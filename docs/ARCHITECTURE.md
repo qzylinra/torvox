@@ -195,8 +195,9 @@ torvox/
 | cargo-fuzz | 0.13 | 模糊测试 (libFuzzer) |
 | cargo-nextest | 0.9 | 增强测试运行器 |
 | Kotlin | 2.3.21 | K2 编译器稳定 (2.4.0 ~2026 年 6 月) |
-| Compose BOM | 2026.05.01 | Material 3 + Compose UI |
-| AGP | 9.2 | Android Gradle Plugin |
+| Compose BOM | 2026.05.00 | Material 3 + Compose UI |
+| AGP | 9.0.1 | Android Gradle Plugin (9.2 为 alpha, 待稳定后升级) |
+| Hilt | 2.59.2 | 依赖注入 (需 AGP 9.0+) |
 | NDK | r29 | Android NDK |
 | targetSdk | 36 | Android 16 |
 | minSdk | 33 | Android 13 (Vulkan 1.3 起始) |
