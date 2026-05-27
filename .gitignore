@@ -27,6 +27,9 @@ Thumbs.db
 # Generated
 *.log
 
+# Nix
+result/
+
 # Fuzz artifacts
 torvox-fuzz/artifacts/
 torvox-fuzz/corpus/

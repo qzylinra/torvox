@@ -1,0 +1,33 @@
+name: CI
+on:
+  push:
+    branches: [main]
+jobs:
+  rust-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@master
+      - run: |
+          cargo fmt --check
+          cargo clippy --deny warnings --all-targets --all-features
+      - uses: taiki-e/install-action@nextest
+      - run: |
+          cargo nextest run --workspace
+          cargo test --workspace -- proptest
+  android-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - uses: actions/setup-java@main
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: actions/setup-android-sdk@main
+      - working-directory: android
+        run: |
+          ./gradlew lint --quiet
+          ./gradlew test --quiet
