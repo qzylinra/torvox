@@ -1,0 +1,44 @@
+# Rust
+target/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.iml
+.idea/
+*.apk
+*.aab
+
+# NDK / Rust cross-compilation (cargo-ndk v4)
+android/app/src/main/jniLibs/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Generated
+*.log
+
+# Fuzz artifacts
+torvox-fuzz/artifacts/
+torvox-fuzz/corpus/
+
+# Profiling
+flamegraph.svg
+perf.data
+massif.out.*
+
+# UniFFI generated (由构建时生成)
+android/app/src/main/java/io/torvox/bridge/uniffi/
+
+# opencode (配置已版本控制, 忽略临时文件)
+.opencode/sessions/
+.opencode/cache/
