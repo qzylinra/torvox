@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+  "torvox-core",
+  "torvox-terminal",
+  "torvox-renderer",
+  "torvox-gui-android",
+  "torvox-bridge-types",
+  "torvox-exec",
+  "torvox-fuzz",
+  "torvox-integration-tests",
+  "torvox-bench",
+]
+package.edition = "2024"
+package.rust-version = "1.95"
+package.license = "UNLICENSED"
+
+[workspace.dependencies]
+torvox-core = { path = "torvox-core" }
+torvox-terminal = { path = "torvox-terminal" }
+torvox-renderer = { path = "torvox-renderer" }
+torvox-gui-android = { path = "torvox-gui-android" }
+torvox-bridge-types = { path = "torvox-bridge-types" }
+
+vte = "0.15"
+libc = "0.2"
+nix = { version = "0.31", features = ["term", "process", "signal", "ioctl", "fs"] }
+serde = { version = "1", default-features = false, features = ["derive"] }
+postcard = { version = "1.1", features = ["alloc"] }
+thiserror = { version = "2", default-features = false }
+wgpu = "29"
+cosmic-text = "0.19"
+swash = "0.2.7"
+etagere = "0.3"
+glyphon = "0.11"
+uniffi = "0.31"
+tokio = { version = "1", features = ["rt", "sync", "macros"] }
+crossbeam = "0.8"
+proptest = "1.11"
