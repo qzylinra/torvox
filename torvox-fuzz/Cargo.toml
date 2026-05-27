@@ -1,0 +1,10 @@
+[package]
+name = "torvox-fuzz"
+version = "0.1.0"
+edition = "2024"
+description = "Fuzz targets for Torvox terminal parser and grid operations"
+license = "UNLICENSEED"
+
+[dependencies]
+torvox-core = { workspace = true }
+torvox-terminal = { workspace = true }
