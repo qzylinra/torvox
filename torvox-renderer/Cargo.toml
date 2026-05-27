@@ -1,0 +1,15 @@
+[package]
+name = "torvox-renderer"
+version = "0.1.0"
+edition = "2024"
+description = "GPU-native terminal renderer for Torvox (wgpu 29 + cosmic-text + swash)"
+license = "UNLICENSED"
+
+[dependencies]
+torvox-core = { workspace = true }
+torvox-terminal = { workspace = true }
+wgpu = { workspace = true }
+cosmic-text = { workspace = true }
+swash = { workspace = true }
+etagere = { workspace = true }
+thiserror = { workspace = true }
