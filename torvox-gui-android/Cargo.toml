@@ -6,6 +6,7 @@ description = "Android JNI/UniFFI bridge for Torvox terminal UI"
 license = "UNLICENSED"
 
 [lib]
+name = "torvox_core"
 crate-type = ["cdylib", "lib"]
 
 [dependencies]

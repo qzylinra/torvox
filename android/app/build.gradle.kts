@@ -2,7 +2,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.dagger.hilt.android")
-    id("org.mozilla.rust-android-gradle.rust-android")
     id("com.google.devtools.ksp")
 }
 
@@ -18,6 +17,10 @@ android {
         versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -35,21 +38,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_25
     }
 
-    kotlinOptions {
-        jvmTarget = "25"
-    }
-
     buildFeatures {
         compose = true
     }
-}
 
-cargo {
-    module = "../../torvox-gui-android"
-    libname = "torvox_core"
-    targets = listOf("arm64", "x86_64")
-    profile = "debug"
-    targetDirectory = "../../target"
+    sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
 }
 
 dependencies {

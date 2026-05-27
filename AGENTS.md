@@ -101,8 +101,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## 当前状态
 
-- **阶段**: 0→1 (基础设施→终端引擎) — P0.1 完成, P0.2 核心类型完成
-- **下一步**: P0.3 Android 外壳
+- **阶段**: 0→1 (基础设施→终端引擎) — P0.1 完成, P0.2 核心类型完成, P0.3 Android 外壳完成
+- **下一步**: P0.4 终端引擎 (VT 解析器 + PTY 集成)
 
 ## 关键约束
 
@@ -115,6 +115,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 │ - 在 VT 解析器中添加 `unsafe`。需要类型安全解析器。            │
 │ - 使用 portable-pty。它不支持 Android。用 nix 0.31 crate。     │
 │ - 使用 bincode。它已废弃 (RUSTSEC-2025-0141)。用 postcard 1.1。│
+│ - 使用 rust-android-gradle。AGP 9.0 移除了 AppExtension，不兼容。│
+│   用 cargo-ndk v4 脚本代替。                                     │
 │ - 略读 ADR。阅读它们。它们存在是为了防止错误决策。            │
 │ - 添加 license 声明。本项目仅作者和 AI 使用。                  │
 │ - 无规范编码 (vibe coding)。必须先写规范再实现。               │

@@ -3,6 +3,5 @@ plugins {
     id("com.android.library") version "9.0.1" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.3.21" apply false
     id("com.google.dagger.hilt.android") version "2.59.2" apply false
-    id("org.mozilla.rust-android-gradle.rust-android") version "0.9.6" apply false
     id("com.google.devtools.ksp") version "2.3.9" apply false
 }
