@@ -1,0 +1,10 @@
+[package]
+name = "torvox-bridge-types"
+version = "0.1.0"
+edition = "2024"
+description = "Shared FFI-safe type definitions for Torvox UniFFI bridge"
+license = "UNLICENSED"
+
+[dependencies]
+uniffi = { workspace = true }
+serde = { workspace = true }

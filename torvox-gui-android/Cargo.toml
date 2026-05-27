@@ -1,0 +1,15 @@
+[package]
+name = "torvox-gui-android"
+version = "0.1.0"
+edition = "2024"
+description = "Android JNI/UniFFI bridge for Torvox terminal UI"
+license = "UNLICENSED"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+torvox-terminal = { workspace = true }
+torvox-renderer = { workspace = true }
+torvox-bridge-types = { workspace = true }
+uniffi = { workspace = true }
