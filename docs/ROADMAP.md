@@ -1,6 +1,6 @@
 # Torvox 路线图
 
-> **当前阶段**: 阶段 0 — 基础设施 (P0.1–P0.5 完成, 进行中 P0.6 UniFFI 桥接验证)
+> **当前阶段**: 阶段 0 — 基础设施 (P0.1–P0.6 完成) → 下一步 阶段 1: 终端引擎
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### P0.1 — Rust Workspace 脚手架
 
-**交付物**: Rust workspace 含 `torvox-core`, `torvox-terminal`, `torvox-renderer`, `torvox-gui-android`, `torvox-bridge-types`, `torvox-exec`, `torvox-fuzz`, `torvox-integration-tests`, `torvox-bench`。Cargo.toml 含所有依赖。编译通过。
+**交付物**: Rust workspace 含 `torvox-core`, `torvox-terminal`, `torvox-renderer`, `torvox-gui-android`, `torvox-exec`, `torvox-fuzz`, `torvox-integration-tests`, `torvox-bench`。Cargo.toml 含所有依赖。编译通过。
 
 **详细步骤**:
 1. 创建 workspace `Cargo.toml` (edition 2024, resolver 2)
@@ -20,7 +20,7 @@
 4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `vte 0.15`, `nix 0.31`, `serde`, `postcard 1.1` 依赖
 5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `skrifa 0.42`, `etagere 0.3`, `glyphon` 依赖
 6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `uniffi 0.31` 依赖
-7. 创建 `torvox-bridge-types/` — 骨架 `lib.rs`, `uniffi` derive
+7. ~~创建 `torvox-bridge-types/`~~ — 类型已合并到 `torvox-gui-android/src/bridge.rs`
 8. 创建 `torvox-exec/` — 骨架 `main.rs` (多调用二进制)
 9. 创建 `torvox-fuzz/` — 骨架 3 个模糊目标
 10. 创建 `torvox-integration-tests/` — 骨架 3 个集成测试文件
@@ -36,8 +36,8 @@
 **交付物**: `torvox-core` 完整类型系统。编译通过。单元测试通过。
 
 **详细步骤**:
-1. `cell.rs` — 定义 `Cell`, `CellAttributes`, `Color` (ANSI 256 + TrueColor RGB)
-2. `grid.rs` — 定义 `Grid<T>`, `DirtyLine` (bitmask), `Scrollback` (环形缓冲)
+1. `cell.rs` — 定义 `Cell`, `Attrs` (含全部 SGR), `Color` (ANSI 256 + TrueColor RGB), `DirtyMask`
+2. `grid.rs` — 定义 `Grid`, `DirtyMask` (Vec<u64> 分区位标志), `Scrollback` (环形缓冲)
 3. `ansi.rs` — 定义 ANSI 调色板 (0-255), SGR 属性枚举
 4. `config.rs` — 定义 `TerminalConfig`, `RenderConfig`, `FontConfig`
 5. `selection.rs` — 定义 `Selection` (字符/词/行/块), `SelectionAnchor`
@@ -45,7 +45,7 @@
 7. `unicode.rs` — 定义 UnicodeWidth 表, EastAsianWidth 查找
 8. `event.rs` — 定义 `TerminalEvent` 枚举 (供跨 crate 事件传递)
 9. 所有类型实现 `serde::Serialize`/`Deserialize` (通过 postcard)
-10. 所有类型 `#[derive(uniffi::Enum/Record)]` (在 bridge-types 中重导出)
+10. 所有类型 `#[derive(uniffi::Enum/Record)]` (在 `torvox-gui-android/src/bridge.rs` 中)
 11. `#[cfg(test)]` 每个类型的单元测试
 12. 验证 `no_std` 编译: `cargo build -p torvox-core --target thumbv6m-none-eabi`
 
@@ -53,14 +53,13 @@
 
 ### P0.3 — Android 外壳
 
-**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.01 + `rust-android-gradle 0.9.6` 插件。Kotlin `MainActivity` + Hilt DI。Rust 通过 cargo-ndk v4 编译。`System.loadLibrary("torvox_core")` 成功。
+**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.01。Kotlin `MainActivity` + Hilt DI。Rust 通过 `scripts/build-android-libs.sh` (cargo-ndk v4) 编译。`System.loadLibrary("torvox_android")` 成功。
 
 **详细步骤**:
 1. 创建 `android/` 目录结构 (app, gradle, settings.gradle.kts, build.gradle.kts)
-2. 配置 AGP 9.2, Kotlin 2.3.21, Compose BOM 2026.05.01
-3. 配置 `rust-android-gradle 0.9.6` 插件 (cargo-ndk v4 语法)
-4. 配置 `cargo { module = "../torvox-gui-android"; libname = "torvox_core"; targets = ["arm64", "x86_64"] }`
-5. 创建 `TorvoxApp.kt` — Application 类 + @HiltAndroidApp
+2. 配置 AGP 9.0.1, Kotlin 2.3.21, Compose BOM 2026.05.00
+3. 配置 `scripts/build-android-libs.sh` (cargo-ndk v4 交叉编译)
+4. 创建 `TorvoxApp.kt` — Application 类 + @HiltAndroidApp
 6. 创建 `MainActivity.kt` — 单 Activity, Compose 导航
 7. 创建 `TerminalViewModel.kt` — 状态管理骨架
 8. 创建 `TerminalScreen.kt` — Compose 屏幕, SurfaceView 占位
@@ -117,7 +116,7 @@
 **交付物**: UniFFI 0.31 生成 Kotlin 绑定。Kotlin 可调用 Rust 函数。
 
 **详细步骤**:
-1. 定义 `torvox-bridge-types` 中的跨边界类型
+1. 定义 `torvox-gui-android/src/bridge.rs` 中的跨边界类型
 2. 在 `torvox-gui-android/src/bridge.rs` 中实现 `#[uniffi::export]` 函数
 3. 配置 `uniffi.toml` (Kotlin 代码生成)
 4. 运行 `uniffi-bindgen generate` 生成 Kotlin 绑定
@@ -204,7 +203,7 @@
 4. WGSL 着色器: `cursor.wgsl` (光标块/下划线/竖线)
 5. 渲染管线: 单次绘制调用, 实例化四边形
 6. 实例缓冲区构建: 遍历脏单元格 → 查找图集 UV → 构建 Instance
-7. DirtyLine bitmask → 仅处理脏行 → 实例缓冲区 diff
+7. DirtyMask (Vec<u64> 分区) → 仅处理脏行 → 实例缓冲区 diff
 8. wgpu 命令编码 + 提交
 9. 帧呈现 (vsync 或 immediate)
 10. 桌面测试: `cargo run` 显示空白终端 + 光标

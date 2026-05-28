@@ -140,7 +140,7 @@ impl Drop for PtyPair {
 
 fn configure_raw_mode(fd: std::os::unix::io::RawFd) -> Result<(), PtyError> {
     use nix::sys::termios::{
-        tcgetattr, tcsetattr, ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg,
+        ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg, tcgetattr, tcsetattr,
     };
     let owned = unsafe { OwnedFd::from_raw_fd(fd) };
     let mut termios = tcgetattr(&owned).map_err(PtyError::Termios)?;

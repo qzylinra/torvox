@@ -28,8 +28,8 @@ cargo ndk -t arm64-v8a -t x86_64 -o "$TARGET_DIR" build --manifest-path "$LIB_CA
 
 for ABI in "${ABIS[@]}"; do
 	mkdir -p "$JNI_LIBS_DIR/$ABI"
-	cp "$TARGET_DIR/$ABI/libtorvox_core.so" "$JNI_LIBS_DIR/$ABI/"
-	echo "Copied to $JNI_LIBS_DIR/$ABI/libtorvox_core.so"
+	cp "$TARGET_DIR/$ABI/libtorvox_android.so" "$JNI_LIBS_DIR/$ABI/"
+	echo "Copied to $JNI_LIBS_DIR/$ABI/libtorvox_android.so"
 done
 
 echo "=== Cross-compiling torvox-exec (PIE binary) ==="

@@ -1,5 +1,5 @@
 pub mod parser;
 pub mod pty;
-pub mod state;
+pub mod terminal;
 
 pub use pty::PtyPair;

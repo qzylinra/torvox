@@ -67,7 +67,7 @@ open class RustBuffer : Structure() {
         internal fun alloc(size: ULong = 0UL) =
             uniffiRustCall { status ->
                 // Note: need to convert the size to a `Long` value to make this work with JVM.
-                UniffiLib.ffi_torvox_core_rustbuffer_alloc(size.toLong(), status)
+                UniffiLib.ffi_torvox_android_rustbuffer_alloc(size.toLong(), status)
             }.also {
                 if (it.data == null) {
                     throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=$size)")
@@ -88,7 +88,7 @@ open class RustBuffer : Structure() {
 
         internal fun free(buf: RustBuffer.ByValue) =
             uniffiRustCall { status ->
-                UniffiLib.ffi_torvox_core_rustbuffer_free(buf, status)
+                UniffiLib.ffi_torvox_android_rustbuffer_free(buf, status)
             }
     }
 
@@ -394,7 +394,7 @@ private fun findLibraryName(componentName: String): String {
     if (libOverride != null) {
         return libOverride
     }
-    return "torvox_core"
+    return "torvox_android"
 }
 
 // Define FFI callback types
@@ -737,22 +737,22 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 // We now use JNA's "direct mapping" - unclear if same considerations apply exactly.
 internal object IntegrityCheckingUniffiLib {
     init {
-        Native.register(IntegrityCheckingUniffiLib::class.java, findLibraryName(componentName = "torvox_core"))
+        Native.register(IntegrityCheckingUniffiLib::class.java, findLibraryName(componentName = "torvox_android"))
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
 
-    external fun uniffi_torvox_core_checksum_method_torvoxbridge_echo_cells(): Short
+    external fun uniffi_torvox_android_checksum_method_torvoxbridge_echo_cells(): Short
 
-    external fun uniffi_torvox_core_checksum_method_torvoxbridge_get_config(): Short
+    external fun uniffi_torvox_android_checksum_method_torvoxbridge_get_config(): Short
 
-    external fun uniffi_torvox_core_checksum_method_torvoxbridge_ping(): Short
+    external fun uniffi_torvox_android_checksum_method_torvoxbridge_ping(): Short
 
-    external fun uniffi_torvox_core_checksum_method_torvoxbridge_spawn_terminal(): Short
+    external fun uniffi_torvox_android_checksum_method_torvoxbridge_spawn_terminal(): Short
 
-    external fun uniffi_torvox_core_checksum_constructor_torvoxbridge_new(): Short
+    external fun uniffi_torvox_android_checksum_constructor_torvoxbridge_new(): Short
 
-    external fun ffi_torvox_core_uniffi_contract_version(): Int
+    external fun ffi_torvox_android_uniffi_contract_version(): Int
 }
 
 internal object UniffiLib {
@@ -762,244 +762,244 @@ internal object UniffiLib {
     }
 
     init {
-        Native.register(UniffiLib::class.java, findLibraryName(componentName = "torvox_core"))
+        Native.register(UniffiLib::class.java, findLibraryName(componentName = "torvox_android"))
     }
 
-    external fun uniffi_torvox_core_fn_clone_torvoxbridge(
+    external fun uniffi_torvox_android_fn_clone_torvoxbridge(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_torvox_core_fn_free_torvoxbridge(
+    external fun uniffi_torvox_android_fn_free_torvoxbridge(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_torvox_core_fn_constructor_torvoxbridge_new(
+    external fun uniffi_torvox_android_fn_constructor_torvoxbridge_new(
         `config`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_torvox_core_fn_method_torvoxbridge_echo_cells(
+    external fun uniffi_torvox_android_fn_method_torvoxbridge_echo_cells(
         `ptr`: Long,
         `cells`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun uniffi_torvox_core_fn_method_torvoxbridge_get_config(
+    external fun uniffi_torvox_android_fn_method_torvoxbridge_get_config(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun uniffi_torvox_core_fn_method_torvoxbridge_ping(
+    external fun uniffi_torvox_android_fn_method_torvoxbridge_ping(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun uniffi_torvox_core_fn_method_torvoxbridge_spawn_terminal(
+    external fun uniffi_torvox_android_fn_method_torvoxbridge_spawn_terminal(
         `ptr`: Long,
         `rows`: Int,
         `cols`: Int,
         uniffi_out_err: UniffiRustCallStatus,
     ): Int
 
-    external fun ffi_torvox_core_rustbuffer_alloc(
+    external fun ffi_torvox_android_rustbuffer_alloc(
         `size`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun ffi_torvox_core_rustbuffer_from_bytes(
+    external fun ffi_torvox_android_rustbuffer_from_bytes(
         `bytes`: ForeignBytes.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun ffi_torvox_core_rustbuffer_free(
+    external fun ffi_torvox_android_rustbuffer_free(
         `buf`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun ffi_torvox_core_rustbuffer_reserve(
+    external fun ffi_torvox_android_rustbuffer_reserve(
         `buf`: RustBuffer.ByValue,
         `additional`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun ffi_torvox_core_rust_future_poll_u8(
+    external fun ffi_torvox_android_rust_future_poll_u8(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_u8(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_u8(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_u8(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_u8(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_u8(
+    external fun ffi_torvox_android_rust_future_complete_u8(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Byte
 
-    external fun ffi_torvox_core_rust_future_poll_i8(
+    external fun ffi_torvox_android_rust_future_poll_i8(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_i8(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_i8(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_i8(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_i8(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_i8(
+    external fun ffi_torvox_android_rust_future_complete_i8(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Byte
 
-    external fun ffi_torvox_core_rust_future_poll_u16(
+    external fun ffi_torvox_android_rust_future_poll_u16(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_u16(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_u16(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_u16(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_u16(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_u16(
+    external fun ffi_torvox_android_rust_future_complete_u16(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Short
 
-    external fun ffi_torvox_core_rust_future_poll_i16(
+    external fun ffi_torvox_android_rust_future_poll_i16(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_i16(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_i16(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_i16(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_i16(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_i16(
+    external fun ffi_torvox_android_rust_future_complete_i16(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Short
 
-    external fun ffi_torvox_core_rust_future_poll_u32(
+    external fun ffi_torvox_android_rust_future_poll_u32(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_u32(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_u32(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_u32(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_u32(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_u32(
+    external fun ffi_torvox_android_rust_future_complete_u32(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Int
 
-    external fun ffi_torvox_core_rust_future_poll_i32(
+    external fun ffi_torvox_android_rust_future_poll_i32(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_i32(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_i32(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_i32(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_i32(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_i32(
+    external fun ffi_torvox_android_rust_future_complete_i32(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Int
 
-    external fun ffi_torvox_core_rust_future_poll_u64(
+    external fun ffi_torvox_android_rust_future_poll_u64(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_u64(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_u64(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_u64(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_u64(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_u64(
+    external fun ffi_torvox_android_rust_future_complete_u64(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun ffi_torvox_core_rust_future_poll_i64(
+    external fun ffi_torvox_android_rust_future_poll_i64(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_i64(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_i64(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_i64(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_i64(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_i64(
+    external fun ffi_torvox_android_rust_future_complete_i64(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun ffi_torvox_core_rust_future_poll_f32(
+    external fun ffi_torvox_android_rust_future_poll_f32(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_f32(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_f32(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_f32(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_f32(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_f32(
+    external fun ffi_torvox_android_rust_future_complete_f32(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Float
 
-    external fun ffi_torvox_core_rust_future_poll_f64(
+    external fun ffi_torvox_android_rust_future_poll_f64(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_f64(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_f64(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_f64(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_f64(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_f64(
+    external fun ffi_torvox_android_rust_future_complete_f64(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Double
 
-    external fun ffi_torvox_core_rust_future_poll_rust_buffer(
+    external fun ffi_torvox_android_rust_future_poll_rust_buffer(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_rust_buffer(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_rust_buffer(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_rust_buffer(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_rust_buffer(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_rust_buffer(
+    external fun ffi_torvox_android_rust_future_complete_rust_buffer(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun ffi_torvox_core_rust_future_poll_void(
+    external fun ffi_torvox_android_rust_future_poll_void(
         `handle`: Long,
         `callback`: UniffiRustFutureContinuationCallback,
         `callbackData`: Long,
     ): Unit
 
-    external fun ffi_torvox_core_rust_future_cancel_void(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_cancel_void(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_free_void(`handle`: Long): Unit
+    external fun ffi_torvox_android_rust_future_free_void(`handle`: Long): Unit
 
-    external fun ffi_torvox_core_rust_future_complete_void(
+    external fun ffi_torvox_android_rust_future_complete_void(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
@@ -1009,7 +1009,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
     // Get the bindings contract version from our ComponentInterface
     val bindings_contract_version = 30
     // Get the scaffolding contract version by calling the into the dylib
-    val scaffolding_contract_version = lib.ffi_torvox_core_uniffi_contract_version()
+    val scaffolding_contract_version = lib.ffi_torvox_android_uniffi_contract_version()
     if (bindings_contract_version != scaffolding_contract_version) {
         throw RuntimeException("UniFFI contract version mismatch: try cleaning and rebuilding your project")
     }
@@ -1017,19 +1017,19 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_torvox_core_checksum_method_torvoxbridge_echo_cells() != 43333.toShort()) {
+    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_echo_cells() != 32313.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_torvox_core_checksum_method_torvoxbridge_get_config() != 55434.toShort()) {
+    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_get_config() != 22838.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_torvox_core_checksum_method_torvoxbridge_ping() != 44080.toShort()) {
+    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_ping() != 52279.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_torvox_core_checksum_method_torvoxbridge_spawn_terminal() != 63716.toShort()) {
+    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_spawn_terminal() != 48689.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_torvox_core_checksum_constructor_torvoxbridge_new() != 15521.toShort()) {
+    if (lib.uniffi_torvox_android_checksum_constructor_torvoxbridge_new() != 28218.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1443,7 +1443,7 @@ open class TorvoxBridge :
         this(
             UniffiWithHandle,
             uniffiRustCall { _status ->
-                UniffiLib.uniffi_torvox_core_fn_constructor_torvoxbridge_new(FfiConverterTypeTerminalConfig.lower(`config`), _status)
+                UniffiLib.uniffi_torvox_android_fn_constructor_torvoxbridge_new(FfiConverterTypeTerminalConfig.lower(`config`), _status)
             },
         )
 
@@ -1503,7 +1503,7 @@ open class TorvoxBridge :
                 return
             }
             uniffiRustCall { status ->
-                UniffiLib.uniffi_torvox_core_fn_free_torvoxbridge(handle, status)
+                UniffiLib.uniffi_torvox_android_fn_free_torvoxbridge(handle, status)
             }
         }
     }
@@ -1516,7 +1516,7 @@ open class TorvoxBridge :
             throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
         return uniffiRustCall { status ->
-            UniffiLib.uniffi_torvox_core_fn_clone_torvoxbridge(handle, status)
+            UniffiLib.uniffi_torvox_android_fn_clone_torvoxbridge(handle, status)
         }
     }
 
@@ -1524,7 +1524,7 @@ open class TorvoxBridge :
         FfiConverterSequenceTypeBridgeCell.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_torvox_core_fn_method_torvoxbridge_echo_cells(
+                    UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_echo_cells(
                         it,
                         FfiConverterSequenceTypeBridgeCell.lower(`cells`),
                         _status,
@@ -1537,7 +1537,7 @@ open class TorvoxBridge :
         FfiConverterTypeTerminalConfig.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_torvox_core_fn_method_torvoxbridge_get_config(
+                    UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_get_config(
                         it,
                         _status,
                     )
@@ -1549,7 +1549,7 @@ open class TorvoxBridge :
         FfiConverterString.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_torvox_core_fn_method_torvoxbridge_ping(
+                    UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_ping(
                         it,
                         _status,
                     )
@@ -1565,7 +1565,7 @@ open class TorvoxBridge :
         FfiConverterInt.lift(
             callWithHandle {
                 uniffiRustCallWithError(TerminalException) { _status ->
-                    UniffiLib.uniffi_torvox_core_fn_method_torvoxbridge_spawn_terminal(
+                    UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_spawn_terminal(
                         it,
                         FfiConverterUInt.lower(`rows`),
                         FfiConverterUInt.lower(`cols`),

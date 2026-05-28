@@ -203,43 +203,25 @@ cargo audit
 
 ```
 [Rust 源码]
-↓ cargo ndk v4 (通过 rust-android-gradle 0.9.6 插件)
+↓ cargo ndk v4 (通过 scripts/build-android-libs.sh)
 [Rust 交叉编译为 aarch64-linux-android / x86_64-linux-android]
-↓ libtorvox_core.so
-[Android jniLibs/arm64-v8a/libtorvox_core.so]
+↓ libtorvox_android.so
+[Android jniLibs/arm64-v8a/libtorvox_android.so]
 ↓ APK 打包
-[Android 应用通过 System.loadLibrary("torvox_core") 加载]
+[Android 应用通过 System.loadLibrary("torvox_android") 加载]
 ```
 
 ### Gradle 集成
 
-`rust-android-gradle` 插件协调:
-1. `cargo ndk v4` 交叉编译步骤
+`cargo-ndk v4` 脚本协调:
+1. `scripts/build-android-libs.sh` 交叉编译步骤
 2. 输出 `.so` 放置到 `jniLibs/` 目录
 3. APK 打包 Rust 原生库
 
-```kotlin
-// android/app/build.gradle.kts 中
-plugins {
-    id("com.android.application")
-    id("org.mozilla.rust-android-gradle.rust-android") version "0.9.6"
-}
-
-cargo {
-    module = "../../torvox-gui-android"
-    libname = "torvox_core"
-    targets = listOf("arm64", "x86_64")
-    // cargo-ndk v4 语法
-    ndkVersion = "29.0.12345678"
-}
+```bash
+# scripts/build-android-libs.sh 中
+cargo ndk -t arm64-v8a -t x86_64 -o android/app/src/main/jniLibs build --release
 ```
-
-### cargo-ndk v4 变更
-
-cargo-ndk v4 是重大重写, CLI 与 v3 不兼容:
-- 目标指定: `cargo ndk -t arm64-v8a` (v4) vs `cargo ndk -t arm64` (v3)
-- 输出目录: `-o <path>` 参数变更
-- 构建配置: 支持新的 `Cargo.toml` metadata
 
 ## 性能分析
 

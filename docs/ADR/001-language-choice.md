@@ -103,5 +103,5 @@
 **缓解措施**:
 - UniFFI 类型安全 Kotlin ↔ Rust 绑定 (ZeroAI, IronRDP, Firefox 使用)
 - CI 矩阵: `cargo nextest` + `./gradlew test` 每 PR 强制执行
-- `torvox-bridge-types` crate 跨边界共享类型
-- `cargo-ndk v4` + `rust-android-gradle` Gradle 插件自动化交叉编译
+- `torvox-gui-android/src/bridge.rs` 跨边界共享 UniFFI 类型
+- `cargo-ndk v4` 脚本自动化交叉编译

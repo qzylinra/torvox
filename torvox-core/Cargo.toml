@@ -8,8 +8,9 @@ license = "UNLICENSED"
 [dependencies]
 serde = { workspace = true }
 postcard = { workspace = true }
-thiserror = { workspace = true }
+thiserror = { workspace = true, optional = true }
 
 [features]
-default = ["std"]
-std = ["thiserror/std"]
+default = ["std", "alloc"]
+std = ["thiserror", "serde/std", "postcard/use-std"]
+alloc = ["serde/alloc", "postcard/alloc"]

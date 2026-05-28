@@ -14,7 +14,7 @@ Torvox 是分层架构的终端模拟器，Rust 核心引擎 + Kotlin/Compose An
 │ └────────┬────────┘ └───────┬────────┘ └──────────┬───────────┘     │
 │          │                  │                      │                 │
 │ ┌────────┴──────────────────┴──────────────────────┴───────────┐    │
-│ │ UniFFI Bridge (torvox-gui-android + torvox-bridge-types) │ │
+│ │ UniFFI Bridge (torvox-gui-android)                         │    │
 │ │ SessionHandle │ CellUpdateStream │ InputEvent │ ConfigSnapshot│    │
 │ └───────────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────────┘
@@ -63,10 +63,11 @@ torvox/
 ├── torvox-core/             # [no_std] 核心类型
 │   ├── src/
 │   │   ├── lib.rs          # crate 根, no_std 声明
-│   │   ├── cell.rs         # Cell, CellAttributes, Color (ANSI 256 + TrueColor)
-│   │   ├── grid.rs         # Grid<T>, Scrollback 环形缓冲, DirtyLine bitmask
+│ │ ├── cell.rs # Cell, Attrs (含全部 SGR), Color (ANSI 256 + TrueColor), DirtyMask (Vec<u64> 分区位标志, 支持任意行数)
+│ │ ├── grid.rs # Grid, Scrollback 环形缓冲, DirtyMask 集成
+│   │   ├── line.rs         # Line 结构, 属性跨度编码
 │   │   ├── ansi.rs         # ANSI 调色板, SGR 属性枚举
-│   │   ├── config.rs       # TerminalConfig, RenderConfig, FontConfig
+│ │ ├── config.rs # TerminalConfig, Shell (SystemDefault|Custom(String)), RenderConfig, FontConfig
 │   │   ├── selection.rs    # Selection 类型 (字符/词/行/块), SelectionAnchor
 │   │   ├── cursor.rs       # CursorState (位置, 样式, 可见性)
 │   │   ├── unicode.rs      # UnicodeWidth 表, EastAsianWidth 查找
@@ -110,21 +111,16 @@ torvox/
 │
 ├── torvox-gui-android/      # Android GUI 桥接
 │   ├── src/
-│   │   ├── lib.rs          # crate 根, JNI_OnLoad
-│   │   ├── bridge.rs       # UniFFI 0.31 导出函数
-│   │   ├── surface.rs      # wgpu → Android Surface 共享
-│   │   └── android.rs      # Android 特定初始化 (ANativeWindow 获取)
-│   ├── Cargo.toml
-│   └── build.rs            # cargo-ndk v4 交叉编译
-│
-├── torvox-bridge-types/     # FFI 边界共享类型
-│   ├── src/
-│   │   └── lib.rs          # #[derive(uniffi::Enum/Record)] 跨边界类型
+│   │   ├── lib.rs          # crate 根, setup_scaffolding!()
+│ │ ├── bridge.rs # UniFFI 导出: TorvoxBridge, BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(6变体), TerminalError
+│   │   ├── surface.rs      # wgpu → Android Surface 共享 (Phase 1)
+│   │   └── android.rs      # Android 特定初始化 (Phase 1)
+│   ├── uniffi.toml         # UniFFI Kotlin 包名配置
 │   └── Cargo.toml
 │
 ├── torvox-exec/             # W^X 多调用二进制
 │   ├── src/
-│   │   └── main.rs         # 根据 /proc/self/exe 执行对应命令
+│   │   └── main.rs         # 根据 argv[0] 执行对应命令
 │   └── Cargo.toml
 │
 ├── torvox-fuzz/             # 模糊测试目标
@@ -185,8 +181,8 @@ torvox/
 | glyphon | 0.11 | wgpu 文本渲染 (参考实现) |
 | vte | 0.15 | Paul Williams 状态机 VT 解析器 |
 | nix | 0.31 | Unix API (forkpty, openpty, ioctl) |
-| UniFFI | 0.31 | 类型安全 Rust↔Kotlin 绑定 |
-| rust-android-gradle | 0.9.6 | Gradle Rust 交叉编译插件 |
+| UniFFI | 0.31 | 类型安全 Rust↔Kotlin 绑定; 所有 UniFFI 类型在 gui-android/src/bridge.rs (单一 setup_scaffolding!()) |
+| rust-android-gradle | 0.9.6 | 已弃用: AGP 9.0 移除了 AppExtension, 不兼容。改用 scripts/build-android-libs.sh + cargo-ndk v4 |
 | cargo-ndk | v4 | **重大变更**: v4 重写了 CLI, 与 v3 不兼容 |
 | postcard | 1.1 | 序列化 (替代已废弃的 bincode 3) |
 | thiserror | 2 | 错误类型派生 |
@@ -211,6 +207,9 @@ torvox/
 | `portable-pty` | → `nix` crate forkpty() | portable-pty 不支持 Android |
 | `AHardwareBuffer` | → `SurfaceView` | wgpu 原生支持 Surface, 零复制, 游戏引擎标准模式 |
 | minSdk 26 | → minSdk 33 | Vulkan 1.3 从 API 33 起原生支持 |
+| `rust-android-gradle 0.9.6` | → `scripts/build-android-libs.sh` | AGP 9.0 移除了 AppExtension, rust-android-gradle 不兼容。用 cargo-ndk v4 直接交叉编译 |
+| `torvox-bridge-types` UniFFI | → 类型合并到 `gui-android/src/bridge.rs` | UniFFI 库模式仅允许一个 `setup_scaffolding!()`; 跨 crate derive 导致 Kotlin 生成重复脚手架 |
+| `TerminalError.message` | → `TerminalError.detail` | Kotlin `Throwable.message` 冲突, UniFFI Error 枚举字段名不能为 `message` |
 | `glifo` | 不采用 (待 1.0) | Linebender 新项目, 未稳定; swash 0.2.x 长期依赖稳定 |
 
 ### 已知风险
@@ -236,7 +235,7 @@ torvox/
 Android 10+ 限制非系统库的 `exec()`。Torvox 使用 Termux 验证的模式：
 
 1. **多调用二进制**: `torvox-exec` 单一二进制文件，所有命令作为符号链接指向它
-2. `torvox-exec` 根据 `/proc/self/exe` 确定调用者身份
+2. `torvox-exec` 根据 `argv[0]` 的 `file_name()` 确定调用者身份
 3. 以正确参数执行 `exec()`
 4. 这绕过了 Android 的 W^X 限制，因为二进制文件本身由系统加载器映射为可执行
 
@@ -306,7 +305,7 @@ PTY write → kernel → read() on PTY fd
 → crossbeam SPSC channel (lock-free, bounded 64KB)
 → VT Parser (vte::Parser + Perform trait)
 → CellGrid.apply(Delta)
-→ DirtyLine bitmask
+→ DirtyMask (Vec<u64> 分区位标志, 任意行数)
 → RenderThread wakes (via crossbeam::Notify)
 → For each dirty line:
     For each cell:
@@ -418,7 +417,7 @@ pub struct Session {
 | **VT 解析器** | 手写 Java FSM (2617行) | libvterm (C/JNI) | vte 0.15 crate (Rust, 零 unsafe) |
 | **FFI 边界** | 最小 JNI (仅 PTY) | libvterm + IronRDP + rclone + PRoot | UniFFI 0.31 类型安全绑定 |
 | **线程模型** | 3 线程 + Handler | mutex 保护 + 协程 | 专用解析线程 + crossbeam lock-free 通道 |
-| **脏区域跟踪** | 无 (全屏重绘) | Compose 管理 | DirtyLine bitmask |
+| **脏区域跟踪** | 无 (全屏重绘) | Compose 管理 | DirtyMask (Vec<u64> 分区位标志, 任意行数) |
 | **字形缓存** | 无 | 无 | etagere 0.3 GPU 图集 |
 | **内存模型** | Java 环形缓冲 (64KB) | C libvterm + Kotlin 复制 | Rust 所有权, crossbeam SPSC 零拷贝通道 |
 | **序列化** | Java Serializable | C struct | postcard 1.1 (bincode 已废弃) |
