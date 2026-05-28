@@ -1,6 +1,6 @@
 # Torvox 路线图
 
-> **当前阶段**: 阶段 0 — 基础设施 (P0.1–P0.6 完成) → 下一步 阶段 1: 终端引擎
+> **当前阶段**: 阶段 1 — 终端引擎 (P1.1–P1.4, P1.6 完成) → 下一步 P1.5 Android Surface 渲染
 
 ---
 
@@ -219,7 +219,7 @@
 1. `TerminalSurface.kt` — `SurfaceView` 子类, 实现 `SurfaceHolder.Callback`
 2. `surfaceCreated()` → 通过 UniFFI 传递 ANativeWindow 到 Rust
 3. `torvox-gui-android/src/surface.rs` — `ANativeWindow` → `raw_window_handle::AndroidNdkWindowHandle`
-4. wgpu v29 Surface 创建: `instance.create_surface_unsafe(SurfaceTargetUnsafe::RawWindow{...})`
+4. wgpu v29 Surface 创建: `instance.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle{...})`
 5. 渲染线程: 在独立 Rust 线程运行 wgpu 事件循环
 6. 帧回调: `SurfaceView` 的 `Choreographer` 同步 vsync
 7. `surfaceChanged()` → 通知 Rust 调整视口

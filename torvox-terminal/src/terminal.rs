@@ -1436,5 +1436,30 @@ mod tests {
             mask.clear();
             prop_assert!(!mask.any_dirty());
         }
+
+        #[test]
+        fn scrollback_saves_scroll_top_lines(
+            rows in 2u32..=20u32,
+            cols in 1u32..=100u32,
+            scroll_count in 1u32..=10u32,
+        ) {
+            let mut g = Grid::new(rows, cols);
+            g.fill_cells(0, 'X', 0, cols);
+            for _ in 0..scroll_count {
+                g.scroll_up(0, rows, cols);
+            }
+            prop_assert!(g.scrollback_len() as u32 >= scroll_count.min(rows - 1));
+        }
+
+        #[test]
+        fn scroll_region_scroll_up(rows in 2u32..=20u32, cols in 1u32..=100u32) {
+            let mut state = TerminalState::new(rows, cols);
+            let mut parser = crate::parser::VtParser::new();
+            state.grid.fill_cells(0, 'A', 0, cols);
+            state.grid.fill_cells(1, 'B', 0, cols);
+            parser.advance(&mut state, b"\x1b[1S");
+            prop_assert_eq!(state.grid.cell(0, 0).unwrap().char, 'B');
+            prop_assert_eq!(state.grid.cell(rows - 1, 0).unwrap().char, ' ');
+        }
     }
 }

@@ -87,7 +87,7 @@ impl ApplicationHandler for App {
                 if let (Some(gpu), Some(window)) = (&self.gpu, &self.window) {
                     let instances = torvox_renderer::gpu::build_cell_instances(
                         &self.terminal,
-                        &self.font_pipeline,
+                        &mut self.font_pipeline,
                         8.0,
                         16.0,
                         self.atlas_width as f32,

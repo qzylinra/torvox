@@ -79,42 +79,28 @@ torvox/
 │   │   ├── lib.rs          # crate 根
 │   │   ├── pty.rs          # PTY 会话 (nix 0.31 forkpty — 非 portable-pty)
 │   │   ├── parser.rs       # VTE + Perform 集成 (vte 0.15 crate)
-│   │   ├── terminal.rs     # Terminal 状态机 (主协调器)
-│   │   ├── screen.rs       # 屏幕缓冲区管理 (主/alt 缓冲区切换)
-│   │   ├── keyboard.rs     # Kitty 键盘协议编码器
-│   │   ├── clipboard.rs    # OSC 52 处理器
-│   │   ├── hyperlinks.rs   # OSC 8 处理器
-│   │   ├── shell_integration.rs # OSC 133 处理器
-│   │   ├── mouse.rs        # 鼠标协议 (X10/VT200/SGR/SGR-pixels)
-│   │   ├── image.rs        # Sixel/Kitty 图形协议
+│   │   ├── terminal.rs     # Terminal 状态机 (vte::Perform impl)
+│   │   ├── keyboard.rs     # Kitty 键盘协议编码器 + VT 传统编码 + 鼠标 SGR
 │   │   └── session.rs      # Session 编排器 (线程管理, 通道)
-│   ├── tests/
-│   │   ├── parser_test.rs  # VT 解析器集成测试
-│   │   ├── pty_test.rs     # PTY 集成测试
-│   │   └── session_test.rs # 会话生命周期测试
 │   └── Cargo.toml
 │
 ├── torvox-renderer/         # GPU 渲染
 │   ├── src/
 │   │   ├── lib.rs          # crate 根
-│   │   ├── atlas.rs        # 字形图集 (etagere 0.3 货架打包)
-│   │   ├── font.rs         # 字体管线 (cosmic-text 0.19 + swash 0.2.7 + skrifa 0.42)
-│   │   ├── shader.rs       # WGSL 着色器 (单元格四边形实例化)
-│   │   ├── pipeline.rs     # wgpu v29 渲染管线
-│   │   ├── instance.rs     # 实例缓冲区构建器 (每单元格: pos+uv+fg+bg+flags)
-│   │   ├── renderer.rs     # WgpuRenderer 编排器
-│   │   └── surface.rs      # Android Surface 创建 (ANativeWindow → wgpu Surface)
+│   │   ├── font.rs         # 字体管线 (cosmic-text 0.19 + swash 0.2.7 + etagere)
+│   │   └── gpu.rs          # wgpu v29 GPU 管线 (Instance/Device/Queue/Surface)
 │   ├── shaders/
-│   │   ├── cell.wgsl       # 单元格实例化四边形着色器
-│   │   └── cursor.wgsl     # 光标渲染着色器
+│   │   ├── cell.wgsl       # 单元格着色器 (实例化四边形)
+│   │   └── cursor.wgsl     # 光标着色器 (纯色矩形)
+│   ├── examples/
+│   │   └── basic_render.rs # 桌面渲染示例 (winit + wgpu)
 │   └── Cargo.toml
 │
 ├── torvox-gui-android/      # Android GUI 桥接
 │   ├── src/
 │   │   ├── lib.rs          # crate 根, setup_scaffolding!()
 │ │ ├── bridge.rs # UniFFI 导出: TorvoxBridge, BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(6变体), TerminalError
-│   │   ├── surface.rs      # wgpu → Android Surface 共享 (Phase 1)
-│   │   └── android.rs      # Android 特定初始化 (Phase 1)
+│   │   └── surface.rs      # wgpu → Android Surface 共享 (P1.5)
 │   ├── uniffi.toml         # UniFFI Kotlin 包名配置
 │   └── Cargo.toml
 │
@@ -349,9 +335,9 @@ let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
 // Android/Vulkan 推荐模式 2:
 let surface = unsafe {
     instance.create_surface_unsafe(
-        wgpu::SurfaceTargetUnsafe::RawWindow {
+        wgpu::SurfaceTargetUnsafe::RawHandle {
             raw_window_handle: android_raw_window_handle,
-            raw_display_handle: None, // Vulkan 后端不使用
+            raw_display_handle: Some(raw_display_handle),
         }
     )?
 };

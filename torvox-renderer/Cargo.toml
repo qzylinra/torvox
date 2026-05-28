@@ -16,9 +16,8 @@ fontdb = { workspace = true }
 swash = { workspace = true }
 etagere = { workspace = true }
 thiserror = { workspace = true }
+raw-window-handle = { workspace = true }
+pollster = "0.4"
 
 [[example]]
 name = "basic_render"
-
-[dev-dependencies]
-pollster = "0.4"

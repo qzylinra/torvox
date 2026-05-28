@@ -10,6 +10,8 @@ pub struct Grid {
     dirty: DirtyMask,
     rows: u32,
     cols: u32,
+    scrollback: Vec<Line>,
+    max_scrollback: usize,
 }
 
 impl Grid {
@@ -22,6 +24,22 @@ impl Grid {
             dirty,
             rows,
             cols,
+            scrollback: Vec::new(),
+            max_scrollback: 50_000,
+        }
+    }
+
+    pub fn with_scrollback(rows: u32, cols: u32, max_scrollback: usize) -> Self {
+        let lines = (0..rows).map(|_| Line::new(cols)).collect();
+        let mut dirty = DirtyMask::new(rows);
+        dirty.mark_all(rows);
+        Self {
+            lines,
+            dirty,
+            rows,
+            cols,
+            scrollback: Vec::new(),
+            max_scrollback,
         }
     }
 
@@ -90,7 +108,14 @@ impl Grid {
         if count <= 1 {
             return;
         }
-        self.lines.remove(top as usize);
+        let removed = self.lines.remove(top as usize);
+        if top == 0 {
+            self.scrollback.push(removed);
+            if self.scrollback.len() > self.max_scrollback {
+                let excess = self.scrollback.len() - self.max_scrollback;
+                self.scrollback.drain(..excess);
+            }
+        }
         self.lines.insert(bottom as usize - 1, Line::new(cols));
         for row in top..bottom {
             self.dirty.mark(row);
@@ -156,6 +181,18 @@ impl Grid {
             }
             self.dirty.mark(row);
         }
+    }
+
+    pub fn scrollback_len(&self) -> usize {
+        self.scrollback.len()
+    }
+
+    pub fn scrollback_line(&self, index: usize) -> Option<&Line> {
+        self.scrollback.get(index)
+    }
+
+    pub fn clear_scrollback(&mut self) {
+        self.scrollback.clear();
     }
 }
 
@@ -261,5 +298,47 @@ mod tests {
         for i in 0..5 {
             assert!(m.is_dirty(i));
         }
+    }
+
+    #[test]
+    fn grid_scrollback_on_scroll_up() {
+        let mut g = Grid::new(3, 5);
+        g.fill_cells(0, 'A', 0, 5);
+        g.fill_cells(1, 'B', 0, 5);
+        g.fill_cells(2, 'C', 0, 5);
+        g.scroll_up(0, 3, 5);
+        assert_eq!(g.scrollback_len(), 1);
+        assert_eq!(g.scrollback_line(0).unwrap().get(0).unwrap().char, 'A');
+    }
+
+    #[test]
+    fn grid_scrollback_no_save_when_not_top() {
+        let mut g = Grid::new(4, 5);
+        g.fill_cells(0, 'A', 0, 5);
+        g.fill_cells(1, 'B', 0, 5);
+        g.fill_cells(2, 'C', 0, 5);
+        g.fill_cells(3, 'D', 0, 5);
+        g.scroll_up(1, 3, 5);
+        assert_eq!(g.scrollback_len(), 0);
+    }
+
+    #[test]
+    fn grid_scrollback_max_limit() {
+        let mut g = Grid::with_scrollback(2, 5, 3);
+        for i in 0..5 {
+            g.fill_cells(0, (b'A' + i) as char, 0, 5);
+            g.scroll_up(0, 2, 5);
+        }
+        assert!(g.scrollback_len() <= 3);
+    }
+
+    #[test]
+    fn grid_scrollback_clear() {
+        let mut g = Grid::new(2, 5);
+        g.fill_cells(0, 'A', 0, 5);
+        g.scroll_up(0, 2, 5);
+        assert_eq!(g.scrollback_len(), 1);
+        g.clear_scrollback();
+        assert_eq!(g.scrollback_len(), 0);
     }
 }

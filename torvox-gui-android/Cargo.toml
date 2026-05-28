@@ -15,3 +15,4 @@ torvox-terminal = { workspace = true }
 torvox-renderer = { workspace = true }
 uniffi = { workspace = true }
 thiserror = { workspace = true }
+raw-window-handle = { workspace = true }

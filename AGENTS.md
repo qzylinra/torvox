@@ -180,8 +180,8 @@
 
 # 第四部分: 当前状态
 
-- **阶段**: 0 完成 (基础设施) → 1 (终端引擎) — P0.1–P0.6 完成, P1.1 完成, P1.2 完成, P1.3 完成, P1.4 完成, P1.6 完成
-- **下一步**: P1.5 Android Surface 渲染
+- **阶段**: 0 完成 (基础设施) → 1 (终端引擎) — P0.1–P0.6 完成, P1.1 完成, P1.2 完成, P1.3 完成, P1.4 完成, P1.5 部分完成, P1.6 完成
+- **下一步**: P1.5 完成 (Kotlin TerminalSurface + UniFFI 集成)
 
 ## 阶段 0 完成内容
 
@@ -209,14 +209,15 @@
 
 | 组件 | 状态 | 说明 |
 |------|------|------|
-| `torvox-core` (9 模块) | **完整** | Cell, Attrs (10 SGR), Color, DirtyMask (Vec<u64>), Grid, Line, Config, Cursor, Selection, Unicode, Event, Ansi |
+| `torvox-core` (9 模块) | **完整** | Cell, Attrs (10 SGR), Color, DirtyMask (Vec<u64>), Grid (含 scrollback), Line, Config, Cursor, Selection, Unicode, Event, Ansi |
 | `torvox-terminal/pty.rs` | **完整** | PtyPair: spawn, resize, read/write, Drop (增量终止), 非阻塞, 4 个 Linux 测试 |
 | `torvox-terminal/parser.rs` | **完整** | VtParser 包装 vte::Parser, advance 方法 |
 | `torvox-terminal/terminal.rs` | **完整** | TerminalState + vte::Perform impl, 76 测试 (含 proptest) |
 | `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + TerminalState + parser + crossbeam channel, 5 个集成测试 |
 | `torvox-terminal/keyboard.rs` | **完整** | InputEngine: Kitty 协议 + VT 传统编码 + 鼠标 SGR, 43 个测试 |
-| `torvox-renderer` | **部分** | FontPipeline (fontdb+cosmic-text+swash+etagere, 7 测试), GlyphAtlas, GpuContext (wgpu v29, cell.wgsl, cursor.wgsl, 3 测试), 空 RenderPipeline |
+| `torvox-renderer` | **部分** | FontPipeline (fontdb+cosmic-text+swash+etagere, 7 测试), GpuContext (wgpu v29, cell.wgsl, cursor.wgsl, 3 测试), Android Surface 支持 (set_surface_from_native_window), 已移除空壳 atlas.rs/pipeline.rs |
 | `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(6变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
+| `torvox-gui-android/surface.rs` | **新建** | AndroidSurface: GPU 管线 + 字体 + 终端状态, set_native_window, render |
 | `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |
 | `torvox-fuzz` | **空** | 仅有 src/lib.rs 存根 |
 | `torvox-integration-tests` | **空** | 仅有 src/lib.rs 存根 |

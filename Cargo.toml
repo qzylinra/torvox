@@ -48,3 +48,4 @@ tokio = { version = "1.43", features = ["rt", "sync", "macros"] }
 crossbeam = "0.8"
 bitflags = "2"
 proptest = "1.11"
+raw-window-handle = "0.6"
