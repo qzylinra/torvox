@@ -95,6 +95,12 @@ impl TerminalState {
         self.grid.cols()
     }
 
+    pub fn resize(&mut self, rows: u32, cols: u32) {
+        self.grid.resize(rows, cols);
+        self.scroll_bottom = rows;
+        self.clamp_cursor();
+    }
+
     fn clamp_cursor(&mut self) {
         let max_row = self.grid.rows().saturating_sub(1);
         let max_col = self.grid.cols().saturating_sub(1);

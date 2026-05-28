@@ -180,8 +180,8 @@
 
 # 第四部分: 当前状态
 
-- **阶段**: 0 完成 (基础设施) → 1 (终端引擎) — P0.1–P0.6 全部完成
-- **下一步**: P1.1 VT 解析器
+- **阶段**: 0 完成 (基础设施) → 1 (终端引擎) — P0.1–P0.6 完成, P1.1 完成
+- **下一步**: P1.2 PTY 会话集成
 
 ## 阶段 0 完成内容
 
@@ -198,7 +198,7 @@
 
 | 里程碑 | 交付物 | 状态 |
 |--------|--------|------|
-| P1.1 | VT 解析器 (vte 0.15, Paul Williams 状态机) | 🔜 下一步 |
+| P1.1 | VT 解析器 (vte 0.15, Paul Williams 状态机) | ✅ 完成 |
 | P1.2 | PTY 会话集成 (crossbeam SPSC) | ⬜ |
 | P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → etagere) | ⬜ |
 | P1.4 | GPU 渲染管线 (实例化四边形, WGSL 着色器) | ⬜ |
@@ -211,8 +211,8 @@
 |------|------|------|
 | `torvox-core` (9 模块) | **完整** | Cell, Attrs (10 SGR), Color, DirtyMask (Vec<u64>), Grid, Line, Config, Cursor, Selection, Unicode, Event, Ansi |
 | `torvox-terminal/pty.rs` | **完整** | PtyPair: spawn, resize, read/write, Drop (增量终止), 非阻塞, 4 个 Linux 测试 |
-| `torvox-terminal/parser.rs` | **骨架** | VtParser 包装 vte::Parser, Perform trait 未实现 |
-| `torvox-terminal/terminal.rs` | **骨架** | TerminalState 含 Grid, 无状态机 |
+| `torvox-terminal/parser.rs` | **完整** | VtParser 包装 vte::Parser, advance 方法 |
+| `torvox-terminal/terminal.rs` | **完整** | TerminalState + vte::Perform impl, 76 测试 (含 proptest) |
 | `torvox-renderer` | **骨架** | GlyphAtlas (etagere) + 空 RenderPipeline |
 | `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(6变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
 | `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |

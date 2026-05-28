@@ -108,6 +108,16 @@ impl PtyPair {
             .map_err(PtyError::Fcntl)?;
         Ok(())
     }
+
+    pub fn master_fd(&self) -> std::os::unix::io::RawFd {
+        self.master.as_raw_fd()
+    }
+
+    pub fn into_raw_fd(self) -> std::os::unix::io::RawFd {
+        let fd = self.master.as_raw_fd();
+        std::mem::forget(self);
+        fd
+    }
 }
 
 impl std::io::Read for PtyPair {
@@ -140,7 +150,7 @@ impl Drop for PtyPair {
 
 fn configure_raw_mode(fd: std::os::unix::io::RawFd) -> Result<(), PtyError> {
     use nix::sys::termios::{
-        ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg, tcgetattr, tcsetattr,
+        tcgetattr, tcsetattr, ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg,
     };
     let owned = unsafe { OwnedFd::from_raw_fd(fd) };
     let mut termios = tcgetattr(&owned).map_err(PtyError::Termios)?;
