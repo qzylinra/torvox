@@ -24,8 +24,14 @@ torvox-bridge-types = { path = "torvox-bridge-types" }
 
 vte = "0.15"
 libc = "0.2"
-nix = { version = "0.31", features = ["term", "process", "signal", "ioctl", "fs"] }
-serde = { version = "1", default-features = false, features = ["derive"] }
+nix = { version = "0.31", features = [
+  "term",
+  "process",
+  "signal",
+  "ioctl",
+  "fs",
+] }
+serde = { version = "1", features = ["derive"] }
 postcard = { version = "1.1", features = ["alloc"] }
 thiserror = { version = "2", default-features = false }
 wgpu = "29"

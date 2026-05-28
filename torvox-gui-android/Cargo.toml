@@ -12,5 +12,5 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 torvox-terminal = { workspace = true }
 torvox-renderer = { workspace = true }
-torvox-bridge-types = { workspace = true }
 uniffi = { workspace = true }
+thiserror = { workspace = true }

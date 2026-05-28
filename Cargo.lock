@@ -1602,7 +1602,7 @@ name = "torvox-bridge-types"
 version = "0.1.0"
 dependencies = [
  "serde",
- "uniffi",
+ "thiserror",
 ]
 
 [[package]]
@@ -1633,7 +1633,7 @@ dependencies = [
 name = "torvox-gui-android"
 version = "0.1.0"
 dependencies = [
- "torvox-bridge-types",
+ "thiserror",
  "torvox-renderer",
  "torvox-terminal",
  "uniffi",

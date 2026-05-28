@@ -101,8 +101,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## 当前状态
 
-- **阶段**: 0→1 (基础设施→终端引擎) — P0.1 完成, P0.2 核心类型完成, P0.3 Android 外壳完成
-- **下一步**: P0.4 终端引擎 (VT 解析器 + PTY 集成)
+- **阶段**: 0→1 (基础设施→终端引擎) — P0.1 完成, P0.2 核心类型完成, P0.3 Android 外壳完成, P0.4 文档+CI 完成, P0.5 PTY 验证完成
+- **下一步**: P0.6 UniFFI 桥接验证
 
 ## 关键约束
 

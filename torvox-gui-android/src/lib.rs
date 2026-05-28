@@ -1,7 +1,5 @@
 uniffi::setup_scaffolding!();
 
-pub mod commands;
+pub mod bridge;
 
-pub struct BridgeState {
-    pub terminal_pid: i32,
-}
+pub use bridge::{BridgeCell, TerminalConfig, TerminalError, TerminalEvent, TorvoxBridge};

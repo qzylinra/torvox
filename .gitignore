@@ -13,6 +13,7 @@ android/local.properties
 
 # NDK / Rust cross-compilation (cargo-ndk v4)
 android/app/src/main/jniLibs/
+android/app/src/main/assets/bin/
 
 # IDE
 .vscode/
