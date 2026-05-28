@@ -9,8 +9,16 @@ license = "UNLICENSED"
 torvox-core = { workspace = true }
 torvox-terminal = { workspace = true }
 wgpu = { workspace = true }
+winit = { workspace = true }
+bytemuck = { workspace = true }
 cosmic-text = { workspace = true }
 fontdb = { workspace = true }
 swash = { workspace = true }
 etagere = { workspace = true }
 thiserror = { workspace = true }
+
+[[example]]
+name = "basic_render"
+
+[dev-dependencies]
+pollster = "0.4"
