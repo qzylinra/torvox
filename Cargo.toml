@@ -46,4 +46,5 @@ glyphon = "0.11"
 uniffi = "0.31"
 tokio = { version = "1.43", features = ["rt", "sync", "macros"] }
 crossbeam = "0.8"
+bitflags = "2"
 proptest = "1.11"
