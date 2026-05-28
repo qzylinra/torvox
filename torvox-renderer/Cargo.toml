@@ -10,6 +10,7 @@ torvox-core = { workspace = true }
 torvox-terminal = { workspace = true }
 wgpu = { workspace = true }
 cosmic-text = { workspace = true }
+fontdb = { workspace = true }
 swash = { workspace = true }
 etagere = { workspace = true }
 thiserror = { workspace = true }

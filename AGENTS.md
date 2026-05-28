@@ -180,8 +180,8 @@
 
 # 第四部分: 当前状态
 
-- **阶段**: 0 完成 (基础设施) → 1 (终端引擎) — P0.1–P0.6 完成, P1.1 完成
-- **下一步**: P1.2 PTY 会话集成
+- **阶段**: 0 完成 (基础设施) → 1 (终端引擎) — P0.1–P0.6 完成, P1.1 完成, P1.2 完成, P1.3 完成
+- **下一步**: P1.4 GPU 渲染管线
 
 ## 阶段 0 完成内容
 
@@ -199,8 +199,8 @@
 | 里程碑 | 交付物 | 状态 |
 |--------|--------|------|
 | P1.1 | VT 解析器 (vte 0.15, Paul Williams 状态机) | ✅ 完成 |
-| P1.2 | PTY 会话集成 (crossbeam SPSC) | ⬜ |
-| P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → etagere) | ⬜ |
+| P1.2 | PTY 会话集成 (crossbeam SPSC) | ✅ 完成 |
+| P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → etagere) | ✅ 完成 |
 | P1.4 | GPU 渲染管线 (实例化四边形, WGSL 着色器) | ⬜ |
 | P1.5 | Android Surface 渲染 (wgpu v29 SurfaceView) | ⬜ |
 | P1.6 | 输入处理 (触摸/键盘 → VT 转义序列 → PTY 写入) | ⬜ |
@@ -213,7 +213,8 @@
 | `torvox-terminal/pty.rs` | **完整** | PtyPair: spawn, resize, read/write, Drop (增量终止), 非阻塞, 4 个 Linux 测试 |
 | `torvox-terminal/parser.rs` | **完整** | VtParser 包装 vte::Parser, advance 方法 |
 | `torvox-terminal/terminal.rs` | **完整** | TerminalState + vte::Perform impl, 76 测试 (含 proptest) |
-| `torvox-renderer` | **骨架** | GlyphAtlas (etagere) + 空 RenderPipeline |
+| `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + TerminalState + parser + crossbeam channel, 5 个集成测试 |
+| `torvox-renderer` | **部分** | FontPipeline (fontdb+cosmic-text+swash+etagere, 7 测试), GlyphAtlas, 空 RenderPipeline |
 | `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(6变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
 | `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |
 | `torvox-fuzz` | **空** | 仅有 src/lib.rs 存根 |

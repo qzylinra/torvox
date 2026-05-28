@@ -37,6 +37,7 @@ postcard = { version = "1.1", default-features = false, features = ["alloc"] }
 thiserror = { version = "2", default-features = false }
 wgpu = "29"
 cosmic-text = "0.19"
+fontdb = "0.23"
 swash = "0.2.7"
 etagere = "0.3"
 glyphon = "0.11"
