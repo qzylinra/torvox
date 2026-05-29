@@ -143,7 +143,9 @@
 | 文件 | 重要性 | 用途 | 何时阅读 |
 |------|--------|------|----------|
 | `AGENTS.md` (本文件) | ★★★★★ | AI 智能体首要上下文 | 每个会话开始 |
+| `docs/WORKFLOW.md` | ★★★★★ | SDD 工作流、状态管理、提交规范、质量门禁 | 每个会话开始 |
 | `docs/ROADMAP.md` | ★★★★★ | 当前阶段、里程碑步骤、退出标准 | 开始任何工作之前 |
+| `docs/AUDIT.md` | ★★★★★ | 当前状态、已知问题、待办事项 | 开始任何工作之前 |
 | `docs/ARCHITECTURE.md` | ★★★★★ | 完整架构、crate 结构、数据流、线程模型、技术版本锁定表 | 修改任何 crate 时 |
 | `docs/SPECIFICATION.md` | ★★★★★ | VT 标准覆盖、性能目标、合规测试 | 实现 VT 功能或优化时 |
 | `docs/ADR/004-pty-implementation.md` | ★★★★★ | 为什么 nix crate forkpty、不用 portable-pty、W^X 方案 | 修改 PTY 时 |
@@ -180,8 +182,8 @@
 
 # 第四部分: 当前状态
 
-- **阶段**: 0 完成 (基础设施) → 1 (终端引擎) — P0.1–P0.6 完成, P1.1 完成, P1.2 完成, P1.3 完成, P1.4 完成, P1.5 部分完成, P1.6 完成
-- **下一步**: P1.5 完成 (Kotlin TerminalSurface + UniFFI 集成)
+- **阶段**: 1 完成 (终端引擎) — P0.1–P0.6, P1.1–P1.6 全部完成
+- **下一步**: P2.1 回滚缓冲UI (Grid scrollback已实现, Kotlin触摸滚动UI待完成)
 
 ## 阶段 0 完成内容
 
@@ -202,7 +204,7 @@
 | P1.2 | PTY 会话集成 (crossbeam SPSC) | ✅ 完成 |
 | P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → etagere) | ✅ 完成 |
 | P1.4 | GPU 渲染管线 (实例化四边形, WGSL 着色器) | ✅ 完成 |
-| P1.5 | Android Surface 渲染 (wgpu v29 SurfaceView) | ⬜ |
+| P1.5 | Android Surface 渲染 (wgpu v29 SurfaceView) | ✅ 完成 |
 | P1.6 | 输入处理 (触摸/键盘 → VT 转义序列 → PTY 写入) | ✅ 完成 |
 
 ## 当前代码状态
@@ -216,7 +218,7 @@
 | `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + TerminalState + parser + crossbeam channel + Condvar 事件通知, 5 个集成测试 |
 | `torvox-terminal/keyboard.rs` | **完整** | InputEngine: Kitty 协议 + VT 传统编码 + 鼠标 SGR, 43 个测试 |
 | `torvox-renderer` | **完整** | FontPipeline (fontdb+cosmic-text+swash+etagere, 7 测试), GpuContext (wgpu v29, 缓存 instance_buffer, cell.wgsl, cursor.wgsl, 3 测试), Android Surface 支持 (set_surface_from_native_window), 已移除空壳 atlas.rs/pipeline.rs, 无 torvox-terminal 依赖 |
-| `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(6变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
+| `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
 | `torvox-gui-android/surface.rs` | **完整** | AndroidSurface: GPU 管线 + 字体 + 终端状态, set_native_window, render (使用 GridSnapshot) |
 | `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |
 | `torvox-fuzz` | **空** | 仅有 src/lib.rs 存根 |
@@ -437,7 +439,7 @@ nix develop --command cargo nextest  # 直接运行
 | 错误处理 | `thiserror 2` (库) + `eyre` (二进制)。**库 crate 中无 `anyhow`** | thiserror 在 torvox-core 中 optional (需 std feature) |
 | 序列化 | `postcard 1.1` (不用 bincode，已废弃 RUSTSEC-2025-0141) | |
 | 测试 | `cargo nextest` 替代 `cargo test`。内联 `#[cfg(test)] mod tests` | 集成测试在 `torvox-integration-tests` |
-| 属性测试 | `proptest 1.11` — VT 解析器和 CellGrid 必须有 | 最少 10K 用例 |
+| 属性测试 | `proptest 1.11` — VT 解析器和 Grid 必须有 | 最少 10K 用例 |
 | 命名 | 函数/变量 `snake_case`，类型 `PascalCase`，常量 `SCREAMING_SNAKE` | |
 | 导出 | 每个 crate 最小公共 API 表面。用 `pub(crate)` 隐藏内部 | |
 | `no_std` | `torvox-core` 必须 `no_std` 兼容。`extern crate alloc` 用于 Vec/String | 验证: `cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --features alloc` |
@@ -480,20 +482,20 @@ nix develop --command cargo nextest  # 直接运行
 |----|------|------|----------|
 | L0 编译时 | clippy, geiger, MIRI, fmt | 每 PR | unsafe 审计、类型安全、格式 |
 | L1 单元 | `cargo nextest` + 内联 `#[test]` | 每 PR | 每个公共函数 |
-| L2 属性 | `proptest 1.11` (10K+ 用例) | 每 PR | VT 解析器、CellGrid、PTY 编码 |
+| L2 属性 | `proptest 1.11` (10K+ 用例) | 每 PR | VT 解析器、Grid、PTY 编码 |
 | L3 集成 | `torvox-integration-tests` | 每 PR | 跨 crate 交互、会话生命周期 |
 | L4 模糊 | `cargo-fuzz` (3 目标, 1B+ 迭代/夜) | 每夜 | 零崩溃 |
 
 ## 确定性回放测试
 
-记录 PTY 输出 → postcard 序列化 → 回放 → 断言 CellGrid 状态。
+记录 PTY 输出 → postcard 序列化 → 回放 → 断言 Grid 状态。
 用于回归验证和跨平台一致性检查。
 
 ## 具体测试要求
 
 - **每个公共函数**: 必须有单元测试
 - **VT 解析器**: proptest (10K+ 用例) + fuzz (每夜 1B+ 迭代)
-- **CellGrid/DirtyMask**: proptest (不变量: mark 后 is_dirty 为 true, clear 后 any_dirty 为 false)
+- **Grid/DirtyMask**: proptest (不变量: mark 后 is_dirty 为 true, clear 后 any_dirty 为 false)
 - **序列化**: 每个可序列化类型须有 postcard roundtrip 测试
 - **PTY**: 非阻塞读写、resize、kill_on_drop (Linux 单元测试, Android 集成测试)
 - **UniFFI 桥接**: Kotlin 调用 Rust 函数，返回值正确 (端到端测试)
@@ -523,7 +525,7 @@ torvox-gui-android (uniffi, 依赖上述所有)
 | 线程 | 职责 | 注意 |
 |------|------|------|
 | PTY 读取线程 | `read()` → crossbeam SPSC → VT 解析器 | 阻塞 I/O，独立线程 |
-| VT 解析器线程 | 消费 SPSC，更新 CellGrid | Arc<Mutex<CellGrid>> |
+| VT 解析器线程 | 消费 SPSC，更新 Grid | Arc<Mutex<Grid>> |
 | 渲染线程 | DirtyMask → 图集查找 → 实例缓冲区 → wgpu submit | **单线程** (wgpu 设备在自己线程) |
 | wgpu 内部线程 | 1-2 个 Vulkan 内部线程 | wgpu 管理 |
 | Android 主线程 | Compose UI, 事件分发 | 不做重计算 |
@@ -534,7 +536,7 @@ torvox-gui-android (uniffi, 依赖上述所有)
 
 ```
 PTY write → kernel → read() → raw bytes → crossbeam SPSC
-  → VT Parser → CellGrid + DirtyMask (Vec<u64>分区) → notify
+  → VT Parser → Grid + DirtyMask (Vec<u64>分区) → notify
   → RenderThread → glyph atlas lookup → instance buffer
   → wgpu submit → SurfaceView
 ```
@@ -594,7 +596,7 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 ```
 [ ] 公共还是内部? 默认 pub(crate)，仅必要时 pub
 [ ] 是否需要单元测试? 每个公共函数必须
-[ ] 是否需要 proptest? VT 解析器和 CellGrid 必须
+[ ] 是否需要 proptest? VT 解析器和 Grid 必须
 [ ] 错误类型用 thiserror，不用 anyhow (库 crate)
 [ ] no_std 兼容? (如果在 torvox-core 中)
 [ ] unsafe? (如果在 torvox-core 中，不允许)
@@ -645,10 +647,10 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 | 2 | `torvox-fuzz/fuzz_targets/` 不存在 | 待建 | 模糊测试无法运行 | P1.1 后 |
 | 3 | `torvox-integration-tests/tests/` 不存在 | 待建 | 集成测试无法运行 | P1.2 后 |
 | 4 | `torvox-bench/benches/` 不存在 | 待建 | 性能基准无法运行 | P1.4 后 |
-| 5 | `torvox-renderer/shaders/` 不存在 | 待建 | 无 WGSL 着色器 | P1.4 |
-| 6 | TerminalForegroundService 未调用 setForegroundServiceType | 待修 | Android 16 可能要求 | P1.6 |
-| 7 | tokio/crossbeam 在 workspace 声明但未被任何 crate 使用 | 待用 | 无实际影响 | P1.2 集成时启用 |
-| 8 | glyphon 在 workspace 声明但未被任何 crate 使用 | 待用 | 无实际影响 | P1.4 渲染时评估 |
+| 5 | ~~`torvox-renderer/shaders/` 不存在~~ | **已解决** | WGSL 着色器已存在 (cell.wgsl, cursor.wgsl) | 审计 2026-05-29 |
+| 6 | ~~TerminalForegroundService 未调用 setForegroundServiceType~~ | **已修复** | P1.6 已完成 | P1.6 |
+| 7 | ~~tokio/crossbeam 在 workspace 声明但未被任何 crate 使用~~ | **已解决** | crossbeam 已用于 session 通道 | 审计 2026-05-29 |
+| 8 | ~~glyphon 在 workspace 声明但未被任何 crate 使用~~ | **已解决** | glyphon 依赖已移除 | 审计 2026-05-29 |
 
 ---
 

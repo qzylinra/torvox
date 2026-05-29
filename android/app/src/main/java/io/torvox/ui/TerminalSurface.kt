@@ -4,14 +4,11 @@ import android.content.Context
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
-import android.view.ScaleGestureDetector
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import io.torvox.SelectionMode
+import io.torvox.TerminalViewModel
 
-/**
- * SurfaceView with scrollback gesture support.
- * Handles fling/scroll gestures for terminal scrollback navigation.
- */
 class TerminalSurface
     @JvmOverloads
     constructor(
@@ -20,7 +17,7 @@ class TerminalSurface
         defStyleAttr: Int = 0,
     ) : SurfaceView(context, attrs, defStyleAttr),
         SurfaceHolder.Callback {
-        private var bridge: Any? = null
+        private var viewModel: TerminalViewModel? = null
         private var rows: Int = 24
         private var cols: Int = 80
         private var isScrolling: Boolean = false
@@ -80,18 +77,18 @@ class TerminalSurface
                         onScrollingStateChanged?.invoke(false)
                         return true
                     }
+                    viewModel?.clearSelection()
                     return false
+                }
+
+                override fun onLongPress(e: MotionEvent) {
+                    val row = (e.y / 16f).toInt().coerceIn(0, rows - 1)
+                    val col = (e.x / 8f).toInt().coerceIn(0, cols - 1)
+                    viewModel?.startSelection(row, col)
                 }
             }
 
         private val gestureDetector = GestureDetector(context, gestureListener)
-        private val scaleGestureDetector =
-            ScaleGestureDetector(
-                context,
-                object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                    override fun onScale(detector: ScaleGestureDetector): Boolean = false
-                },
-            )
 
         init {
             holder.addCallback(this)
@@ -99,8 +96,8 @@ class TerminalSurface
             isFocusableInTouchMode = true
         }
 
-        fun initialize(bridgeInstance: Any) {
-            this.bridge = bridgeInstance
+        fun initialize(viewModel: TerminalViewModel) {
+            this.viewModel = viewModel
         }
 
         fun setDimensions(
@@ -125,8 +122,20 @@ class TerminalSurface
         fun isCurrentlyScrolling(): Boolean = isScrolling
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
-            var handled = scaleGestureDetector.onTouchEvent(event)
-            handled = gestureDetector.onTouchEvent(event) || handled
+            val handled = gestureDetector.onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_MOVE && viewModel
+                    ?.state
+                    ?.value
+                    ?.selection
+                    ?.active == true
+            ) {
+                val row = (event.y / 16f).toInt().coerceIn(0, rows - 1)
+                val col = (event.x / 8f).toInt().coerceIn(0, cols - 1)
+                viewModel?.updateSelection(row, col)
+            }
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                viewModel?.endSelection()
+            }
             return handled || super.onTouchEvent(event)
         }
 
@@ -142,5 +151,10 @@ class TerminalSurface
         override fun surfaceDestroyed(holder: SurfaceHolder) {
             isScrolling = false
             scrollOffset = 0
+        }
+
+        override fun onDetachedFromWindow() {
+            super.onDetachedFromWindow()
+            handler.removeCallbacksAndMessages(null)
         }
     }

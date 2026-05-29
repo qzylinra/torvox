@@ -1,6 +1,6 @@
 # Torvox 路线图
 
-> **当前阶段**: 阶段 1 — 终端引擎 (P1.1–P1.4, P1.6 完成) → 下一步 P1.5 Android Surface 渲染
+> **当前阶段**: 阶段 2 — P1.1–P1.6 全部完成 → 下一步 P2.1 回滚缓冲UI
 
 ---
 
@@ -18,7 +18,7 @@
 2. 创建 `rust-toolchain.toml` (固定 stable 版本)
 3. 创建 `torvox-core/` — `no_std` crate, 骨架 `lib.rs`
 4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `vte 0.15`, `nix 0.31`, `serde`, `postcard 1.1` 依赖
-5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `skrifa 0.42`, `etagere 0.3`, `glyphon` 依赖
+5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `etagere 0.3` 依赖
 6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `uniffi 0.31` 依赖
 7. ~~创建 `torvox-bridge-types/`~~ — 类型已合并到 `torvox-gui-android/src/bridge.rs`
 8. 创建 `torvox-exec/` — 骨架 `main.rs` (多调用二进制)
@@ -53,7 +53,7 @@
 
 ### P0.3 — Android 外壳
 
-**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.01。Kotlin `MainActivity` + Hilt DI。Rust 通过 `scripts/build-android-libs.sh` (cargo-ndk v4) 编译。`System.loadLibrary("torvox_android")` 成功。
+**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.00。Kotlin `MainActivity` + Hilt DI。Rust 通过 `scripts/build-android-libs.sh` (cargo-ndk v4) 编译。`System.loadLibrary("torvox_android")` 成功。
 
 **详细步骤**:
 1. 创建 `android/` 目录结构 (app, gradle, settings.gradle.kts, build.gradle.kts)
@@ -134,7 +134,7 @@
 
 ### P1.1 — VT 解析器
 
-**交付物**: `torvox-terminal::parser` — 通过 `vte 0.15` crate 的 Paul Williams 状态机。`CellGrid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
+**交付物**: `torvox-terminal::parser` — 通过 `vte 0.15` crate 的 Paul Williams 状态机。`Grid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
 
 **详细步骤**:
 1. 实现 `vte::Perform` trait 处理所有回调
@@ -157,19 +157,19 @@
 
 ### P1.2 — PTY 会话集成
 
-**交付物**: `torvox-terminal::session` — 完整 PTY 会话。读取 PTY 输出 → VT 解析器 → CellGrid。写入 → PTY。
+**交付物**: `torvox-terminal::session` — 完整 PTY 会话。读取 PTY 输出 → VT 解析器 → Grid。写入 → PTY。
 
 **详细步骤**:
-1. 实现 `Session` 编排器 (拥有 PtyPair + CellGrid + Parser)
+1. 实现 `Session` 编排器 (拥有 PtyPair + Grid + Parser)
 2. PTY 读取线程: 阻塞 `read()` → `crossbeam::channel` → 解析任务
-3. VT 解析任务: 从通道读取字节 → `vte::Parser::advance()` → CellGrid 变更
-4. 脏区域通知: CellGrid 变更 → `crossbeam::Notify` → 渲染线程
+3. VT 解析任务: 从通道读取字节 → `vte::Parser::advance()` → Grid 变更
+4. 脏区域通知: Grid 变更 → `Condvar` → 渲染线程
 5. 输入写入: `InputEngine::process()` → VT 转义编码 → PTY `write()`
-6. 调整大小: `resize(rows, cols)` → `ioctl(TIOCSWINSZ)` + CellGrid 调整
+6. 调整大小: `resize(rows, cols)` → `ioctl(TIOCSWINSZ)` + Grid 调整
 7. 进程退出: `waitpid()` → `ProcessExited` 事件
 8. 信号处理: SIGWINCH, SIGHUP, SIGCHLD
-9. 集成测试: 生成 `echo hello` → CellGrid 包含 "hello"
-10. 回放测试: 录制 PTY 输出 → 重放 → 断言 CellGrid 状态
+9. 集成测试: 生成 `echo hello` → Grid 包含 "hello"
+10. 回放测试: 录制 PTY 输出 → 重放 → 断言 Grid 状态
 
 **验证**: `cargo test -p torvox-terminal --test session_test`
 

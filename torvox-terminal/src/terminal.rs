@@ -9,7 +9,6 @@ use torvox_core::ansi::ansi_to_rgb;
 use torvox_core::cell::{Attrs, Cell, Color};
 use torvox_core::cursor::CursorState;
 use torvox_core::grid::Grid;
-use torvox_core::line::Line;
 
 const DEFAULT_TAB_STOP_INTERVAL: u32 = 8;
 const MAX_TAB_STOPS: u32 = 512;
@@ -50,10 +49,6 @@ pub struct TerminalState {
     insert_mode: bool,
     alt_grid: Option<Grid>,
     title: Option<String>,
-    #[allow(dead_code)]
-    scrollback: Vec<Line>,
-    #[allow(dead_code)]
-    max_scrollback: usize,
 }
 
 impl TerminalState {
@@ -82,8 +77,6 @@ impl TerminalState {
             insert_mode: false,
             alt_grid: None,
             title: None,
-            scrollback: Vec::new(),
-            max_scrollback: 50000,
         }
     }
 
@@ -223,7 +216,9 @@ impl TerminalState {
         if count == 0 || col >= cols {
             return;
         }
-        let line = self.grid.get_mut(row).unwrap();
+        let Some(line) = self.grid.get_mut(row) else {
+            return;
+        };
         let actual = count.min(cols - col);
         // Shift cells right by `actual` positions, in-place from right to left
         let mut i = cols;
@@ -249,7 +244,9 @@ impl TerminalState {
         if count == 0 || col >= cols {
             return;
         }
-        let line = self.grid.get_mut(row).unwrap();
+        let Some(line) = self.grid.get_mut(row) else {
+            return;
+        };
         let actual = count.min(cols - col);
         // Shift cells left by `actual` positions, in-place from left to right
         for c in col..cols - actual {
@@ -278,16 +275,20 @@ impl TerminalState {
         self.grid.delete_lines(row, count, self.scroll_bottom, cols);
     }
 
-    fn scroll_up(&mut self, _count: u32) {
+    fn scroll_up(&mut self, count: u32) {
         let cols = self.grid.cols();
-        self.grid
-            .scroll_up(self.scroll_top, self.scroll_bottom, cols);
+        for _ in 0..count {
+            self.grid
+                .scroll_up(self.scroll_top, self.scroll_bottom, cols);
+        }
     }
 
-    fn scroll_down(&mut self, _count: u32) {
+    fn scroll_down(&mut self, count: u32) {
         let cols = self.grid.cols();
-        self.grid
-            .scroll_down(self.scroll_top, self.scroll_bottom, cols);
+        for _ in 0..count {
+            self.grid
+                .scroll_down(self.scroll_top, self.scroll_bottom, cols);
+        }
     }
 
     fn set_sgr(&mut self, params: &[u16]) {
@@ -313,7 +314,7 @@ impl TerminalState {
                 7 => self.current_attrs.reverse = true,
                 8 => self.current_attrs.hidden = true,
                 9 => self.current_attrs.strikethrough = true,
-                21 => self.current_attrs.bold = false,
+                21 => self.current_attrs.double_underline = true,
                 22 => {
                     self.current_attrs.bold = false;
                     self.current_attrs.dim = false;
@@ -623,7 +624,7 @@ impl vte::Perform for TerminalState {
                 self.set_scrolling_region(top, bottom);
             }
             ('m', []) => {
-                let mut p = Vec::new();
+                let mut p = Vec::with_capacity(16);
                 for param in params {
                     for &v in param {
                         p.push(v);

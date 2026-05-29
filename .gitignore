@@ -40,6 +40,9 @@ flamegraph.svg
 perf.data
 massif.out.*
 
+# Test results
+test-results/
+
 # UniFFI generated (由构建时生成)
 android/app/src/main/java/io/torvox/bridge/uniffi/
 

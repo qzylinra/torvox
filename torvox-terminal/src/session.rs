@@ -43,9 +43,19 @@ impl Session {
 
         let (output_tx, output_rx) = bounded::<Vec<u8>>(64);
 
+        // SAFETY: dup() is safe because pty.master_fd() returns a valid fd
+        // owned by PtyPair. We duplicate it so the reader thread has its own
+        // fd to close on exit without interfering with the original.
         let read_fd = unsafe { libc::dup(pty.master_fd()) };
         if read_fd < 0 {
             return Err(SessionError::Io(std::io::Error::last_os_error()));
+        }
+
+        fn notify_output(notify: &Arc<(Mutex<bool>, Condvar)>) {
+            let (lock, cvar) = &**notify;
+            let mut pending = lock.lock().unwrap();
+            *pending = true;
+            cvar.notify_one();
         }
 
         let exited_read = exited.clone();
@@ -53,6 +63,10 @@ impl Session {
         let reader_handle = std::thread::spawn(move || {
             let mut read_buf = [0u8; READ_BUF_SIZE];
             loop {
+                // SAFETY: read_fd is a valid fd (dup'd from PtyPair's master).
+                // read_buf is a stack-allocated array with known size. The
+                // read call is blocking but the fd is set to nonblocking mode.
+                // We pass a valid pointer and length — no memory safety issue.
                 let n = unsafe {
                     libc::read(
                         read_fd,
@@ -65,16 +79,10 @@ impl Session {
                     if output_tx.send(data).is_err() {
                         break;
                     }
-                    let (lock, cvar) = &*notify_read;
-                    let mut pending = lock.lock().unwrap();
-                    *pending = true;
-                    cvar.notify_one();
+                    notify_output(&notify_read);
                 } else if n == 0 {
                     exited_read.store(true, Ordering::Release);
-                    let (lock, cvar) = &*notify_read;
-                    let mut pending = lock.lock().unwrap();
-                    *pending = true;
-                    cvar.notify_one();
+                    notify_output(&notify_read);
                     break;
                 } else {
                     let err = std::io::Error::last_os_error();
@@ -82,14 +90,14 @@ impl Session {
                         std::thread::sleep(Duration::from_millis(2));
                     } else {
                         exited_read.store(true, Ordering::Release);
-                        let (lock, cvar) = &*notify_read;
-                        let mut pending = lock.lock().unwrap();
-                        *pending = true;
-                        cvar.notify_one();
+                        notify_output(&notify_read);
                         break;
                     }
                 }
             }
+            // SAFETY: read_fd was created by libc::dup() and is only used
+            // in this thread. Closing it here is safe and necessary to
+            // prevent fd leaks. No other code references this fd after close.
             unsafe {
                 libc::close(read_fd);
             }

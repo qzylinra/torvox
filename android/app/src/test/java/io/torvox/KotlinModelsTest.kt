@@ -14,13 +14,6 @@ import org.junit.Test
 class KotlinModelsTest {
     @Test
     fun packageNameIsCorrect() {
-        assertEquals("io.torvox", "io.torvox")
-    }
-
-    @Test
-    fun terminalSurfaceCanBeInstantiated() {
-        // TerminalSurface is a simple wrapper, verify it compiles
-        // (actual instantiation requires Android Context)
-        assertTrue(true)
+        assertEquals("io.torvox", KotlinModelsTest::class.qualifiedName?.substringBeforeLast('.'))
     }
 }
