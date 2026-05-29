@@ -256,11 +256,11 @@
 
 ### P2.1 — 回滚缓冲
 
-1. 环形缓冲回滚 (50K 行默认, 可配置)
-2. 触摸滚动 (fling 手势)
-3. 滚动位置指示器
-4. 滚动时锁定键盘输入
-5. 搜索功能 (在回滚中查找文本)
+1. ✅ 环形缓冲回滚 (50K 行默认, 可配置) — Grid.scrollback
+2. ✅ 触摸滚动 (fling 手势) — TerminalSurface GestureDetector
+3. ✅ 滚动位置指示器 — onScrollChanged callback
+4. ✅ 滚动时锁定键盘输入 — isScrolling 状态
+5. ⬜ 搜索功能 (在回滚中查找文本)
 
 ### P2.2 — 选择
 

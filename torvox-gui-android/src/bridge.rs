@@ -292,6 +292,36 @@ impl TorvoxBridge {
         }
     }
 
+    fn scrollback_len(&self) -> u32 {
+        self.surface
+            .lock()
+            .ok()
+            .and_then(|g| {
+                g.as_ref()
+                    .map(|s| s.terminal().grid.scrollback_len() as u32)
+            })
+            .unwrap_or(0)
+    }
+
+    fn scrollback_line(&self, index: u32) -> Option<String> {
+        self.surface.lock().ok().and_then(|g| {
+            g.as_ref().and_then(|s| {
+                s.terminal()
+                    .grid
+                    .scrollback_line(index as usize)
+                    .map(|line| {
+                        let mut text = String::new();
+                        for col in 0..line.len() {
+                            if let Some(cell) = line.get(col) {
+                                text.push(cell.char);
+                            }
+                        }
+                        text.trim_end().to_string()
+                    })
+            })
+        })
+    }
+
     fn get_config(&self) -> TerminalConfig {
         self.config.clone()
     }

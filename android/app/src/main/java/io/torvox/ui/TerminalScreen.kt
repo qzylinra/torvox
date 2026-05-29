@@ -1,6 +1,5 @@
 package io.torvox.ui
 
-import android.view.SurfaceView
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -20,21 +19,9 @@ fun TerminalScreen(modifier: Modifier = Modifier) {
         Box(modifier = Modifier.fillMaxSize()) {
             AndroidView(
                 factory = { context ->
-                    SurfaceView(context).apply {
-                        holder.addCallback(
-                            object : android.view.SurfaceHolder.Callback {
-                                override fun surfaceCreated(holder: android.view.SurfaceHolder) {}
-
-                                override fun surfaceChanged(
-                                    holder: android.view.SurfaceHolder,
-                                    format: Int,
-                                    width: Int,
-                                    height: Int,
-                                ) {}
-
-                                override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {}
-                            },
-                        )
+                    TerminalSurface(context).apply {
+                        setDimensions(24, 80)
+                        setMaxScrollback(50000)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
