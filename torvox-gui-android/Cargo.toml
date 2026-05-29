@@ -2,7 +2,7 @@
 name = "torvox-gui-android"
 version = "0.1.0"
 edition = "2024"
-description = "Android JNI/UniFFI bridge for Torvox terminal UI"
+description = "Android BoltFFI bridge for Torvox terminal UI"
 license = "UNLICENSED"
 
 [lib]
@@ -12,7 +12,7 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 torvox-core = { workspace = true }
 torvox-terminal = { workspace = true }
-torvox-renderer = { workspace = true }
-uniffi = { workspace = true }
+torvox-renderer = { workspace = true, default-features = false }
+boltffi = { workspace = true }
 thiserror = { workspace = true }
-raw-window-handle = { workspace = true }
+libghostty-vt = { workspace = true }

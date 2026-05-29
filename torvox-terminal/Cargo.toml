@@ -7,11 +7,11 @@ license = "UNLICENSED"
 
 [dependencies]
 torvox-core = { workspace = true }
-vte = { workspace = true }
+libghostty-vt = { workspace = true }
 nix = { workspace = true }
 libc = { workspace = true }
 thiserror = { workspace = true }
-crossbeam = { workspace = true }
+flume = { workspace = true }
 bitflags = { workspace = true }
 
 [dev-dependencies]

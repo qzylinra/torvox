@@ -1,8 +1,36 @@
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::cell::DirtyMask;
+use crate::cell::{Cell, DirtyMask};
 use crate::line::Line;
+
+/// Read-only snapshot of the terminal grid for rendering.
+/// Implemented by Grid so renderer doesn't depend on terminal crate.
+pub trait GridSnapshot {
+    fn rows(&self) -> u32;
+    fn cols(&self) -> u32;
+    fn get(&self, row: u32) -> Option<&Line>;
+    fn cell(&self, row: u32, col: u32) -> Option<&Cell>;
+    fn dirty(&self) -> &DirtyMask;
+}
+
+impl GridSnapshot for Grid {
+    fn rows(&self) -> u32 {
+        self.rows
+    }
+    fn cols(&self) -> u32 {
+        self.cols
+    }
+    fn get(&self, row: u32) -> Option<&Line> {
+        self.lines.get(row as usize)
+    }
+    fn cell(&self, row: u32, col: u32) -> Option<&Cell> {
+        self.lines.get(row as usize).and_then(|line| line.get(col))
+    }
+    fn dirty(&self) -> &DirtyMask {
+        &self.dirty
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Grid {
@@ -68,6 +96,10 @@ impl Grid {
         self.dirty.clear();
     }
 
+    pub fn mark_all_dirty(&mut self) {
+        self.dirty.mark_all(self.rows);
+    }
+
     pub fn resize(&mut self, new_rows: u32, new_cols: u32) {
         self.lines.resize(new_rows as usize, Line::new(new_cols));
         for line in &mut self.lines {
@@ -104,19 +136,27 @@ impl Grid {
         if top >= bottom || bottom > self.rows {
             return;
         }
-        let count = (bottom - top) as usize;
-        if count <= 1 {
+        let region_size = bottom - top;
+        if region_size <= 1 {
             return;
         }
-        let removed = self.lines.remove(top as usize);
+        let t = top as usize;
+        let b = bottom as usize;
         if top == 0 {
+            let removed = self.lines.remove(t);
             self.scrollback.push(removed);
             if self.scrollback.len() > self.max_scrollback {
                 let excess = self.scrollback.len() - self.max_scrollback;
                 self.scrollback.drain(..excess);
             }
+            self.lines.insert(b - 1, Line::new(cols));
+        } else {
+            self.lines[t..b].rotate_left(1);
+            *self
+                .lines
+                .get_mut(b - 1)
+                .expect("grid invariant: b-1 < lines.len() after rotate") = Line::new(cols);
         }
-        self.lines.insert(bottom as usize - 1, Line::new(cols));
         for row in top..bottom {
             self.dirty.mark(row);
         }
@@ -126,8 +166,13 @@ impl Grid {
         if top >= bottom || bottom > self.rows {
             return;
         }
-        self.lines.remove(bottom as usize - 1);
-        self.lines.insert(top as usize, Line::new(cols));
+        let t = top as usize;
+        let b = bottom as usize;
+        self.lines[t..b].rotate_right(1);
+        *self
+            .lines
+            .get_mut(t)
+            .expect("grid invariant: t < lines.len() after rotate") = Line::new(cols);
         for row in top..bottom {
             self.dirty.mark(row);
         }
@@ -138,9 +183,16 @@ impl Grid {
             return;
         }
         let actual = count.min(bottom - at);
-        for _ in 0..actual {
-            self.lines.remove(bottom as usize - 1);
-            self.lines.insert(at as usize, Line::new(cols));
+        let a = at as usize;
+        let b = bottom as usize;
+        // Rotate left: insert blank lines at `at`, push existing lines down
+        self.lines[a..b].rotate_right(actual as usize);
+        // Fill the inserted lines (now at the beginning of the slice) with blank
+        for i in a..a + actual as usize {
+            *self
+                .lines
+                .get_mut(i)
+                .expect("grid invariant: i < lines.len() after rotate_right") = Line::new(cols);
         }
         for row in at..bottom {
             self.dirty.mark(row);
@@ -152,9 +204,16 @@ impl Grid {
             return;
         }
         let actual = count.min(bottom - at);
-        for _ in 0..actual {
-            self.lines.remove(at as usize);
-            self.lines.insert(bottom as usize - 1, Line::new(cols));
+        let a = at as usize;
+        let b = bottom as usize;
+        // Rotate left: delete lines at `at`, pull lines up from below
+        self.lines[a..b].rotate_left(actual as usize);
+        // Fill the deleted lines (now at the end of the slice) with blank
+        for i in b - actual as usize..b {
+            *self
+                .lines
+                .get_mut(i)
+                .expect("grid invariant: i < lines.len() after rotate_left") = Line::new(cols);
         }
         for row in at..bottom {
             self.dirty.mark(row);

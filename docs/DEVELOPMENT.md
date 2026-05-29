@@ -42,7 +42,7 @@ rustup target add thumbv6m-none-eabi
 ```bash
 # 通过 ANDROID_SDK_ROOT 环境变量或 local.properties 设置
 echo "sdk.dir=$HOME/Android/Sdk" > android/local.properties
-echo "ndk.dir=$HOME/Android/Sdk/ndk/28.x.x" >> android/local.properties
+echo "ndk.dir=$HOME/Android/Sdk/ndk/29.0.14206865" >> android/local.properties
 ```
 
 ## 快速开始
@@ -169,8 +169,8 @@ cargo fuzz run vt_parser -- -max_total=1000000000
 cargo geiger --all-features
 
 # 未定义行为检测 (MIRI, 仅 Linux)
-MIRIFLAGS="-Zmiri-tag-raw-pointers" cargo miri test -p torvox-core
-MIRIFLAGS="-Zmiri-tag-raw-pointers" cargo miri test -p torvox-terminal
+cargo miri test -p torvox-core
+cargo miri test -p torvox-terminal
 
 # 依赖审计
 cargo audit

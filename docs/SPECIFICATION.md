@@ -12,11 +12,11 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 
 | 标准 | 覆盖 | 备注 |
 |------|------|------|
-| **VT100** | 完整 | DEC AWB, CKM, DECCOLM (80/132), 原点模式, 滚动区域, 换行模式 |
-| **VT220** | 完整 | Paul Williams 解析器全部 15 状态, DECSC/DECRC, DECSTBM, DECDHL |
-| **VT320** | 完整 | 8-bit 控制, DECRQSS, DECRQM, 选择性擦除, 矩形区域操作 |
-| **ECMA-48** | 完整 | 所有 CSI 序列, SGR (22-27), 私有模式 |
-| **xterm** | 完整 | 256 色, 真彩色 (24-bit), 括号粘贴, DECSET/DECRST (完整 200 模式范围) |
+| **VT100** | ✅ 完整 | DEC AWB, CKM, DECCOLM (80/132), 原点模式, 滚动区域, 换行模式 |
+| **VT220** | ⚠️ 部分 | Paul Williams 解析器全部 15 状态, DECSC/DECRC, DECSTBM (已实现); DECDHL ❌ |
+| **VT320** | ❌ 未实现 | 8-bit 控制, DECRQSS, DECRQM, 选择性擦除, 矩形区域操作 — 均未实现 |
+| **ECMA-48** | ❌ 未实现 | 仅实现部分 CSI 序列; "所有 CSI 序列" 和完整私有模式未实现 |
+| **xterm** | ⚠️ 部分 | 256 色 ✅, 真彩色 ✅, 括号粘贴 ✅; DECSET/DECRST 仅少数模式 ❌ |
 
 ### 现代扩展 (MVP — 阶段 1)
 
@@ -25,24 +25,24 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 真彩色 (24-bit) | ✅ | `vttest true-color` |
 | 256 调色板 | ✅ | `Colin's 256colors2.pl` |
 | 粗体/斜体/下划线/删除线 | ✅ | SGR 1-9, 21-29, 51-55 |
-| 彩色下划线 (5 种样式) | ✅ | SGR 58:2/59:2 |
-| 双宽字符 | ✅ | DECDHL, DECSWL, DECDWL |
+| 彩色下划线 (5 种样式) | ❌ | SGR 58:2/59:2 — 未实现。基本下划线存在 (SGR 4), 但彩色下划线未实现 |
+| 双宽字符 | ❌ | DECDHL, DECSWL, DECDWL — 均未实现 |
 | 括号粘贴模式 | ✅ | DEC 2004 |
 | 鼠标跟踪 | ✅ | X10, VT200, SGR, SGR-pixels (DEC 1016) |
-| DEC 定位器 | ✅ | CSI DECELR, DECRQLR |
+| DEC 定位器 | ❌ | CSI DECELR, DECRQLR — 未实现 |
 | 焦点事件 | ✅ | CSI I/F |
-| 同步输出 (DEC 2026) | ✅ | 无闪烁渲染 |
-| Sixel 图形 | ✅ | 完整 DEC sixel 协议 |
-| Kitty 图形协议 | ✅ | 全部 5 动作: 传输, 删除, 合成, 传输+显示 |
-| iTerm2 图像协议 | ✅ | OSC 1337 File= |
+| 同步输出 (DEC 2026) | ❌ | 未实现 |
+| Sixel 图形 | ❌ | 未实现 |
+| Kitty 图形协议 | ❌ | 未实现 |
+| iTerm2 图像协议 | ❌ | 未实现 |
 | **Kitty 键盘协议** | ✅ | 渐进增强: CSI u, push/pop/restore 配置。完整按键编码。 |
-| **OSC 8 超链接** | ✅ | id= URI 悬停高亮 |
-| **OSC 52 剪贴板** | ✅ | 系统剪贴板读写 |
-| **OSC 133 Shell 集成** | ✅ | Prompt/marker/exec: A/B/C 序列。语义选择。 |
-| **OSC 7 CWD** | ✅ | 目录报告 |
-| **OSC 4/10/11/12/17/19/110/111/112/708** | ✅ | 动态颜色配置 |
-| **DECRQSS** | ✅ | 请求终端状态 (vttest 使用) |
-| **DECRQM** | ✅ | 请求模式状态 |
+| **OSC 8 超链接** | ❌ | 未实现 |
+| **OSC 52 剪贴板** | ❌ | 未实现 (未来工作) |
+| **OSC 133 Shell 集成** | ❌ | 未实现 |
+| **OSC 7 CWD** | ❌ | 未实现 |
+| **OSC 4/10/11/12/17/19/110/111/112/708** | ❌ | 未实现 |
+| **DECRQSS** | ❌ | 未实现 |
+| **DECRQM** | ❌ | 未实现 |
 
 ### 阶段 1 之后
 
@@ -58,24 +58,24 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 
 | 特性 | 级别 | 备注 |
 |------|------|------|
-| UTF-8 编码 | ✅ 完整 | 单码点字形簇感知 |
-| 字形簇聚类 | ✅ 完整 | UAX#29, 通过 East Asian Width 计算宽度 |
-| Emoji (ZWJ 序列) | ✅ 完整 | 通过 cosmic-text + swash/skrifa 彩色 emoji |
-| CJK 宽字符 | ✅ 完整 | East Asian Width, 行双宽 |
-| 双向文本 | ✅ 完整 | Unicode BIDI 算法 |
-| 零宽连接符 | ✅ 完整 | ZWNJ, ZWJ, 区域指示符 |
-| 组合字符 | ✅ 完整 | COMBINING 标记, 包围标记 |
-| 变体选择符 | ✅ 完整 | VS1-VS16 用于 emoji/文本呈现 |
-| 私用区 | ⚠️ | 通过捆绑字体文件的 Nerd Font 字形 |
+| UTF-8 编码 | ✅ 完整 | Rust 字符串原生 UTF-8 |
+| 字形簇聚类 | ⬜ 未实现 | UAX#29 — cosmic-text 处理基本聚类, 但完整 UAX#29 未验证 |
+| Emoji (ZWJ 序列) | ⬜ 未测试 | 通过 cosmic-text + swash/skrifa 彩色 emoji, 但 ZWJ 序列未测试 |
+| CJK 宽字符 | ⚠️ 部分 | East Asian Width 部分处理, 行双宽未实现 |
+| 双向文本 | ❌ 未实现 | Unicode BIDI 算法未实现 |
+| 零宽连接符 | ⬜ 未测试 | ZWNJ, ZWJ, 区域指示符 — 未测试 |
+| 组合字符 | ⬜ 未测试 | COMBINING 标记, 包围标记 — 未测试 |
+| 变体选择符 | ⬜ 未测试 | VS1-VS16 用于 emoji/文本呈现 — 未测试 |
+| 私用区 | ⬜ 未计划 | 通过捆绑字体文件的 Nerd Font 字形 (阶段 2+) |
 
 ### Emoji 渲染策略
 
 | 格式 | 状态 | 备注 |
 |------|------|------|
-| CBDT/CBLC | ✅ | 遗留 Android emoji 格式, swash 原生支持 |
-| sbix | ✅ | Apple 格式, cosmic-text 支持 |
-| COLR v0 | ✅ | Windows/Chrome 格式, swash 支持 |
-| COLR v1 | ⚠️ | 现代格式, skrifa 0.42 支持, 需集成验证 |
+| CBDT/CBLC | ⬜ | 遗留 Android emoji 格式, swash 原生支持 — 未验证 |
+| sbix | ⬜ | Apple 格式, cosmic-text 支持 — 未验证 |
+| COLR v0 | ⬜ | Windows/Chrome 格式, swash 支持 — 未验证 |
+| COLR v1 | ⬜ | 现代格式, skrifa 0.42 支持, 需集成验证 — 未验证 |
 
 **风险缓解**: 如果 COLRv1 集成失败, 捆绑遗留 CBDT 字体作为回退。
 
@@ -98,7 +98,7 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 阶段 | 库 | 配置 |
 |------|-----|------|
 | 发现 | `fontdb` | 系统字体 + 捆绑 `JetBrainsMono-Nerd-Font.ttf` |
-| 成形 | `cosmic-text` 0.19 / `rustybuzz` | 默认: `cursive`, `kern`, `liga`, `dlig`, `rlig`, `calt` |
+| 成形 | `cosmic-text` 0.19 | 默认: `cursive`, `kern`, `liga`, `dlig`, `rlig`, `calt` |
 | 缩放+光栅化 | `swash` 0.2.7 | 缩放 via 内部 skrifa 0.42 (`scale` feature), 光栅化 via zeno。无需单独依赖 skrifa crate。CBDT/COLR 彩色 emoji, 可变字体 @ 请求像素 |
 | 图集 | `etagere` 0.3 | 2048×2048 或 4096×4096, 货架打包 |
 | 缓存 | LRU | 按最后帧访问排序, OOM 时驱逐 |
@@ -175,7 +175,7 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 
 ## 6. MCP 服务器规范
 
-Agent 传输协议是本地回环上的 JSON-RPC 2.0 服务器。
+Agent 传输协议是本地回环上的 JSON-RPC 2.0 服务器。**注意: 本节描述的 MCP 服务器是阶段 2+ 功能, 尚未实现。**
 
 ### 启动
 
@@ -183,7 +183,7 @@ Agent 传输协议是本地回环上的 JSON-RPC 2.0 服务器。
 - 认证: Unix 域套接字权限 (0700)
 - 默认: **关闭**。通过 Settings → Agent Access 启用。
 
-### 核心工具 (MVP)
+### 核心工具 (阶段 2+)
 
 | 工具 | 参数 | 返回 | 备注 |
 |------|------|------|------|
@@ -222,8 +222,8 @@ Agent 传输协议是本地回环上的 JSON-RPC 2.0 服务器。
 | **Rust 工具链** | stable (固定在 `rust-toolchain.toml`) | Edition 2024 |
 | **NDK** | r29 | |
 | **Kotlin** | 2.3.21+ | K2 编译器稳定 |
-| **Compose BOM** | 2026.05.01 | Material 3 |
-| **AGP** | 9.2 | |
+| **Compose BOM** | 2026.05.00 | Material 3 |
+| **AGP** | 9.0.1 | |
 
 ### minSdk 33 的理由
 

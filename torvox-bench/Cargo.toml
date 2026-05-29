@@ -3,7 +3,7 @@ name = "torvox-bench"
 version = "0.1.0"
 edition = "2024"
 description = "Criterion benchmarks for Torvox terminal operations"
-license = "UNLICENSEED"
+license = "UNLICENSED"
 
 [dependencies]
 torvox-core = { workspace = true }

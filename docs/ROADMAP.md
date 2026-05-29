@@ -1,6 +1,6 @@
 # Torvox 路线图
 
-> **当前阶段**: 阶段 1 — 终端引擎 (P1.1–P1.4, P1.6 完成) → 下一步 P1.5 Android Surface 渲染
+> **当前阶段**: 阶段 2 — P1.1–P1.6 全部完成 → 下一步 P2.1 回滚缓冲UI
 
 ---
 
@@ -18,8 +18,8 @@
 2. 创建 `rust-toolchain.toml` (固定 stable 版本)
 3. 创建 `torvox-core/` — `no_std` crate, 骨架 `lib.rs`
 4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `vte 0.15`, `nix 0.31`, `serde`, `postcard 1.1` 依赖
-5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `skrifa 0.42`, `etagere 0.3`, `glyphon` 依赖
-6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `uniffi 0.31` 依赖
+5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `etagere 0.3` 依赖
+6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `boltffi 0.25` 依赖
 7. ~~创建 `torvox-bridge-types/`~~ — 类型已合并到 `torvox-gui-android/src/bridge.rs`
 8. 创建 `torvox-exec/` — 骨架 `main.rs` (多调用二进制)
 9. 创建 `torvox-fuzz/` — 骨架 3 个模糊目标
@@ -45,7 +45,7 @@
 7. `unicode.rs` — 定义 UnicodeWidth 表, EastAsianWidth 查找
 8. `event.rs` — 定义 `TerminalEvent` 枚举 (供跨 crate 事件传递)
 9. 所有类型实现 `serde::Serialize`/`Deserialize` (通过 postcard)
-10. 所有类型 `#[derive(uniffi::Enum/Record)]` (在 `torvox-gui-android/src/bridge.rs` 中)
+10. 所有类型使用 boltffi 注解 (`#[data]`/`#[error]`) (在 `torvox-gui-android/src/bridge.rs` 中)
 11. `#[cfg(test)]` 每个类型的单元测试
 12. 验证 `no_std` 编译: `cargo build -p torvox-core --target thumbv6m-none-eabi`
 
@@ -53,7 +53,7 @@
 
 ### P0.3 — Android 外壳
 
-**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.01。Kotlin `MainActivity` + Hilt DI。Rust 通过 `scripts/build-android-libs.sh` (cargo-ndk v4) 编译。`System.loadLibrary("torvox_android")` 成功。
+**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.00。Kotlin `MainActivity` + Hilt DI。Rust 通过 `scripts/build-android-libs.sh` (cargo-ndk v4) 编译。`System.loadLibrary("torvox_android")` 成功。
 
 **详细步骤**:
 1. 创建 `android/` 目录结构 (app, gradle, settings.gradle.kts, build.gradle.kts)
@@ -111,15 +111,14 @@
 
 **验证**: `cargo test -p torvox-terminal --test pty_test && adb shell /data/data/io.torvox/torvox-exec ls /`
 
-### P0.6 — UniFFI 桥接验证
+### P0.6 — boltffi 桥接验证
 
-**交付物**: UniFFI 0.31 生成 Kotlin 绑定。Kotlin 可调用 Rust 函数。
+**交付物**: boltffi 0.25 生成 Kotlin 绑定。Kotlin 可调用 Rust 函数。
 
 **详细步骤**:
 1. 定义 `torvox-gui-android/src/bridge.rs` 中的跨边界类型
-2. 在 `torvox-gui-android/src/bridge.rs` 中实现 `#[uniffi::export]` 函数
-3. 配置 `uniffi.toml` (Kotlin 代码生成)
-4. 运行 `uniffi-bindgen generate` 生成 Kotlin 绑定
+2. 在 `torvox-gui-android/src/bridge.rs` 中实现 `#[boltffi::export]` 函数
+3. 运行 `boltffi pack android` 生成 Kotlin 绑定
 5. 在 `TorvoxBridge.kt` 中调用生成的绑定
 6. 端到端测试: Kotlin 调用 Rust 函数, 返回值正确
 
@@ -134,7 +133,7 @@
 
 ### P1.1 — VT 解析器
 
-**交付物**: `torvox-terminal::parser` — 通过 `vte 0.15` crate 的 Paul Williams 状态机。`CellGrid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
+**交付物**: `torvox-terminal::parser` — 通过 `vte 0.15` crate 的 Paul Williams 状态机。`Grid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
 
 **详细步骤**:
 1. 实现 `vte::Perform` trait 处理所有回调
@@ -157,19 +156,19 @@
 
 ### P1.2 — PTY 会话集成
 
-**交付物**: `torvox-terminal::session` — 完整 PTY 会话。读取 PTY 输出 → VT 解析器 → CellGrid。写入 → PTY。
+**交付物**: `torvox-terminal::session` — 完整 PTY 会话。读取 PTY 输出 → VT 解析器 → Grid。写入 → PTY。
 
 **详细步骤**:
-1. 实现 `Session` 编排器 (拥有 PtyPair + CellGrid + Parser)
+1. 实现 `Session` 编排器 (拥有 PtyPair + Grid + Parser)
 2. PTY 读取线程: 阻塞 `read()` → `crossbeam::channel` → 解析任务
-3. VT 解析任务: 从通道读取字节 → `vte::Parser::advance()` → CellGrid 变更
-4. 脏区域通知: CellGrid 变更 → `crossbeam::Notify` → 渲染线程
+3. VT 解析任务: 从通道读取字节 → `vte::Parser::advance()` → Grid 变更
+4. 脏区域通知: Grid 变更 → `Condvar` → 渲染线程
 5. 输入写入: `InputEngine::process()` → VT 转义编码 → PTY `write()`
-6. 调整大小: `resize(rows, cols)` → `ioctl(TIOCSWINSZ)` + CellGrid 调整
+6. 调整大小: `resize(rows, cols)` → `ioctl(TIOCSWINSZ)` + Grid 调整
 7. 进程退出: `waitpid()` → `ProcessExited` 事件
 8. 信号处理: SIGWINCH, SIGHUP, SIGCHLD
-9. 集成测试: 生成 `echo hello` → CellGrid 包含 "hello"
-10. 回放测试: 录制 PTY 输出 → 重放 → 断言 CellGrid 状态
+9. 集成测试: 生成 `echo hello` → Grid 包含 "hello"
+10. 回放测试: 录制 PTY 输出 → 重放 → 断言 Grid 状态
 
 **验证**: `cargo test -p torvox-terminal --test session_test`
 
@@ -217,7 +216,7 @@
 
 **详细步骤**:
 1. `TerminalSurface.kt` — `SurfaceView` 子类, 实现 `SurfaceHolder.Callback`
-2. `surfaceCreated()` → 通过 UniFFI 传递 ANativeWindow 到 Rust
+2. `surfaceCreated()` → 通过 boltffi 传递 ANativeWindow 到 Rust
 3. `torvox-gui-android/src/surface.rs` — `ANativeWindow` → `raw_window_handle::AndroidNdkWindowHandle`
 4. wgpu v29 Surface 创建: `instance.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle{...})`
 5. 渲染线程: 在独立 Rust 线程运行 wgpu 事件循环
@@ -242,7 +241,7 @@
 6. 鼠标协议: X10, VT200, SGR, SGR-pixels
 7. 触摸事件: 单击/双击/长按/拖拽 → 鼠标序列
 8. 选择手势: 长按开始选择, 拖拽扩展选择
-9. Android 事件路由: `TerminalSurface.onKeyDown/onTouchEvent` → UniFFI → Rust
+9. Android 事件路由: `TerminalSurface.onKeyDown/onTouchEvent` → boltffi → Rust
 10. 输入延迟测试: 按键 → PTY write <2ms
 
 **验证**: 连接硬件键盘, 在应用中键入字符, 看到回显
@@ -256,20 +255,20 @@
 
 ### P2.1 — 回滚缓冲
 
-1. 环形缓冲回滚 (50K 行默认, 可配置)
-2. 触摸滚动 (fling 手势)
-3. 滚动位置指示器
-4. 滚动时锁定键盘输入
-5. 搜索功能 (在回滚中查找文本)
+1. ✅ 环形缓冲回滚 (50K 行默认, 可配置) — Grid.scrollback
+2. ✅ 触摸滚动 (fling 手势) — TerminalSurface GestureDetector
+3. ✅ 滚动位置指示器 — onScrollChanged callback
+4. ✅ 滚动时锁定键盘输入 — isScrolling 状态
+5. ⬜ 搜索功能 (在回滚中查找文本)
 
 ### P2.2 — 选择
 
-1. 字符/词/行/块选择模式
-2. 放大镜精确选择 (Android Maginifier)
-3. 复制到剪贴板 (Android ClipboardManager)
-4. 检测到链接时打开 URL (Intent.ACTION_VIEW)
-5. OSC 8 超链接悬停高亮
-6. 语义选择 (OSC 133 Shell 集成)
+1. ✅ 字符/词/行/块选择模式 — SelectionMode枚举 + ViewModel状态管理
+2. ⬜ 放大镜精确选择 (Android Maginifier)
+3. ✅ 复制到剪贴板 (Android ClipboardManager) — TerminalViewModel.copySelectionToClipboard
+4. ⬜ 检测到链接时打开 URL (Intent.ACTION_VIEW) — TerminalViewModel.openUrl已实现
+5. ⬜ OSC 8 超链接悬停高亮
+6. ⬜ 语义选择 (OSC 133 Shell 集成)
 
 ### P2.3 — 修饰键栏
 

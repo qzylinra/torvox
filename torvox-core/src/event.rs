@@ -1,7 +1,6 @@
 use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
-use crate::cell::Color;
 use crate::cursor::CursorState;
 use crate::selection::Selection;
 
@@ -22,15 +21,6 @@ pub enum TerminalEvent {
 pub struct DirtyRegion {
     pub start_row: u32,
     pub end_row: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CellUpdate {
-    pub row: u32,
-    pub col: u32,
-    pub char: char,
-    pub fg: Color,
-    pub bg: Color,
 }
 
 #[cfg(test)]
@@ -78,19 +68,5 @@ mod tests {
         let bytes = postcard::to_allocvec(&dr).unwrap();
         let decoded: DirtyRegion = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(dr, decoded);
-    }
-
-    #[test]
-    fn cell_update_serde() {
-        let cu = CellUpdate {
-            row: 1,
-            col: 2,
-            char: 'X',
-            fg: Color::default(),
-            bg: Color::default(),
-        };
-        let bytes = postcard::to_allocvec(&cu).unwrap();
-        let decoded: CellUpdate = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(cu, decoded);
     }
 }

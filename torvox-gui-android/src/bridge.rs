@@ -1,4 +1,5 @@
-#[derive(Debug, Clone, uniffi::Record)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[boltffi::data]
 pub struct BridgeCell {
     pub char_code: u32,
     pub fg: u32,
@@ -6,7 +7,8 @@ pub struct BridgeCell {
     pub attrs: BridgeAttrs,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, uniffi::Record)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[boltffi::data]
 pub struct BridgeAttrs {
     pub bold: bool,
     pub dim: bool,
@@ -54,7 +56,8 @@ impl From<BridgeAttrs> for torvox_core::cell::Attrs {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Enum)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[boltffi::data]
 pub enum Shell {
     #[default]
     SystemDefault,
@@ -81,7 +84,8 @@ impl From<torvox_core::config::Shell> for Shell {
     }
 }
 
-#[derive(Debug, Clone, uniffi::Record)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[boltffi::data]
 pub struct TerminalConfig {
     pub shell: Shell,
     pub rows: u32,
@@ -122,14 +126,36 @@ impl From<torvox_core::config::TerminalConfig> for TerminalConfig {
     }
 }
 
-#[derive(Debug, Clone, uniffi::Enum)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[boltffi::data]
 pub enum TerminalEvent {
     Bell,
-    TitleChanged { title: String },
-    ClipboardRequest { text: String },
-    HyperlinkHover { url: Option<String> },
-    ProcessExited { exit_code: i32 },
-    DirtyRegion { start_row: u32, end_row: u32 },
+    TitleChanged {
+        title: String,
+    },
+    ClipboardRequest {
+        text: String,
+    },
+    HyperlinkHover {
+        url: Option<String>,
+    },
+    ProcessExited {
+        exit_code: i32,
+    },
+    DirtyRegion {
+        start_row: u32,
+        end_row: u32,
+    },
+    CursorChanged {
+        row: u32,
+        col: u32,
+    },
+    SelectionChanged {
+        start_row: u32,
+        start_col: u32,
+        end_row: u32,
+        end_col: u32,
+    },
 }
 
 impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
@@ -152,13 +178,28 @@ impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
             torvox_core::event::TerminalEvent::ProcessExited(c) => {
                 TerminalEvent::ProcessExited { exit_code: c }
             }
-            torvox_core::event::TerminalEvent::CursorChanged(_) => TerminalEvent::DirtyRegion {
-                start_row: 0,
-                end_row: 0,
-            },
-            torvox_core::event::TerminalEvent::SelectionChanged(_) => TerminalEvent::DirtyRegion {
-                start_row: 0,
-                end_row: 0,
+            torvox_core::event::TerminalEvent::CursorChanged(cursor) => {
+                TerminalEvent::CursorChanged {
+                    row: cursor.row,
+                    col: cursor.col,
+                }
+            }
+            torvox_core::event::TerminalEvent::SelectionChanged(sel) => match sel {
+                Some(s) => {
+                    let (lo, hi) = s.ordered();
+                    TerminalEvent::SelectionChanged {
+                        start_row: lo.row,
+                        start_col: lo.col,
+                        end_row: hi.row,
+                        end_col: hi.col,
+                    }
+                }
+                None => TerminalEvent::SelectionChanged {
+                    start_row: 0,
+                    start_col: 0,
+                    end_row: 0,
+                    end_col: 0,
+                },
             },
             torvox_core::event::TerminalEvent::DirtyRegion(dr) => TerminalEvent::DirtyRegion {
                 start_row: dr.start_row,
@@ -168,7 +209,8 @@ impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
     }
 }
 
-#[derive(Debug, Clone, thiserror::Error, uniffi::Error)]
+#[boltffi::error]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum TerminalError {
     #[error("PTY error: {detail}")]
     PtyError { detail: String },
@@ -176,16 +218,20 @@ pub enum TerminalError {
     InvalidConfig { detail: String },
 }
 
-#[derive(uniffi::Object)]
+#[allow(dead_code)]
 pub struct TorvoxBridge {
     config: TerminalConfig,
+    surface: std::sync::Mutex<Option<crate::surface::AndroidSurface>>,
 }
 
-#[uniffi::export]
+#[allow(dead_code)]
+#[boltffi::export]
 impl TorvoxBridge {
-    #[uniffi::constructor]
     fn new(config: TerminalConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            surface: std::sync::Mutex::new(None),
+        }
     }
 
     fn ping(&self) -> String {
@@ -205,6 +251,109 @@ impl TorvoxBridge {
                 }
             })?;
         Ok(pty.child_pid().as_raw())
+    }
+
+    fn set_native_window(&self, window_ptr: i64) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if surface_guard.is_none() {
+            let mut surface =
+                crate::surface::AndroidSurface::new(self.config.rows, self.config.cols).map_err(
+                    |e| TerminalError::PtyError {
+                        detail: e.to_string(),
+                    },
+                )?;
+            surface
+                .set_native_window(window_ptr as *mut std::ffi::c_void)
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
+            *surface_guard = Some(surface);
+        }
+        Ok(())
+    }
+
+    fn render(&self) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.render().map_err(|e| TerminalError::PtyError {
+                detail: e.to_string(),
+            })?;
+        }
+        Ok(())
+    }
+
+    fn resize(&self, rows: u32, cols: u32) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.resize(rows, cols);
+        }
+        Ok(())
+    }
+
+    fn release_surface(&self) {
+        if let Ok(mut guard) = self.surface.lock() {
+            *guard = None;
+        }
+    }
+
+    fn scrollback_len(&self) -> u32 {
+        self.surface
+            .lock()
+            .ok()
+            .and_then(|g| {
+                g.as_ref()
+                    .map(|s| s.terminal().terminal().scrollback_rows().unwrap_or(0) as u32)
+            })
+            .unwrap_or(0)
+    }
+
+    fn scrollback_line(&self, index: u32) -> Option<String> {
+        use libghostty_vt::terminal::Point;
+
+        self.surface.lock().ok().and_then(|g| {
+            g.as_ref().and_then(|s| {
+                let terminal = s.terminal().terminal();
+                let total = terminal.total_rows().unwrap_or(0) as u32;
+                let viewport_rows = terminal.rows().unwrap_or(24) as u32;
+                let history_row = total.saturating_sub(viewport_rows);
+                let target_row = history_row + index;
+
+                if target_row >= total {
+                    return None;
+                }
+
+                let coord = libghostty_vt::ffi::GhosttyPointCoordinate {
+                    x: 0,
+                    y: target_row,
+                };
+                let point_coord: libghostty_vt::terminal::PointCoordinate = coord.into();
+
+                terminal
+                    .grid_ref(Point::Screen(point_coord))
+                    .ok()
+                    .map(|grid_ref| {
+                        let mut text = String::new();
+                        let cols = terminal.cols().unwrap_or(80);
+                        for _col in 0..cols {
+                            let mut buf = [char::default(); 8];
+                            if let Ok(len) = grid_ref.graphemes(&mut buf) {
+                                for &ch in &buf[..len] {
+                                    if ch != '\0' {
+                                        text.push(ch);
+                                    }
+                                }
+                            }
+                        }
+                        text.trim_end().to_string()
+                    })
+            })
+        })
     }
 
     fn get_config(&self) -> TerminalConfig {
@@ -255,14 +404,14 @@ mod tests {
         let config = TerminalConfig::default();
         let bridge = TorvoxBridge::new(config);
         let cells = vec![BridgeCell {
-            char_code: 'A' as u32,
+            char_code: b'A' as u32,
             fg: 0xFFFFFF,
             bg: 0x000000,
             attrs: BridgeAttrs::default(),
         }];
         let result = bridge.echo_cells(cells.clone());
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].char_code, 'A' as u32);
+        assert_eq!(result[0].char_code, b'A' as u32);
     }
 
     #[test]

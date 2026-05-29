@@ -41,6 +41,12 @@ impl PtyPair {
         let master_fd = result.master;
         let slave_fd = result.slave;
 
+        // SAFETY: fork() is the standard Unix process duplication primitive.
+        // We immediately distinguish parent and child. The child setsid() +
+        // login_tty() to establish a new session, then execvp(). The parent
+        // closes the slave fd and returns. This is the standard forkpty pattern.
+        // Only one unsafe block orchestrates the entire fork — all subsequent
+        // libc calls in the child path are single-threaded and bounded.
         match unsafe { nix::unistd::fork()? } {
             nix::unistd::ForkResult::Parent { child } => {
                 nix::unistd::close(slave_fd).ok();
@@ -52,20 +58,27 @@ impl PtyPair {
             nix::unistd::ForkResult::Child => {
                 nix::unistd::close(master_fd).ok();
                 nix::unistd::setsid().ok();
+                // SAFETY: In the child process after fork(), it is safe to
+                // call login_tty because the child has its own address space
+                // and file descriptor table. login_tty sets up the slave as
+                // the controlling terminal for this new session. We check the
+                // return value and exit on failure.
                 let ret = unsafe { libc::login_tty(slave_fd.as_raw_fd()) };
                 if ret != 0 {
                     std::process::exit(1);
                 }
                 configure_raw_mode(slave_fd.as_raw_fd()).ok();
                 let env = build_env();
+                // SAFETY: set_var is unsafe in Rust 1.95+ due to potential
+                // race conditions with other threads. In the child process
+                // after fork(), there is exactly one thread, so no race is
+                // possible. The env vars are bounded local data.
                 for (key, value) in &env {
                     unsafe { std::env::set_var(key, value) };
                 }
-                nix::unistd::execvp(
-                    std::ffi::CString::new(shell).unwrap().as_c_str(),
-                    &[std::ffi::CString::new(shell).unwrap()],
-                )
-                .unwrap_err();
+                let c_shell = std::ffi::CString::new(shell).expect("shell path contains null byte");
+                let args = [c_shell.as_c_str()];
+                nix::unistd::execvp(c_shell.as_c_str(), &args).unwrap_err();
                 std::process::exit(1);
             }
         }
@@ -86,6 +99,10 @@ impl PtyPair {
             ws_xpixel: 0,
             ws_ypixel: 0,
         };
+        // SAFETY: ioctl with TIOCSWINSZ writes a well-formed Winsize struct
+        // to the master PTY fd. The fd is owned and valid. The kernel copies
+        // the winsize to the slave side — no memory safety risk. The return
+        // value is checked for errors.
         unsafe {
             let ret = libc::ioctl(
                 self.master.as_raw_fd(),
@@ -152,6 +169,11 @@ fn configure_raw_mode(fd: std::os::unix::io::RawFd) -> Result<(), PtyError> {
     use nix::sys::termios::{
         ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg, tcgetattr, tcsetattr,
     };
+    // SAFETY: We create an OwnedFd from a borrowed raw fd solely to use
+    // nix's termios API which requires AsFd. We then mem::forget(owned)
+    // to prevent the OwnedFd from closing the fd on drop. This is the
+    // standard pattern for using nix termios on a borrowed fd. The fd
+    // remains owned by the caller's PtyPair.
     let owned = unsafe { OwnedFd::from_raw_fd(fd) };
     let mut termios = tcgetattr(&owned).map_err(PtyError::Termios)?;
     termios.input_flags &= !(InputFlags::IGNBRK
@@ -214,7 +236,7 @@ mod tests {
                 Err(_) => break,
             }
             if output
-                .windows("hello_torvox".as_bytes().len())
+                .windows("hello_torvox".len())
                 .any(|w| w == b"hello_torvox")
             {
                 return;

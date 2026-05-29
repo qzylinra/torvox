@@ -10,7 +10,7 @@ use winit::{
 struct App {
     window: Option<Arc<Window>>,
     gpu: Option<torvox_renderer::gpu::GpuContext>,
-    terminal: torvox_terminal::terminal::TerminalState,
+    grid: torvox_core::grid::Grid,
     font_pipeline: torvox_renderer::font::FontPipeline,
     atlas_width: u32,
     atlas_height: u32,
@@ -18,7 +18,13 @@ struct App {
 
 impl App {
     fn new() -> Self {
-        let terminal = torvox_terminal::terminal::TerminalState::new(24, 80);
+        let mut grid = torvox_core::grid::Grid::new(24, 80);
+        grid.fill_cells(0, 'H', 0, 5);
+        grid.fill_cells(0, 'e', 1, 5);
+        grid.fill_cells(0, 'l', 2, 5);
+        grid.fill_cells(0, 'l', 3, 5);
+        grid.fill_cells(0, 'o', 4, 5);
+
         let atlas_width = 2048;
         let atlas_height = 2048;
         let mut font_pipeline =
@@ -28,10 +34,42 @@ impl App {
         Self {
             window: None,
             gpu: None,
-            terminal,
+            grid,
             font_pipeline,
             atlas_width,
             atlas_height,
+        }
+    }
+
+    fn handle_resize(&mut self, size: winit::dpi::PhysicalSize<u32>) {
+        let gpu = match self.gpu.as_mut() {
+            Some(g) => g,
+            None => return,
+        };
+        let window = match self.window.as_ref() {
+            Some(w) => w,
+            None => return,
+        };
+        if let Some(config) = &mut gpu.surface_config {
+            config.width = size.width.max(1);
+            config.height = size.height.max(1);
+            if let Some(surface) = &gpu.surface {
+                surface.configure(&gpu.device, config);
+            }
+            let proj = torvox_renderer::gpu::orthographic_projection(
+                config.width as f32,
+                config.height as f32,
+            );
+            let uniforms = torvox_renderer::gpu::GpuUniforms {
+                projection: proj,
+                cell_size: [8.0, 16.0],
+                atlas_size: [self.atlas_width as f32, self.atlas_height as f32],
+            };
+            if let Some(buf) = &gpu.cell_uniform_buffer {
+                gpu.queue
+                    .write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
+            }
+            window.request_redraw();
         }
     }
 }
@@ -84,9 +122,9 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                if let (Some(gpu), Some(window)) = (&self.gpu, &self.window) {
+                if let (Some(gpu), Some(window)) = (&mut self.gpu, &self.window) {
                     let instances = torvox_renderer::gpu::build_cell_instances(
-                        &self.terminal,
+                        &self.grid,
                         &mut self.font_pipeline,
                         8.0,
                         16.0,
@@ -102,33 +140,7 @@ impl ApplicationHandler for App {
                 }
             }
             WindowEvent::Resized(size) => {
-                if let (Some(gpu), Some(window)) = (&mut self.gpu, &self.window) {
-                    if let Some(config) = &mut gpu.surface_config {
-                        config.width = size.width.max(1);
-                        config.height = size.height.max(1);
-                        if let Some(surface) = &gpu.surface {
-                            surface.configure(&gpu.device, config);
-                        }
-
-                        let proj = torvox_renderer::gpu::orthographic_projection(
-                            config.width as f32,
-                            config.height as f32,
-                        );
-
-                        let uniforms = torvox_renderer::gpu::GpuUniforms {
-                            projection: proj,
-                            cell_size: [8.0, 16.0],
-                            atlas_size: [self.atlas_width as f32, self.atlas_height as f32],
-                        };
-
-                        if let Some(buf) = &gpu.cell_uniform_buffer {
-                            gpu.queue
-                                .write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
-                        }
-
-                        window.request_redraw();
-                    }
-                }
+                self.handle_resize(size);
             }
             _ => {}
         }
