@@ -136,12 +136,13 @@ impl Grid {
         if top >= bottom || bottom > self.rows {
             return;
         }
-        let region_size = bottom - top;
-        if region_size <= 1 {
+        let count = (bottom - top) as usize;
+        if count <= 1 {
             return;
         }
         let t = top as usize;
         let b = bottom as usize;
+        // Save scrolled-out line to scrollback if scrolling from top
         if top == 0 {
             let removed = self.lines.remove(t);
             self.scrollback.push(removed);
@@ -151,11 +152,10 @@ impl Grid {
             }
             self.lines.insert(b - 1, Line::new(cols));
         } else {
+            // Rotate left: first element moves to end (scroll up)
             self.lines[t..b].rotate_left(1);
-            *self
-                .lines
-                .get_mut(b - 1)
-                .expect("grid invariant: b-1 < lines.len() after rotate") = Line::new(cols);
+            // Replace the last element (which is now the scrolled-in line) with blank
+            *self.lines.last_mut().unwrap() = Line::new(cols);
         }
         for row in top..bottom {
             self.dirty.mark(row);
@@ -168,11 +168,10 @@ impl Grid {
         }
         let t = top as usize;
         let b = bottom as usize;
+        // Rotate right: last element moves to front (scroll down)
         self.lines[t..b].rotate_right(1);
-        *self
-            .lines
-            .get_mut(t)
-            .expect("grid invariant: t < lines.len() after rotate") = Line::new(cols);
+        // Replace the first element (which is now the scrolled-in line) with blank
+        *self.lines.get_mut(t).unwrap() = Line::new(cols);
         for row in top..bottom {
             self.dirty.mark(row);
         }
@@ -189,10 +188,7 @@ impl Grid {
         self.lines[a..b].rotate_right(actual as usize);
         // Fill the inserted lines (now at the beginning of the slice) with blank
         for i in a..a + actual as usize {
-            *self
-                .lines
-                .get_mut(i)
-                .expect("grid invariant: i < lines.len() after rotate_right") = Line::new(cols);
+            *self.lines.get_mut(i).unwrap() = Line::new(cols);
         }
         for row in at..bottom {
             self.dirty.mark(row);
@@ -210,10 +206,7 @@ impl Grid {
         self.lines[a..b].rotate_left(actual as usize);
         // Fill the deleted lines (now at the end of the slice) with blank
         for i in b - actual as usize..b {
-            *self
-                .lines
-                .get_mut(i)
-                .expect("grid invariant: i < lines.len() after rotate_left") = Line::new(cols);
+            *self.lines.get_mut(i).unwrap() = Line::new(cols);
         }
         for row in at..bottom {
             self.dirty.mark(row);

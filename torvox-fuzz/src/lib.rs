@@ -3,21 +3,21 @@
 //! Run with: `cargo fuzz run <target>`
 
 pub fn fuzz_vt_parser(data: &[u8]) {
+    use torvox_terminal::parser::VtParser;
     use torvox_terminal::terminal::TerminalState;
 
-    let Ok(mut state) = TerminalState::new(24, 80) else {
-        return;
-    };
-    state.process_bytes(data);
+    let mut state = TerminalState::new(24, 80);
+    let mut parser = VtParser::new();
+    parser.advance(&mut state, data);
 }
 
 pub fn fuzz_osc_parse(data: &[u8]) {
+    use torvox_terminal::parser::VtParser;
     use torvox_terminal::terminal::TerminalState;
 
-    let Ok(mut state) = TerminalState::new(24, 80) else {
-        return;
-    };
-    state.process_bytes(data);
+    let mut state = TerminalState::new(24, 80);
+    let mut parser = VtParser::new();
+    parser.advance(&mut state, data);
 }
 
 pub fn fuzz_grid_resize(data: &[u8]) {

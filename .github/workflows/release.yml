@@ -1,8 +1,7 @@
 name: Release
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    tags: ['v*']
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,14 +13,14 @@ jobs:
       - uses: actions/setup-java@main
         with:
           distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@main
+          java-version: 25
+      - uses: actions/setup-android-sdk@main
       - run: |
           cargo install cargo-ndk@4.1.2
-          cargo ndk -t arm64-v8a -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --release
+          cargo ndk -t arm64-v8a -t x86_64 -o android/app/src/main/jniLibs build --release
       - working-directory: android
         run: ./gradlew assembleRelease
-      - uses: actions/upload-artifact@master
+      - uses: softprops/action-gh-release@master
         with:
-          name: torvox-release
-          path: android/app/build/outputs/apk/release/*.apk
+          files: android/app/build/outputs/apk/release/*.apk
+          generate_release_notes: true

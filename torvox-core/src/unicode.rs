@@ -78,6 +78,9 @@ fn unicode_width_char(c: char) -> u8 {
     if ('\u{20000}'..='\u{3FFFD}').contains(&c) {
         return 2;
     }
+    if ('\u{30000}'..='\u{3FFFD}').contains(&c) {
+        return 2;
+    }
     if matches!(
         c,
         '\u{20A9}' | '\u{2190}'..='\u{2193}'
@@ -96,6 +99,20 @@ fn unicode_width_char(c: char) -> u8 {
 
 pub fn str_width(s: &str) -> u32 {
     s.chars().map(|c| width_val(c) as u32).sum()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EastAsianWidth {
+    A,
+    F,
+    H,
+    N,
+    Na,
+    W,
+}
+
+pub fn east_asian_width(_c: char) -> EastAsianWidth {
+    EastAsianWidth::N
 }
 
 pub fn is_wide(c: char) -> bool {

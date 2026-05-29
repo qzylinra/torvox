@@ -6,7 +6,7 @@ Torvox 是分层架构的终端模拟器，Rust 核心引擎 + Kotlin/Compose An
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ torvox-android (Kotlin)                                              │
+│ torvox-android (Kotlin 2.3.21+ / Compose BOM 2026.05.01+)                  │
 │ ┌─────────────────┐ ┌────────────────┐ ┌──────────────────────┐     │
 │ │ TerminalActivity │ │ TerminalView   │ │ SettingsActivity     │     │
 │ │ (Lifecycle)      │ │ (SurfaceView  │ │ (DataStore, Theme)   │     │
@@ -14,23 +14,41 @@ Torvox 是分层架构的终端模拟器，Rust 核心引擎 + Kotlin/Compose An
 │ └────────┬────────┘ └───────┬────────┘ └──────────┬───────────┘     │
 │          │                  │                      │                 │
 │ ┌────────┴──────────────────┴──────────────────────┴───────────┐    │
-│ │ boltffi Bridge (torvox-gui-android)                       │    │
+│ │ UniFFI Bridge (torvox-gui-android)                         │    │
+│ │ SessionHandle │ CellUpdateStream │ InputEvent │ ConfigSnapshot│    │
 │ └───────────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│ Rust Engine                                                          │
-│ ┌─────────────────────────────────────┐ ┌─────────────────────────┐  │
-│ │ torvox-terminal                     │ │ torvox-renderer          │  │
-│ │ Session PTY Parser Terminal Keyboard│ │ FontPipeline GpuContext  │  │
-│ └──────────┬──────────────────────────┘ └──────────┬──────────────┘  │
-│            │                                      │                  │
-│            └──────────┬───────────────┬────────────┘                  │
-│                      ▼                ▼                              │
-│            ┌────────────────────┐ ┌──────────────┐                   │
-│            │ torvox-core (no_std)│ │ torvox-exec  │                   │
-│            └────────────────────┘ └──────────────┘                   │
+│ torvox-core (Rust, no_std 兼容)                                       │
+│                                                                      │
+│ ┌──────────────────────────────────────────────────────────────────┐ │
+│ │ torvox-terminal                         │ torvox-renderer          │ │
+│ │ ┌─────────────────┐                    │ ┌────────────────────┐  │ │
+│ │ │ PTY Session      │                    │ │ WgpuRenderer       │  │ │
+│ │ │ (nix forkpty)    │                    │ │ ┌────────┐┌─────┐  │  │ │
+│ │ │ Parser Thread    │────────────────────│─││GlyphAt ││Inst  │  │  │ │
+│ │ │ VT State Machine │                    │ ││(etagere)││Buf  │  │  │ │
+│ │ │ (vte crate)      │                    │ │└────────┘└─────┘  │  │ │
+│ │ │ CellGrid         │                    │ │ ┌────────────────┐  │  │ │
+│ │ │ Scrollback Ring  │                    │ │ │Shader Pipeline │  │  │ │
+│ │ │ Selection        │                    │ │ │(wgpu v29)      │  │  │ │
+│ │ └─────────────────┘                    │ │ └────────────────┘  │  │ │
+│ │ ┌─────────────────┐                    │ └────────────────────┘  │ │
+│ │ │ Font Pipeline    │────────────────────│                         │ │
+│ │ │ cosmic-text 0.19 │                    │ ┌────────────────────┐  │ │
+│ │ │ swash 0.2.7     │                    │ │ Input Engine       │  │ │
+│ │ │ skrifa 0.42      │                    │ │ Keyboard → VT      │  │ │
+│ │ │ Font Discovery   │                    │ │ Touch → Mouse seq. │  │ │
+│ │ └─────────────────┘                    │ │ Selection gestures  │  │ │
+│ │ ┌─────────────────┐                    │ └────────────────────┘  │ │
+│ │ │ Session Manager  │                    │                         │ │
+│ │ │ Tab State        │                    │                         │ │
+│ │ │ Persistence      │                    │                         │ │
+│ │ │ MCP Server       │                    │                         │ │
+│ │ └─────────────────┘                    │                         │ │
+│ └──────────────────────────────────────────────────────────────────┘ │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -60,8 +78,8 @@ torvox/
 │   ├── src/
 │   │   ├── lib.rs          # crate 根
 │   │   ├── pty.rs          # PTY 会话 (nix 0.31 forkpty — 非 portable-pty)
-│   │   ├── parser.rs       # Ghostty VT 集成 (libghostty-vt 0.1 crate)
-│   │   ├── terminal.rs     # Terminal 状态机 (Ghostty VT Terminal + RenderState)
+│   │   ├── parser.rs       # VTE + Perform 集成 (vte 0.15 crate)
+│   │   ├── terminal.rs     # Terminal 状态机 (vte::Perform impl)
 │   │   ├── keyboard.rs     # Kitty 键盘协议编码器 + VT 传统编码 + 鼠标 SGR
 │   │   └── session.rs      # Session 编排器 (线程管理, 通道)
 │   └── Cargo.toml
@@ -69,7 +87,7 @@ torvox/
 ├── torvox-renderer/         # GPU 渲染
 │   ├── src/
 │   │   ├── lib.rs          # crate 根
-│   │   ├── font.rs         # 字体管线 (cosmic-text 0.19 + swash 0.2.7 + guillotière)
+│   │   ├── font.rs         # 字体管线 (cosmic-text 0.19 + swash 0.2.7 + etagere)
 │   │   └── gpu.rs          # wgpu v29 GPU 管线 (Instance/Device/Queue/Surface)
 │   ├── shaders/
 │   │   ├── cell.wgsl       # 单元格着色器 (实例化四边形)
@@ -80,10 +98,10 @@ torvox/
 │
 ├── torvox-gui-android/      # Android GUI 桥接
 │   ├── src/
-│   │   ├── lib.rs          # crate 根
-│ │ ├── bridge.rs # boltffi 导出: TorvoxBridge, BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError
+│   │   ├── lib.rs          # crate 根, setup_scaffolding!()
+│ │ ├── bridge.rs # UniFFI 导出: TorvoxBridge, BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(6变体), TerminalError
 │   │   └── surface.rs      # wgpu → Android Surface 共享 (P1.5)
-│   ├── uniffi.toml         # boltffi 配置文件 (已移除)
+│   ├── uniffi.toml         # UniFFI Kotlin 包名配置
 │   └── Cargo.toml
 │
 ├── torvox-exec/             # W^X 多调用二进制
@@ -91,19 +109,25 @@ torvox/
 │   │   └── main.rs         # 根据 argv[0] 执行对应命令
 │   └── Cargo.toml
 │
-├── torvox-fuzz/             # 模糊测试 (pending crate; targets 待建)
-│   ├── src/
-│   │   └── lib.rs          # 存根
+├── torvox-fuzz/             # 模糊测试目标
+│   ├── fuzz_targets/
+│   │   ├── vt_parser.rs    # VT 解析器模糊目标
+│   │   ├── osc_parser.rs   # OSC 转义序列模糊目标
+│   │   └── utf8_parser.rs  # UTF-8 边缘情况模糊目标
 │   └── Cargo.toml
 │
-├── torvox-integration-tests/ # 跨边界集成测试 (pending crate)
-│   ├── src/
-│   │   └── lib.rs          # 存根
+├── torvox-integration-tests/ # 跨边界集成测试
+│   ├── tests/
+│   │   ├── parse_and_render.rs
+│   │   ├── session_lifecycle.rs
+│   │   └── vttest_compliance.rs
 │   └── Cargo.toml
 │
-├── torvox-bench/            # 基准测试 (empty)
-│   ├── src/
-│   │   └── lib.rs          # 存根
+├── torvox-bench/            # 基准测试
+│   ├── benches/
+│   │   ├── parser_throughput.rs
+│   │   ├── render_latency.rs
+│   │   └── font_cache.rs
 │   └── Cargo.toml
 │
 ├── android/                # Kotlin Android 应用
@@ -121,7 +145,7 @@ torvox/
 │   │   │   ├── service/
 │   │   │   │   └── TerminalForegroundService.kt  # FOREGROUND_SERVICE_SPECIAL_USE
 │   │   │   └── bridge/
-│   │   │       └── TorvoxBridge.kt         # boltffi 生成绑定
+│   │   │       └── TorvoxBridge.kt         # UniFFI 生成绑定
 │   │   └── build.gradle.kts
 │   ├── gradle/
 │   ├── settings.gradle.kts
@@ -139,46 +163,39 @@ torvox/
 | cosmic-text | 0.19 | 文本成形, COLR/COLRv1 emoji |
 | swash | 0.2.7 | 光栅化 (via zeno), 缩放功能已完全迁移到 skrifa |
 | skrifa | 0.42 | Google 字体缩放库 (swash 0.2.x `scale` feature 的内部依赖, 无需单独声明) |
-| guillotière | 0.7 | 货架打包图集 |
-| libghostty-vt | 0.1 | Ghostty VT 解析器 (SIMD优化, VT100-520) |
+| etagere | 0.3 | 货架打包图集 |
+| glyphon | 0.11 | wgpu 文本渲染 (参考实现) |
+| vte | 0.15 | Paul Williams 状态机 VT 解析器 |
 | nix | 0.31 | Unix API (forkpty, openpty, ioctl) |
-| libc | 0.2 | C 语言 FFI (PTY syscall 支持) |
-| serde | 1 | 序列化框架 (可选, via features) |
-| bytemuck | 1 | 安全字节 reinterpret (GPU instance 数据) |
-| bitflags | 2 | 位标志类型 |
-| flume | 0.11 | 无锁 SPSC 通道 (PTY→解析器) |
-| raw-window-handle | 0.6 | 仅 gpu.rs 内部用于 Android Surface 创建; 非公开 API 依赖 |
-| boltffi | 0.25 | 类型安全 Rust↔Kotlin 绑定; 所有 boltffi 类型在 gui-android/src/bridge.rs (单一导出位置) |
+| UniFFI | 0.31 | 类型安全 Rust↔Kotlin 绑定; 所有 UniFFI 类型在 gui-android/src/bridge.rs (单一 setup_scaffolding!()) |
+| rust-android-gradle | 0.9.6 | 已弃用: AGP 9.0 移除了 AppExtension, 不兼容。改用 scripts/build-android-libs.sh + cargo-ndk v4 |
 | cargo-ndk | v4 | **重大变更**: v4 重写了 CLI, 与 v3 不兼容 |
-| postcard | 1.1 | 测试序列化 (dev-dependency) |
+| postcard | 1.1 | 序列化 (替代已废弃的 bincode 3) |
 | thiserror | 2 | 错误类型派生 |
-| pollster | 0.4 | 阻塞运行时, 用于 wgpu 同步初始化 (gpu.rs 内部使用) |
+| tokio | 1.43 | 异步运行时 (仅用于会话级任务调度, 不用于通道和 PTY I/O; 热路径通道用 crossbeam) |
 | proptest | 1.11 | 属性测试 |
 | cargo-fuzz | 0.13 | 模糊测试 (libFuzzer) |
 | cargo-nextest | 0.9 | 增强测试运行器 |
 | Kotlin | 2.3.21 | K2 编译器稳定 (2.4.0 ~2026 年 6 月) |
 | Compose BOM | 2026.05.00 | Material 3 + Compose UI |
-| AGP | 9.0.1 | Android Gradle Plugin |
+| AGP | 9.0.1 | Android Gradle Plugin (9.2 为 alpha, 待稳定后升级) |
 | Hilt | 2.59.2 | 依赖注入 (需 AGP 9.0+) |
 | NDK | r29 | Android NDK |
-| compileSdk | 36 | Android 16 编译目标 |
 | targetSdk | 36 | Android 16 |
 | minSdk | 33 | Android 13 (Vulkan 1.3 起始) |
-
-> **已弃用/移除**: `rust-android-gradle 0.9.6` — AGP 9.0 移除了 `AppExtension`, 不兼容。改用 `scripts/build-android-libs.sh` + `cargo-ndk v4`。`glyphon 0.11` — 参考实现, 未使用, 已移除。
 
 ### 关键技术修正
 
 | 原方案 | 修正 | 原因 |
 |--------|------|------|
-| `bincode` | → `postcard 1.1` | bincode 3.0.0 被作者故意破坏 (RUSTSEC-2025-0141), postcard 仅用于测试 |
+| `bincode` | → `postcard 1.1` | bincode 3.0.0 被作者故意破坏 (RUSTSEC-2025-0141), 永久停止维护 |
 | `swash` 缩放 | → `skrifa 0.42` | swash 缩放已完全迁移到 skrifa; swash 仍负责光栅化 (via zeno) |
 | `portable-pty` | → `nix` crate forkpty() | portable-pty 不支持 Android |
 | `AHardwareBuffer` | → `SurfaceView` | wgpu 原生支持 Surface, 零复制, 游戏引擎标准模式 |
 | minSdk 26 | → minSdk 33 | Vulkan 1.3 从 API 33 起原生支持 |
 | `rust-android-gradle 0.9.6` | → `scripts/build-android-libs.sh` | AGP 9.0 移除了 AppExtension, rust-android-gradle 不兼容。用 cargo-ndk v4 直接交叉编译 |
-| `torvox-bridge-types` boltffi | → 类型合并到 `gui-android/src/bridge.rs` | boltffi 库模式仅允许一个导出位置; 跨 crate derive 导致 Kotlin 生成重复脚手架 |
-| `TerminalError.message` | → `TerminalError.detail` | Kotlin `Throwable.message` 冲突, boltffi Error 枚举字段名不能为 `message` |
+| `torvox-bridge-types` UniFFI | → 类型合并到 `gui-android/src/bridge.rs` | UniFFI 库模式仅允许一个 `setup_scaffolding!()`; 跨 crate derive 导致 Kotlin 生成重复脚手架 |
+| `TerminalError.message` | → `TerminalError.detail` | Kotlin `Throwable.message` 冲突, UniFFI Error 枚举字段名不能为 `message` |
 | `glifo` | 不采用 (待 1.0) | Linebender 新项目, 未稳定; swash 0.2.x 长期依赖稳定 |
 
 ### 已知风险
@@ -214,7 +231,7 @@ Android 10+ 限制非系统库的 `exec()`。Torvox 使用 Termux 验证的模�
 ┌──────────────────────────────────────────────────────────────────┐
 │ 会话 1                                                           │
 │ ┌──────────────┐  ┌──────────────┐  ┌────────────────────┐      │
-│ │ PTY Reader   │─►│ VT Parser    │─►│ Grid              │      │
+│ │ PTY Reader   │─►│ VT Parser    │─►│ CellGrid           │      │
 │ │ (block read) │  │ (async task) │  │ (Arc<Mutex>)       │      │
 │ └──────────────┘  └──────────────┘  └────────┬───────────┘      │
 │                                               │                  │
@@ -234,7 +251,7 @@ Android 10+ 限制非系统库的 `exec()`。Torvox 使用 Termux 验证的模�
 │ 渲染线程             │
 │ (单线程, 跨会话共享) │
 │                     │
-│ 轮询所有 Grid      │
+│ 轮询所有 CellGrid   │
 │ 构建实例缓冲区      │
 │ 提交到 wgpu v29    │
 └──────────┬──────────┘
@@ -271,11 +288,11 @@ Android 10+ 限制非系统库的 `exec()`。Torvox 使用 Termux 验证的模�
 ```
 PTY write → kernel → read() on PTY fd
 → raw bytes [Vec<u8>]
-→ flume bounded channel (lock-free, bounded 64KB)
-→ Ghostty VT Terminal (SIMD优化 VT 解析)
-→ Grid.apply(Delta)
+→ crossbeam SPSC channel (lock-free, bounded 64KB)
+→ VT Parser (vte::Parser + Perform trait)
+→ CellGrid.apply(Delta)
 → DirtyMask (Vec<u64> 分区位标志, 任意行数)
-→ RenderThread wakes (via Condvar)
+→ RenderThread wakes (via crossbeam::Notify)
 → For each dirty line:
     For each cell:
       Lookup glyph in Atlas
@@ -294,7 +311,7 @@ PTY write → kernel → read() on PTY fd
 ```
 Touch/Key event → Android InputReader → Compose
 → TerminalSurface.onKeyDown/onTouchEvent
-→ boltffi call → torvox-gui-android
+→ UniFFI call → torvox-gui-android
 → InputEngine.process(KeyEvent/TouchEvent)
 → VT escape sequence encoding (Kitty protocol or CSI-u)
 → PTY write(fd, encoded_bytes)
@@ -330,24 +347,48 @@ Kotlin 侧通过 `SurfaceView.getHolder().getSurface()` 传递 ANativeWindow 到
 
 ## 关键接口
 
+### Rust: `TerminalBackend` trait
+
+```rust
+#[uniffi::export]
+pub trait TerminalBackend: Send {
+    fn render_frame(&self, config: &RenderConfig) -> RenderResult;
+    fn handle_key(&mut self, event: KeyEvent) -> Vec<u8>;
+    fn handle_touch(&mut self, event: TouchEvent) -> Vec<u8>;
+    fn cell_state(&self) -> CellStateSnapshot;
+    fn resize(&mut self, rows: u16, cols: u16);
+    fn dirty_regions(&self) -> DirtyRegion;
+}
+```
+
+### Kotlin: `SessionEvent` sealed class
+
+```kotlin
+sealed class SessionEvent {
+    data class OutputReady(val sessionId: Long) : SessionEvent()
+    data class Bell(val sessionId: Long) : SessionEvent()
+    data class TitleChanged(val sessionId: Long, val title: String) : SessionEvent()
+    data class ClipboardRequest(val sessionId: Long, val text: String) : SessionEvent()
+    data class HyperlinkHover(val sessionId: Long, val url: String?) : SessionEvent()
+    data class ProcessExited(val sessionId: Long, val code: Int) : SessionEvent()
+}
+```
+
 ### Rust: `Session` 编排器
 
 ```rust
 pub struct Session {
     pty: PtyPair,
-    terminal: TerminalState,
-    parser: VtParser,
-    output_rx: Receiver<Vec<u8>>,
-    output_notify: Arc<(Mutex<bool>, Condvar)>,
-    exited: Arc<AtomicBool>,
-    reader_handle: Option<std::thread::JoinHandle<()>>,
-    wait_handle: Option<std::thread::JoinHandle<()>>,
+    grid: Arc<Mutex<CellGrid>>,
+    parser: vte::Parser,
+    render_notifier: crossbeam::channel::Sender<RenderNotification>,
+    input_buffer: Vec<u8>,
 }
 ```
 
 ## 安全模型
 
-1. **Rust 内存安全覆盖所有 PTY/VT 代码**: boltffi 桥接是唯一 `unsafe` 边界
+1. **Rust 内存安全覆盖所有 PTY/VT 代码**: UniFFI 桥接是唯一 `unsafe` 边界
 2. **OSC 52 剪贴板**: 用户确认 (Android toast + 接受)
 3. **PTY 隔离**: 每个会话在自己的进程组中；`kill_on_drop` 语义
 4. **默认无网络**: MCP 服务器仅限本地回环，默认禁用
@@ -359,11 +400,11 @@ pub struct Session {
 | 维度 | Termux | Haven | Torvox |
 |------|--------|-------|-------|
 | **渲染** | View + Canvas (Java) | Compose + Canvas (Kotlin) | wgpu v29 GPU (Rust) |
-| **VT 解析器** | 手写 Java FSM (2617行) | libvterm (C/JNI) | libghostty-vt 0.1 (SIMD, Rust FFI) |
-| **FFI 边界** | 最小 JNI (仅 PTY) | libvterm + IronRDP + rclone + PRoot | boltffi 0.25 类型安全绑定 |
-| **线程模型** | 3 线程 + Handler | mutex 保护 + 协程 | 专用解析线程 + flume lock-free 通道 |
+| **VT 解析器** | 手写 Java FSM (2617行) | libvterm (C/JNI) | vte 0.15 crate (Rust, 零 unsafe) |
+| **FFI 边界** | 最小 JNI (仅 PTY) | libvterm + IronRDP + rclone + PRoot | UniFFI 0.31 类型安全绑定 |
+| **线程模型** | 3 线程 + Handler | mutex 保护 + 协程 | 专用解析线程 + crossbeam lock-free 通道 |
 | **脏区域跟踪** | 无 (全屏重绘) | Compose 管理 | DirtyMask (Vec<u64> 分区位标志, 任意行数) |
-| **字形缓存** | 无 | 无 | guillotière 0.7 GPU 图集 |
-| **内存模型** | Java 环形缓冲 (64KB) | C libvterm + Kotlin 复制 | Rust 所有权, flume SPSC 零拷贝通道 |
-| **序列化** | Java Serializable | C struct | postcard 1.1 (测试用) |
+| **字形缓存** | 无 | 无 | etagere 0.3 GPU 图集 |
+| **内存模型** | Java 环形缓冲 (64KB) | C libvterm + Kotlin 复制 | Rust 所有权, crossbeam SPSC 零拷贝通道 |
+| **序列化** | Java Serializable | C struct | postcard 1.1 (bincode 已废弃) |
 | **前台服务** | 普通 Service | 普通 Service | FOREGROUND_SERVICE_SPECIAL_USE (Android 16) |

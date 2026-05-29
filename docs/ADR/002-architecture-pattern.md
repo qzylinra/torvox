@@ -36,7 +36,7 @@
 │ (wgpu 29 GPU 字形图集, 实例化四边形, 脏区域) │
 ├──────────────────────────────────────────────────┤
 │ torvox-terminal │
-│ (VT 解析器, Grid, PTY 会话, 剪贴板) │
+│ (VT 解析器, CellGrid, PTY 会话, 剪贴板) │
 ├──────────────────────────────────────────────────┤
 │ torvox-core (no_std 兼容) │
 │ (VT 状态机, Cell 类型, ANSI 颜色, 事件类型) │
@@ -52,7 +52,7 @@ torvox-core (无依赖, 仅 libcore)
 ↑
 torvox-terminal (依赖 torvox-core + vte + nix + serde + postcard)
 ↑
-torvox-renderer (依赖 torvox-core + wgpu + cosmic-text + swash)
+torvox-renderer (依赖 torvox-terminal + wgpu + cosmic-text + swash)
 ↑
 torvox-gui (依赖 torvox-renderer + winit 0.30 / SurfaceView)
 ↑
@@ -63,7 +63,7 @@ torvox-app / torvox-tui / 自定义消费者
 
 ```
 PTY → [读取线程] → 原始字节 → [crossbeam SPSC 通道] → VT 解析器
-→ [Grid 变更 + DirtyMask 集合] → [crossbeam Notify]
+→ [CellGrid 变更 + DirtyRegion 集合] → [crossbeam Notify]
 → [渲染线程] → 字形图集更新 → GPU 提交
 
 用户输入 → [UI 线程] → 按键/鼠标事件 → [UniFFI 调用]
@@ -81,13 +81,13 @@ Ghostty 确立了此模式 (libghostty 可嵌入)，Spectra、BossTerm 和 Conne
 
 - **无 UI 测试**: `torvox-core` 可在纯 Rust 中测试——无需模拟器、GPU、Android
 - **多前端**: 一个 Android 应用、一个潜在桌面应用、一个无头测试工具
-- **确定性回放**: 将录制的 PTY 输出馈入解析器 → 断言 Grid 状态
+- **确定性回放**: 将录制的 PTY 输出馈入解析器 → 断言 CellGrid 状态
 - **AI 智能体访问**: 驱动 UI 的同一库接口可驱动智能体自动化
 
 ### 为什么事件驱动？
 
 终端仿真问题天然映射到事件溯源：
-- **输入流** (PTY 字节) → **状态机** (VT 解析器) → **状态差** (Grid 变更)
+- **输入流** (PTY 字节) → **状态机** (VT 解析器) → **状态差** (CellGrid 变更)
 - **用户动作** (键盘) → **事件** → **处理** → **输出流** (PTY 写入)
 
 这是 WezTerm (Mux 事件系统)、Ghostty (线程安全事件通道) 和 Spectra (异步解析器任务) 使用的模式。它使以下成为可能：

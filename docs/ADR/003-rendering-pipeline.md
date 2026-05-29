@@ -20,9 +20,9 @@
 **wgpu v29 原生 GPU 渲染，cosmic-text 0.19 → swash 0.2.7/skrifa 0.42 → etagere 0.3 字体管线，实例化四边形渲染。**
 
 ```
-PTY 字节 → VT 解析器 → Grid 变更
+PTY 字节 → VT 解析器 → CellGrid 变更
 ↓
-脏区域跟踪 (DirtyMask Vec<u64> 分区位标志)
+脏区域跟踪 (DirtyLine bitmask)
 ↓
 单元格 → 字形查找
 ↓
@@ -68,9 +68,9 @@ let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
 
 let surface = unsafe {
     instance.create_surface_unsafe(
-        wgpu::SurfaceTargetUnsafe::RawHandle {
+        wgpu::SurfaceTargetUnsafe::RawWindow {
             raw_window_handle: android_raw_window_handle,
-            raw_display_handle: Some(raw_display_handle), // Vulkan 后端不使用
+            raw_display_handle: None, // Vulkan 后端不使用
         }
     )?
 };
@@ -81,7 +81,7 @@ let surface = unsafe {
 | 关注点 | 状态 |
 |--------|------|
 | Vulkan 后端 | ✅ 成熟。Android 10+ (API 29) 原生支持 Vulkan 1.1。 |
-| Surface 渲染 | ✅ 通过 `create_surface_unsafe(RawHandle{...})` 支持 Android `Surface`。 |
+| Surface 渲染 | ✅ 通过 `create_surface_unsafe(RawWindow{...})` 支持 Android `Surface`。 |
 | 着色器编译 | ✅ wgpu 在 Android 上使用 Vulkan SPIR-V，naga 运行时编译。首次帧有编译延迟，可通过预热缓解。 |
 | 多后端 | ❌ 不需要。Vulkan-only 是 Android 上的正确选择。 |
 
@@ -134,7 +134,7 @@ let surface = unsafe {
 ### 脏区域优化
 
 不每帧重新渲染所有单元格：
-- 维护 `DirtyMask(Vec<u64>)` 分区位标志 (每 u64 覆盖 64 行)
+- 维护 `DirtyLine` 位掩码 (终端网格每行一位)
 - 仅处理标记为脏的行
 - 将连续脏行批处理为脏矩形
 - 仅上传变更的图集区域到 GPU
@@ -150,7 +150,7 @@ let surface = unsafe {
 | ConnectBot termlib | 无 | 每帧全屏重绘 |
 | Alacritty | DirtyLine bitmask | 仅重绘脏行 |
 | WezTerm | 损伤跟踪 | 仅重绘变更 |
-| **Torvox** | **DirtyMask(Vec<u64>) + 实例缓冲区 diff** | **仅重绘脏行, 仅上传变更图集** |
+| **Torvox** | **DirtyLine bitmask + 实例缓冲区 diff** | **仅重绘脏行, 仅上传变更图集** |
 
 ## 后果
 

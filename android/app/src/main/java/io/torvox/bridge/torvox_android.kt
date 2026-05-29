@@ -748,18 +748,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_torvox_android_checksum_method_torvoxbridge_ping(): Short
 
-    external fun uniffi_torvox_android_checksum_method_torvoxbridge_release_surface(): Short
-
-    external fun uniffi_torvox_android_checksum_method_torvoxbridge_render(): Short
-
-    external fun uniffi_torvox_android_checksum_method_torvoxbridge_resize(): Short
-
-    external fun uniffi_torvox_android_checksum_method_torvoxbridge_scrollback_len(): Short
-
-    external fun uniffi_torvox_android_checksum_method_torvoxbridge_scrollback_line(): Short
-
-    external fun uniffi_torvox_android_checksum_method_torvoxbridge_set_native_window(): Short
-
     external fun uniffi_torvox_android_checksum_method_torvoxbridge_spawn_terminal(): Short
 
     external fun uniffi_torvox_android_checksum_constructor_torvoxbridge_new(): Short
@@ -807,40 +795,6 @@ internal object UniffiLib {
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-
-    external fun uniffi_torvox_android_fn_method_torvoxbridge_release_surface(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_torvox_android_fn_method_torvoxbridge_render(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_torvox_android_fn_method_torvoxbridge_resize(
-        `ptr`: Long,
-        `rows`: Int,
-        `cols`: Int,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_torvox_android_fn_method_torvoxbridge_scrollback_len(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Int
-
-    external fun uniffi_torvox_android_fn_method_torvoxbridge_scrollback_line(
-        `ptr`: Long,
-        `index`: Int,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_torvox_android_fn_method_torvoxbridge_set_native_window(
-        `ptr`: Long,
-        `windowPtr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
 
     external fun uniffi_torvox_android_fn_method_torvoxbridge_spawn_terminal(
         `ptr`: Long,
@@ -1072,24 +1026,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_ping() != 52279.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_release_surface() != 19654.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_render() != 13671.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_resize() != 35766.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_scrollback_len() != 25366.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_scrollback_line() != 56456.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_set_native_window() != 33684.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if (lib.uniffi_torvox_android_checksum_method_torvoxbridge_spawn_terminal() != 48689.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1312,46 +1248,6 @@ public object FfiConverterInt : FfiConverter<Int, Int> {
 /**
  * @suppress
  */
-public object FfiConverterLong : FfiConverter<Long, Long> {
-    override fun lift(value: Long): Long = value
-
-    override fun read(buf: ByteBuffer): Long = buf.getLong()
-
-    override fun lower(value: Long): Long = value
-
-    override fun allocationSize(value: Long) = 8UL
-
-    override fun write(
-        value: Long,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(value)
-    }
-}
-
-/**
- * @suppress
- */
-public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
-    override fun lift(value: Byte): Boolean = value.toInt() != 0
-
-    override fun read(buf: ByteBuffer): Boolean = lift(buf.get())
-
-    override fun lower(value: Boolean): Byte = if (value) 1.toByte() else 0.toByte()
-
-    override fun allocationSize(value: Boolean) = 1UL
-
-    override fun write(
-        value: Boolean,
-        buf: ByteBuffer,
-    ) {
-        buf.put(lower(value))
-    }
-}
-
-/**
- * @suppress
- */
 public object FfiConverterString : FfiConverter<String, RustBuffer.ByValue> {
     // Note: we don't inherit from FfiConverterRustBuffer, because we use a
     // special encoding when lowering/lifting.  We can use `RustBuffer.len` to
@@ -1510,21 +1406,6 @@ public interface TorvoxBridgeInterface {
 
     fun `ping`(): kotlin.String
 
-    fun `releaseSurface`()
-
-    fun `render`()
-
-    fun `resize`(
-        `rows`: kotlin.UInt,
-        `cols`: kotlin.UInt,
-    )
-
-    fun `scrollbackLen`(): kotlin.UInt
-
-    fun `scrollbackLine`(`index`: kotlin.UInt): kotlin.String?
-
-    fun `setNativeWindow`(`windowPtr`: kotlin.Long)
-
     fun `spawnTerminal`(
         `rows`: kotlin.UInt,
         `cols`: kotlin.UInt,
@@ -1676,79 +1557,6 @@ open class TorvoxBridge :
             },
         )
 
-    override fun `releaseSurface`() =
-        callWithHandle {
-            uniffiRustCall { _status ->
-                UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_release_surface(
-                    it,
-                    _status,
-                )
-            }
-        }
-
-    @Throws(TerminalException::class)
-    override fun `render`() =
-        callWithHandle {
-            uniffiRustCallWithError(TerminalException) { _status ->
-                UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_render(
-                    it,
-                    _status,
-                )
-            }
-        }
-
-    @Throws(TerminalException::class)
-    override fun `resize`(
-        `rows`: kotlin.UInt,
-        `cols`: kotlin.UInt,
-    ) = callWithHandle {
-        uniffiRustCallWithError(TerminalException) { _status ->
-            UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_resize(
-                it,
-                FfiConverterUInt.lower(`rows`),
-                FfiConverterUInt.lower(`cols`),
-                _status,
-            )
-        }
-    }
-
-    override fun `scrollbackLen`(): kotlin.UInt =
-        FfiConverterUInt.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_scrollback_len(
-                        it,
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `scrollbackLine`(`index`: kotlin.UInt): kotlin.String? =
-        FfiConverterOptionalString.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_scrollback_line(
-                        it,
-                        FfiConverterUInt.lower(`index`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    @Throws(TerminalException::class)
-    override fun `setNativeWindow`(`windowPtr`: kotlin.Long) =
-        callWithHandle {
-            uniffiRustCallWithError(TerminalException) { _status ->
-                UniffiLib.uniffi_torvox_android_fn_method_torvoxbridge_set_native_window(
-                    it,
-                    FfiConverterLong.lower(`windowPtr`),
-                    _status,
-                )
-            }
-        }
-
     @Throws(TerminalException::class)
     override fun `spawnTerminal`(
         `rows`: kotlin.UInt,
@@ -1793,75 +1601,10 @@ public object FfiConverterTypeTorvoxBridge : FfiConverter<TorvoxBridge, Long> {
     }
 }
 
-data class BridgeAttrs(
-    var `bold`: kotlin.Boolean,
-    var `dim`: kotlin.Boolean,
-    var `italic`: kotlin.Boolean,
-    var `underline`: kotlin.Boolean,
-    var `doubleUnderline`: kotlin.Boolean,
-    var `reverse`: kotlin.Boolean,
-    var `strikethrough`: kotlin.Boolean,
-    var `blink`: kotlin.Boolean,
-    var `hidden`: kotlin.Boolean,
-    var `overline`: kotlin.Boolean,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeBridgeAttrs : FfiConverterRustBuffer<BridgeAttrs> {
-    override fun read(buf: ByteBuffer): BridgeAttrs =
-        BridgeAttrs(
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-        )
-
-    override fun allocationSize(value: BridgeAttrs) =
-        (
-            FfiConverterBoolean.allocationSize(value.`bold`) +
-                FfiConverterBoolean.allocationSize(value.`dim`) +
-                FfiConverterBoolean.allocationSize(value.`italic`) +
-                FfiConverterBoolean.allocationSize(value.`underline`) +
-                FfiConverterBoolean.allocationSize(value.`doubleUnderline`) +
-                FfiConverterBoolean.allocationSize(value.`reverse`) +
-                FfiConverterBoolean.allocationSize(value.`strikethrough`) +
-                FfiConverterBoolean.allocationSize(value.`blink`) +
-                FfiConverterBoolean.allocationSize(value.`hidden`) +
-                FfiConverterBoolean.allocationSize(value.`overline`)
-        )
-
-    override fun write(
-        value: BridgeAttrs,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterBoolean.write(value.`bold`, buf)
-        FfiConverterBoolean.write(value.`dim`, buf)
-        FfiConverterBoolean.write(value.`italic`, buf)
-        FfiConverterBoolean.write(value.`underline`, buf)
-        FfiConverterBoolean.write(value.`doubleUnderline`, buf)
-        FfiConverterBoolean.write(value.`reverse`, buf)
-        FfiConverterBoolean.write(value.`strikethrough`, buf)
-        FfiConverterBoolean.write(value.`blink`, buf)
-        FfiConverterBoolean.write(value.`hidden`, buf)
-        FfiConverterBoolean.write(value.`overline`, buf)
-    }
-}
-
 data class BridgeCell(
     var `charCode`: kotlin.UInt,
     var `fg`: kotlin.UInt,
     var `bg`: kotlin.UInt,
-    var `attrs`: BridgeAttrs,
 ) {
     companion object
 }
@@ -1875,15 +1618,13 @@ public object FfiConverterTypeBridgeCell : FfiConverterRustBuffer<BridgeCell> {
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
-            FfiConverterTypeBridgeAttrs.read(buf),
         )
 
     override fun allocationSize(value: BridgeCell) =
         (
             FfiConverterUInt.allocationSize(value.`charCode`) +
                 FfiConverterUInt.allocationSize(value.`fg`) +
-                FfiConverterUInt.allocationSize(value.`bg`) +
-                FfiConverterTypeBridgeAttrs.allocationSize(value.`attrs`)
+                FfiConverterUInt.allocationSize(value.`bg`)
         )
 
     override fun write(
@@ -1893,12 +1634,11 @@ public object FfiConverterTypeBridgeCell : FfiConverterRustBuffer<BridgeCell> {
         FfiConverterUInt.write(value.`charCode`, buf)
         FfiConverterUInt.write(value.`fg`, buf)
         FfiConverterUInt.write(value.`bg`, buf)
-        FfiConverterTypeBridgeAttrs.write(value.`attrs`, buf)
     }
 }
 
 data class TerminalConfig(
-    var `shell`: Shell,
+    var `shell`: kotlin.String,
     var `rows`: kotlin.UInt,
     var `cols`: kotlin.UInt,
     var `scrollbackLines`: kotlin.UInt,
@@ -1912,7 +1652,7 @@ data class TerminalConfig(
 public object FfiConverterTypeTerminalConfig : FfiConverterRustBuffer<TerminalConfig> {
     override fun read(buf: ByteBuffer): TerminalConfig =
         TerminalConfig(
-            FfiConverterTypeShell.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
@@ -1920,7 +1660,7 @@ public object FfiConverterTypeTerminalConfig : FfiConverterRustBuffer<TerminalCo
 
     override fun allocationSize(value: TerminalConfig) =
         (
-            FfiConverterTypeShell.allocationSize(value.`shell`) +
+            FfiConverterString.allocationSize(value.`shell`) +
                 FfiConverterUInt.allocationSize(value.`rows`) +
                 FfiConverterUInt.allocationSize(value.`cols`) +
                 FfiConverterUInt.allocationSize(value.`scrollbackLines`)
@@ -1930,80 +1670,10 @@ public object FfiConverterTypeTerminalConfig : FfiConverterRustBuffer<TerminalCo
         value: TerminalConfig,
         buf: ByteBuffer,
     ) {
-        FfiConverterTypeShell.write(value.`shell`, buf)
+        FfiConverterString.write(value.`shell`, buf)
         FfiConverterUInt.write(value.`rows`, buf)
         FfiConverterUInt.write(value.`cols`, buf)
         FfiConverterUInt.write(value.`scrollbackLines`, buf)
-    }
-}
-
-sealed class Shell {
-    object SystemDefault : Shell()
-
-    data class Custom(
-        val `path`: kotlin.String,
-    ) : Shell() {
-        companion object
-    }
-
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeShell : FfiConverterRustBuffer<Shell> {
-    override fun read(buf: ByteBuffer): Shell =
-        when (buf.getInt()) {
-            1 -> {
-                Shell.SystemDefault
-            }
-
-            2 -> {
-                Shell.Custom(
-                    FfiConverterString.read(buf),
-                )
-            }
-
-            else -> {
-                throw RuntimeException("invalid enum value, something is very wrong!!")
-            }
-        }
-
-    override fun allocationSize(value: Shell) =
-        when (value) {
-            is Shell.SystemDefault -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-
-            is Shell.Custom -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`path`)
-                )
-            }
-        }
-
-    override fun write(
-        value: Shell,
-        buf: ByteBuffer,
-    ) {
-        when (value) {
-            is Shell.SystemDefault -> {
-                buf.putInt(1)
-                Unit
-            }
-
-            is Shell.Custom -> {
-                buf.putInt(2)
-                FfiConverterString.write(value.`path`, buf)
-                Unit
-            }
-        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
@@ -2088,49 +1758,15 @@ public object FfiConverterTypeTerminalError : FfiConverterRustBuffer<TerminalExc
 sealed class TerminalEvent {
     object Bell : TerminalEvent()
 
-    data class TitleChanged(
-        val `title`: kotlin.String,
-    ) : TerminalEvent() {
-        companion object
-    }
-
-    data class ClipboardRequest(
-        val `text`: kotlin.String,
-    ) : TerminalEvent() {
-        companion object
-    }
-
-    data class HyperlinkHover(
-        val `url`: kotlin.String?,
-    ) : TerminalEvent() {
-        companion object
-    }
-
     data class ProcessExited(
         val `exitCode`: kotlin.Int,
     ) : TerminalEvent() {
         companion object
     }
 
-    data class DirtyRegion(
-        val `startRow`: kotlin.UInt,
-        val `endRow`: kotlin.UInt,
-    ) : TerminalEvent() {
-        companion object
-    }
-
-    data class CursorChanged(
+    data class CellUpdate(
         val `row`: kotlin.UInt,
         val `col`: kotlin.UInt,
-    ) : TerminalEvent() {
-        companion object
-    }
-
-    data class SelectionChanged(
-        val `startRow`: kotlin.UInt,
-        val `startCol`: kotlin.UInt,
-        val `endRow`: kotlin.UInt,
-        val `endCol`: kotlin.UInt,
     ) : TerminalEvent() {
         companion object
     }
@@ -2149,47 +1785,13 @@ public object FfiConverterTypeTerminalEvent : FfiConverterRustBuffer<TerminalEve
             }
 
             2 -> {
-                TerminalEvent.TitleChanged(
-                    FfiConverterString.read(buf),
-                )
-            }
-
-            3 -> {
-                TerminalEvent.ClipboardRequest(
-                    FfiConverterString.read(buf),
-                )
-            }
-
-            4 -> {
-                TerminalEvent.HyperlinkHover(
-                    FfiConverterOptionalString.read(buf),
-                )
-            }
-
-            5 -> {
                 TerminalEvent.ProcessExited(
                     FfiConverterInt.read(buf),
                 )
             }
 
-            6 -> {
-                TerminalEvent.DirtyRegion(
-                    FfiConverterUInt.read(buf),
-                    FfiConverterUInt.read(buf),
-                )
-            }
-
-            7 -> {
-                TerminalEvent.CursorChanged(
-                    FfiConverterUInt.read(buf),
-                    FfiConverterUInt.read(buf),
-                )
-            }
-
-            8 -> {
-                TerminalEvent.SelectionChanged(
-                    FfiConverterUInt.read(buf),
-                    FfiConverterUInt.read(buf),
+            3 -> {
+                TerminalEvent.CellUpdate(
                     FfiConverterUInt.read(buf),
                     FfiConverterUInt.read(buf),
                 )
@@ -2209,30 +1811,6 @@ public object FfiConverterTypeTerminalEvent : FfiConverterRustBuffer<TerminalEve
                 )
             }
 
-            is TerminalEvent.TitleChanged -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`title`)
-                )
-            }
-
-            is TerminalEvent.ClipboardRequest -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`text`)
-                )
-            }
-
-            is TerminalEvent.HyperlinkHover -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterOptionalString.allocationSize(value.`url`)
-                )
-            }
-
             is TerminalEvent.ProcessExited -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -2241,32 +1819,12 @@ public object FfiConverterTypeTerminalEvent : FfiConverterRustBuffer<TerminalEve
                 )
             }
 
-            is TerminalEvent.DirtyRegion -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterUInt.allocationSize(value.`startRow`) +
-                        FfiConverterUInt.allocationSize(value.`endRow`)
-                )
-            }
-
-            is TerminalEvent.CursorChanged -> {
+            is TerminalEvent.CellUpdate -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL +
                         FfiConverterUInt.allocationSize(value.`row`) +
                         FfiConverterUInt.allocationSize(value.`col`)
-                )
-            }
-
-            is TerminalEvent.SelectionChanged -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterUInt.allocationSize(value.`startRow`) +
-                        FfiConverterUInt.allocationSize(value.`startCol`) +
-                        FfiConverterUInt.allocationSize(value.`endRow`) +
-                        FfiConverterUInt.allocationSize(value.`endCol`)
                 )
             }
         }
@@ -2281,85 +1839,19 @@ public object FfiConverterTypeTerminalEvent : FfiConverterRustBuffer<TerminalEve
                 Unit
             }
 
-            is TerminalEvent.TitleChanged -> {
-                buf.putInt(2)
-                FfiConverterString.write(value.`title`, buf)
-                Unit
-            }
-
-            is TerminalEvent.ClipboardRequest -> {
-                buf.putInt(3)
-                FfiConverterString.write(value.`text`, buf)
-                Unit
-            }
-
-            is TerminalEvent.HyperlinkHover -> {
-                buf.putInt(4)
-                FfiConverterOptionalString.write(value.`url`, buf)
-                Unit
-            }
-
             is TerminalEvent.ProcessExited -> {
-                buf.putInt(5)
+                buf.putInt(2)
                 FfiConverterInt.write(value.`exitCode`, buf)
                 Unit
             }
 
-            is TerminalEvent.DirtyRegion -> {
-                buf.putInt(6)
-                FfiConverterUInt.write(value.`startRow`, buf)
-                FfiConverterUInt.write(value.`endRow`, buf)
-                Unit
-            }
-
-            is TerminalEvent.CursorChanged -> {
-                buf.putInt(7)
+            is TerminalEvent.CellUpdate -> {
+                buf.putInt(3)
                 FfiConverterUInt.write(value.`row`, buf)
                 FfiConverterUInt.write(value.`col`, buf)
                 Unit
             }
-
-            is TerminalEvent.SelectionChanged -> {
-                buf.putInt(8)
-                FfiConverterUInt.write(value.`startRow`, buf)
-                FfiConverterUInt.write(value.`startCol`, buf)
-                FfiConverterUInt.write(value.`endRow`, buf)
-                FfiConverterUInt.write(value.`endCol`, buf)
-                Unit
-            }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
-    }
-}
-
-/**
- * @suppress
- */
-public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?> {
-    override fun read(buf: ByteBuffer): kotlin.String? {
-        if (buf.get().toInt() == 0) {
-            return null
-        }
-        return FfiConverterString.read(buf)
-    }
-
-    override fun allocationSize(value: kotlin.String?): ULong {
-        if (value == null) {
-            return 1UL
-        } else {
-            return 1UL + FfiConverterString.allocationSize(value)
-        }
-    }
-
-    override fun write(
-        value: kotlin.String?,
-        buf: ByteBuffer,
-    ) {
-        if (value == null) {
-            buf.put(0)
-        } else {
-            buf.put(1)
-            FfiConverterString.write(value, buf)
-        }
     }
 }
 

@@ -1,3 +1,5 @@
+uniffi::setup_scaffolding!();
+
 pub mod bridge;
 pub mod surface;
 

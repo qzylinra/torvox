@@ -33,7 +33,7 @@ pub struct GlyphInfo {
 pub struct FontPipeline {
     font_system: FontSystem,
     scaler_context: ScaleContext,
-    atlas: guillotiere::AtlasAllocator,
+    atlas: etagere::AtlasAllocator,
     glyph_cache: HashMap<GlyphKey, GlyphInfo>,
     atlas_bitmap: Vec<u8>,
     atlas_width: u32,
@@ -46,7 +46,7 @@ impl FontPipeline {
     pub fn new(atlas_width: i32, atlas_height: i32, font_size: f32) -> Self {
         let font_system = FontSystem::new();
         let scaler_context = ScaleContext::new();
-        let atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(atlas_width, atlas_height));
+        let atlas = etagere::AtlasAllocator::new(etagere::size2(atlas_width, atlas_height));
         let atlas_bitmap = vec![0u8; (atlas_width * atlas_height * 4) as usize];
 
         let mut pipeline = Self {
@@ -135,12 +135,10 @@ impl FontPipeline {
             return Some(info);
         }
 
-        let allocation = self
-            .atlas
-            .allocate(guillotiere::size2(width + 1, height + 1))?;
+        let allocation = self.atlas.allocate(etagere::size2(width + 1, height + 1))?;
         let rect = allocation.rectangle;
-        let ax = rect.min.x as i32;
-        let ay = rect.min.y as i32;
+        let ax = rect.min.x;
+        let ay = rect.min.y;
 
         match image.content {
             swash::scale::image::Content::Mask => {

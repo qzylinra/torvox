@@ -7,12 +7,10 @@ license = "UNLICENSED"
 
 [dependencies]
 serde = { workspace = true }
-thiserror = { workspace = true, optional = true }
-
-[dev-dependencies]
 postcard = { workspace = true }
+thiserror = { workspace = true, optional = true }
 
 [features]
 default = ["std", "alloc"]
-std = ["thiserror", "serde/std"]
-alloc = ["serde/alloc"]
+std = ["thiserror", "serde/std", "postcard/use-std"]
+alloc = ["serde/alloc", "postcard/alloc"]

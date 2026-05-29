@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "std")]
+use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
@@ -113,6 +115,15 @@ impl DirtyMask {
         let bit = row % BITS_PER_PARTITION;
         (part, bit)
     }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "std", derive(Error))]
+pub enum CoreError {
+    #[cfg_attr(feature = "std", error("row index out of bounds: {index} >= {max}"))]
+    RowOutOfBounds { index: u32, max: u32 },
+    #[cfg_attr(feature = "std", error("column index out of bounds: {index} >= {max}"))]
+    ColOutOfBounds { index: u32, max: u32 },
 }
 
 impl Color {

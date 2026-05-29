@@ -31,15 +31,23 @@ Torvox 是 AI 辅助开发的绿地项目。从 100+ AI 重写案例中提取的
 
 | 工具 | 角色 | 配置位置 |
 |------|------|----------|
-| **opencode** | 主要 AI 编码工具 | `AGENTS.md` (仓库根), `opencode.jsonc` |
+| **opencode** | 主要 AI 编码工具 | `AGENTS.md` (仓库根), `.opencode/` |
+| **Claude Code** | 复杂重构/分析 | `CLAUDE.md` (兼容 AGENTS.md) |
+| **Cursor** | 辅助 IDE | `.cursor/rules/` |
 
 ### 配置文件层次
 
 ```
 torvox/
 ├── AGENTS.md              # 主 AI 上下文文件 (opencode 兼容)
-├── opencode.jsonc         # opencode 配置
-└── .opencode/agents/      # 自定义智能体定义
+├── .opencode/
+│   ├── config.jsonc       # opencode 配置
+│   └── agents/            # 自定义智能体定义
+├── .cursor/
+│   └── rules/
+│       ├── general.mdc    # 通用规则
+│       └── rust.mdc       # Rust 特定规则
+└── CLAUDE.md              # Claude Code 兼容 (symlink 或同步)
 ```
 
 ### AGENTS.md 结构 (基于最佳实践)
@@ -58,7 +66,7 @@ torvox/
 
 ### opencode 配置
 
-见 `opencode.jsonc`。定义 3 个专用智能体 (torvox-rust, torvox-kotlin, torvox-docs) + 质量门命令。
+见 `.opencode/config.jsonc`。定义 3 个专用智能体 (torvox-rust, torvox-kotlin, torvox-docs) + 质量门命令。
 
 ### AI 交互的 7 种提示模式
 

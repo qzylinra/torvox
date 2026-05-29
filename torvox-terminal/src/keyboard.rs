@@ -1,3 +1,5 @@
+use std::vec::Vec;
+
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Modifiers: u8 {
@@ -280,7 +282,7 @@ impl InputEngine {
         }
     }
 
-    fn modifier_bits(&self) -> u32 {
+    fn modifier_value(&self) -> u32 {
         let mut val = 1u32;
         if self.modifiers.contains(Modifiers::SHIFT) {
             val += 1;
@@ -297,12 +299,21 @@ impl InputEngine {
         val
     }
 
-    fn modifier_value(&self) -> u32 {
-        self.modifier_bits()
-    }
-
     fn modifier_value_legacy(&self) -> String {
-        format!("1;{}", self.modifier_bits())
+        let mut val = 1u32;
+        if self.modifiers.contains(Modifiers::SHIFT) {
+            val += 1;
+        }
+        if self.modifiers.contains(Modifiers::ALT) {
+            val += 2;
+        }
+        if self.modifiers.contains(Modifiers::CTRL) {
+            val += 4;
+        }
+        if self.modifiers.contains(Modifiers::META) {
+            val += 8;
+        }
+        format!("1;{}", val)
     }
 
     pub fn encode_paste_start(&self) -> Vec<u8> {

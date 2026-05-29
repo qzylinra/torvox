@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 pub const ANSI_256: [[u8; 3]; 256] = {
     let mut table = [[0u8; 3]; 256];
     let mut i = 0;
@@ -41,6 +43,27 @@ const ANSI_16: [[u8; 3]; 16] = [
     [255, 255, 255],
 ];
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SgrAttribute {
+    Reset,
+    Bold,
+    Dim,
+    Italic,
+    Underline,
+    Blink,
+    Reverse,
+    Hidden,
+    Strikethrough,
+    FgAnsi(u8),
+    FgRgb(u8, u8, u8),
+    FgDefault,
+    BgAnsi(u8),
+    BgRgb(u8, u8, u8),
+    BgDefault,
+    Overline,
+    DoubleUnderline,
+}
+
 pub fn ansi_to_rgb(index: u8) -> [u8; 3] {
     ANSI_256[index as usize]
 }
@@ -75,5 +98,13 @@ mod tests {
     fn ansi_to_rgb_index() {
         assert_eq!(ansi_to_rgb(1), [128, 0, 0]);
         assert_eq!(ansi_to_rgb(9), [255, 0, 0]);
+    }
+
+    #[test]
+    fn sgr_attribute_serde_roundtrip() {
+        let attr = SgrAttribute::FgRgb(255, 128, 0);
+        let bytes = postcard::to_allocvec(&attr).unwrap();
+        let decoded: SgrAttribute = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(attr, decoded);
     }
 }

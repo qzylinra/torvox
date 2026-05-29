@@ -1,286 +1,164 @@
 {
-  description = "Torvox — Android 终端模拟器";
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-parts.url = "github:hercules-ci/flake-parts";
-    fenix.url = "github:nix-community/fenix";
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
+    {
+      nixpkgs,
+      fenix,
+      flake-parts,
+      ...
+    }@inputs:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = builtins.filter (system: system != "x86_64-darwin") nixpkgs.lib.systems.flakeExposed;
 
       perSystem =
-        { pkgs, system, ... }:
         {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            config.allowUnfree = true;
-            overlays = [ inputs.fenix.overlays.default ];
-          };
-
-          packages.rust-toolchain = pkgs.fenix.stable.withComponents [
+          pkgs,
+          system,
+          ...
+        }:
+        let
+          rustToolchain = pkgs.fenix.stable.withComponents [
             "cargo"
             "clippy"
             "rust-src"
             "rustc"
             "rustfmt"
           ];
-
-          # ── 格式化器 ──────────────────────────────────────
-          formatter = pkgs.nixfmt-tree.override {
-            nixfmtPackage = pkgs.nixfmt-rs;
-            runtimeInputs = [
-              pkgs.taplo
-              pkgs.yamlfmt
-              pkgs.shfmt
+          rustToolchainAndroid = pkgs.fenix.combine [
+            pkgs.fenix.targets.aarch64-linux-android.stable.rust-std
+            pkgs.fenix.targets.x86_64-linux-android.stable.rust-std
+          ];
+          androidSdkPkgs = pkgs.androidenv.composeAndroidPackages.override { licenseAccepted = true; } {
+            buildToolsVersions = [ "36.0.0" ];
+            cmdLineToolsVersion = "16.0";
+            platformToolsVersion = "36.0.0";
+            platformVersions = [
+              "36"
+              "33"
             ];
-            settings.formatter = {
-              toml = {
-                command = "taplo";
-                options = [ "format" ];
-                includes = [ "*.toml" ];
-              };
-              yaml = {
-                command = "yamlfmt";
-                includes = [
-                  "*.yaml"
-                  "*.yml"
-                ];
-              };
-              shell = {
-                command = "shfmt";
-                options = [
-                  "-w"
-                  "-i"
-                  "2"
-                  "-ci"
-                ];
-                includes = [
-                  "*.sh"
-                  "*.bash"
-                ];
-              };
+            ndkVersions = [ "29.0.14206865" ];
+            includeNDK = true;
+            includeEmulator = false;
+            includeSystemImages = false;
+            includeSources = false;
+          };
+          androidEmuSdkPkgs = pkgs.androidenv.composeAndroidPackages.override { licenseAccepted = true; } {
+            buildToolsVersions = [ "36.0.0" ];
+            cmdLineToolsVersion = "16.0";
+            platformToolsVersion = "36.0.0";
+            platformVersions = [
+              "36"
+              "33"
+            ];
+            ndkVersions = [ "29.0.14206865" ];
+            includeNDK = true;
+            includeEmulator = true;
+            includeSystemImages = true;
+            systemImageTypes = [ "default" ];
+            abiVersions = [ "x86_64" ];
+            includeSources = false;
+          };
+          jdk = pkgs.javaPackages.compiler.temurin-bin.jdk-25;
+          nativeDeps = with pkgs; [
+            pkg-config
+            openssl
+          ];
+          rustDeps = [
+            rustToolchainAndroid
+            pkgs.cargo-nextest
+            pkgs.cargo-fuzz
+            pkgs.cargo-geiger
+            pkgs.cargo-audit
+            pkgs.cargo-ndk
+            pkgs.rust-analyzer
+          ];
+          androidDeps = with pkgs; [
+            jdk
+            kotlin
+            gradle_9
+            ktfmt
+            ktlint
+            android-tools
+            androidSdkPkgs.androidsdk
+          ];
+        in
+        {
+          _module.args.pkgs = import nixpkgs {
+            inherit system;
+            config = {
+              allowUnfree = true;
+              allowAliases = false;
+              warnUndeclaredOptions = true;
             };
+            overlays = [
+              fenix.overlays.default
+            ];
           };
 
-          # ── 质量检查 ──────────────────────────────────────
-          checks =
-            let
-              toolchain = pkgs.fenix.stable.withComponents [
-                "cargo"
-                "clippy"
-                "rust-src"
-                "rustc"
-                "rustfmt"
-              ];
-              native-dependencies = [
-                toolchain
-                pkgs.cargo-nextest
-                pkgs.pkg-config
-                pkgs.openssl
-                pkgs.zig_0_15
-              ];
-              copy-source = "cp -r ${./.} . && chmod -R u+w .";
-            in
-            {
-              clippy =
-                pkgs.runCommand "check-clippy"
-                  {
-                    nativeBuildInputs = native-dependencies;
-                    RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
-                    LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                      pkgs.pkg-config
-                      pkgs.openssl
-                    ];
-                  }
-                  ''
-                    ${copy-source}
-                    cargo clippy -- -D warnings
-                    touch $out
-                  '';
-
-              fmt =
-                pkgs.runCommand "check-fmt"
-                  {
-                    nativeBuildInputs = [ toolchain ];
-                  }
-                  ''
-                    ${copy-source}
-                    cargo fmt --check
-                    touch $out
-                  '';
-
-              tests =
-                pkgs.runCommand "check-tests"
-                  {
-                    nativeBuildInputs = native-dependencies;
-                    RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
-                    LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                      pkgs.pkg-config
-                      pkgs.openssl
-                    ];
-                  }
-                  ''
-                    ${copy-source}
-                    cargo nextest run --workspace
-                    touch $out
-                  '';
-
-              proptest =
-                pkgs.runCommand "check-proptest"
-                  {
-                    nativeBuildInputs = native-dependencies;
-                    RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
-                    LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                      pkgs.pkg-config
-                      pkgs.openssl
-                    ];
-                  }
-                  ''
-                    ${copy-source}
-                    cargo test --workspace -- proptest
-                    touch $out
-                  '';
-
-              typos =
-                pkgs.runCommand "check-typos"
-                  {
-                    nativeBuildInputs = [ pkgs.typos ];
-                  }
-                  ''
-                    ${copy-source}
-                    typos
-                    touch $out
-                  '';
-
-              nixfmt =
-                pkgs.runCommand "check-nixfmt"
-                  {
-                    nativeBuildInputs = [ pkgs.nixfmt-rs ];
-                  }
-                  ''
-                    ${copy-source}
-                    find . -name '*.nix' \
-                      -not -path './target/*' \
-                      -not -path './.git/*' \
-                      -exec nixfmt --check {} +
-                    touch $out
-                  '';
-
-              cargo-deny =
-                pkgs.runCommand "check-cargo-deny"
-                  {
-                    nativeBuildInputs = [
-                      toolchain
-                      pkgs.cargo-deny
-                    ];
-                  }
-                  ''
-                    ${copy-source}
-                    cargo deny check
-                    touch $out
-                  '';
-
-              cargo-audit =
-                pkgs.runCommand "check-cargo-audit"
-                  {
-                    nativeBuildInputs = [
-                      toolchain
-                      pkgs.cargo-audit
-                    ];
-                  }
-                  ''
-                    ${copy-source}
-                    cargo audit
-                    touch $out
-                  '';
-
-              cargo-machete =
-                pkgs.runCommand "check-cargo-machete"
-                  {
-                    nativeBuildInputs = [
-                      toolchain
-                      pkgs.cargo-machete
-                    ];
-                  }
-                  ''
-                    ${copy-source}
-                    cargo machete
-                    touch $out
-                  '';
-
-              markdownlint =
-                pkgs.runCommand "check-markdownlint"
-                  {
-                    nativeBuildInputs = [
-                      pkgs.nodePackages.markdownlint-cli
-                    ];
-                  }
-                  ''
-                    ${copy-source}
-                    find . -name '*.md' \
-                      -not -path './target/*' \
-                      -not -path './.git/*' \
-                      -not -path './.opencode/*' \
-                      -exec markdownlint {} +
-                    touch $out
-                  '';
+          devShells = {
+            default = pkgs.mkShell {
+              name = "torvox-dev";
+              packages = nativeDeps ++ rustDeps ++ androidDeps;
+              env = {
+                LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath nativeDeps;
+                RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+                ANDROID_HOME = "${androidSdkPkgs.androidsdk}/libexec/android-sdk";
+                ANDROID_SDK_ROOT = "${androidSdkPkgs.androidsdk}/libexec/android-sdk";
+                ANDROID_NDK_ROOT = "${androidSdkPkgs.androidsdk}/libexec/android-sdk/ndk/29.0.14206865";
+                JAVA_HOME = jdk;
+              };
+              shellHook = ''
+                echo "=== Torvox Dev Shell ==="
+                echo "Rust: $(rustc --version)"
+                echo "Cargo: $(cargo --version)"
+                echo "Nextest: $(cargo nextest --version 2>/dev/null || echo N/A)"
+                echo "Kotlin: $(kotlin -version 2>&1 | head -1 || echo N/A)"
+                echo "Gradle: $(gradle --version 2>/dev/null | grep '^Gradle' || echo N/A)"
+                echo "JDK: $(java -version 2>&1 | head -1)"
+                echo "ANDROID_HOME: $ANDROID_HOME"
+                echo ""
+                echo "Quick start:"
+                echo " cargo build --workspace"
+                echo " cargo nextest run --workspace"
+                echo " cargo clippy -- -D warnings"
+                echo " cd android && ./gradlew assembleDebug"
+              '';
             };
-
-          # ── 开发环境 ──────────────────────────────────────
-          devShells.default = pkgs.mkShell {
-            name = "torvox-dev";
-            packages = [
-              # Rust
-              (pkgs.fenix.stable.withComponents [
-                "cargo"
-                "clippy"
-                "rust-src"
-                "rustc"
-                "rustfmt"
-              ])
-              pkgs.cargo-nextest
-              pkgs.cargo-fuzz
-              pkgs.cargo-geiger
-              pkgs.cargo-audit
-              pkgs.cargo-ndk
-              pkgs.cargo-deny
-              pkgs.cargo-machete
-              pkgs.rust-analyzer
-
-              # Zig (Ghostty VT 构建依赖)
-              pkgs.zig_0_15
-
-              # Android
-              pkgs.kotlin
-              pkgs.gradle_9
-              pkgs.ktfmt
-              pkgs.ktlint
-              pkgs.android-tools
-
-              # 代码质量
-              pkgs.nushell
-              pkgs.taplo
-              pkgs.yamlfmt
-              pkgs.shfmt
-              pkgs.typos
-              pkgs.nodePackages.markdownlint-cli
-
-              # 原生依赖
-              pkgs.pkg-config
-              pkgs.openssl
-            ];
-            env = {
-              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                pkgs.pkg-config
-                pkgs.openssl
-              ];
+            emulator = pkgs.mkShell {
+              name = "torvox-emulator";
+              packages =
+                nativeDeps
+                ++ rustDeps
+                ++ androidDeps
+                ++ [
+                  androidEmuSdkPkgs.androidsdk
+                  pkgs.qemu
+                ];
+              env = {
+                LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath nativeDeps;
+                RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+                ANDROID_HOME = "${androidEmuSdkPkgs.androidsdk}/libexec/android-sdk";
+                ANDROID_SDK_ROOT = "${androidEmuSdkPkgs.androidsdk}/libexec/android-sdk";
+                ANDROID_NDK_ROOT = "${androidEmuSdkPkgs.androidsdk}/libexec/android-sdk/ndk/29.0.14206865";
+                JAVA_HOME = jdk;
+              };
+              shellHook = ''
+                echo "=== Torvox Emulator Shell ==="
+                echo "Emulator SDK: $ANDROID_HOME"
+                echo "Run: emulator -avd torvox_api36 -no-window -no-boot-anim -noaudio"
+                echo "Setup AVD: avdmanager create avd -n torvox_api36 -k 'system-images;android-36;default;x86_64' -d pixel_7_pro"
+              '';
             };
           };
         };

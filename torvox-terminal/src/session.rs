@@ -3,11 +3,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
-use flume::{Receiver, bounded};
+use crossbeam::channel::{Receiver, bounded};
 use thiserror::Error;
 
+use crate::parser::VtParser;
 use crate::pty::{PtyError, PtyPair};
-use crate::terminal::{TerminalState, TerminalStateError};
+use crate::terminal::TerminalState;
 
 const READ_BUF_SIZE: usize = 8192;
 
@@ -17,8 +18,6 @@ pub enum SessionError {
     Pty(#[from] PtyError),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("terminal state error: {0}")]
-    TerminalState(#[from] TerminalStateError),
     #[error("session closed")]
     Closed,
 }
@@ -26,6 +25,7 @@ pub enum SessionError {
 pub struct Session {
     pty: PtyPair,
     terminal: TerminalState,
+    parser: VtParser,
     output_rx: Receiver<Vec<u8>>,
     output_notify: Arc<(Mutex<bool>, Condvar)>,
     exited: Arc<AtomicBool>,
@@ -43,20 +43,9 @@ impl Session {
 
         let (output_tx, output_rx) = bounded::<Vec<u8>>(64);
 
-        // SAFETY: dup() is safe because pty.master_fd() returns a valid fd
-        // owned by PtyPair. We duplicate it so the reader thread has its own
-        // fd to close on exit without interfering with the original.
         let read_fd = unsafe { libc::dup(pty.master_fd()) };
         if read_fd < 0 {
             return Err(SessionError::Io(std::io::Error::last_os_error()));
-        }
-
-        fn notify_output(notify: &Arc<(Mutex<bool>, Condvar)>) {
-            let (lock, cvar) = &**notify;
-            if let Ok(mut pending) = lock.lock() {
-                *pending = true;
-                cvar.notify_one();
-            }
         }
 
         let exited_read = exited.clone();
@@ -64,10 +53,6 @@ impl Session {
         let reader_handle = std::thread::spawn(move || {
             let mut read_buf = [0u8; READ_BUF_SIZE];
             loop {
-                // SAFETY: read_fd is a valid fd (dup'd from PtyPair's master).
-                // read_buf is a stack-allocated array with known size. The
-                // read call is blocking but the fd is set to nonblocking mode.
-                // We pass a valid pointer and length — no memory safety issue.
                 let n = unsafe {
                     libc::read(
                         read_fd,
@@ -80,10 +65,16 @@ impl Session {
                     if output_tx.send(data).is_err() {
                         break;
                     }
-                    notify_output(&notify_read);
+                    let (lock, cvar) = &*notify_read;
+                    let mut pending = lock.lock().unwrap();
+                    *pending = true;
+                    cvar.notify_one();
                 } else if n == 0 {
                     exited_read.store(true, Ordering::Release);
-                    notify_output(&notify_read);
+                    let (lock, cvar) = &*notify_read;
+                    let mut pending = lock.lock().unwrap();
+                    *pending = true;
+                    cvar.notify_one();
                     break;
                 } else {
                     let err = std::io::Error::last_os_error();
@@ -91,14 +82,14 @@ impl Session {
                         std::thread::sleep(Duration::from_millis(2));
                     } else {
                         exited_read.store(true, Ordering::Release);
-                        notify_output(&notify_read);
+                        let (lock, cvar) = &*notify_read;
+                        let mut pending = lock.lock().unwrap();
+                        *pending = true;
+                        cvar.notify_one();
                         break;
                     }
                 }
             }
-            // SAFETY: read_fd was created by libc::dup() and is only used
-            // in this thread. Closing it here is safe and necessary to
-            // prevent fd leaks. No other code references this fd after close.
             unsafe {
                 libc::close(read_fd);
             }
@@ -113,7 +104,8 @@ impl Session {
 
         Ok(Self {
             pty,
-            terminal: TerminalState::new(rows, cols)?,
+            terminal: TerminalState::new(rows, cols),
+            parser: VtParser::new(),
             output_rx,
             output_notify,
             exited,
@@ -139,14 +131,9 @@ impl Session {
 
     pub fn wait_for_output(&self) {
         let (lock, cvar) = &*self.output_notify;
-        let Ok(mut pending) = lock.lock() else {
-            return;
-        };
+        let mut pending = lock.lock().unwrap();
         while !*pending {
-            let Ok(p) = cvar.wait(pending) else {
-                return;
-            };
-            pending = p;
+            pending = cvar.wait(pending).unwrap();
         }
         *pending = false;
     }
@@ -154,11 +141,8 @@ impl Session {
     pub fn process_output(&mut self) -> bool {
         let mut changed = false;
         while let Ok(data) = self.output_rx.try_recv() {
-            self.terminal.process_bytes(&data);
+            self.parser.advance(&mut self.terminal, &data);
             changed = true;
-        }
-        if changed {
-            self.terminal.update_render_state();
         }
         changed
     }
@@ -202,53 +186,22 @@ mod tests {
         }
     }
 
-    fn grid_text(session: &mut Session) -> String {
-        use libghostty_vt::render::{CellIterator, RowIterator};
-
-        let terminal = session.terminal_mut();
-
-        // SAFETY: render_state and ghostty_terminal are separate fields within TerminalState.
-        // update() reads from terminal and writes to render_state.
-        let render_state_ptr: *mut libghostty_vt::RenderState<'static> =
-            terminal.render_state_mut();
-        let terminal_ptr: *const libghostty_vt::Terminal<'static, 'static> = terminal.terminal();
-
-        unsafe {
-            if let Ok(snapshot) = (*render_state_ptr).update(&*terminal_ptr) {
-                let mut rows_iter = RowIterator::new().expect("failed to create row iterator");
-                let mut cells_iter = CellIterator::new().expect("failed to create cell iterator");
-                let mut row_iter = rows_iter
-                    .update(&snapshot)
-                    .expect("failed to update row iterator");
-                let mut text = String::new();
-                let mut row_index = 0;
-
-                while let Some(row) = row_iter.next() {
-                    let mut line_text = String::new();
-                    let mut cell_iter = cells_iter
-                        .update(&row)
-                        .expect("failed to update cell iterator");
-                    while let Some(cell) = cell_iter.next() {
-                        if let Ok(graphemes) = cell.graphemes() {
-                            for ch in graphemes {
-                                if ch != '\0' {
-                                    line_text.push(ch);
-                                }
-                            }
-                        }
-                    }
-                    text.push_str(line_text.trim_end());
-                    text.push('\n');
-                    row_index += 1;
-                    if row_index >= 24 {
-                        break;
+    fn grid_text(session: &Session) -> String {
+        let grid = &session.terminal().grid;
+        let mut text = String::new();
+        for row in 0..grid.rows() {
+            if let Some(line) = grid.get(row) {
+                let mut line_text = String::new();
+                for col in 0..line.len() {
+                    if let Some(cell) = line.get(col) {
+                        line_text.push(cell.char);
                     }
                 }
-                text
-            } else {
-                String::new()
+                text.push_str(line_text.trim_end());
+                text.push('\n');
             }
         }
+        text
     }
 
     #[test]
@@ -268,7 +221,7 @@ mod tests {
         let mut found = false;
         while std::time::Instant::now() < deadline {
             session.process_output();
-            let text = grid_text(&mut session);
+            let text = grid_text(&session);
             if text.contains("hello_p12") {
                 found = true;
                 break;

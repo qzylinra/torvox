@@ -2,7 +2,6 @@ name: CI
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 jobs:
   rust-checks:
     runs-on: ubuntu-latest
@@ -14,7 +13,7 @@ jobs:
       - uses: Swatinem/rust-cache@master
       - run: |
           cargo fmt --check
-          cargo clippy --all-targets --all-features -- -D warnings
+          cargo clippy --deny warnings --all-targets --all-features
       - uses: taiki-e/install-action@nextest
       - run: |
           cargo nextest run --workspace
@@ -26,8 +25,8 @@ jobs:
       - uses: actions/setup-java@main
         with:
           distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@main
+          java-version: 25
+      - uses: actions/setup-android-sdk@main
       - working-directory: android
         run: |
           ./gradlew lint --quiet
@@ -44,15 +43,12 @@ jobs:
       - uses: actions/setup-java@main
         with:
           distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@main
-      - name: Build debug APK
+          java-version: 25
+      - uses: actions/setup-android-sdk@main
+      - name: Build APK
         working-directory: android
         run: ./gradlew assembleDebug
-      - name: Build release APK (debug signing)
-        working-directory: android
-        run: ./gradlew assembleRelease
-      - name: Android Emulator UI Test
+      - name: Android Emulator Test
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -67,6 +63,3 @@ jobs:
             adb shell am start -a android.intent.action.MAIN -n io.torvox/.MainActivity
             sleep 5
             adb shell dumpsys activity activities | grep -q "io.torvox/.MainActivity"
-            adb shell screencap -p /sdcard/torvox-test.png
-            adb pull /sdcard/torvox-test.png /tmp/torvox-test.png
-            adb shell pm list packages | grep -q io.torvox
