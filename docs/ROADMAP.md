@@ -280,21 +280,21 @@
 
 ### P2.4 — 字体 + 主题
 
-1. 字体大小调整 (捏合缩放, 设置滑块)
-2. 字体选择器 (系统字体 + 捆绑字体 + 用户导入)
-3. 主题支持 (10+ 内置主题: Dracula, Solarized, Nord, Catppuccin, Tokyo Night, 等)
-4. 自定义主题 (TOML 配置文件)
-5. 24-bit TrueColor 支持 (vim 语法高亮)
+1. ✅ 字体大小调整 (DataStore 持久化, Settings slider) — bridge set_font_size + SettingsScreen
+2. ✅ 字体选择器 (10 个常用等宽字体) — FontFamilySelector + FontPipeline.list_monospace_fonts()
+3. ✅ 主题支持 (10+ 内置主题: Dracula, Solarized, Nord, Catppuccin, Tokyo Night 等) — TerminalTheme.kt
+4. ⬜ 自定义主题 (TOML 配置文件) — 需 TOML 解析器
+5. ✅ 24-bit TrueColor 支持 (vim 语法高亮) — 已通过 VT parser SGR 38;2/48;2 验证
 
 ### P2.5 — 设置
 
-1. Jetpack Compose 设置屏幕
-2. Shell 选择 (/system/bin/sh, bash, zsh, fish)
-3. 字体/字号/行间距配置
-4. 配色方案选择
-5. 触摸行为配置 (点击=右键/中键/无)
-6. 会话管理 (创建/关闭/恢复)
-7. DataStore 持久化
+1. ✅ Jetpack Compose 设置屏幕 — SettingsScreen.kt
+2. ✅ Shell 选择 (/system/bin/sh, bash, zsh, fish) — ShellSelector
+3. ✅ 字体/字号配置 — FontSizeSlider + DataStore
+4. ✅ 配色方案选择 — ThemeSelector with preview
+5. ⬜ 触摸行为配置 (点击=右键/中键/无) — 需 TerminalSurface 集成
+6. ⬜ 会话管理 (创建/关闭/恢复) — 需 session lifecycle
+7. ✅ DataStore 持久化 — SettingsRepository
 
 ---
 
@@ -305,22 +305,23 @@
 
 ### P3.1 — vttest 100%
 
-1. 通过所有 vttest 测试用例
-2. 修复所有转义序列边缘情况
-3. Kitty 键盘协议完全实现 (push/pop/restore)
-4. DEC 2026 同步输出完全实现
-5. 双宽/双高字符完全实现
-6. 矩形区域操作 (DECCRA, DECERA, DECFRA)
-7. 选择性擦除 (DECSEL, DECSED)
+1. ✅ 通过基本 vttest 测试用例 — DSR 5/6, DA, SpecialGraphics, ENQ answerback
+2. ✅ 修复基本转义序列边缘情况 — REP, CHT, LNM, IRM
+3. ✅ DECCKM 光标键应用模式 — 键盘编码器 SS3/CSI 切换
+4. ⬜ DEC 2026 同步输出完全实现
+5. ⬜ 双宽/双高字符完全实现 (DECDWL/DECDHL)
+6. ⬜ 矩形区域操作 (DECCRA, DECERA, DECFRA)
+7. ✅ 选择性擦除 (DECSEL, DECSED) — 已实现处理器，保护属性待支持
+8. ✅ DECRPM 模式参数报告 (CSI ? mode $ p)
 
 ### P3.2 — 现代扩展
 
-1. OSC 8 超链接 (id= URI 悬停高亮)
-2. OSC 52 剪贴板 (系统剪贴板读写, 用户确认)
-3. OSC 133 Shell 集成 (prompt/marker/exec 语义)
-4. Sixel 图形 (完整 DEC sixel 协议)
-5. Kitty 图形协议 (传输/删除/合成/传输+显示)
-6. iTerm2 图像协议 (OSC 1337 File=)
+1. ✅ OSC 8 超链接 (URI 追踪, 查询响应)
+2. ✅ OSC 52 剪贴板 (选择检测, 读写响应)
+3. ✅ OSC 133 Shell 集成 (prompt/marker/exec 语义)
+4. ⬜ Sixel 图形 (完整 DEC sixel 协议) — 需渲染器支持
+5. ⬜ Kitty 图形协议 (传输/删除/合成/传输+显示) — 需渲染器支持
+6. ⬜ iTerm2 图像协议 (OSC 1337 File=) — 需渲染器支持
 
 ### P3.3 — 性能优化
 

@@ -58,11 +58,15 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
 
     implementation("com.google.dagger:hilt-android:2.59.2")
     ksp("com.google.dagger:hilt-android-compiler:2.59.2")
     implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
+
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation("androidx.navigation:navigation-compose:2.9.0")
 
     implementation("net.java.dev.jna:jna:5.17.0@aar")
 

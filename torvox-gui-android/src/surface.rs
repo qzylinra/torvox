@@ -86,6 +86,10 @@ impl AndroidSurface {
         &mut self.terminal
     }
 
+    pub fn font_pipeline(&self) -> &FontPipeline {
+        &self.font_pipeline
+    }
+
     pub fn resize(&mut self, rows: u32, cols: u32) {
         self.terminal.resize(rows, cols);
     }

@@ -56,6 +56,9 @@ pub struct TerminalState {
     insert_mode: bool,
     alt_grid: Option<Grid>,
     title: Option<String>,
+    pending_responses: Vec<Vec<u8>>,
+    pub keypad_application_mode: bool,
+    pub cursor_key_application_mode: bool,
 }
 
 impl TerminalState {
@@ -84,6 +87,9 @@ impl TerminalState {
             insert_mode: false,
             alt_grid: None,
             title: None,
+            pending_responses: Vec::new(),
+            keypad_application_mode: false,
+            cursor_key_application_mode: false,
         })
     }
 
@@ -99,6 +105,14 @@ impl TerminalState {
         self.grid.resize(rows, cols);
         self.scroll_bottom = rows;
         self.clamp_cursor();
+    }
+
+    pub fn take_responses(&mut self) -> Vec<Vec<u8>> {
+        core::mem::take(&mut self.pending_responses)
+    }
+
+    fn send_response(&mut self, response: &[u8]) {
+        self.pending_responses.push(response.to_vec());
     }
 
     fn clamp_cursor(&mut self) {
@@ -407,13 +421,16 @@ impl TerminalState {
 
     fn dec_set_mode(&mut self, mode: u32) {
         match mode {
-            1 => {}
+            1 => self.cursor_key_application_mode = true,
             3 => {}
+            4 => self.insert_mode = true,
             5 => {}
             6 => self.origin_mode = true,
             7 => self.wrap_around = true,
             12 => {}
+            20 => {} // LNM handled in execute()
             25 => self.cursor.visible = true,
+            66 => self.keypad_application_mode = true,
             1049 => {
                 let cols = self.grid.cols();
                 let rows = self.grid.rows();
@@ -434,13 +451,16 @@ impl TerminalState {
 
     fn dec_reset_mode(&mut self, mode: u32) {
         match mode {
-            1 => {}
+            1 => self.cursor_key_application_mode = false,
             3 => {}
+            4 => self.insert_mode = false,
             5 => {}
             6 => self.origin_mode = false,
             7 => self.wrap_around = false,
             12 => {}
+            20 => {} // LNM handled in execute()
             25 => self.cursor.visible = false,
+            66 => self.keypad_application_mode = false,
             1049 => {
                 if let Some(alt) = self.alt_grid.take() {
                     self.grid = alt;
@@ -458,6 +478,32 @@ impl TerminalState {
 
 impl vte::Perform for TerminalState {
     fn print(&mut self, c: char) {
+        let c = if self.charsets[self.active_charset] == Charset::SpecialGraphics {
+            match c {
+                'j' => '┘',
+                'k' => '┐',
+                'l' => '┌',
+                'm' => '└',
+                'n' => '┼',
+                'q' => '─',
+                't' => '├',
+                'u' => '┤',
+                'v' => '┴',
+                'w' => '┬',
+                'x' => '│',
+                'y' => '≠',
+                'z' => '≥',
+                '{' => '≤',
+                '|' => 'π',
+                '}' => '×',
+                '~' => '°',
+                '`' => '◆',
+                _ => c,
+            }
+        } else {
+            c
+        };
+
         let row = self.effective_row();
         let cols = self.grid.cols();
 
@@ -494,9 +540,15 @@ impl vte::Perform for TerminalState {
                 self.cursor.col = 0;
             }
             C0_LF | C0_VT | C0_FF => {
+                if self.modes.contains(&20) {
+                    self.cursor.col = 0;
+                }
                 self.advance_line();
             }
             C0_BEL => {}
+            0x05 => {
+                self.send_response(b"\x1b[?1;2c");
+            }
             C0_SO => {
                 self.active_charset = 1;
             }
@@ -568,7 +620,15 @@ impl vte::Perform for TerminalState {
                 let mode = next_param();
                 self.clear_screen(mode);
             }
+            ('J', [b'?']) => {
+                let mode = next_param();
+                self.clear_screen(mode);
+            }
             ('K', []) => {
+                let mode = next_param();
+                self.clear_line(mode);
+            }
+            ('K', [b'?']) => {
                 let mode = next_param();
                 self.clear_line(mode);
             }
@@ -600,6 +660,36 @@ impl vte::Perform for TerminalState {
                 let _n = next_param();
                 let new_col = self.prev_tab_stop(self.cursor.col);
                 self.cursor.col = new_col;
+            }
+            ('I', []) => {
+                let n = next_param().max(1);
+                let mut col = self.cursor.col;
+                for _ in 0..n {
+                    col = self.next_tab_stop(col);
+                }
+                self.cursor.col = col.min(self.grid.cols().saturating_sub(1));
+            }
+            ('b', []) => {
+                let n = next_param().max(1);
+                let row = self.effective_row();
+                if let Some(cell) = self.grid.cell(row, self.cursor.col) {
+                    let ch = cell.char;
+                    let fg = cell.fg;
+                    let bg = cell.bg;
+                    let attrs = cell.attrs;
+                    for i in 0..n {
+                        let col = self.cursor.col + i;
+                        if col >= self.grid.cols() {
+                            break;
+                        }
+                        if let Some(c) = self.grid.cell_mut(row, col) {
+                            c.char = ch;
+                            c.fg = fg;
+                            c.bg = bg;
+                            c.attrs = attrs;
+                        }
+                    }
+                }
             }
             ('@', []) => {
                 let n = next_param().max(1);
@@ -653,8 +743,34 @@ impl vte::Perform for TerminalState {
                     }
                 }
             }
-            ('n', []) => {}
-            ('c', []) => {}
+            ('n', []) => {
+                let mode = next_param();
+                match mode {
+                    5 => {
+                        self.send_response(b"\x1b[0n");
+                    }
+                    6 => {
+                        let row = self.cursor.row + 1;
+                        let col = self.cursor.col + 1;
+                        let response = alloc::format!("\x1b[{};{}R", row, col);
+                        self.send_response(response.as_bytes());
+                    }
+                    _ => {}
+                }
+            }
+            ('c', []) => {
+                self.send_response(b"\x1b[?1;2c");
+            }
+            ('s', [b'?']) => {
+                let mode = next_param();
+                let status = if self.modes.contains(&(mode as u16)) {
+                    1
+                } else {
+                    2
+                };
+                let response = alloc::format!("\x1b[?{};{}$y", mode, status);
+                self.send_response(response.as_bytes());
+            }
             ('s', []) => self.save_cursor_position(),
             ('u', []) => self.restore_cursor_position(),
             ('q', [b' ']) => {
@@ -682,9 +798,50 @@ impl vte::Perform for TerminalState {
                     self.title = Some(title);
                 }
             }
-            b"4" => {}
-            b"10" | b"11" | b"12" => {}
-            b"52" => {}
+            b"4" => {
+                if params.len() >= 3 {
+                    let _color_index = params[1];
+                    let _color_spec = params[1];
+                }
+            }
+            b"8" => {
+                if params.len() >= 2 {
+                    let action = String::from_utf8_lossy(params[1]);
+                    if action == "a" || action.is_empty() {
+                        self.pending_responses.push(b"\x1b]8;;\x07".to_vec());
+                    }
+                    if params.len() >= 3 {
+                        let uri = String::from_utf8_lossy(params[2]);
+                        if !uri.is_empty() {
+                            self.pending_responses
+                                .push(format!("\x1b]8;;{}\x07", uri).into_bytes());
+                        }
+                    }
+                }
+            }
+            b"52" => {
+                if params.len() >= 2 {
+                    let selection = String::from_utf8_lossy(params[1]);
+                    if (selection.contains('c') || selection.contains('p')) && params.len() >= 3 {
+                        let data = String::from_utf8_lossy(params[2]);
+                        if data == "?" || data == "+" {
+                            self.send_response(b"\x1b]52;c;\x07");
+                        }
+                    }
+                }
+            }
+            b"133" => {
+                if params.len() >= 2 {
+                    match params[1] {
+                        b"A" => {}
+                        b"B" => {}
+                        b"C" => {}
+                        b"D" => {}
+                        b"E" => {}
+                        _ => {}
+                    }
+                }
+            }
             b"104" => {}
             b"110" => {}
             b"111" => {}

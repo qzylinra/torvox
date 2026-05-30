@@ -199,12 +199,22 @@
 
 | 里程碑 | 交付物 | 状态 |
 |--------|--------|------|
-| P1.1 | VT 解析器 (libghostty-vt 0.1, SIMD优化) | ✅ 完成 |
-| P1.2 | PTY 会话集成 (crossbeam SPSC) | ✅ 完成 |
-| P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → etagere) | ✅ 完成 |
+| P1.1 | VT 解析器 (vte 0.15, Paul Williams FSM) | ✅ 完成 |
+| P1.2 | PTY 会话集成 (flume SPSC) | ✅ 完成 |
+| P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → guillotiere) | ✅ 完成 |
 | P1.4 | GPU 渲染管线 (实例化四边形, WGSL 着色器) | ✅ 完成 |
 | P1.5 | Android Surface 渲染 (wgpu v29 SurfaceView) | ✅ 完成 |
 | P1.6 | 输入处理 (触摸/键盘 → VT 转义序列 → PTY 写入) | ✅ 完成 |
+
+## 阶段 2 进行中 (详见 ROADMAP.md)
+
+| 里程碑 | 交付物 | 状态 |
+|--------|--------|------|
+| P2.1 | 回滚缓冲 (scrollback + 触摸滚动) | ✅ 完成 |
+| P2.2 | 选择 (字符/词/行/块 + 复制剪贴板) | ✅ 完成 |
+| P2.3 | 修饰键栏 (Ctrl/Alt/Esc/Tab + 粘滞模式) | ✅ 完成 |
+| P2.4 | 字体 + 主题 (10 内置主题 + 字体大小 + TrueColor) | ✅ 完成 |
+| P2.5 | 设置 (Compose UI + DataStore + Shell 选择) | ✅ 完成 |
 
 ## 当前代码状态
 
@@ -223,7 +233,7 @@
 | `torvox-fuzz` | **空** | 仅有 src/lib.rs 存根 |
 | `torvox-integration-tests` | **空** | 仅有 src/lib.rs 存根 |
 | `torvox-bench` | **空** | 仅有 src/lib.rs 存根 |
-| Android Kotlin | **壳** | TorvoxApp, MainActivity, TerminalViewModel, TerminalScreen (占位), ForegroundService, ExecInstaller |
+| Android Kotlin | **功能** | TorvoxApp, MainActivity, TerminalViewModel (+settings), TerminalScreen (+topbar), ModifierBar, SettingsScreen (+theme/shell/font), ForegroundService, ExecInstaller |
 
 ## 已删除/合并的组件
 

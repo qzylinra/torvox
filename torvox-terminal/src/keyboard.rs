@@ -70,6 +70,8 @@ pub struct InputEngine {
     modifiers: Modifiers,
     bracketed_paste: bool,
     kitty_protocol: bool,
+    cursor_key_application_mode: bool,
+    keypad_application_mode: bool,
 }
 
 impl InputEngine {
@@ -78,6 +80,8 @@ impl InputEngine {
             modifiers: Modifiers::empty(),
             bracketed_paste: false,
             kitty_protocol: false,
+            cursor_key_application_mode: false,
+            keypad_application_mode: false,
         }
     }
 
@@ -87,6 +91,14 @@ impl InputEngine {
 
     pub fn set_kitty_protocol(&mut self, enabled: bool) {
         self.kitty_protocol = enabled;
+    }
+
+    pub fn set_cursor_key_application_mode(&mut self, enabled: bool) {
+        self.cursor_key_application_mode = enabled;
+    }
+
+    pub fn set_keypad_application_mode(&mut self, enabled: bool) {
+        self.keypad_application_mode = enabled;
     }
 
     pub fn set_modifier(&mut self, modifier: Modifiers, pressed: bool) {
@@ -228,10 +240,34 @@ impl InputEngine {
 
     fn encode_legacy_special(&self, key: SpecialKey) -> Vec<u8> {
         let (prefix, final_char): (&[u8], u8) = match key {
-            SpecialKey::Up => (b"\x1b[", b'A'),
-            SpecialKey::Down => (b"\x1b[", b'B'),
-            SpecialKey::Right => (b"\x1b[", b'C'),
-            SpecialKey::Left => (b"\x1b[", b'D'),
+            SpecialKey::Up => {
+                if self.cursor_key_application_mode {
+                    (b"\x1bO", b'A')
+                } else {
+                    (b"\x1b[", b'A')
+                }
+            }
+            SpecialKey::Down => {
+                if self.cursor_key_application_mode {
+                    (b"\x1bO", b'B')
+                } else {
+                    (b"\x1b[", b'B')
+                }
+            }
+            SpecialKey::Right => {
+                if self.cursor_key_application_mode {
+                    (b"\x1bO", b'C')
+                } else {
+                    (b"\x1b[", b'C')
+                }
+            }
+            SpecialKey::Left => {
+                if self.cursor_key_application_mode {
+                    (b"\x1bO", b'D')
+                } else {
+                    (b"\x1b[", b'D')
+                }
+            }
             SpecialKey::Home => (b"\x1b[", b'H'),
             SpecialKey::End => (b"\x1b[", b'F'),
             SpecialKey::PageUp => (b"\x1b[5", b'~'),

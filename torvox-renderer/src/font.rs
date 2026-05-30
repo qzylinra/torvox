@@ -201,6 +201,23 @@ impl FontPipeline {
         self.glyph_cache.len()
     }
 
+    pub fn list_monospace_fonts(&self) -> Vec<String> {
+        let db = self.font_system.db();
+        let mut fonts = Vec::new();
+        for face in db.faces() {
+            if face.monospaced {
+                for (family, _) in &face.families {
+                    let name = family.to_string();
+                    if !fonts.contains(&name) {
+                        fonts.push(name);
+                    }
+                }
+            }
+        }
+        fonts.sort();
+        fonts
+    }
+
     pub fn atlas_bitmap(&self) -> &[u8] {
         &self.atlas_bitmap
     }

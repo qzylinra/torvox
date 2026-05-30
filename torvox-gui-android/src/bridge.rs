@@ -466,6 +466,14 @@ impl TorvoxBridge {
         Ok(())
     }
 
+    fn list_fonts(&self) -> Vec<String> {
+        self.surface
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|s| s.font_pipeline().list_monospace_fonts()))
+            .unwrap_or_default()
+    }
+
     fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),

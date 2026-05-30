@@ -6,13 +6,18 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import io.torvox.settings.SettingsRepository
 import io.torvox.ui.ModifierKey
 import io.torvox.ui.defaultModifierKeys
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class SelectionMode {
@@ -49,9 +54,70 @@ class TerminalViewModel
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
+        private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         private val _state = MutableStateFlow(TerminalState())
         val state: StateFlow<TerminalState> = _state.asStateFlow()
+
+        val fontSize: StateFlow<Float> =
+            settingsRepository.fontSize
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 14f)
+
+        val themeName: StateFlow<String> =
+            settingsRepository.themeName
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Catppuccin Mocha")
+
+        val shell: StateFlow<String> =
+            settingsRepository.shell
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "/system/bin/sh")
+
+        val scrollbackLines: StateFlow<Int> =
+            settingsRepository.scrollbackLines
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 50000)
+
+        val fontFamily: StateFlow<String> =
+            settingsRepository.fontFamily
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "JetBrains Mono Nerd Font")
+
+        val touchBehavior: StateFlow<String> =
+            settingsRepository.touchBehavior
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "right_click")
+
+        fun setFontSize(size: Float) {
+            viewModelScope.launch {
+                settingsRepository.setFontSize(size)
+            }
+        }
+
+        fun setFontFamily(family: String) {
+            viewModelScope.launch {
+                settingsRepository.setFontFamily(family)
+            }
+        }
+
+        fun setTouchBehavior(behavior: String) {
+            viewModelScope.launch {
+                settingsRepository.setTouchBehavior(behavior)
+            }
+        }
+
+        fun setThemeName(name: String) {
+            viewModelScope.launch {
+                settingsRepository.setThemeName(name)
+            }
+        }
+
+        fun setShell(shell: String) {
+            viewModelScope.launch {
+                settingsRepository.setShell(shell)
+            }
+        }
+
+        fun setScrollbackLines(lines: Int) {
+            viewModelScope.launch {
+                settingsRepository.setScrollbackLines(lines)
+            }
+        }
 
         fun startSelection(
             row: Int,
