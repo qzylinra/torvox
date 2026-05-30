@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
-use flume::{Receiver, bounded};
+use flume::{bounded, Receiver};
 use thiserror::Error;
 
 use crate::parser::VtParser;
@@ -65,6 +65,9 @@ impl Session {
         let reader_handle = std::thread::spawn(move || {
             let mut read_buf = [0u8; READ_BUF_SIZE];
             loop {
+                if exited_read.load(Ordering::Acquire) {
+                    break;
+                }
                 // SAFETY: read_fd is a valid fd (dup'd from PtyPair's master).
                 // read_buf is a stack-allocated array with known size. The
                 // read call is blocking but the fd is set to nonblocking mode.
@@ -173,6 +176,9 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.exited.store(true, Ordering::Release);
+        // PtyPair::drop kills the child process, which closes the master fd.
+        // This causes the reader thread's read() to return 0 or error, breaking
+        // the loop. The reader checks `exited` each iteration as a safety net.
         if let Some(h) = self.reader_handle.take() {
             let _ = h.join();
         }

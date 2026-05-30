@@ -8,6 +8,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import io.torvox.ui.ModifierKey
+import io.torvox.ui.defaultModifierKeys
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +40,8 @@ data class TerminalState(
     val isRunning: Boolean = false,
     val title: String = "Torvox",
     val selection: SelectionState = SelectionState(),
+    val pendingInput: ByteArray? = null,
+    val modifierKeys: List<ModifierKey> = defaultModifierKeys,
 )
 
 @HiltViewModel
@@ -145,5 +149,23 @@ class TerminalViewModel
                     "selection[block:${lo.row}:${lo.col}-${hi.row}:${hi.col}]"
                 }
             }
+        }
+
+        fun writeToPty(data: ByteArray) {
+            _state.value = _state.value.copy(pendingInput = data)
+        }
+
+        fun consumePendingInput(): ByteArray? {
+            val data = _state.value.pendingInput
+            _state.value = _state.value.copy(pendingInput = null)
+            return data
+        }
+
+        fun setModifierKeys(keys: List<ModifierKey>) {
+            _state.value = _state.value.copy(modifierKeys = keys)
+        }
+
+        fun resetModifierKeys() {
+            _state.value = _state.value.copy(modifierKeys = defaultModifierKeys)
         }
     }

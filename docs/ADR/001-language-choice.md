@@ -31,7 +31,7 @@
 │ boltffi Bridge                      │
 ├─────────────────────────────────────┤
 │ Rust Core                           │
-│ - VT 解析器 (libghostty-vt crate)   │
+│ - VT 解析器 (vte crate)              │
 │ - PTY I/O (nix forkpty)            │
 │ - 单元格网格 + 回滚缓冲            │
 │ - 字体管线 (cosmic-text/swash)     │

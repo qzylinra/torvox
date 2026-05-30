@@ -1,7 +1,7 @@
 # Torvox Android 库交叉编译 (nushell)
 # 使用: nu scripts/build-android-libs.nu
 
-let project_root = ($env.PWD | path dirname | path join "..")
+let project_root = $env.PWD
 let android_dir = ($project_root | path join "android")
 let jni_libs_dir = ($android_dir | path join "app/src/main/jniLibs")
 let exec_dir = ($android_dir | path join "app/src/main/assets/bin")
@@ -36,7 +36,7 @@ for i in 0..(($abis | length) - 1) {
     let triple = ($triples | get $i)
     let linker = ($env.ANDROID_NDK_ROOT | path join "toolchains/llvm/prebuilt/linux-x86_64/bin" | path join $"($triple)33-clang")
     print $"--- Building torvox-exec for ($triple) ($abi) ---"
-    let env_var = ($triple | str upcase | str replace -a "-" "_")
+    let env_var = $"CARGO_TARGET_($triple | str upcase | str replace -a "-")_LINKER"
     with-env { ($env_var): $linker } {
         cargo build -p torvox-exec --target $triple --profile dev
     }

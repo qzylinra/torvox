@@ -2,6 +2,8 @@ name: CI
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   rust-checks:
@@ -67,6 +69,5 @@ jobs:
             adb shell am start -a android.intent.action.MAIN -n io.torvox/.MainActivity
             sleep 5
             adb shell dumpsys activity activities | grep -q "io.torvox/.MainActivity"
-            adb shell screencap -p /sdcard/torvox-test.png
-            adb pull /sdcard/torvox-test.png /tmp/torvox-test.png
+            adb exec-out screencap -p > /tmp/torvox-test.png
             adb shell pm list packages | grep -q io.torvox

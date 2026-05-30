@@ -17,7 +17,7 @@
 1. 创建 workspace `Cargo.toml` (edition 2024, resolver 2)
 2. 创建 `rust-toolchain.toml` (固定 stable 版本)
 3. 创建 `torvox-core/` — `no_std` crate, 骨架 `lib.rs`
-4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `libghostty-vt 0.1`, `nix 0.31`, `serde`, `postcard 1.1 (dev-dependency)` 依赖
+4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `vte 0.15`, `nix 0.31`, `serde` 依赖
 5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `guillotiere 0.7` 依赖
 6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `boltffi 0.25` 依赖
 7. ~~创建 `torvox-bridge-types/`~~ — 类型已合并到 `torvox-gui-android/src/bridge.rs`
@@ -44,7 +44,7 @@
 6. `cursor.rs` — 定义 `CursorState` (行, 列, 样式, 可见性)
 7. `unicode.rs` — 定义 UnicodeWidth 表, EastAsianWidth 查找
 8. `event.rs` — 定义 `TerminalEvent` 枚举 (供跨 crate 事件传递)
-9. 所有类型实现 `serde::Serialize`/`Deserialize` (通过 postcard)
+9. 所有类型实现 `serde::Serialize`/`Deserialize`
 10. 所有类型使用 boltffi 注解 (`#[data]`/`#[error]`) (在 `torvox-gui-android/src/bridge.rs` 中)
 11. `#[cfg(test)]` 每个类型的单元测试
 12. 验证 `no_std` 编译: `cargo build -p torvox-core --target thumbv6m-none-eabi`
@@ -133,7 +133,7 @@
 
 ### P1.1 — VT 解析器
 
-**交付物**: `torvox-terminal::parser` — 通过 `libghostty-vt 0.1` crate 的 SIMD 优化 VT 解析器。`Grid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
+**交付物**: `torvox-terminal::parser` — vte 0.15 VT 解析器 (Paul Williams FSM)。`Grid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
 
 **详细步骤**:
 1. 使用 Ghostty VT Terminal API 处理所有 VT 序列
@@ -272,11 +272,11 @@
 
 ### P2.3 — 修饰键栏
 
-1. 屏幕修饰键 (Ctrl/Alt/Esc/Tab/方向键)
-2. 粘滞模式 (双击锁定修饰键)
-3. 可配置布局 (用户自定义键)
-4. Nerd Font 字形用于键标签
-5. 滑动手势 (左滑=Esc, 右滑=Tab)
+1. ✅ 屏幕修饰键 (Ctrl/Alt/Esc/Tab/方向键) — ModifierBar.kt + boltffi write_to_pty
+2. ✅ 粘滞模式 (双击锁定修饰键) — ModifierBar.kt 双击重置
+3. ✅ 可配置布局 (用户自定义键) — ViewModel.setModifierKeys API
+4. ⬜ Nerd Font 字形用于键标签 — 需要打包 Nerd Font，暂用文本标签
+5. ✅ 滑动手势 (左滑=Esc, 右滑=Tab) — TerminalSurface.onFling
 
 ### P2.4 — 字体 + 主题
 

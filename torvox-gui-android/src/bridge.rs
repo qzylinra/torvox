@@ -86,11 +86,106 @@ impl From<torvox_core::config::Shell> for Shell {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[boltffi::data]
+pub struct BridgeTheme {
+    pub name: String,
+    pub bg: u32,
+    pub fg: u32,
+    pub cursor: u32,
+    pub ansi0: u32,
+    pub ansi1: u32,
+    pub ansi2: u32,
+    pub ansi3: u32,
+    pub ansi4: u32,
+    pub ansi5: u32,
+    pub ansi6: u32,
+    pub ansi7: u32,
+    pub ansi8: u32,
+    pub ansi9: u32,
+    pub ansi10: u32,
+    pub ansi11: u32,
+    pub ansi12: u32,
+    pub ansi13: u32,
+    pub ansi14: u32,
+    pub ansi15: u32,
+}
+
+fn rgb_to_u32(c: [u8; 3]) -> u32 {
+    ((c[0] as u32) << 16) | ((c[1] as u32) << 8) | (c[2] as u32)
+}
+
+fn u32_to_rgb(v: u32) -> [u8; 3] {
+    [
+        ((v >> 16) & 0xFF) as u8,
+        ((v >> 8) & 0xFF) as u8,
+        (v & 0xFF) as u8,
+    ]
+}
+
+impl From<torvox_core::config::Theme> for BridgeTheme {
+    fn from(t: torvox_core::config::Theme) -> Self {
+        Self {
+            name: t.name,
+            bg: rgb_to_u32(t.bg),
+            fg: rgb_to_u32(t.fg),
+            cursor: rgb_to_u32(t.cursor),
+            ansi0: rgb_to_u32(t.ansi[0]),
+            ansi1: rgb_to_u32(t.ansi[1]),
+            ansi2: rgb_to_u32(t.ansi[2]),
+            ansi3: rgb_to_u32(t.ansi[3]),
+            ansi4: rgb_to_u32(t.ansi[4]),
+            ansi5: rgb_to_u32(t.ansi[5]),
+            ansi6: rgb_to_u32(t.ansi[6]),
+            ansi7: rgb_to_u32(t.ansi[7]),
+            ansi8: rgb_to_u32(t.ansi[8]),
+            ansi9: rgb_to_u32(t.ansi[9]),
+            ansi10: rgb_to_u32(t.ansi[10]),
+            ansi11: rgb_to_u32(t.ansi[11]),
+            ansi12: rgb_to_u32(t.ansi[12]),
+            ansi13: rgb_to_u32(t.ansi[13]),
+            ansi14: rgb_to_u32(t.ansi[14]),
+            ansi15: rgb_to_u32(t.ansi[15]),
+        }
+    }
+}
+
+impl From<BridgeTheme> for torvox_core::config::Theme {
+    fn from(t: BridgeTheme) -> Self {
+        Self {
+            name: t.name,
+            bg: u32_to_rgb(t.bg),
+            fg: u32_to_rgb(t.fg),
+            cursor: u32_to_rgb(t.cursor),
+            ansi: [
+                u32_to_rgb(t.ansi0),
+                u32_to_rgb(t.ansi1),
+                u32_to_rgb(t.ansi2),
+                u32_to_rgb(t.ansi3),
+                u32_to_rgb(t.ansi4),
+                u32_to_rgb(t.ansi5),
+                u32_to_rgb(t.ansi6),
+                u32_to_rgb(t.ansi7),
+                u32_to_rgb(t.ansi8),
+                u32_to_rgb(t.ansi9),
+                u32_to_rgb(t.ansi10),
+                u32_to_rgb(t.ansi11),
+                u32_to_rgb(t.ansi12),
+                u32_to_rgb(t.ansi13),
+                u32_to_rgb(t.ansi14),
+                u32_to_rgb(t.ansi15),
+            ],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[boltffi::data]
 pub struct TerminalConfig {
     pub shell: Shell,
     pub rows: u32,
     pub cols: u32,
     pub scrollback_lines: u32,
+    pub font_size_tenths: u32,
+    pub theme: BridgeTheme,
 }
 
 impl Default for TerminalConfig {
@@ -100,6 +195,8 @@ impl Default for TerminalConfig {
             rows: 24,
             cols: 80,
             scrollback_lines: 50_000,
+            font_size_tenths: 140,
+            theme: torvox_core::config::Theme::catppuccin_mocha().into(),
         }
     }
 }
@@ -122,6 +219,8 @@ impl From<torvox_core::config::TerminalConfig> for TerminalConfig {
             rows: c.rows,
             cols: c.cols,
             scrollback_lines: c.scrollback_lines,
+            font_size_tenths: 140,
+            theme: torvox_core::config::Theme::catppuccin_mocha().into(),
         }
     }
 }
@@ -332,6 +431,41 @@ impl TorvoxBridge {
         self.config.clone()
     }
 
+    fn get_theme_names(&self) -> Vec<String> {
+        torvox_core::config::Theme::all_built_in()
+            .into_iter()
+            .map(|t| t.name)
+            .collect()
+    }
+
+    fn get_theme(&self, name: String) -> Option<BridgeTheme> {
+        torvox_core::config::Theme::all_built_in()
+            .into_iter()
+            .find(|t| t.name == name)
+            .map(|t| t.into())
+    }
+
+    fn set_font_size(&self, size_tenths: u32) -> Result<(), TerminalError> {
+        let size = size_tenths as f32 / 10.0;
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.set_font_size(size);
+        }
+        Ok(())
+    }
+
+    fn set_theme(&self, theme: BridgeTheme) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.set_theme(theme.into());
+        }
+        Ok(())
+    }
+
     fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
@@ -360,6 +494,8 @@ mod tests {
             rows: 24,
             cols: 80,
             scrollback_lines: 50_000,
+            font_size_tenths: 140,
+            theme: torvox_core::config::Theme::catppuccin_mocha().into(),
         };
         let bridge = TorvoxBridge::new(config);
         assert_eq!(bridge.ping(), "pong");
@@ -374,6 +510,8 @@ mod tests {
             rows: 40,
             cols: 120,
             scrollback_lines: 10000,
+            font_size_tenths: 160,
+            theme: torvox_core::config::Theme::dracula().into(),
         };
         let bridge = TorvoxBridge::new(config.clone());
         let got = bridge.get_config();

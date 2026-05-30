@@ -35,7 +35,11 @@ object ExecInstaller {
                 .first()
         ) {
             "arm64-v8a" -> "arm64-v8a"
+
             "x86_64" -> "x86_64"
-            else -> "arm64-v8a"
+
+            else -> throw IllegalStateException(
+                "Unsupported ABI: ${android.os.Build.SUPPORTED_ABIS.first()}",
+            )
         }
 }

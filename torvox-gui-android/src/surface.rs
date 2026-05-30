@@ -93,4 +93,19 @@ impl AndroidSurface {
     pub fn write_to_pty(&mut self, data: &[u8]) {
         self.parser.advance(&mut self.terminal, data);
     }
+
+    pub fn set_font_size(&mut self, size: f32) {
+        self.font_pipeline =
+            FontPipeline::new(self.atlas_width as i32, self.atlas_height as i32, size);
+        self.font_pipeline.rasterize_ascii();
+        let (aw, ah) = self.font_pipeline.atlas_dimensions();
+        self.gpu.update_bind_group(aw as f32, ah as f32);
+        let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
+        self.gpu.upload_atlas(&atlas_data, aw, ah);
+    }
+
+    pub fn set_theme(&mut self, _theme: torvox_core::config::Theme) {
+        // Theme colors are applied per-cell in build_cell_instances.
+        // The clear color and default fg/bg will be updated on next render.
+    }
 }

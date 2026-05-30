@@ -26,6 +26,8 @@ class TerminalSurface
 
         var onScrollChanged: ((offset: Int) -> Unit)? = null
         var onScrollingStateChanged: ((isScrolling: Boolean) -> Unit)? = null
+        var onSwipeLeft: (() -> Unit)? = null
+        var onSwipeRight: (() -> Unit)? = null
 
         private val gestureListener =
             object : GestureDetector.SimpleOnGestureListener() {
@@ -56,6 +58,18 @@ class TerminalSurface
                     velocityX: Float,
                     velocityY: Float,
                 ): Boolean {
+                    val absX = kotlin.math.abs(velocityX)
+                    val absY = kotlin.math.abs(velocityY)
+
+                    if (absX > absY && absX > 500f) {
+                        if (velocityX > 0) {
+                            onSwipeRight?.invoke()
+                        } else {
+                            onSwipeLeft?.invoke()
+                        }
+                        return true
+                    }
+
                     val flingAmount = (velocityY / 100f).toInt().coerceIn(-50, 50)
                     val newOffset = (scrollOffset + flingAmount).coerceIn(0, maxScrollOffset)
                     if (newOffset != scrollOffset) {
@@ -120,6 +134,8 @@ class TerminalSurface
         fun getScrollOffset(): Int = scrollOffset
 
         fun isCurrentlyScrolling(): Boolean = isScrolling
+
+        fun consumePendingInput(): ByteArray? = viewModel?.consumePendingInput()
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
             val handled = gestureDetector.onTouchEvent(event)

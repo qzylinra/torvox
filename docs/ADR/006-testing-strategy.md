@@ -95,7 +95,7 @@ use proptest::prelude::*;
 proptest! {
     #[test]
     fn parser_never_panics(input in "[\\x00-\\xff]{0..1000}") {
-        let mut parser = libghostty_vt::Parser::new();
+        let mut parser = vte::Parser::new();
         let mut performer = TestPerformer::new();
         for byte in input.bytes() {
             parser.advance(&mut performer, byte);
@@ -156,7 +156,7 @@ fn session_echo_hello() {
 // torvox-fuzz/fuzz_targets/vt_parser.rs
 #![no_main]
 use libfuzzer_sys::fuzzer_input;
-use libghostty_vt::Parser;
+use vte::Parser;
 
 fn fuzz(data: &[u8]) {
     let mut parser = Parser::new();

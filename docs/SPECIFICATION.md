@@ -159,11 +159,11 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 数据 | 格式 | 位置 | 同步 |
 |------|------|------|------|
 | 打开的会话 | JSON | `app/sessions.json` | 会话创建/关闭时 |
-| 终端状态 | postcard | `app/state/{id}.postcard` | 每 60s + 前台丢失时 |
+| 终端状态 | serde JSON | `app/state/{id}.json` | 每 60s + 前台丢失时 |
 | 配置 | TOML | `app/config.toml` | 变更时 |
 | Shell 历史 | — | Shell 原生 | — |
 
-**注意**: 不使用 `bincode`。bincode 3.0.0 被故意破坏 (RUSTSEC-2025-0141)，永久停止维护。使用 `postcard 1.1` 替代 (仅 dev-dependency，用于测试序列化 roundtrip)。
+**注意**: 不使用 `bincode`。bincode 3.0.0 被故意破坏 (RUSTSEC-2025-0141)，永久停止维护。使用 `serde` + `serde_json` 替代。
 
 ### 前台服务
 
