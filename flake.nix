@@ -84,6 +84,7 @@
                 pkgs.cargo-nextest
                 pkgs.pkg-config
                 pkgs.openssl
+                pkgs.zig_0_15
               ];
               copy-source = "cp -r ${./.} . && chmod -R u+w .";
             in
@@ -252,6 +253,9 @@
               pkgs.cargo-deny
               pkgs.cargo-machete
               pkgs.rust-analyzer
+
+              # Zig (Ghostty VT 构建依赖)
+              pkgs.zig_0_15
 
               # Android
               pkgs.kotlin

@@ -19,7 +19,7 @@
 3. 创建 `torvox-core/` — `no_std` crate, 骨架 `lib.rs`
 4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `vte 0.15`, `nix 0.31`, `serde`, `postcard 1.1` 依赖
 5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `etagere 0.3` 依赖
-6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `uniffi 0.31` 依赖
+6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `boltffi 0.25` 依赖
 7. ~~创建 `torvox-bridge-types/`~~ — 类型已合并到 `torvox-gui-android/src/bridge.rs`
 8. 创建 `torvox-exec/` — 骨架 `main.rs` (多调用二进制)
 9. 创建 `torvox-fuzz/` — 骨架 3 个模糊目标
@@ -45,7 +45,7 @@
 7. `unicode.rs` — 定义 UnicodeWidth 表, EastAsianWidth 查找
 8. `event.rs` — 定义 `TerminalEvent` 枚举 (供跨 crate 事件传递)
 9. 所有类型实现 `serde::Serialize`/`Deserialize` (通过 postcard)
-10. 所有类型 `#[derive(uniffi::Enum/Record)]` (在 `torvox-gui-android/src/bridge.rs` 中)
+10. 所有类型使用 boltffi 注解 (`#[data]`/`#[error]`) (在 `torvox-gui-android/src/bridge.rs` 中)
 11. `#[cfg(test)]` 每个类型的单元测试
 12. 验证 `no_std` 编译: `cargo build -p torvox-core --target thumbv6m-none-eabi`
 
@@ -111,15 +111,14 @@
 
 **验证**: `cargo test -p torvox-terminal --test pty_test && adb shell /data/data/io.torvox/torvox-exec ls /`
 
-### P0.6 — UniFFI 桥接验证
+### P0.6 — boltffi 桥接验证
 
-**交付物**: UniFFI 0.31 生成 Kotlin 绑定。Kotlin 可调用 Rust 函数。
+**交付物**: boltffi 0.25 生成 Kotlin 绑定。Kotlin 可调用 Rust 函数。
 
 **详细步骤**:
 1. 定义 `torvox-gui-android/src/bridge.rs` 中的跨边界类型
-2. 在 `torvox-gui-android/src/bridge.rs` 中实现 `#[uniffi::export]` 函数
-3. 配置 `uniffi.toml` (Kotlin 代码生成)
-4. 运行 `uniffi-bindgen generate` 生成 Kotlin 绑定
+2. 在 `torvox-gui-android/src/bridge.rs` 中实现 `#[boltffi::export]` 函数
+3. 运行 `boltffi pack android` 生成 Kotlin 绑定
 5. 在 `TorvoxBridge.kt` 中调用生成的绑定
 6. 端到端测试: Kotlin 调用 Rust 函数, 返回值正确
 
@@ -217,7 +216,7 @@
 
 **详细步骤**:
 1. `TerminalSurface.kt` — `SurfaceView` 子类, 实现 `SurfaceHolder.Callback`
-2. `surfaceCreated()` → 通过 UniFFI 传递 ANativeWindow 到 Rust
+2. `surfaceCreated()` → 通过 boltffi 传递 ANativeWindow 到 Rust
 3. `torvox-gui-android/src/surface.rs` — `ANativeWindow` → `raw_window_handle::AndroidNdkWindowHandle`
 4. wgpu v29 Surface 创建: `instance.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle{...})`
 5. 渲染线程: 在独立 Rust 线程运行 wgpu 事件循环
@@ -242,7 +241,7 @@
 6. 鼠标协议: X10, VT200, SGR, SGR-pixels
 7. 触摸事件: 单击/双击/长按/拖拽 → 鼠标序列
 8. 选择手势: 长按开始选择, 拖拽扩展选择
-9. Android 事件路由: `TerminalSurface.onKeyDown/onTouchEvent` → UniFFI → Rust
+9. Android 事件路由: `TerminalSurface.onKeyDown/onTouchEvent` → boltffi → Rust
 10. 输入延迟测试: 按键 → PTY write <2ms
 
 **验证**: 连接硬件键盘, 在应用中键入字符, 看到回显
@@ -264,12 +263,12 @@
 
 ### P2.2 — 选择
 
-1. 字符/词/行/块选择模式
-2. 放大镜精确选择 (Android Maginifier)
-3. 复制到剪贴板 (Android ClipboardManager)
-4. 检测到链接时打开 URL (Intent.ACTION_VIEW)
-5. OSC 8 超链接悬停高亮
-6. 语义选择 (OSC 133 Shell 集成)
+1. ✅ 字符/词/行/块选择模式 — SelectionMode枚举 + ViewModel状态管理
+2. ⬜ 放大镜精确选择 (Android Maginifier)
+3. ✅ 复制到剪贴板 (Android ClipboardManager) — TerminalViewModel.copySelectionToClipboard
+4. ⬜ 检测到链接时打开 URL (Intent.ACTION_VIEW) — TerminalViewModel.openUrl已实现
+5. ⬜ OSC 8 超链接悬停高亮
+6. ⬜ 语义选择 (OSC 133 Shell 集成)
 
 ### P2.3 — 修饰键栏
 

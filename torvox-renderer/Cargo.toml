@@ -12,7 +12,7 @@ bytemuck = { workspace = true }
 cosmic-text = { workspace = true }
 fontdb = { workspace = true }
 swash = { workspace = true }
-etagere = { workspace = true }
+guillotiere = { workspace = true }
 thiserror = { workspace = true }
 raw-window-handle = { workspace = true }
 pollster = "0.4"

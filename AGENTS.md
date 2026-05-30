@@ -67,7 +67,7 @@
 
 **具体到本项目**:
 - 修改 `torvox-core` 类型时，同步更新 `bridge.rs` 的桥接类型
-- 修改 Rust 公共 API 时，检查 UniFFI 生成绑定是否需要重新生成
+- 修改 Rust 公共 API 时，检查 boltffi 生成绑定是否需要重新生成
 - 修改 Cargo.toml 依赖版本时，确认与 ARCHITECTURE.md 版本锁定一致
 
 ## 4. 目标驱动执行
@@ -103,7 +103,7 @@
 - 不确定某个函数是否应该 `pub` 还是 `pub(crate)`
 - 不确定新类型该放在哪个 crate
 - 不确定某个依赖是否已被项目批准
-- 不确定修改是否会破坏 UniFFI 绑定
+- 不确定修改是否会破坏 boltffi 绑定
 
 ---
 
@@ -172,8 +172,8 @@
 | `torvox-core/src/config.rs` | TerminalConfig, Shell (SystemDefault/Custom(String)), RenderConfig, FontConfig | Shell 是 Clone 不是 Copy |
 | `torvox-core/src/grid.rs` | Grid, DirtyMask (Vec<u64> 分区位标志) | 任意行数 |
 | `torvox-terminal/src/pty.rs` | PtyPair (spawn, resize, Read/Write, Drop) | 唯一允许 fork unsafe 的位置 |
-| `torvox-gui-android/src/bridge.rs` | UniFFI 导出类型 + TorvoxBridge | 唯一允许 setup_scaffolding!() 的位置 |
-| `torvox-gui-android/uniffi.toml` | Kotlin 包名配置 | package_name = "io.torvox.bridge" |
+| `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
+| `torvox-gui-android/uniffi.toml` | boltffi 配置文件 | 已移除 (boltffi 不需要配置文件) |
 | `scripts/build-android-libs.sh` | cargo-ndk 交叉编译 + torvox-exec 构建 | 替代 rust-android-gradle |
 | `scripts/quality-gate.sh` | 8 步质量门 | 提交前必须通过 |
 | `flake.nix` | 完整 Nix 开发环境 | 使用 flake-parts，需要 allowUnfree |
@@ -194,7 +194,7 @@
 | P0.3 | Android 项目 + Kotlin + Hilt + Compose | ✅ |
 | P0.4 | 文档 + CI + 质量门 | ✅ |
 | P0.5 | PtyPair (spawn, 原始模式, 非阻塞, kill_on_drop) + W^X 多调用二进制 | ✅ |
-| P0.6 | UniFFI 桥接验证 (bridge.rs + 生成 Kotlin 绑定) | ✅ |
+| P0.6 | boltffi 桥接验证 (bridge.rs + 生成 Kotlin 绑定) | ✅ |
 
 ## 阶段 1 待完成内容 (详见 ROADMAP.md)
 
@@ -228,8 +228,8 @@
 
 ## 已删除/合并的组件
 
-- `torvox-bridge-types/` — **已删除**。UniFFI 库模式只允许一个 `setup_scaffolding!()`，
-  跨 crate derive 会导致 Kotlin 生成重复脚手架。所有 UniFFI 类型合并到
+- `torvox-bridge-types/` — **已删除**。boltffi 库模式只允许一个导出位置，
+  跨 crate derive 会导致 Kotlin 生成重复脚手架。所有 boltffi 类型合并到
   `torvox-gui-android/src/bridge.rs`。文档中如仍引用此 crate 视为过时。
 
 ---
@@ -252,17 +252,17 @@
 │ ✗ 使用 rust-android-gradle — AGP 9.0+ 移除 AppExtension，不兼容          │
 │   用 scripts/build-android-libs.sh (cargo-ndk v4) 代替                    │
 │ ✗ 在库 crate 中使用 anyhow — 库用 thiserror 2，仅二进制可用 eyre         │
-│ ✗ 在 UniFFI Error 枚举中使用 `message` 字段名 — 与 Kotlin                │
+│ ✗ 在 boltffi Error 枚举中使用 `message` 字段名 — 与 Kotlin               │
 │   Throwable.message 冲突。改用 `detail`                                   │
 │ ✗ 添加 license 声明 — 本项目 UNLICENSED，仅作者和 AI 使用                 │
 │                                                                            │
 │ 【架构与安全】                                                             │
 │ ✗ 在 VT 解析器中添加 `unsafe` — 需要类型安全解析器                        │
 │ ✗ 在 torvox-core 中添加 `unsafe` — 零 unsafe crate                       │
-│ ✗ 在多个 crate 中使用 setup_scaffolding!() — UniFFI 库模式               │
-│   只允许一个。所有 UniFFI 类型放 torvox-gui-android/src/bridge.rs         │
+│ ✗ 在多个 crate 中使用 setup_scaffolding!() — boltffi 库模式              │
+│   只允许一个。所有 boltffi 类型放 torvox-gui-android/src/bridge.rs       │
 │ ✗ 使用 Canvas.drawText 逐单元格 — 仅 GPU 渲染 (wgpu v29)                │
-│ ✗ 在 FFI 边界传递原始字节 — 传递结构化事件 (UniFFI Record/Enum)          │
+│ ✗ 在 FFI 边界传递原始字节 — 传递结构化事件 (boltffi #[data]/#[error])  │
 │ ✗ 使用 /proc/self/exe 确定多调用二进制身份 — 用 argv[0] 的               │
 │   file_name()。/proc/self/exe 解引用符号链接，丢失名称                    │
 │                                                                            │
@@ -301,8 +301,8 @@
 | 1 | `Shell::Custom(u8)` 存储路径 | `u8` 太小，改为 `Shell::Custom(String)`。Shell 失去 `Copy`，TerminalConfig 也失去 `Copy` | P0.2 审计 |
 | 2 | `DirtyLine` 枚举 vs 位掩码 | ARCHITECTURE.md 指定位掩码。实现为 `DirtyMask { partitions: Vec<u64> }`，每 u64 分区 64 行，支持任意行数 | P0.2 审计 → C4 → 本次修复 |
 | 3 | `thiserror 2.x` 与 `no_std` | `torvox-core` 是 `no_std`。`thiserror` 需要 `std` feature。方案: `thiserror` 设为 optional，`std` feature 启用它；`serde/postcard` 也需 `default-features = false` + `alloc` feature | P0.2 审计 |
-| 4 | UniFFI `setup_scaffolding!()` 多 crate 冲突 | UniFFI 库模式只允许一个 `setup_scaffolding!()`。跨 crate derive 导致 Kotlin 重复脚手架 | P0.6 |
-| 5 | UniFFI Error `message` 字段与 Kotlin 冲突 | Kotlin `Throwable.message` 与 UniFFI 生成的 `message` 字段冲突。改用 `detail` | P0.6 |
+| 4 | boltffi `setup_scaffolding!()` 多 crate 冲突 | boltffi 库模式只允许一个导出位置。跨 crate derive 导致 Kotlin 重复脚手架 | P0.6 |
+| 5 | boltffi Error `message` 字段与 Kotlin 冲突 | Kotlin `Throwable.message` 与 boltffi 生成的 `message` 字段冲突。改用 `detail` | P0.6 |
 | 6 | `libtorvox_core.so` 命名冲突 | lib 名与 `torvox-core` Rust crate 冲突。改为 `libtorvox_android.so` | C1 审计 |
 | 7 | `/proc/self/exe` 不保留符号链接名 | 解引用到真实二进制。用 `argv[0]` 的 `file_name()` 代替 | ADR 004 |
 | 8 | `rust-android-gradle` 与 AGP 9.0 不兼容 | AGP 9.0 移除了 `AppExtension`。用 `scripts/build-android-libs.sh` 代替 | P0.3 |
@@ -311,8 +311,8 @@
 | 11 | `OwnedFd::from_raw_fd` + `mem::forget` 模式 | 用于在借用 fd 上操作 termios，防止 drop 关闭 fd | P0.5 |
 | 12 | 一个枚举中多个 `#[from] nix::errno::Errno` 冲突 | 产生冲突的 `From` impl。用手动 `From` impl 代替 | P0.5 |
 | 13 | `cargo-ndk` 仅支持 cdylib | `torvox-exec` 是 `[[bin]]`，不能通过 cargo-ndk 构建。用 `CARGO_TARGET_*_LINKER` 环境变量直接构建 | P0.5 |
-| 14 | `Result<T, String>` 不被 UniFFI 支持 | 必须使用 `uniffi::Error` 枚举 | P0.6 |
-| 15 | `uniffi::Error` 在 0.31 仅适用于枚举 | 不适用于结构体 | P0.6 |
+| 14 | `Result<T, String>` 不被 boltffi 支持 | 必须使用 `#[error]` 枚举 | P0.6 |
+| 15 | `#[error]` 枚举在 boltffi 中仅适用于枚举 | 不适用于结构体 | P0.6 |
 | 16 | `DirtyMask(Vec<u64>)` 不再是 `Copy` | 含 Vec 的类型不能 Copy。DirtyMask 失去 Copy，需 Clone。Grid 的 Clone 仍可用 | P0.2→本次修复 |
 | 17 | bridge.rs `shell: String` 无法表达 "系统默认" | 改为 `Shell` 枚举 (SystemDefault/Custom)，与 core 的 Shell 对齐，避免空字符串 hack | 本次修复 |
 
@@ -340,10 +340,10 @@ cd android && ./gradlew assembleDebug              # 构建 APK (需要先运行
 cd android && ./gradlew lint                       # Kotlin lint
 cd android && ./gradlew test                       # Kotlin 测试
 
-# ── UniFFI 绑定生成 ──────────────────────────────────
+# ── boltffi 绑定生成 ──────────────────────────────────
 # 先构建 cdylib，再生成 Kotlin 绑定:
 cargo build -p torvox-gui-android
-~/.cargo/bin/uniffi-bindgen generate \
+boltffi pack android \
   target/debug/libtorvox_android.so \
   --language kotlin \
   --output-dir android/app/src/main/java/io/torvox/bridge/
@@ -406,7 +406,7 @@ nix develop --command cargo nextest  # 直接运行
 | cosmic-text | 0.19 | 文本整形 |
 | swash | 0.2.7 | 字体光栅化 (内部用 skrifa 做 scaling) |
 | etagere | 0.3 | 字形图集打包 |
-| uniffi | 0.31 | Kotlin 绑定生成 |
+| boltffi | 0.25 | Kotlin 绑定生成 |
 | postcard | 1.1 | 序列化 (替代 bincode) |
 | thiserror | 2 | 错误类型 (torvox-core 中 optional) |
 | tokio | 1.43 | 仅异步运行时 (热路径用 crossbeam) |
@@ -458,7 +458,7 @@ nix develop --command cargo nextest  # 直接运行
 | 格式化 | `ktfmt` 强制 | |
 | 渲染 | SurfaceView 宿主 Rust wgpu v29 Surface，**不用 Canvas** | ADR 003 |
 | 前台服务 | `FOREGROUND_SERVICE_SPECIAL_USE` | AndroidManifest 中声明 foregroundServiceType |
-| JNA | `net.java.dev.jna:jna:5.17.0@aar` | UniFFI 运行时依赖 |
+| JNA | `net.java.dev.jna:jna:5.17.0@aar` | boltffi 运行时依赖 |
 | AGP 插件 | 不使用 `org.jetbrains.kotlin.android` — AGP 9.0+ 内置 Kotlin | 用 KSP 2.3.9 替代 kapt |
 
 ## Git
@@ -498,7 +498,7 @@ nix develop --command cargo nextest  # 直接运行
 - **Grid/DirtyMask**: proptest (不变量: mark 后 is_dirty 为 true, clear 后 any_dirty 为 false)
 - **序列化**: 每个可序列化类型须有 postcard roundtrip 测试
 - **PTY**: 非阻塞读写、resize、kill_on_drop (Linux 单元测试, Android 集成测试)
-- **UniFFI 桥接**: Kotlin 调用 Rust 函数，返回值正确 (端到端测试)
+- **boltffi 桥接**: Kotlin 调用 Rust 函数，返回值正确 (端到端测试)
 
 ---
 
@@ -515,7 +515,7 @@ torvox-terminal (nix, vte, crossbeam)
       ↑
 torvox-renderer (wgpu, cosmic-text, swash, etagere)
       ↑
-torvox-gui-android (uniffi, 依赖上述所有)
+torvox-gui-android (boltffi, 依赖上述所有)
 ```
 
 **依赖只能从下往上**。torvox-core 不能知道 torvox-terminal 的存在。
@@ -546,7 +546,7 @@ PTY write → kernel → read() → raw bytes → crossbeam SPSC
 - **torvox-core 需要 `alloc`** (no_std + alloc)。Vec/String 通过 `extern crate alloc` 支持，`no_std` 环境需启用 `alloc` feature。
 - **torvox-terminal 拥有所有 PTY I/O** 在专用线程中。fork 是唯一 unsafe。
 - **torvox-renderer 是单线程** (wgpu 设备在自己线程上)。
-- **FFI 边界传递结构化事件**，不是原始字节 (UniFFI Record/Enum)。
+- **FFI 边界传递结构化事件**，不是原始字节 (boltffi #[data]/#[error])。
 - **DirtyMask** `Vec<u64>` 分区，每 u64 覆盖 64 行，支持任意行数。不再有行数限制。
 - **热路径用 crossbeam**，不用 tokio。crossbeam 零分配、无锁、有界反压。
 
@@ -584,9 +584,9 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 
 ```
 [ ] 类型定义在哪个 crate? (core → terminal → renderer → gui-android)
-[ ] 该类型是否通过 UniFFI 导出? (检查 bridge.rs)
+[ ] 该类型是否通过 boltffi 导出? (检查 bridge.rs)
 [ ] bridge.rs 的桥接类型是否需要同步更新?
-[ ] UniFFI Kotlin 绑定是否需要重新生成?
+[ ] boltffi Kotlin 绑定是否需要重新生成?
 [ ] 此类型变更是否影响 postcard 序列化格式? (破坏性变更?)
 [ ] 相关单元测试是否需要更新?
 ```
@@ -621,7 +621,7 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 6. [ ] `cd android && ./gradlew lint` 通过
 7. [ ] `cd android && ./gradlew test` 通过
 8. [ ] `./scripts/build-android-libs.sh` 成功
-9. [ ] UniFFI 绑定已重新生成 (如 bridge.rs 有变更)
+9. [ ] boltffi 绑定已重新生成 (如 bridge.rs 有变更)
 
 ## 文档同步
 

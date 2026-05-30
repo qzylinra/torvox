@@ -656,6 +656,91 @@ pub fn build_cell_instances(
     instances
 }
 
+/// Flat grid data for building cell instances without requiring GridSnapshot.
+/// Used by Ghostty VT integration where terminal state is managed externally.
+pub struct FlatGrid {
+    pub rows: u32,
+    pub cols: u32,
+    pub chars: Vec<char>,
+    pub fg: Vec<[f32; 4]>,
+    pub bg: Vec<[f32; 4]>,
+}
+
+impl FlatGrid {
+    pub fn new(rows: u32, cols: u32) -> Self {
+        let len = (rows * cols) as usize;
+        Self {
+            rows,
+            cols,
+            chars: vec![' '; len],
+            fg: vec![[1.0, 1.0, 1.0, 1.0]; len],
+            bg: vec![[0.0, 0.0, 0.0, 1.0]; len],
+        }
+    }
+
+    pub fn set_cell(&mut self, row: u32, col: u32, ch: char, fg: [f32; 4], bg: [f32; 4]) {
+        let idx = (row * self.cols + col) as usize;
+        if idx < self.chars.len() {
+            self.chars[idx] = ch;
+            self.fg[idx] = fg;
+            self.bg[idx] = bg;
+        }
+    }
+
+    pub fn cell(&self, row: u32, col: u32) -> Option<(char, [f32; 4], [f32; 4])> {
+        let idx = (row * self.cols + col) as usize;
+        if idx < self.chars.len() {
+            Some((self.chars[idx], self.fg[idx], self.bg[idx]))
+        } else {
+            None
+        }
+    }
+}
+
+pub fn build_cell_instances_from_flat(
+    flat: &FlatGrid,
+    font_pipeline: &mut crate::font::FontPipeline,
+    atlas_width: f32,
+    atlas_height: f32,
+) -> Vec<CellInstance> {
+    let mut instances = Vec::with_capacity((flat.rows * flat.cols) as usize);
+
+    for row in 0..flat.rows {
+        for col in 0..flat.cols {
+            if let Some((ch, fg, bg)) = flat.cell(row, col) {
+                if ch == ' ' {
+                    instances.push(CellInstance {
+                        cell_pos: [col as f32, row as f32],
+                        atlas_offset: [0.0, 0.0],
+                        atlas_size: [0.0, 0.0],
+                        fg_color: [0.0, 0.0, 0.0, 0.0],
+                        bg_color: bg,
+                        flags: 0.0,
+                        _pad: [0.0; 3],
+                    });
+                } else if let Some(info) = font_pipeline.glyph_info(ch) {
+                    let uv_x = info.atlas_x as f32 / atlas_width;
+                    let uv_y = info.atlas_y as f32 / atlas_height;
+                    let uv_w = info.width as f32 / atlas_width;
+                    let uv_h = info.height as f32 / atlas_height;
+
+                    instances.push(CellInstance {
+                        cell_pos: [col as f32, row as f32],
+                        atlas_offset: [uv_x, uv_y],
+                        atlas_size: [uv_w, uv_h],
+                        fg_color: fg,
+                        bg_color: bg,
+                        flags: 0.0,
+                        _pad: [0.0; 3],
+                    });
+                }
+            }
+        }
+    }
+
+    instances
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

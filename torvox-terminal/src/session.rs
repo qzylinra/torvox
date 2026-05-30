@@ -3,10 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
-use crossbeam::channel::{Receiver, bounded};
+use flume::{Receiver, bounded};
 use thiserror::Error;
 
-use crate::parser::VtParser;
 use crate::pty::{PtyError, PtyPair};
 use crate::terminal::TerminalState;
 
@@ -25,7 +24,6 @@ pub enum SessionError {
 pub struct Session {
     pty: PtyPair,
     terminal: TerminalState,
-    parser: VtParser,
     output_rx: Receiver<Vec<u8>>,
     output_notify: Arc<(Mutex<bool>, Condvar)>,
     exited: Arc<AtomicBool>,
@@ -113,7 +111,6 @@ impl Session {
         Ok(Self {
             pty,
             terminal: TerminalState::new(rows, cols),
-            parser: VtParser::new(),
             output_rx,
             output_notify,
             exited,
@@ -149,8 +146,11 @@ impl Session {
     pub fn process_output(&mut self) -> bool {
         let mut changed = false;
         while let Ok(data) = self.output_rx.try_recv() {
-            self.parser.advance(&mut self.terminal, &data);
+            self.terminal.process_bytes(&data);
             changed = true;
+        }
+        if changed {
+            self.terminal.update_render_state();
         }
         changed
     }
@@ -194,22 +194,53 @@ mod tests {
         }
     }
 
-    fn grid_text(session: &Session) -> String {
-        let grid = &session.terminal().grid;
-        let mut text = String::new();
-        for row in 0..grid.rows() {
-            if let Some(line) = grid.get(row) {
-                let mut line_text = String::new();
-                for col in 0..line.len() {
-                    if let Some(cell) = line.get(col) {
-                        line_text.push(cell.char);
+    fn grid_text(session: &mut Session) -> String {
+        use libghostty_vt::render::{CellIterator, RowIterator};
+
+        let terminal = session.terminal_mut();
+
+        // SAFETY: render_state and ghostty_terminal are separate fields within TerminalState.
+        // update() reads from terminal and writes to render_state.
+        let render_state_ptr: *mut libghostty_vt::RenderState<'static> =
+            terminal.render_state_mut();
+        let terminal_ptr: *const libghostty_vt::Terminal<'static, 'static> = terminal.terminal();
+
+        unsafe {
+            if let Ok(snapshot) = (*render_state_ptr).update(&*terminal_ptr) {
+                let mut rows_iter = RowIterator::new().expect("failed to create row iterator");
+                let mut cells_iter = CellIterator::new().expect("failed to create cell iterator");
+                let mut row_iter = rows_iter
+                    .update(&snapshot)
+                    .expect("failed to update row iterator");
+                let mut text = String::new();
+                let mut row_index = 0;
+
+                while let Some(row) = row_iter.next() {
+                    let mut line_text = String::new();
+                    let mut cell_iter = cells_iter
+                        .update(&row)
+                        .expect("failed to update cell iterator");
+                    while let Some(cell) = cell_iter.next() {
+                        if let Ok(graphemes) = cell.graphemes() {
+                            for ch in graphemes {
+                                if ch != '\0' {
+                                    line_text.push(ch);
+                                }
+                            }
+                        }
+                    }
+                    text.push_str(line_text.trim_end());
+                    text.push('\n');
+                    row_index += 1;
+                    if row_index >= 24 {
+                        break;
                     }
                 }
-                text.push_str(line_text.trim_end());
-                text.push('\n');
+                text
+            } else {
+                String::new()
             }
         }
-        text
     }
 
     #[test]
@@ -229,7 +260,7 @@ mod tests {
         let mut found = false;
         while std::time::Instant::now() < deadline {
             session.process_output();
-            let text = grid_text(&session);
+            let text = grid_text(&mut session);
             if text.contains("hello_p12") {
                 found = true;
                 break;

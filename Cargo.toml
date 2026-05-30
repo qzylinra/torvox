@@ -20,7 +20,7 @@ torvox-terminal = { path = "torvox-terminal" }
 torvox-renderer = { path = "torvox-renderer", default-features = false }
 torvox-gui-android = { path = "torvox-gui-android" }
 
-vte = "0.15"
+libghostty-vt = "0.1"
 libc = "0.2"
 nix = { version = "0.31.3", features = ["term", "process", "signal", "fs"] }
 serde = { version = "1", default-features = false, features = [
@@ -34,11 +34,11 @@ bytemuck = { version = "1", features = ["derive"] }
 cosmic-text = "0.19"
 fontdb = "0.23"
 swash = "0.2.7"
-etagere = "0.3"
+guillotiere = "0.7"
 
-uniffi = "0.31"
+boltffi = "0.25"
 
-crossbeam = "0.8"
+flume = "0.11"
 bitflags = "2"
 proptest = "1.11"
 raw-window-handle = "0.6"
