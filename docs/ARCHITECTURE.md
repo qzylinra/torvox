@@ -83,7 +83,6 @@ torvox/
 │   │   ├── lib.rs          # crate 根
 │ │ ├── bridge.rs # boltffi 导出: TorvoxBridge, BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError
 │   │   └── surface.rs      # wgpu → Android Surface 共享 (P1.5)
-│   ├── uniffi.toml         # boltffi 配置文件 (已移除)
 │   └── Cargo.toml
 │
 ├── torvox-exec/             # W^X 多调用二进制
@@ -279,7 +278,7 @@ PTY write → kernel → read() on PTY fd
 → For each dirty line:
     For each cell:
       Lookup glyph in Atlas
-      Atlas miss → cosmic-text shape + swash/skrifa render → etagere pack
+      Atlas miss → cosmic-text shape + swash/skrifa render → guillotiere pack
     → Atlas upload (if new glyph)
     → Instance { position, uv, fg, bg, flags }
 → wgpu submission (1 draw call, 实例化四边形)

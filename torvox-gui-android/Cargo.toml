@@ -15,4 +15,3 @@ torvox-terminal = { workspace = true }
 torvox-renderer = { workspace = true, default-features = false }
 boltffi = { workspace = true }
 thiserror = { workspace = true }
-libghostty-vt = { workspace = true }

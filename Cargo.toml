@@ -20,14 +20,13 @@ torvox-terminal = { path = "torvox-terminal" }
 torvox-renderer = { path = "torvox-renderer", default-features = false }
 torvox-gui-android = { path = "torvox-gui-android" }
 
-libghostty-vt = "0.1"
+vte = "0.15"
 libc = "0.2"
 nix = { version = "0.31.3", features = ["term", "process", "signal", "fs"] }
 serde = { version = "1", default-features = false, features = [
   "derive",
   "alloc",
 ] }
-postcard = { version = "1.1.3", default-features = false, features = ["alloc"] }
 thiserror = { version = "2", default-features = false }
 wgpu = "29.0.3"
 bytemuck = { version = "1", features = ["derive"] }

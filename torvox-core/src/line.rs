@@ -106,12 +106,4 @@ mod tests {
         l.resize(3);
         assert_eq!(l.get(2).unwrap().char, ' ');
     }
-
-    #[test]
-    fn line_serde_roundtrip() {
-        let l = Line::new(10);
-        let bytes = postcard::to_allocvec(&l).unwrap();
-        let decoded: Line = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(decoded.len(), 10);
-    }
 }

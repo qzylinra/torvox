@@ -135,7 +135,7 @@ cd android && ./gradlew connectedCheck
 cargo fmt --check && cargo clippy --deny warnings && cargo nextest --workspace
 
 # 完整质量门 (包含 Android, ~15min)
-./scripts/quality-gate.sh
+nu scripts/quality-gate.nu
 # 等价于:
 cargo fmt --check \
   && cargo clippy --deny warnings \
@@ -203,7 +203,7 @@ cargo audit
 
 ```
 [Rust 源码]
-↓ cargo ndk v4 (通过 scripts/build-android-libs.sh)
+↓ cargo ndk v4 (通过 scripts/build-android-libs.nu)
 [Rust 交叉编译为 aarch64-linux-android / x86_64-linux-android]
 ↓ libtorvox_android.so
 [Android jniLibs/arm64-v8a/libtorvox_android.so]
@@ -214,12 +214,12 @@ cargo audit
 ### Gradle 集成
 
 `cargo-ndk v4` 脚本协调:
-1. `scripts/build-android-libs.sh` 交叉编译步骤
+1. `scripts/build-android-libs.nu` 交叉编译步骤
 2. 输出 `.so` 放置到 `jniLibs/` 目录
 3. APK 打包 Rust 原生库
 
 ```bash
-# scripts/build-android-libs.sh 中
+# scripts/build-android-libs.nu 中
 cargo ndk -t arm64-v8a -t x86_64 -o android/app/src/main/jniLibs build --release
 ```
 
@@ -276,7 +276,7 @@ ms_print massif.out.*
 # - torvox-gui-android/Cargo.toml
 
 # 2. 质量门
-./scripts/quality-gate.sh
+nu scripts/quality-gate.nu
 
 # 3. 构建 + 签名
 cd android && ./gradlew assembleRelease

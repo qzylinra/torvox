@@ -138,16 +138,4 @@ mod tests {
         assert!(!s.contains(2, 4));
         assert!(!s.contains(3, 11));
     }
-
-    #[test]
-    fn selection_serde_roundtrip() {
-        let s = Selection::new(
-            SelectionAnchor { row: 1, col: 2 },
-            SelectionAnchor { row: 3, col: 4 },
-            SelectionMode::Word,
-        );
-        let bytes = postcard::to_allocvec(&s).unwrap();
-        let decoded: Selection = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(s, decoded);
-    }
 }

@@ -17,8 +17,8 @@
 1. 创建 workspace `Cargo.toml` (edition 2024, resolver 2)
 2. 创建 `rust-toolchain.toml` (固定 stable 版本)
 3. 创建 `torvox-core/` — `no_std` crate, 骨架 `lib.rs`
-4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `vte 0.15`, `nix 0.31`, `serde`, `postcard 1.1` 依赖
-5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `etagere 0.3` 依赖
+4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `libghostty-vt 0.1`, `nix 0.31`, `serde`, `postcard 1.1 (dev-dependency)` 依赖
+5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `guillotiere 0.7` 依赖
 6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `boltffi 0.25` 依赖
 7. ~~创建 `torvox-bridge-types/`~~ — 类型已合并到 `torvox-gui-android/src/bridge.rs`
 8. 创建 `torvox-exec/` — 骨架 `main.rs` (多调用二进制)
@@ -133,10 +133,10 @@
 
 ### P1.1 — VT 解析器
 
-**交付物**: `torvox-terminal::parser` — 通过 `vte 0.15` crate 的 Paul Williams 状态机。`Grid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
+**交付物**: `torvox-terminal::parser` — 通过 `libghostty-vt 0.1` crate 的 SIMD 优化 VT 解析器。`Grid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
 
 **详细步骤**:
-1. 实现 `vte::Perform` trait 处理所有回调
+1. 使用 Ghostty VT Terminal API 处理所有 VT 序列
 2. 光标移动: CUU/CUD/CUF/CUB/CUP/CHA/HVP
 3. 擦除: ED (0/1/2), EL (0/1/2), ICH, DCH, ECH
 4. 行操作: IL, DL, SU, SD
@@ -160,8 +160,8 @@
 
 **详细步骤**:
 1. 实现 `Session` 编排器 (拥有 PtyPair + Grid + Parser)
-2. PTY 读取线程: 阻塞 `read()` → `crossbeam::channel` → 解析任务
-3. VT 解析任务: 从通道读取字节 → `vte::Parser::advance()` → Grid 变更
+2. PTY 读取线程: 阻塞 `read()` → `flume bounded channel` → 解析任务
+3. VT 解析任务: 从通道读取字节 → `vte::Perform` trait → Grid 变更
 4. 脏区域通知: Grid 变更 → `Condvar` → 渲染线程
 5. 输入写入: `InputEngine::process()` → VT 转义编码 → PTY `write()`
 6. 调整大小: `resize(rows, cols)` → `ioctl(TIOCSWINSZ)` + Grid 调整
@@ -174,7 +174,7 @@
 
 ### P1.3 — 字体管线
 
-**交付物**: `torvox-renderer::font` — `cosmic-text 0.19` 成形, `swash 0.2.7`/`skrifa 0.42` 缩放/光栅化, `etagere 0.3` 图集。捆绑 JetBrains Mono Nerd Font。初始仅 ASCII。
+**交付物**: `torvox-renderer::font` — `cosmic-text 0.19` 成形, `swash 0.2.7`/`skrifa 0.42` 缩放/光栅化, `guillotiere 0.7` 图集。捆绑 JetBrains Mono Nerd Font。初始仅 ASCII。
 
 **详细步骤**:
 1. 实现 `FontPipeline` 结构 (fontdb → cosmic-text → swash/skrifa → etagere)
@@ -329,7 +329,7 @@
 3. `find /` 下 120 FPS
 4. 图集 LRU 驱驱逐策略优化
 5. 空闲内存 <10MB
-6. crossbeam 通道调优 (缓冲区大小)
+6. flume 通道调优 (缓冲区大小)
 7. 实例缓冲区 diff (仅上传变更单元格)
 8. 着色器预热 (首次帧延迟消除)
 

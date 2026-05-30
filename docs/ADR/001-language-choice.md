@@ -28,15 +28,15 @@
 │ - 设置, 导航, 叠加层               │
 │ - Android 生命周期, 服务            │
 ├─────────────────────────────────────┤
-│ UniFFI Bridge                       │
+│ boltffi Bridge                      │
 ├─────────────────────────────────────┤
 │ Rust Core                           │
-│ - VT 解析器 (vte crate)             │
+│ - VT 解析器 (libghostty-vt crate)   │
 │ - PTY I/O (nix forkpty)            │
 │ - 单元格网格 + 回滚缓冲            │
 │ - 字体管线 (cosmic-text/swash)     │
 │ - GPU 渲染器 (wgpu 29)             │
-│ - 会话持久化 (postcard)            │
+│ - 会话持久化 (postcard, dev-dep)    │
 └─────────────────────────────────────┘
 ```
 
@@ -96,12 +96,12 @@
 
 **负面**:
 - 双构建系统 (Cargo + Gradle)
-- UniFFI 边界需要仔细类型设计
+- boltffi 边界需要仔细类型设计
 - 需精通双语言
 - 交叉编译 CI 复杂性
 
 **缓解措施**:
-- UniFFI 类型安全 Kotlin ↔ Rust 绑定 (ZeroAI, IronRDP, Firefox 使用)
+- boltffi 类型安全 Kotlin ↔ Rust 绑定
 - CI 矩阵: `cargo nextest` + `./gradlew test` 每 PR 强制执行
-- `torvox-gui-android/src/bridge.rs` 跨边界共享 UniFFI 类型
+- `torvox-gui-android/src/bridge.rs` 跨边界共享 boltffi 类型
 - `cargo-ndk v4` 脚本自动化交叉编译

@@ -688,6 +688,9 @@ impl FlatGrid {
     }
 
     pub fn cell(&self, row: u32, col: u32) -> Option<(char, [f32; 4], [f32; 4])> {
+        if row >= self.rows || col >= self.cols {
+            return None;
+        }
         let idx = (row * self.cols + col) as usize;
         if idx < self.chars.len() {
             Some((self.chars[idx], self.fg[idx], self.bg[idx]))
@@ -762,5 +765,58 @@ mod tests {
         let layout = CellInstance::buffer_layout();
         assert_eq!(layout.step_mode, wgpu::VertexStepMode::Instance);
         assert!(layout.array_stride > 0);
+    }
+
+    #[test]
+    fn flat_grid_new() {
+        let grid = FlatGrid::new(10, 20);
+        assert_eq!(grid.rows, 10);
+        assert_eq!(grid.cols, 20);
+        assert_eq!(grid.chars.len(), 200);
+        assert!(grid.chars.iter().all(|&c| c == ' '));
+    }
+
+    #[test]
+    fn flat_grid_set_and_get_cell() {
+        let mut grid = FlatGrid::new(5, 5);
+        let fg = [1.0, 0.0, 0.0, 1.0];
+        let bg = [0.0, 0.0, 0.0, 1.0];
+        grid.set_cell(2, 3, 'A', fg, bg);
+
+        let (ch, fg_out, bg_out) = grid.cell(2, 3).unwrap();
+        assert_eq!(ch, 'A');
+        assert_eq!(fg_out, fg);
+        assert_eq!(bg_out, bg);
+    }
+
+    #[test]
+    fn flat_grid_out_of_bounds() {
+        let grid = FlatGrid::new(3, 3);
+        assert!(grid.cell(3, 0).is_none());
+        assert!(grid.cell(0, 3).is_none());
+    }
+
+    #[test]
+    fn build_cell_instances_from_flat_basic() {
+        let mut grid = FlatGrid::new(1, 4);
+        grid.set_cell(0, 0, 'A', [1.0, 1.0, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]);
+        grid.set_cell(0, 1, ' ', [0.0, 0.0, 0.0, 0.0], [0.5, 0.5, 0.5, 1.0]);
+        grid.set_cell(0, 2, 'B', [0.0, 1.0, 0.0, 1.0], [0.2, 0.2, 0.2, 1.0]);
+        grid.set_cell(0, 3, 'C', [1.0, 0.0, 1.0, 1.0], [0.3, 0.3, 0.3, 1.0]);
+
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+
+        let instances = build_cell_instances_from_flat(&grid, &mut font_pipeline, 2048.0, 2048.0);
+        // All 4 cells get instances (space gets bg-only, others get glyph)
+        assert_eq!(instances.len(), 4);
+
+        let cell0 = &instances[0];
+        assert_eq!(cell0.cell_pos, [0.0, 0.0]);
+        assert_eq!(cell0.bg_color, [0.0, 0.0, 0.0, 1.0]);
+
+        let cell1 = &instances[1];
+        assert_eq!(cell1.cell_pos, [1.0, 0.0]);
+        assert_eq!(cell1.bg_color, [0.5, 0.5, 0.5, 1.0]);
     }
 }

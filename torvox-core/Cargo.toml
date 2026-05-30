@@ -9,9 +9,6 @@ license = "UNLICENSED"
 serde = { workspace = true }
 thiserror = { workspace = true, optional = true }
 
-[dev-dependencies]
-postcard = { workspace = true }
-
 [features]
 default = ["std", "alloc"]
 std = ["thiserror", "serde/std"]

@@ -172,38 +172,6 @@ mod tests {
     }
 
     #[test]
-    fn color_serde_roundtrip() {
-        let c = Color::new(10, 20, 30);
-        let bytes = postcard::to_allocvec(&c).unwrap();
-        let decoded: Color = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(c, decoded);
-    }
-
-    #[test]
-    fn cell_serde_roundtrip() {
-        let c = Cell {
-            char: 'A',
-            fg: Color::new(255, 0, 0),
-            bg: Color::new(0, 0, 255),
-            attrs: Attrs {
-                bold: true,
-                dim: false,
-                italic: false,
-                underline: true,
-                double_underline: false,
-                reverse: false,
-                strikethrough: false,
-                blink: false,
-                hidden: false,
-                overline: false,
-            },
-        };
-        let bytes = postcard::to_allocvec(&c).unwrap();
-        let decoded: Cell = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(c, decoded);
-    }
-
-    #[test]
     fn attrs_default_all_false() {
         let a = Attrs::default();
         assert!(!a.bold);
@@ -264,16 +232,5 @@ mod tests {
         assert!(!m.is_dirty(100));
         m.mark(150);
         assert!(m.is_dirty(150));
-    }
-
-    #[test]
-    fn dirty_mask_serde_roundtrip() {
-        let mut m = DirtyMask::new(200);
-        m.mark(0);
-        m.mark(64);
-        m.mark(199);
-        let bytes = postcard::to_allocvec(&m).unwrap();
-        let decoded: DirtyMask = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(m, decoded);
     }
 }

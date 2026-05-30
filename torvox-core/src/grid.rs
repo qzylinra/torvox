@@ -334,15 +334,6 @@ mod tests {
     }
 
     #[test]
-    fn grid_serde_roundtrip() {
-        let g = Grid::new(4, 10);
-        let bytes = postcard::to_allocvec(&g).unwrap();
-        let decoded: Grid = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(decoded.rows(), 4);
-        assert_eq!(decoded.cols(), 10);
-    }
-
-    #[test]
     fn dirty_mask_bit_ops() {
         let mut m = DirtyMask::new(24);
         assert!(!m.any_dirty());

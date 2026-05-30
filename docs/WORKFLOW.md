@@ -28,7 +28,7 @@ nix flake check --no-build
 - 环境完全可复现，不依赖系统安装
 - 所有工具版本锁定，不会因系统更新而破坏
 - CI 和本地环境完全一致
-- `nix fmt` 格式化所有语言 (Rust, TOML, YAML, Shell)
+- `nix fmt` 格式化所有语言 (Rust, TOML, YAML, Nushell)
 - `nix flake check` 运行所有质量检查 (clippy, tests, typos, fmt)
 
 **可用工具 (在 nix develop 中)**:
@@ -39,7 +39,7 @@ nix flake check --no-build
 | `cargo-clippy` | Rust lint |
 | `rustfmt` | Rust 格式化 |
 | `taplo` | TOML 格式化 |
-| `shfmt` | Shell 格式化 |
+| `shfmt` | Shell 格式化 (注: scripts 现为 .nu Nushell 文件, shfmt 不再适用) |
 | `yamlfmt` | YAML 格式化 |
 | `typos` | 拼写检查 |
 | `ktfmt` | Kotlin 格式化 |
@@ -297,7 +297,7 @@ docs/
 [ ] 是否需要更新 AGENTS.md?
 [ ] 是否需要更新 ROADMAP.md?
 [ ] 代码变更是否影响 bridge.rs?
-[ ] 是否需要重新生成 UniFFI 绑定?
+[ ] 是否需要重新生成 boltffi 绑定?
 ```
 
 ---
@@ -339,8 +339,8 @@ cargo fmt --check
 # 拼写检查
 typos
 
-# Shell 格式化
-shfmt -w -i 2 -ci scripts/*.sh
+# Nushell 脚本格式化 (scripts 现为 .nu 文件)
+nu scripts/format.nu
 ```
 
 ### 7.4 文档检查
@@ -376,7 +376,7 @@ shfmt -w -i 2 -ci scripts/*.sh
 2. ✅ 更新 AUDIT.md — 反映当前状态
 3. ✅ 更新 AGENTS.md — 引用本文件
 4. ✅ flake.nix — 添加 formatter/checks
-5. ✅ scripts — shfmt 格式化
+5. ✅ scripts — Nushell (.nu) 格式化
 
 ### 9.2 持续执行
 

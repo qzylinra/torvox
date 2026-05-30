@@ -7,7 +7,7 @@ license = "UNLICENSED"
 
 [dependencies]
 torvox-core = { workspace = true }
-libghostty-vt = { workspace = true }
+vte = { workspace = true }
 nix = { workspace = true }
 libc = { workspace = true }
 thiserror = { workspace = true }

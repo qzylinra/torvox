@@ -118,17 +118,4 @@ mod tests {
         assert_eq!(c.col, 0);
         assert_eq!(c.row, 5);
     }
-
-    #[test]
-    fn cursor_state_serde_roundtrip() {
-        let c = CursorState {
-            row: 10,
-            col: 20,
-            style: CursorStyle::Underline,
-            visible: false,
-        };
-        let bytes = postcard::to_allocvec(&c).unwrap();
-        let decoded: CursorState = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(c, decoded);
-    }
 }

@@ -17,7 +17,7 @@
 
 ## 决策
 
-**wgpu v29 原生 GPU 渲染，cosmic-text 0.19 → swash 0.2.7/skrifa 0.42 → etagere 0.3 字体管线，实例化四边形渲染。**
+**wgpu v29 原生 GPU 渲染，cosmic-text 0.19 → swash 0.2.7/skrifa 0.42 → guillotiere 字体管线，实例化四边形渲染。**
 
 ```
 PTY 字节 → VT 解析器 → Grid 变更
@@ -28,7 +28,7 @@ PTY 字节 → VT 解析器 → Grid 变更
 ↓
 cosmic-text 0.19 (成形 + 布局) → swash 0.2.7 (缩放 via skrifa 0.42 + 光栅化 via zeno)
 ↓
-etagere 0.3 (图集打包) → wgpu 纹理上传
+guillotiere (图集打包) → wgpu 纹理上传
 ↓
 实例缓冲区 (位置 + UV + 颜色 每单元格)
 ↓

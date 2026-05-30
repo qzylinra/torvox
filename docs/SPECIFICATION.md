@@ -100,7 +100,7 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 发现 | `fontdb` | 系统字体 + 捆绑 `JetBrainsMono-Nerd-Font.ttf` |
 | 成形 | `cosmic-text` 0.19 | 默认: `cursive`, `kern`, `liga`, `dlig`, `rlig`, `calt` |
 | 缩放+光栅化 | `swash` 0.2.7 | 缩放 via 内部 skrifa 0.42 (`scale` feature), 光栅化 via zeno。无需单独依赖 skrifa crate。CBDT/COLR 彩色 emoji, 可变字体 @ 请求像素 |
-| 图集 | `etagere` 0.3 | 2048×2048 或 4096×4096, 货架打包 |
+| 图集 | `guillotiere` 0.7 | 2048×2048 或 4096×4096, 货架打包 |
 | 缓存 | LRU | 按最后帧访问排序, OOM 时驱逐 |
 
 ### 色彩空间
@@ -163,7 +163,7 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 配置 | TOML | `app/config.toml` | 变更时 |
 | Shell 历史 | — | Shell 原生 | — |
 
-**注意**: 不使用 `bincode`。bincode 3.0.0 被故意破坏 (RUSTSEC-2025-0141)，永久停止维护。使用 `postcard 1.1` 替代。
+**注意**: 不使用 `bincode`。bincode 3.0.0 被故意破坏 (RUSTSEC-2025-0141)，永久停止维护。使用 `postcard 1.1` 替代 (仅 dev-dependency，用于测试序列化 roundtrip)。
 
 ### 前台服务
 

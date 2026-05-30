@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[boltffi::data]
 pub struct BridgeCell {
     pub char_code: u32,
@@ -304,46 +304,22 @@ impl TorvoxBridge {
             .ok()
             .and_then(|g| {
                 g.as_ref()
-                    .map(|s| s.terminal().terminal().scrollback_rows().unwrap_or(0) as u32)
+                    .map(|s| s.terminal().grid.scrollback_len() as u32)
             })
             .unwrap_or(0)
     }
 
     fn scrollback_line(&self, index: u32) -> Option<String> {
-        use libghostty_vt::terminal::Point;
-
         self.surface.lock().ok().and_then(|g| {
             g.as_ref().and_then(|s| {
-                let terminal = s.terminal().terminal();
-                let total = terminal.total_rows().unwrap_or(0) as u32;
-                let viewport_rows = terminal.rows().unwrap_or(24) as u32;
-                let history_row = total.saturating_sub(viewport_rows);
-                let target_row = history_row + index;
-
-                if target_row >= total {
-                    return None;
-                }
-
-                let coord = libghostty_vt::ffi::GhosttyPointCoordinate {
-                    x: 0,
-                    y: target_row,
-                };
-                let point_coord: libghostty_vt::terminal::PointCoordinate = coord.into();
-
-                terminal
-                    .grid_ref(Point::Screen(point_coord))
-                    .ok()
-                    .map(|grid_ref| {
+                s.terminal()
+                    .grid
+                    .scrollback_line(index as usize)
+                    .map(|line| {
                         let mut text = String::new();
-                        let cols = terminal.cols().unwrap_or(80);
-                        for _col in 0..cols {
-                            let mut buf = [char::default(); 8];
-                            if let Ok(len) = grid_ref.graphemes(&mut buf) {
-                                for &ch in &buf[..len] {
-                                    if ch != '\0' {
-                                        text.push(ch);
-                                    }
-                                }
+                        for col in 0..line.len() {
+                            if let Some(cell) = line.get(col) {
+                                text.push(cell.char);
                             }
                         }
                         text.trim_end().to_string()
@@ -354,6 +330,16 @@ impl TorvoxBridge {
 
     fn get_config(&self) -> TerminalConfig {
         self.config.clone()
+    }
+
+    fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.write_to_pty(&data);
+        }
+        Ok(())
     }
 
     fn echo_cells(&self, cells: Vec<BridgeCell>) -> Vec<BridgeCell> {
@@ -400,14 +386,14 @@ mod tests {
         let config = TerminalConfig::default();
         let bridge = TorvoxBridge::new(config);
         let cells = vec![BridgeCell {
-            char_code: b'A' as u32,
+            char_code: 'A' as u32,
             fg: 0xFFFFFF,
             bg: 0x000000,
             attrs: BridgeAttrs::default(),
         }];
         let result = bridge.echo_cells(cells.clone());
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0].char_code, b'A' as u32);
+        assert_eq!(result[0].char_code, 'A' as u32);
     }
 
     #[test]

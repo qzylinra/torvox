@@ -92,7 +92,7 @@
 1. 写代码 → `cargo clippy -- -D warnings` 零警告
 2. 写测试 → `cargo nextest -p <crate>` 通过
 3. 提交前 → `cargo nextest --workspace` 全量通过
-4. 完成阶段 → `./scripts/quality-gate.sh` 通过
+4. 完成阶段 → `nu scripts/quality-gate.nu` 通过
 
 ## 5. 不确定时停下
 
@@ -145,7 +145,6 @@
 | `AGENTS.md` (本文件) | ★★★★★ | AI 智能体首要上下文 | 每个会话开始 |
 | `docs/WORKFLOW.md` | ★★★★★ | SDD 工作流、状态管理、提交规范、质量门禁 | 每个会话开始 |
 | `docs/ROADMAP.md` | ★★★★★ | 当前阶段、里程碑步骤、退出标准 | 开始任何工作之前 |
-| `docs/AUDIT.md` | ★★★★★ | 当前状态、已知问题、待办事项 | 开始任何工作之前 |
 | `docs/ARCHITECTURE.md` | ★★★★★ | 完整架构、crate 结构、数据流、线程模型、技术版本锁定表 | 修改任何 crate 时 |
 | `docs/SPECIFICATION.md` | ★★★★★ | VT 标准覆盖、性能目标、合规测试 | 实现 VT 功能或优化时 |
 | `docs/ADR/004-pty-implementation.md` | ★★★★★ | 为什么 nix crate forkpty、不用 portable-pty、W^X 方案 | 修改 PTY 时 |
@@ -174,8 +173,8 @@
 | `torvox-terminal/src/pty.rs` | PtyPair (spawn, resize, Read/Write, Drop) | 唯一允许 fork unsafe 的位置 |
 | `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
 | `torvox-gui-android/uniffi.toml` | boltffi 配置文件 | 已移除 (boltffi 不需要配置文件) |
-| `scripts/build-android-libs.sh` | cargo-ndk 交叉编译 + torvox-exec 构建 | 替代 rust-android-gradle |
-| `scripts/quality-gate.sh` | 8 步质量门 | 提交前必须通过 |
+| `scripts/build-android-libs.nu` | cargo-ndk 交叉编译 + torvox-exec 构建 | 替代 rust-android-gradle |
+| `scripts/quality-gate.nu` | 8 步质量门 | 提交前必须通过 |
 | `flake.nix` | 完整 Nix 开发环境 | 使用 flake-parts，需要 allowUnfree |
 
 ---
@@ -200,7 +199,7 @@
 
 | 里程碑 | 交付物 | 状态 |
 |--------|--------|------|
-| P1.1 | VT 解析器 (vte 0.15, Paul Williams 状态机) | ✅ 完成 |
+| P1.1 | VT 解析器 (libghostty-vt 0.1, SIMD优化) | ✅ 完成 |
 | P1.2 | PTY 会话集成 (crossbeam SPSC) | ✅ 完成 |
 | P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → etagere) | ✅ 完成 |
 | P1.4 | GPU 渲染管线 (实例化四边形, WGSL 着色器) | ✅ 完成 |
@@ -217,7 +216,7 @@
 | `torvox-terminal/terminal.rs` | **完整** | TerminalState + vte::Perform impl, 76 测试 (含 proptest), 就地 insert/delete chars |
 | `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + TerminalState + parser + crossbeam channel + Condvar 事件通知, 5 个集成测试 |
 | `torvox-terminal/keyboard.rs` | **完整** | InputEngine: Kitty 协议 + VT 传统编码 + 鼠标 SGR, 43 个测试 |
-| `torvox-renderer` | **完整** | FontPipeline (fontdb+cosmic-text+swash+etagere, 7 测试), GpuContext (wgpu v29, 缓存 instance_buffer, cell.wgsl, cursor.wgsl, 3 测试), Android Surface 支持 (set_surface_from_native_window), 已移除空壳 atlas.rs/pipeline.rs, 无 torvox-terminal 依赖 |
+| `torvox-renderer` | **完整** | FontPipeline (fontdb+cosmic-text+swash+guillotiere, 7 测试), GpuContext (wgpu v29, 缓存 instance_buffer, cell.wgsl, cursor.wgsl, 3 测试), Android Surface 支持 (set_surface_from_native_window), 已移除空壳 atlas.rs/pipeline.rs, 无 torvox-terminal 依赖 |
 | `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
 | `torvox-gui-android/surface.rs` | **完整** | AndroidSurface: GPU 管线 + 字体 + 终端状态, set_native_window, render (使用 GridSnapshot) |
 | `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |
@@ -248,9 +247,9 @@
 │ ✗ 添加 Java 文件 — 仅 Kotlin                                              │
 │ ✗ 依赖 Termux — Torvox 是独立项目                                         │
 │ ✗ 使用 portable-pty — 不支持 Android，用 nix 0.31 crate                  │
-│ ✗ 使用 bincode — 已废弃 (RUSTSEC-2025-0141)，用 postcard 1.1             │
+│ ✗ 使用 bincode — 已废弃 (RUSTSEC-2025-0141)，用 serde derive            │
 │ ✗ 使用 rust-android-gradle — AGP 9.0+ 移除 AppExtension，不兼容          │
-│   用 scripts/build-android-libs.sh (cargo-ndk v4) 代替                    │
+│   用 scripts/build-android-libs.nu (cargo-ndk v4) 代替                    │
 │ ✗ 在库 crate 中使用 anyhow — 库用 thiserror 2，仅二进制可用 eyre         │
 │ ✗ 在 boltffi Error 枚举中使用 `message` 字段名 — 与 Kotlin               │
 │   Throwable.message 冲突。改用 `detail`                                   │
@@ -305,7 +304,7 @@
 | 5 | boltffi Error `message` 字段与 Kotlin 冲突 | Kotlin `Throwable.message` 与 boltffi 生成的 `message` 字段冲突。改用 `detail` | P0.6 |
 | 6 | `libtorvox_core.so` 命名冲突 | lib 名与 `torvox-core` Rust crate 冲突。改为 `libtorvox_android.so` | C1 审计 |
 | 7 | `/proc/self/exe` 不保留符号链接名 | 解引用到真实二进制。用 `argv[0]` 的 `file_name()` 代替 | ADR 004 |
-| 8 | `rust-android-gradle` 与 AGP 9.0 不兼容 | AGP 9.0 移除了 `AppExtension`。用 `scripts/build-android-libs.sh` 代替 | P0.3 |
+| 8 | `rust-android-gradle` 与 AGP 9.0 不兼容 | AGP 9.0 移除了 `AppExtension`。用 `scripts/build-android-libs.nu` 代替 | P0.3 |
 | 9 | `std::env::set_var` 在 Rust 1.95 是 unsafe | 需要 `unsafe` 块包裹 | 构建 |
 | 10 | `nix::fcntl::fcntl` 在 nix 0.31 接受 `AsFd` 而非 `RawFd` | API 变更，注意类型转换 | P0.5 |
 | 11 | `OwnedFd::from_raw_fd` + `mem::forget` 模式 | 用于在借用 fd 上操作 termios，防止 drop 关闭 fd | P0.5 |
@@ -335,7 +334,7 @@ cargo clippy -- -D warnings                        # 零警告 (必须)
 cargo fmt --check                                  # 格式检查
 
 # ── Android 构建 ─────────────────────────────────────
-./scripts/build-android-libs.sh                    # 交叉编译 Rust → Android .so + exec
+./scripts/build-android-libs.nu                    # 交叉编译 Rust → Android .so + exec
 cd android && ./gradlew assembleDebug              # 构建 APK (需要先运行上方脚本)
 cd android && ./gradlew lint                       # Kotlin lint
 cd android && ./gradlew test                       # Kotlin 测试
@@ -349,7 +348,7 @@ boltffi pack android \
   --output-dir android/app/src/main/java/io/torvox/bridge/
 
 # ── 质量门 ───────────────────────────────────────────
-./scripts/quality-gate.sh                          # 8 步全量质量门
+nu scripts/quality-gate.nu                          # 8 步全量质量门
 
 # ── 安全检查 ─────────────────────────────────────────
 cargo geiger                                       # 检查 unsafe 使用
@@ -407,7 +406,7 @@ nix develop --command cargo nextest  # 直接运行
 | swash | 0.2.7 | 字体光栅化 (内部用 skrifa 做 scaling) |
 | etagere | 0.3 | 字形图集打包 |
 | boltffi | 0.25 | Kotlin 绑定生成 |
-| postcard | 1.1 | 序列化 (替代 bincode) |
+| postcard | 1.1 | 已移除 (原用于测试序列化) |
 | thiserror | 2 | 错误类型 (torvox-core 中 optional) |
 | tokio | 1.43 | 仅异步运行时 (热路径用 crossbeam) |
 | crossbeam | 0.8 | 无锁 SPSC 队列 (PTY→解析器) |
@@ -437,7 +436,7 @@ nix develop --command cargo nextest  # 直接运行
 | Clippy | `--deny warnings` 每 PR 必需 | 零警告策略 |
 | `unsafe` | `torvox-core` 中 **零**。仅 `torvox-gui-android` FFI 桥接和 `torvox-terminal::pty` 中 | 每个 unsafe 块注释安全不变量 |
 | 错误处理 | `thiserror 2` (库) + `eyre` (二进制)。**库 crate 中无 `anyhow`** | thiserror 在 torvox-core 中 optional (需 std feature) |
-| 序列化 | `postcard 1.1` (不用 bincode，已废弃 RUSTSEC-2025-0141) | |
+| 序列化 | `serde derive` (不用 bincode/postcard，已废弃) | |
 | 测试 | `cargo nextest` 替代 `cargo test`。内联 `#[cfg(test)] mod tests` | 集成测试在 `torvox-integration-tests` |
 | 属性测试 | `proptest 1.11` — VT 解析器和 Grid 必须有 | 最少 10K 用例 |
 | 命名 | 函数/变量 `snake_case`，类型 `PascalCase`，常量 `SCREAMING_SNAKE` | |
@@ -496,7 +495,7 @@ nix develop --command cargo nextest  # 直接运行
 - **每个公共函数**: 必须有单元测试
 - **VT 解析器**: proptest (10K+ 用例) + fuzz (每夜 1B+ 迭代)
 - **Grid/DirtyMask**: proptest (不变量: mark 后 is_dirty 为 true, clear 后 any_dirty 为 false)
-- **序列化**: 每个可序列化类型须有 postcard roundtrip 测试
+- **序列化**: 每个可序列化类型须有 serde roundtrip 测试
 - **PTY**: 非阻塞读写、resize、kill_on_drop (Linux 单元测试, Android 集成测试)
 - **boltffi 桥接**: Kotlin 调用 Rust 函数，返回值正确 (端到端测试)
 
@@ -554,7 +553,7 @@ PTY write → kernel → read() → raw bytes → crossbeam SPSC
 
 ```
 fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrifa 做 scaling)
-  → etagere 0.3 (shelf packing 图集) → 实例化四边形 → 单次 draw call
+  → guillotiere 0.7 (shelf packing 图集) → 实例化四边形 → 单次 draw call
 ```
 
 - swash 0.2.x: scaling 完全由内部 skrifa 处理，**不需要单独依赖 skrifa crate**
@@ -587,7 +586,7 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 [ ] 该类型是否通过 boltffi 导出? (检查 bridge.rs)
 [ ] bridge.rs 的桥接类型是否需要同步更新?
 [ ] boltffi Kotlin 绑定是否需要重新生成?
-[ ] 此类型变更是否影响 postcard 序列化格式? (破坏性变更?)
+[ ] 此类型变更是否影响 serde 序列化格式? (破坏性变更?)
 [ ] 相关单元测试是否需要更新?
 ```
 
@@ -620,7 +619,7 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 
 6. [ ] `cd android && ./gradlew lint` 通过
 7. [ ] `cd android && ./gradlew test` 通过
-8. [ ] `./scripts/build-android-libs.sh` 成功
+8. [ ] `./scripts/build-android-libs.nu` 成功
 9. [ ] boltffi 绑定已重新生成 (如 bridge.rs 有变更)
 
 ## 文档同步
@@ -633,7 +632,7 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 
 ## 序列化兼容性
 
-15. [ ] 修改了 postcard 序列化的类型? → 评估是否破坏已保存状态兼容性
+15. [ ] 修改了 serde 序列化的类型? → 评估是否破坏已保存状态兼容性
 
 ---
 
@@ -641,16 +640,10 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 
 以下问题已知但尚未修复。不要在新代码中重复这些错误:
 
-| # | 问题 | 状态 | 影响 | 计划 |
-|---|------|------|------|------|
-| 1 | ~~`DirtyMask` 最多 64 行 (u64)~~ | **已修复** | 改为 `Vec<u64>` 分区方案 | 本次会话 |
-| 2 | `torvox-fuzz/fuzz_targets/` 不存在 | 待建 | 模糊测试无法运行 | P1.1 后 |
-| 3 | `torvox-integration-tests/tests/` 不存在 | 待建 | 集成测试无法运行 | P1.2 后 |
-| 4 | `torvox-bench/benches/` 不存在 | 待建 | 性能基准无法运行 | P1.4 后 |
-| 5 | ~~`torvox-renderer/shaders/` 不存在~~ | **已解决** | WGSL 着色器已存在 (cell.wgsl, cursor.wgsl) | 审计 2026-05-29 |
-| 6 | ~~TerminalForegroundService 未调用 setForegroundServiceType~~ | **已修复** | P1.6 已完成 | P1.6 |
-| 7 | ~~tokio/crossbeam 在 workspace 声明但未被任何 crate 使用~~ | **已解决** | crossbeam 已用于 session 通道 | 审计 2026-05-29 |
-| 8 | ~~glyphon 在 workspace 声明但未被任何 crate 使用~~ | **已解决** | glyphon 依赖已移除 | 审计 2026-05-29 |
+| # | 问题 | 状态 | 计划 |
+|---|------|------|------|
+| 1 | `torvox-bench/benches/` 不存在 | 待建 | 性能基准无法运行 |
+| 2 | CI 使用 `@main` 引用 | 待修 | 应固定到 SHA 或 tag |
 
 ---
 

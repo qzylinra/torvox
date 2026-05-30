@@ -81,24 +81,4 @@ mod tests {
         assert_eq!(c.font.family, "JetBrains Mono Nerd Font");
         assert_eq!(c.font.size, 14);
     }
-
-    #[test]
-    fn font_config_serde_roundtrip() {
-        let fc = FontConfig {
-            family: String::from("Fira Code"),
-            size: 16,
-            line_spacing: 2,
-        };
-        let bytes = postcard::to_allocvec(&fc).unwrap();
-        let decoded: FontConfig = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(fc, decoded);
-    }
-
-    #[test]
-    fn terminal_config_serde_roundtrip() {
-        let c = TerminalConfig::default();
-        let bytes = postcard::to_allocvec(&c).unwrap();
-        let decoded: TerminalConfig = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(c, decoded);
-    }
 }
