@@ -15,14 +15,14 @@ if not ($env.ANDROID_NDK_ROOT? | default "") {
 
 if (which cargo-ndk | length) == 0 {
     print "Installing cargo-ndk..."
-    cargo install cargo-ndk
+    cargo install cargo-ndk@4.1.2
 }
 
 let abis = ["arm64-v8a" "x86_64"]
 let triples = ["aarch64-linux-android" "x86_64-linux-android"]
 
 print "=== Cross-compiling torvox-gui-android (cdylib) ==="
-cargo ndk -t arm64-v8a -t x86_64 -o $target_dir build --manifest-path $lib_cargo_toml --profile dev
+cargo ndk -t arm64-v8a -t x86_64 -o $target_dir build --locked --manifest-path $lib_cargo_toml --profile dev
 
 for abi in $abis {
     mkdir -p ($jni_libs_dir | path join $abi)
@@ -36,12 +36,12 @@ for i in 0..(($abis | length) - 1) {
     let triple = ($triples | get $i)
     let linker = ($env.ANDROID_NDK_ROOT | path join "toolchains/llvm/prebuilt/linux-x86_64/bin" | path join $"($triple)33-clang")
     print $"--- Building torvox-exec for ($triple) ($abi) ---"
-    let env_var = $"CARGO_TARGET_($triple | str upcase | str replace -a "-")_LINKER"
+    let env_var = $"CARGO_TARGET_($triple | str upcase | str replace -a "-" "_")_LINKER"
     with-env { ($env_var): $linker } {
         cargo build -p torvox-exec --target $triple --profile dev
     }
     mkdir -p ($exec_dir | path join $abi)
-    cp ($target_dir | path join $triple "debug/torvox-exec") ($exec_dir | path join $abi)
+    cp ($target_dir | path join $triple "dev/torvox-exec") ($exec_dir | path join $abi)
     chmod +x ($exec_dir | path join $abi "torvox-exec")
     print $"Copied to ($exec_dir)/($abi)/torvox-exec"
 }

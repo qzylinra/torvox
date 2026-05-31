@@ -150,16 +150,19 @@ cargo fmt --check \
 
 ```bash
 # VT 解析器模糊 (1 小时)
-cargo fuzz run vt_parser -- -max_total_time=3600
+cargo fuzz run --fuzz-dir torvox-fuzz/fuzz fuzz_vt_parser -- -max_total_time=3600
 
 # OSC 转义模糊 (1 小时)
-cargo fuzz run osc_parser -- -max_total_time=3600
+cargo fuzz run --fuzz-dir torvox-fuzz/fuzz fuzz_osc_parse -- -max_total_time=3600
 
-# UTF-8 边缘情况模糊 (1 小时)
-cargo fuzz run utf8_parser -- -max_total_time=3600
+# Grid 调整大小模糊 (1 小时)
+cargo fuzz run --fuzz-dir torvox-fuzz/fuzz fuzz_grid_resize -- -max_total_time=3600
+
+# 键盘输入模糊 (1 小时)
+cargo fuzz run --fuzz-dir torvox-fuzz/fuzz fuzz_keyboard_input -- -max_total_time=3600
 
 # 长时间模糊 (1B 迭代, ~12 小时)
-cargo fuzz run vt_parser -- -max_total=1000000000
+cargo fuzz run --fuzz-dir torvox-fuzz/fuzz fuzz_vt_parser -- -max_total=1000000000
 ```
 
 ### 安全检查

@@ -95,11 +95,8 @@ use proptest::prelude::*;
 proptest! {
     #[test]
     fn parser_never_panics(input in "[\\x00-\\xff]{0..1000}") {
-        let mut parser = vte::Parser::new();
-        let mut performer = TestPerformer::new();
-        for byte in input.bytes() {
-            parser.advance(&mut performer, byte);
-        }
+        let mut terminal = GhosttyTerminal::new(24, 80, 50000).unwrap();
+        terminal.vt_write(&input);
     }
 
     #[test]
@@ -153,17 +150,13 @@ fn session_echo_hello() {
 ### 第 4 层: 模糊测试
 
 ```rust
-// torvox-fuzz/fuzz_targets/vt_parser.rs
+// torvox-fuzz/fuzz_targets/fuzz_vt_parser.rs
 #![no_main]
 use libfuzzer_sys::fuzzer_input;
-use vte::Parser;
 
 fn fuzz(data: &[u8]) {
-    let mut parser = Parser::new();
-    let mut performer = TestPerformer::new();
-    for byte in data {
-        parser.advance(&mut performer, *byte);
-    }
+    let mut terminal = GhosttyTerminal::new(24, 80, 50000).unwrap();
+    terminal.vt_write(data);
 }
 ```
 
@@ -199,7 +192,7 @@ fn replay_deterministic() {
 
 ### 质量门脚本
 
-见 `scripts/quality-gate.sh`。8 步质量门: fmt → clippy → nextest → proptest → geiger → Android lint → Android test → 集成测试。
+见 `scripts/quality-gate.nu`。8 步质量门: fmt → clippy → nextest → proptest → geiger → Android lint → Android test → 集成测试。
 
 ## 后果
 

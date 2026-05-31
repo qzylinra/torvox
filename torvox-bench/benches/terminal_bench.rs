@@ -1,14 +1,12 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use torvox_terminal::parser::VtParser;
-use torvox_terminal::terminal::TerminalState;
+use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
 fn bench_vt_parse_plain_text(c: &mut Criterion) {
     let input = b"Hello, World! This is a terminal benchmark.\n";
     c.bench_function("vt_parse_plain_text", |b| {
-        let mut state = TerminalState::new(24, 80).unwrap();
-        let mut parser = VtParser::new();
+        let mut terminal = GhosttyTerminal::new(24, 80, 1000).unwrap();
         b.iter(|| {
-            parser.advance(&mut state, input);
+            terminal.vt_write(input);
         });
     });
 }
@@ -16,10 +14,9 @@ fn bench_vt_parse_plain_text(c: &mut Criterion) {
 fn bench_vt_parse_sgr_sequences(c: &mut Criterion) {
     let input = b"\x1b[1mBold\x1b[0m \x1b[31mRed\x1b[0m \x1b[1;32mGreenBold\x1b[0m\n";
     c.bench_function("vt_parse_sgr_sequences", |b| {
-        let mut state = TerminalState::new(24, 80).unwrap();
-        let mut parser = VtParser::new();
+        let mut terminal = GhosttyTerminal::new(24, 80, 1000).unwrap();
         b.iter(|| {
-            parser.advance(&mut state, input);
+            terminal.vt_write(input);
         });
     });
 }
@@ -27,10 +24,9 @@ fn bench_vt_parse_sgr_sequences(c: &mut Criterion) {
 fn bench_vt_parse_cursor_movement(c: &mut Criterion) {
     let input = b"\x1b[2A\x1b[3B\x1b[4C\x1b[5D\x1b[10;20H";
     c.bench_function("vt_parse_cursor_movement", |b| {
-        let mut state = TerminalState::new(24, 80).unwrap();
-        let mut parser = VtParser::new();
+        let mut terminal = GhosttyTerminal::new(24, 80, 1000).unwrap();
         b.iter(|| {
-            parser.advance(&mut state, input);
+            terminal.vt_write(input);
         });
     });
 }
@@ -43,10 +39,9 @@ fn bench_vt_parse_large_output(c: &mut Criterion) {
         input.extend_from_slice(line);
     }
     c.bench_function("vt_parse_large_output_1k_lines", |b| {
-        let mut state = TerminalState::new(24, 80).unwrap();
-        let mut parser = VtParser::new();
+        let mut terminal = GhosttyTerminal::new(24, 80, 1000).unwrap();
         b.iter(|| {
-            parser.advance(&mut state, &input);
+            terminal.vt_write(&input);
         });
     });
 }

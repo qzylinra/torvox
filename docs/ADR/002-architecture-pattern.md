@@ -50,7 +50,7 @@
 ```
 torvox-core (无依赖, 仅 libcore)
 ↑
-torvox-terminal (依赖 torvox-core + vte + nix + serde)
+torvox-terminal (依赖 torvox-core + libghostty-vt + nix + serde)
 ↑
 torvox-renderer (依赖 torvox-core + wgpu + cosmic-text + swash)
 ↑
@@ -107,11 +107,11 @@ Ghostty 确立了此模式 (libghostty 可嵌入)，Spectra、BossTerm 和 Conne
 
 Haven 和 ConnectBot termlib 使用 libvterm (C 库) 通过 JNI。我们选择不这样做：
 
-| 因素 | libvterm (C/JNI) | vte 0.15 crate (Rust) |
+| 因素 | libvterm (C/JNI) | libghostty-vt (Rust) |
 |------|-------------------|------------------------|
-| 内存安全 | C 代码, JNI 不安全边界 | Rust 安全, 零 unsafe |
+| 内存安全 | C 代码, JNI 不安全边界 | Rust 安全, channel-based |
 | 跨语言开销 | JNI 调用 + C→Kotlin 复制 | 纯 Rust, 无跨语言边界 |
-| 锁要求 | mutex 保护每次访问 | Rust 所有权, 无锁 |
+| 锁要求 | mutex 保护每次访问 | flume channel 序列化, 无锁 |
 | 死锁风险 | 回调不可重入 (已验证) | 无回调, 无死锁可能 |
 | 图集集成 | C 不知道 GPU 图集 | 直接 Rust 类型到 wgpu |
 | 测试 | 需要 Android 模拟器 | 纯 Rust 单元测试 |

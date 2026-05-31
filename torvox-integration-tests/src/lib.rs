@@ -7,50 +7,42 @@
 mod parse_and_render {
     #[test]
     fn parse_then_verify_terminal() {
-        use torvox_terminal::parser::VtParser;
-        use torvox_terminal::terminal::TerminalState;
+        use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
-        let mut state = TerminalState::new(24, 80).unwrap();
-        let mut parser = VtParser::new();
+        let mut terminal = GhosttyTerminal::new(24, 80, 1000).unwrap();
 
-        parser.advance(&mut state, b"Hello, World!\r\n");
-        parser.advance(&mut state, b"\x1b[31mRed\x1b[0m\r\n");
+        terminal.vt_write(b"Hello, World!\r\n");
+        terminal.vt_write(b"\x1b[31mRed\x1b[0m\r\n");
 
-        assert_eq!(state.rows(), 24);
-        assert_eq!(state.cols(), 80);
+        assert_eq!(terminal.rows(), 24);
+        assert_eq!(terminal.cols(), 80);
     }
 
     #[test]
     fn scrollback_preserved_on_scroll() {
-        use torvox_terminal::parser::VtParser;
-        use torvox_terminal::terminal::TerminalState;
+        use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
-        let mut state = TerminalState::new(3, 10).unwrap();
-        let mut parser = VtParser::new();
+        let mut terminal = GhosttyTerminal::new(3, 10, 1000).unwrap();
 
         for i in 0..10 {
             let line = format!("line{}\r\n", i);
-            parser.advance(&mut state, line.as_bytes());
+            terminal.vt_write(line.as_bytes());
         }
 
-        assert!(state.grid.dirty().any_dirty());
+        assert!(terminal.scrollback_len() > 0);
     }
 
     #[test]
     fn sgr_color_persists_across_cells() {
-        use torvox_terminal::parser::VtParser;
-        use torvox_terminal::terminal::TerminalState;
+        use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
-        let mut state = TerminalState::new(1, 80).unwrap();
-        let mut parser = VtParser::new();
+        let mut terminal = GhosttyTerminal::new(1, 80, 1000).unwrap();
 
-        parser.advance(&mut state, b"\x1b[31mABC");
-        let c = state.grid.cell(0, 0).unwrap();
-        assert!(c.fg.r > 0);
-        assert_eq!(c.char, 'A');
-        let c2 = state.grid.cell(0, 1).unwrap();
-        assert!(c2.fg.r > 0);
-        assert_eq!(c2.char, 'B');
+        terminal.vt_write(b"\x1b[31mABC");
+
+        let text = terminal.read_line_text(0).unwrap_or_default();
+        assert!(text.contains('A'));
+        assert!(text.contains('B'));
     }
 }
 

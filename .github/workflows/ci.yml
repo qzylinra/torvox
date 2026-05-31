@@ -12,10 +12,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.95.0
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      - run: |
+          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
+          tar -xf /tmp/zig.tar.xz -C /tmp
+          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: |
+          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
+          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
       - run: |
           cargo fmt --check
           cargo clippy --all-targets --all-features -- -D warnings
@@ -23,18 +30,45 @@ jobs:
       - run: |
           cargo nextest run --workspace
           cargo test --workspace -- proptest
+      - run: cargo install cargo-audit && cargo audit
+      - run: cargo install cargo-geiger && cargo geiger
   no-std-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: thumbv6m-none-eabi
+      - run: |
+          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
+          tar -xf /tmp/zig.tar.xz -C /tmp
+          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: |
+          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
+          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
       - run: cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --features alloc
   android-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: x86_64-unknown-linux-gnu
+      - run: |
+          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
+          tar -xf /tmp/zig.tar.xz -C /tmp
+          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-checks
+      - run: |
+          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
+          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
+      - run: cargo build -p torvox-gui-android
+      - run: |
+          cargo install boltffi --version 0.25.1 || true
+          boltffi pack android target/debug/libtorvox_android.so --language kotlin --output-dir /tmp/boltffi-check
+          diff -r /tmp/boltffi-check android/app/src/main/java/io/torvox/bridge/ || (echo "::error::boltffi bindings are stale — regenerate with: boltffi pack android target/debug/libtorvox_android.so --language kotlin --output-dir android/app/src/main/java/io/torvox/bridge/" && exit 1)
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -48,16 +82,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: x86_64-linux-android
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk@4.1.2
+      - run: |
+          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
+          tar -xf /tmp/zig.tar.xz -C /tmp
+          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: cargo install cargo-ndk@4.1.2
       - uses: Swatinem/rust-cache@v2
         with:
           key: emulator-x86_64
-      - name: Enable KVM
-        run: |
+      - run: |
+          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
+          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
+      - run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
@@ -66,21 +105,14 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
-      - name: Build cdylib (x86_64 only for emulator)
-        run: cargo ndk -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --profile dev
-      - name: Build torvox-exec (x86_64 for emulator)
-        env:
-          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
-          CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang
-        run: |
+      - run: cargo ndk -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --profile dev
+      - run: |
           cargo build -p torvox-exec --target x86_64-linux-android --profile dev
           mkdir -p android/app/src/main/assets/bin/x86_64
           cp target/x86_64-linux-android/debug/torvox-exec android/app/src/main/assets/bin/x86_64/
-      - name: Build debug APK
-        working-directory: android
+      - working-directory: android
         run: ./gradlew assembleDebug
-      - name: Android Emulator UI Test
-        uses: reactivecircus/android-emulator-runner@v2
+      - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
           target: default

@@ -1,7 +1,11 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use thiserror::Error;
 use torvox_renderer::font::FontPipeline;
 use torvox_renderer::gpu::GpuContext;
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
+use torvox_terminal::session::Session;
 
 #[derive(Debug, Error)]
 pub enum SurfaceError {
@@ -13,42 +17,58 @@ pub enum SurfaceError {
     NoSurface,
     #[error("Render error: {0}")]
     Render(String),
+    #[error("session error: {0}")]
+    Session(String),
 }
 
 pub struct AndroidSurface {
     gpu: GpuContext,
     font_pipeline: FontPipeline,
-    terminal: GhosttyTerminal,
+    session: Option<Session>,
     atlas_width: u32,
     atlas_height: u32,
     theme: torvox_core::config::Theme,
+    rows: u32,
+    cols: u32,
+    exited: Arc<AtomicBool>,
 }
 
 impl AndroidSurface {
-    pub fn new(rows: u32, cols: u32) -> Self {
+    pub fn new(rows: u32, cols: u32, _scrollback_lines: u32) -> Self {
         let atlas_width = 2048;
         let atlas_height = 2048;
         let mut font_pipeline = FontPipeline::new(atlas_width as i32, atlas_height as i32, 14.0);
         font_pipeline.rasterize_ascii();
-        let terminal =
-            GhosttyTerminal::new(rows, cols, 50000).expect("failed to create GhosttyTerminal");
 
         Self {
             gpu: GpuContext::new_with_no_surface(),
             font_pipeline,
-            terminal,
+            session: None,
             atlas_width,
             atlas_height,
             theme: torvox_core::config::Theme::catppuccin_mocha(),
+            rows,
+            cols,
+            exited: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    pub fn spawn_session(&mut self, shell: &str) -> Result<(), SurfaceError> {
+        let session = Session::spawn(shell, self.rows, self.cols)
+            .map_err(|e| SurfaceError::Session(e.to_string()))?;
+        self.exited = session.exited_flag().clone();
+        self.session = Some(session);
+        Ok(())
     }
 
     pub fn set_native_window(
         &mut self,
         window_ptr: *mut std::ffi::c_void,
+        width: u32,
+        height: u32,
     ) -> Result<(), SurfaceError> {
         self.gpu
-            .set_surface_from_native_window(window_ptr)
+            .set_surface_from_native_window(window_ptr, width, height)
             .map_err(|e| SurfaceError::SurfaceCreation(e.to_string()))?;
 
         self.gpu
@@ -64,13 +84,22 @@ impl AndroidSurface {
     }
 
     pub fn render(&mut self) -> Result<(), SurfaceError> {
-        let instances = torvox_renderer::gpu::build_cell_instances_from_ghostty(
-            &self.terminal,
+        if let Some(session) = &mut self.session {
+            session.process_output();
+        }
+
+        let snapshot = self
+            .session
+            .as_ref()
+            .map(|s| s.terminal().take_snapshot())
+            .ok_or(SurfaceError::NoSurface)?;
+
+        let instances = torvox_renderer::gpu::build_cell_instances_from_snapshot(
+            &snapshot,
             &mut self.font_pipeline,
-            8.0,
-            16.0,
             self.atlas_width as f32,
             self.atlas_height as f32,
+            None,
         );
 
         self.gpu
@@ -79,11 +108,17 @@ impl AndroidSurface {
     }
 
     pub fn terminal(&self) -> &GhosttyTerminal {
-        &self.terminal
+        self.session
+            .as_ref()
+            .map(|s| s.terminal())
+            .expect("no session")
     }
 
     pub fn terminal_mut(&mut self) -> &mut GhosttyTerminal {
-        &mut self.terminal
+        self.session
+            .as_mut()
+            .map(|s| s.terminal_mut())
+            .expect("no session")
     }
 
     pub fn font_pipeline(&self) -> &FontPipeline {
@@ -91,11 +126,25 @@ impl AndroidSurface {
     }
 
     pub fn resize(&mut self, rows: u32, cols: u32) {
-        self.terminal.resize(rows, cols, 8, 16);
+        self.rows = rows;
+        self.cols = cols;
+        if let Some(session) = &mut self.session {
+            let _ = session.resize(rows, cols);
+        }
     }
 
     pub fn write_to_pty(&mut self, data: &[u8]) {
-        self.terminal.vt_write(data);
+        if let Some(session) = &mut self.session {
+            let _ = session.write(data);
+        }
+    }
+
+    pub fn is_exited(&self) -> bool {
+        self.exited.load(Ordering::Acquire)
+    }
+
+    pub fn has_session(&self) -> bool {
+        self.session.is_some()
     }
 
     pub fn set_font_size(&mut self, size: f32) {

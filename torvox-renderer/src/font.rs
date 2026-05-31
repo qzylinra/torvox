@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::num::NonZeroUsize;
 
 use cosmic_text::FontSystem;
+use lru::LruCache;
 use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Placement;
 use thiserror::Error;
@@ -34,9 +35,7 @@ pub struct FontPipeline {
     font_system: FontSystem,
     scaler_context: ScaleContext,
     atlas: guillotiere::AtlasAllocator,
-    glyph_cache: HashMap<GlyphKey, GlyphInfo>,
-    glyph_access: HashMap<GlyphKey, u64>,
-    access_counter: u64,
+    glyph_cache: LruCache<GlyphKey, GlyphInfo>,
     atlas_bitmap: Vec<u8>,
     atlas_width: u32,
     atlas_height: u32,
@@ -55,9 +54,7 @@ impl FontPipeline {
             font_system,
             scaler_context,
             atlas,
-            glyph_cache: HashMap::new(),
-            glyph_access: HashMap::new(),
-            access_counter: 0,
+            glyph_cache: LruCache::new(NonZeroUsize::new(10000).unwrap()),
             atlas_bitmap,
             atlas_width: atlas_width as u32,
             atlas_height: atlas_height as u32,
@@ -94,10 +91,8 @@ impl FontPipeline {
             pixel_size: self.font_size as u16,
         };
 
-        if let Some(info) = self.glyph_cache.get(&key) {
-            self.access_counter += 1;
-            self.glyph_access.insert(key, self.access_counter);
-            return Some(info.clone());
+        if let Some(info) = self.glyph_cache.get(&key).cloned() {
+            return Some(info);
         }
 
         let image = db.with_face_data(font_id, |font_data, face_index| {
@@ -121,7 +116,7 @@ impl FontPipeline {
                     height: 0,
                     placement: Placement::default(),
                 };
-                self.glyph_cache.insert(key, info.clone());
+                self.glyph_cache.put(key, info.clone());
                 return Some(info);
             }
         };
@@ -137,7 +132,7 @@ impl FontPipeline {
                 height: 0,
                 placement: image.placement,
             };
-            self.glyph_cache.insert(key, info.clone());
+            self.glyph_cache.put(key, info.clone());
             return Some(info);
         }
 
@@ -147,7 +142,10 @@ impl FontPipeline {
         {
             Some(a) => a,
             None => {
-                self.evict_lru();
+                let evict_count = (self.glyph_cache.len() / 4).max(1);
+                for _ in 0..evict_count {
+                    self.glyph_cache.pop_lru();
+                }
                 self.atlas
                     .allocate(guillotiere::size2(width + 1, height + 1))?
             }
@@ -201,27 +199,13 @@ impl FontPipeline {
             placement: image.placement,
         };
 
-        self.access_counter += 1;
-        self.glyph_access.insert(key, self.access_counter);
-        self.glyph_cache.insert(key, info.clone());
+        self.glyph_cache.put(key, info.clone());
         Some(info)
     }
 
     pub fn rasterize_ascii(&mut self) {
         for ch in 32u8..127u8 {
             self.glyph_info(ch as char);
-        }
-    }
-
-    fn evict_lru(&mut self) {
-        let evict_count = (self.glyph_cache.len() / 4).max(1);
-        let mut entries: Vec<(GlyphKey, u64)> =
-            self.glyph_access.iter().map(|(&k, &v)| (k, v)).collect();
-        entries.sort_by_key(|(_, access)| *access);
-
-        for (key, _) in entries.into_iter().take(evict_count) {
-            self.glyph_cache.remove(&key);
-            self.glyph_access.remove(&key);
         }
     }
 

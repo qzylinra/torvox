@@ -10,8 +10,9 @@ import org.junit.runner.RunWith
  * Instrumented tests for the Android app.
  * These tests run on a real Android device/emulator.
  *
- * Note: UniFFI-generated bridge types (TorvoxBridge, Shell, etc.) are only
- * available after running: cargo build -p torvox-gui-android + uniffi-bindgen generate
+ * Note: boltffi JNA bridge types (TorvoxBridge, Shell, etc.) are in
+ * io.torvox.bridge.TorvoxBridge.kt. To regenerate after Rust changes:
+ * cargo build -p torvox-gui-android && boltffi pack android
  * These tests verify basic Android functionality without the Rust bridge.
  */
 @RunWith(AndroidJUnit4::class)

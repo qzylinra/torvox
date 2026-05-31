@@ -15,33 +15,31 @@ jobs:
           components: clippy, rustfmt
           targets: aarch64-linux-android,x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
+      - run: |
+          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
+          tar -xf /tmp/zig.tar.xz -C /tmp
+          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: |
+          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
+          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
       - uses: android-actions/setup-android@v3
-      - name: Quality checks
-        run: |
+      - run: |
           cargo fmt --check
           cargo clippy --all-targets --all-features -- -D warnings
-      - name: Install cargo-ndk
-        run: cargo install cargo-ndk@4.1.2
-      - name: Build cdylib (torvox-gui-android)
-        run: cargo ndk -t arm64-v8a -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --release
-      - name: Build torvox-exec (PIE binary)
-        env:
-          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
-          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
-          CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER: /usr/local/lib/android/sdk/ndk/29.0.14206865/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang
-        run: |
+      - run: cargo install cargo-ndk@4.1.2
+      - run: cargo ndk -t arm64-v8a -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --release
+      - run: |
           cargo build -p torvox-exec --target aarch64-linux-android --release
           cargo build -p torvox-exec --target x86_64-linux-android --release
           mkdir -p android/app/src/main/assets/bin/arm64-v8a
           mkdir -p android/app/src/main/assets/bin/x86_64
           cp target/aarch64-linux-android/release/torvox-exec android/app/src/main/assets/bin/arm64-v8a/
           cp target/x86_64-linux-android/release/torvox-exec android/app/src/main/assets/bin/x86_64/
-      - name: Build APK
-        working-directory: android
+      - working-directory: android
         run: ./gradlew assembleRelease
       - uses: actions/upload-artifact@v4
         with:

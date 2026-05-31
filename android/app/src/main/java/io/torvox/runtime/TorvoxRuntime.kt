@@ -95,7 +95,7 @@ class TorvoxRuntime
             bridge = createBridge(config)
 
             val windowPtr = getNativeWindowPtr(surface)
-            bridge?.setNativeWindow(windowPtr)
+            bridge?.setNativeWindow(windowPtr, width.toInt(), height.toInt())
 
             val cellWidth = 8f
             val cellHeight = 16f

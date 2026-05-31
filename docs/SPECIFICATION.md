@@ -13,7 +13,7 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 标准 | 覆盖 | 备注 |
 |------|------|------|
 | **VT100** | ✅ 完整 | DEC AWB, CKM, DECCOLM (80/132), 原点模式, 滚动区域, 换行模式 |
-| **VT220** | ⚠️ 部分 | Paul Williams 解析器全部 15 状态, DECSC/DECRC, DECSTBM (已实现); DECDHL ❌ |
+| **VT220** | ⚠️ 部分 | GhosttyTerminal (libghostty-vt) VT 引擎, DECSC/DECRC, DECSTBM (已实现); DECDHL ❌ |
 | **VT320** | ❌ 未实现 | 8-bit 控制, DECRQSS, DECRQM, 选择性擦除, 矩形区域操作 — 均未实现 |
 | **ECMA-48** | ❌ 未实现 | 仅实现部分 CSI 序列; "所有 CSI 序列" 和完整私有模式未实现 |
 | **xterm** | ⚠️ 部分 | 256 色 ✅, 真彩色 ✅, 括号粘贴 ✅; DECSET/DECRST 仅少数模式 ❌ |
@@ -163,7 +163,7 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 配置 | TOML | `app/config.toml` | 变更时 |
 | Shell 历史 | — | Shell 原生 | — |
 
-**注意**: 不使用 `bincode`。bincode 3.0.0 被故意破坏 (RUSTSEC-2025-0141)，永久停止维护。使用 `serde` + `serde_json` 替代。
+**注意**: 不使用 `bincode`。bincode 3.0.0 被故意破坏 (RUSTSEC-2025-0141)，永久停止维护。使用 `serde` derive 替代 (生产)，`postcard 1.1` 仅用于测试回放序列化。
 
 ### 前台服务
 

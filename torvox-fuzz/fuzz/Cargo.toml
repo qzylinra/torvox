@@ -25,6 +25,12 @@ path = "fuzz_targets/fuzz_grid_resize.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "fuzz_keyboard_input"
+path = "fuzz_targets/fuzz_keyboard_input.rs"
+test = false
+bench = false
+
 [dependencies]
 torvox-core = { path = "../../torvox-core" }
 torvox-terminal = { path = "../../torvox-terminal" }

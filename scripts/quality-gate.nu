@@ -20,11 +20,11 @@ if not (cargo clippy --workspace --all-targets -- -D warnings | complete | get e
     print "FAIL: cargo clippy"
 }
 
-# [3/8] cargo test
-print "[3/8] cargo test --workspace"
-if not (cargo test --workspace | complete | get exit_code == 0) {
-    $failed | append "cargo test"
-    print "FAIL: cargo test"
+# [3/8] cargo nextest (replaces cargo test)
+print "[3/8] cargo nextest run --workspace"
+if not (cargo nextest run --workspace | complete | get exit_code == 0) {
+    $failed | append "cargo nextest"
+    print "FAIL: cargo nextest"
 }
 
 # [4/8] proptest
@@ -76,10 +76,24 @@ if ("android" | path exists) and ($env.JAVA_HOME? | default "") != "" {
 print "[8/8] cargo audit"
 if (which cargo-audit | length) > 0 {
     if not (cargo audit | complete | get exit_code == 0) {
-        print "WARN: cargo audit found vulnerabilities"
+        $failed | append "cargo audit"
+        print "FAIL: cargo audit found vulnerabilities"
     }
 } else {
     print "SKIP: cargo-audit not installed"
+}
+
+# [9/8] APK build verification
+print "[9/8] APK build (assembleDebug)"
+if ("android" | path exists) and ($env.JAVA_HOME? | default "") != "" {
+    cd android
+    if not (./gradlew assembleDebug --quiet | complete | get exit_code == 0) {
+        $failed | append "APK build"
+        print "FAIL: APK build"
+    }
+    cd ..
+} else {
+    print "SKIP: APK build (no JAVA_HOME)"
 }
 
 print ""

@@ -39,7 +39,6 @@ nix flake check --no-build
 | `cargo-clippy` | Rust lint |
 | `rustfmt` | Rust 格式化 |
 | `taplo` | TOML 格式化 |
-| `shfmt` | Shell 格式化 (注: scripts 现为 .nu Nushell 文件, shfmt 不再适用) |
 | `yamlfmt` | YAML 格式化 |
 | `typos` | 拼写检查 |
 | `ktfmt` | Kotlin 格式化 |
@@ -339,8 +338,8 @@ cargo fmt --check
 # 拼写检查
 typos
 
-# Nushell 脚本格式化 (scripts 现为 .nu 文件)
-nu scripts/format.nu
+# Nix 格式化 (所有语言)
+nix fmt
 ```
 
 ### 7.4 文档检查
@@ -368,9 +367,69 @@ nu scripts/format.nu
 
 ---
 
-## 九、执行计划
+## 九、编码规范
 
-### 9.1 已完成
+### 9.1 Shell 脚本
+
+所有 shell 脚本必须使用 **Nushell** (`.nu`)。禁止使用 bash/sh 脚本。
+
+| 规范 | 说明 |
+|------|------|
+| 首行 | `#!/usr/bin/env nu` |
+| 错误处理 | 所有外部命令检查退出码 (`try`/`catch` 或 `| complete`) |
+| 管道风格 | 每步一行，`|` 在行尾 |
+| 变量命名 | `snake_case`，不缩写 |
+| 环境变量 | 用 `$env.VAR = "val"`，不用 `load-env` |
+| 外部命令 | 用 `^command` 调用 |
+
+### 9.2 环境管理
+
+所有环境管理必须使用 **Nix**。禁止在系统 shell 中直接运行构建命令。
+
+| 规范 | 说明 |
+|------|------|
+| 开发 | 始终使用 `nix develop` |
+| 构建 | `nix develop --command cargo build` |
+| 格式化 | `nix fmt` |
+| 检查 | `nix flake check` |
+
+### 9.3 GitHub Actions
+
+| 规范 | 说明 |
+|------|------|
+| Action 版本 | 使用精确标签 (`@v4`)，不用分支 (`@main`) |
+| Step `name` | 不设置 — 消息在 run 命令中自解释 |
+| 空行 | 不添加无实际作用的空行 |
+| `uses` | 紧接 action 路径 + 版本，不换行 |
+| Job 命名 | 短横线命名 (`rust-checks`, `no-std-check`) |
+| 权限 | 显式声明 `permissions:` |
+
+### 9.4 Nix 表达式
+
+| 规范 | 说明 |
+|------|------|
+| `let in` | 不要使用 — 用 `let body = ...; in body` 或直接 `{ ... }` |
+| `rec` | 不要使用 — 用 `self` 参数或拆分定义 |
+| `with` | 限制使用 — 仅在顶级 shell 环境引入 |
+| 中间变量 | 减少中间变量，不定义只用一次的变量 |
+| 命名 | 不缩写单词 (`system` 不写成 `s`) |
+| 单行 | 简单映射可单行，复杂逻辑拆多行 |
+| flake inputs | 优先用 flake-parts |
+
+### 9.5 通用
+
+| 规范 | 说明 |
+|------|------|
+| 变量命名 | 不缩写单词 |
+| 中间变量 | 尽可能 inline，不定义只用一次的变量 |
+| 依赖管理 | shell scripts → Nushell, 环境 → Nix |
+| SPA 模型 | 每个主题只有一个权威文档，其他文档交叉引用 |
+
+---
+
+## 十、执行计划
+
+### 10.1 已完成
 
 1. ✅ 本文件 (WORKFLOW.md) — 工作流定义
 2. ✅ 更新 AUDIT.md — 反映当前状态
@@ -378,7 +437,7 @@ nu scripts/format.nu
 4. ✅ flake.nix — 添加 formatter/checks
 5. ✅ scripts — Nushell (.nu) 格式化
 
-### 9.2 持续执行
+### 10.2 持续执行
 
 1. 每次代码变更同步更新文档
 2. 每次发现新问题记录到 AUDIT.md

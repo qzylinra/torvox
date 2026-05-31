@@ -205,9 +205,9 @@ dependencies = [
 
 [[package]]
 name = "boltffi"
-version = "0.25.1"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe2ac41f6307b9aeb89fd07c2c92997999684f75c2d3d7c16a31cd3135601f6e"
+checksum = "5662bb1904d8a0791e1e9c61610d1529b47c107b71d7f56a11d71c9de8bfff06"
 dependencies = [
  "boltffi_core",
  "boltffi_macros",
@@ -215,9 +215,9 @@ dependencies = [
 
 [[package]]
 name = "boltffi_core"
-version = "0.25.1"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b31649bb4e2b6729ebf51059df1567d16f5170b288ab472ee909bee95604e7e"
+checksum = "bffbb19cfaadaa61c77d8bd41eeafca02428706a16c624ad0c3debf300cd0cb3"
 dependencies = [
  "boltffi_macros",
  "url",
@@ -226,15 +226,15 @@ dependencies = [
 
 [[package]]
 name = "boltffi_ffi_rules"
-version = "0.25.1"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a23bb3bd42923427d4793c7b476634b7d75317ba7ece33c415d2409ca1ca9d6e"
+checksum = "5d6063a40071db98255f369887c9927b09423709771fb8b4def5ff02c99394ae"
 
 [[package]]
 name = "boltffi_macros"
-version = "0.25.1"
+version = "0.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ba6af59fa521a2273927db12264653cf00180caaf5e82fab2ee9339077a3fcf"
+checksum = "33e78b79cf977f97ebc3f7f2b0ae3526fe366851848f5e11781e10324a9939cc"
 dependencies = [
  "boltffi_ffi_rules",
  "proc-macro2",
@@ -932,6 +932,8 @@ version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 dependencies = [
+ "allocator-api2",
+ "equivalent",
  "foldhash 0.1.5",
 ]
 
@@ -1333,6 +1335,15 @@ name = "log"
 version = "0.4.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "616ec5685824bcc94416c6d4a7a446eea774a31efd7062c8480ba6fd06d7a6e5"
+
+[[package]]
+name = "lru"
+version = "0.12.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "234cf4f4a04dc1f57e24b96cc0cd600cf2af460d4161ac5ecdd0af8e1f3b2a38"
+dependencies = [
+ "hashbrown 0.15.5",
+]
 
 [[package]]
 name = "memchr"
@@ -2662,6 +2673,7 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "thiserror 2.0.18",
+ "unicode-width",
 ]
 
 [[package]]
@@ -2709,6 +2721,7 @@ dependencies = [
  "fontdb",
  "guillotiere",
  "libghostty-vt",
+ "lru",
  "pollster",
  "raw-window-handle",
  "swash",
@@ -2731,7 +2744,6 @@ dependencies = [
  "proptest",
  "thiserror 2.0.18",
  "torvox-core",
- "vte",
 ]
 
 [[package]]
@@ -2840,16 +2852,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vte"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5924018406ce0063cd67f8e008104968b74b563ee1b85dde3ed1f7cb87d3dbd"
-dependencies = [
- "arrayvec",
- "memchr",
-]
 
 [[package]]
 name = "wait-timeout"

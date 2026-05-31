@@ -17,7 +17,7 @@
 1. 创建 workspace `Cargo.toml` (edition 2024, resolver 2)
 2. 创建 `rust-toolchain.toml` (固定 stable 版本)
 3. 创建 `torvox-core/` — `no_std` crate, 骨架 `lib.rs`
-4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `vte 0.15`, `nix 0.31`, `serde` 依赖
+4. 创建 `torvox-terminal/` — 骨架 `lib.rs`, 添加 `libghostty-vt`, `nix 0.31`, `serde` 依赖
 5. 创建 `torvox-renderer/` — 骨架 `lib.rs`, 添加 `wgpu v29`, `cosmic-text 0.19`, `swash 0.2.7`, `guillotiere 0.7` 依赖
 6. 创建 `torvox-gui-android/` — 骨架 `lib.rs`, 添加 `boltffi 0.25` 依赖
 7. ~~创建 `torvox-bridge-types/`~~ — 类型已合并到 `torvox-gui-android/src/bridge.rs`
@@ -53,12 +53,12 @@
 
 ### P0.3 — Android 外壳
 
-**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.00。Kotlin `MainActivity` + Hilt DI。Rust 通过 `scripts/build-android-libs.sh` (cargo-ndk v4) 编译。`System.loadLibrary("torvox_android")` 成功。
+**交付物**: Gradle 项目含 Kotlin 2.3.21 + Compose BOM 2026.05.00。Kotlin `MainActivity` + Hilt DI。Rust 通过 `scripts/build-android-libs.nu` (cargo-ndk v4) 编译。`System.loadLibrary("torvox_android")` 成功。
 
 **详细步骤**:
 1. 创建 `android/` 目录结构 (app, gradle, settings.gradle.kts, build.gradle.kts)
 2. 配置 AGP 9.0.1, Kotlin 2.3.21, Compose BOM 2026.05.00
-3. 配置 `scripts/build-android-libs.sh` (cargo-ndk v4 交叉编译)
+3. 配置 `scripts/build-android-libs.nu` (cargo-ndk v4 交叉编译)
 4. 创建 `TorvoxApp.kt` — Application 类 + @HiltAndroidApp
 6. 创建 `MainActivity.kt` — 单 Activity, Compose 导航
 7. 创建 `TerminalViewModel.kt` — 状态管理骨架
@@ -86,11 +86,11 @@
 5. 创建 `.github/workflows/release.yml`:
    - 触发: 标签 v*
    - 步骤: cargo ndk build → assembleRelease → 签名 → GitHub Release
-6. 创建 `scripts/quality-gate.sh`
+6. 创建 `scripts/quality-gate.nu`
 7. 创建 `rust-toolchain.toml`
 8. 更新 `.gitignore` (cargo-ndk v4 输出路径等)
 
-**验证**: `./scripts/quality-gate.sh` 通过 (cargo 部分)
+**验证**: `./scripts/quality-gate.nu` 通过 (cargo 部分)
 
 ### P0.5 — PTY 验证
 
@@ -133,7 +133,7 @@
 
 ### P1.1 — VT 解析器
 
-**交付物**: `torvox-terminal::parser` — vte 0.15 VT 解析器 (Paul Williams FSM)。`Grid` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
+**交付物**: `torvox-terminal::ghostty_terminal` — GhosttyTerminal (libghostty-vt) VT 引擎。`GridSnapshot` 在输入上变更。所有光标、擦除、SGR 的 CSI 序列。通过 50% vttest。
 
 **详细步骤**:
 1. 使用 Ghostty VT Terminal API 处理所有 VT 序列
@@ -161,7 +161,7 @@
 **详细步骤**:
 1. 实现 `Session` 编排器 (拥有 PtyPair + Grid + Parser)
 2. PTY 读取线程: 阻塞 `read()` → `flume bounded channel` → 解析任务
-3. VT 解析任务: 从通道读取字节 → `vte::Perform` trait → Grid 变更
+3. VT 解析任务: 从通道读取字节 → GhosttyTerminal → GridSnapshot
 4. 脏区域通知: Grid 变更 → `Condvar` → 渲染线程
 5. 输入写入: `InputEngine::process()` → VT 转义编码 → PTY `write()`
 6. 调整大小: `resize(rows, cols)` → `ioctl(TIOCSWINSZ)` + Grid 调整
@@ -177,12 +177,12 @@
 **交付物**: `torvox-renderer::font` — `cosmic-text 0.19` 成形, `swash 0.2.7`/`skrifa 0.42` 缩放/光栅化, `guillotiere 0.7` 图集。捆绑 JetBrains Mono Nerd Font。初始仅 ASCII。
 
 **详细步骤**:
-1. 实现 `FontPipeline` 结构 (fontdb → cosmic-text → swash/skrifa → etagere)
+1. 实现 `FontPipeline` 结构 (fontdb → cosmic-text → swash/skrifa → guillotiere)
 2. `fontdb` 字体发现: 系统字体 + 捆绑字体
 3. `cosmic-text` 文本成形: 字形簇 + 光标位置
 4. `skrifa` 字体缩放: 请求像素大小的字形轮廓
 5. `swash` 光栅化: 轮廓 → 位图 (包括彩色 emoji)
-6. `etagere` 图集打包: 2048×2048 初始, 可扩展到 4096×4096
+6. `guillotiere` 图集打包: 2048×2048 初始, 可扩展到 4096×4096
 7. LRU 缓存: 按最后帧访问排序, 64MB 上限 → 驱逐最旧
 8. 字形查找: `hash(glyph_id + pixel_size) → 图集 UV`
 9. 初始仅 ASCII (95 可打印字符), 预光栅化启动
@@ -259,14 +259,14 @@
 2. ✅ 触摸滚动 (fling 手势) — TerminalSurface GestureDetector
 3. ✅ 滚动位置指示器 — onScrollChanged callback
 4. ✅ 滚动时锁定键盘输入 — isScrolling 状态
-5. ⬜ 搜索功能 (在回滚中查找文本)
+5. ✅ 搜索功能 (在回滚中查找文本)
 
 ### P2.2 — 选择
 
 1. ✅ 字符/词/行/块选择模式 — SelectionMode枚举 + ViewModel状态管理
 2. ⬜ 放大镜精确选择 (Android Maginifier)
 3. ✅ 复制到剪贴板 (Android ClipboardManager) — TerminalViewModel.copySelectionToClipboard
-4. ⬜ 检测到链接时打开 URL (Intent.ACTION_VIEW) — TerminalViewModel.openUrl已实现
+4. ✅ 检测到链接时打开 URL (Intent.ACTION_VIEW) — TerminalViewModel.openUrl已实现
 5. ⬜ OSC 8 超链接悬停高亮
 6. ⬜ 语义选择 (OSC 133 Shell 集成)
 

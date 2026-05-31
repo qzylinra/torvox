@@ -129,8 +129,8 @@
 |----|------|
 | 核心引擎 | Rust (stable, Edition 2024, MSRV 1.95) |
 | GPU 渲染 | wgpu 29 (Vulkan) |
-| VT 解析器 | vte 0.15 (Paul Williams FSM) |
-| FFI 绑定 | boltffi 0.25 (Rust 宏) / UniFFI 生成的 Kotlin 绑定 (待用 boltffi 重新生成) |
+| VT 解析器 | libghostty-vt (GhosttyTerminal, channel-based) |
+| FFI 绑定 | boltffi 0.25 (JNA 桥接, TorvoxBridge.kt) |
 | Android UI | Kotlin 2.3.21 + Compose BOM 2026.05.00 + Material 3 |
 | DI | Hilt 2.59.2 + KSP 2.3.9 |
 | 持久化 | DataStore Preferences |
@@ -189,6 +189,7 @@
 | `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
 | `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
 | `scripts/build-android-libs.nu` | cargo-ndk 交叉编译 + torvox-exec 构建 | 替代 rust-android-gradle |
+| `scripts/generate-bindings.nu` | boltffi Kotlin 绑定生成 | 替代旧 generate-bindings.sh |
 | `scripts/quality-gate.nu` | 8 步质量门 | 提交前必须通过 |
 | `flake.nix` | 完整 Nix 开发环境 | 使用 flake-parts，需要 allowUnfree |
 
@@ -196,8 +197,8 @@
 
 # 第四部分: 当前状态
 
-- **阶段**: 1 完成 (终端引擎) — P0.1–P0.6, P1.1–P1.6 全部完成
-- **下一步**: P2.1 回滚缓冲UI (Grid scrollback已实现, Kotlin触摸滚动UI待完成)
+- **阶段**: 2 完成 — P0.1–P0.6, P1.1–P1.6, P2.1–P2.5 全部完成
+- **下一步**: P3 审计修复 (已完成大部分)
 
 ## 阶段 0 完成内容
 
@@ -214,7 +215,7 @@
 
 | 里程碑 | 交付物 | 状态 |
 |--------|--------|------|
-| P1.1 | VT 解析器 (vte 0.15, Paul Williams FSM) | ✅ 完成 |
+| P1.1 | VT 解析器 (libghostty-vt, GhosttyTerminal) | ✅ 完成 |
 | P1.2 | PTY 会话集成 (flume SPSC) | ✅ 完成 |
 | P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → guillotiere) | ✅ 完成 |
 | P1.4 | GPU 渲染管线 (实例化四边形, WGSL 着色器) | ✅ 完成 |
@@ -237,15 +238,14 @@
 |------|------|------|
 | `torvox-core` (9 模块) | **完整** | Cell, Attrs (10 SGR), Color, DirtyMask (Vec<u64>), Grid (含 scrollback + GridSnapshot trait), Line, Config, Cursor, Selection, Unicode, Event, Ansi |
 | `torvox-terminal/pty.rs` | **完整** | PtyPair: spawn, resize, read/write, Drop (增量终止), 非阻塞, 4 个 Linux 测试 |
-| `torvox-terminal/parser.rs` | **完整** | VtParser 包装 vte::Parser, advance 方法 |
-| `torvox-terminal/terminal.rs` | **完整** | TerminalState + vte::Perform impl, 132 测试 (含 proptest), 就地 insert/delete chars |
-| `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + TerminalState + parser + flume channel + Condvar 事件通知, 4 个集成测试 |
+| `torvox-terminal/ghostty_terminal.rs` | **完整** | Channel-based GhosttyTerminal: flume command channel + 专用线程, GridSnapshot, 11 公共方法 |
+| `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + GhosttyTerminal + flume channel + Condvar 事件通知, 4 个集成测试 |
 | `torvox-terminal/keyboard.rs` | **完整** | InputEngine: Kitty 协议 + VT 传统编码 + 鼠标 SGR, 43 个测试 |
 | `torvox-renderer` | **完整** | FontPipeline (fontdb+cosmic-text+swash+guillotiere, LRU eviction, 7 测试), GpuContext (wgpu v29, cell.wgsl, 7 测试), Android Surface 支持 |
 | `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), BridgeTheme, Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
-| `torvox-gui-android/surface.rs` | **完整** | AndroidSurface: GPU 管线 + 字体 + 终端状态, set_native_window, render (使用 GridSnapshot) |
+| `torvox-gui-android/surface.rs` | **完整** | AndroidSurface: GPU 管线 + 字体 + Session (PTY+terminal+parser), set_native_window (自动 spawn), render, write_to_pty (真正写 PTY) |
 | `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |
-| `torvox-fuzz` | **功能** | 3 个模糊目标 (fuzz_vt_parser, fuzz_osc_parse, fuzz_grid_resize), cargo-fuzz 配置完整 |
+| `torvox-fuzz` | **功能** | 4 个模糊目标 (fuzz_vt_parser, fuzz_osc_parse, fuzz_grid_resize, fuzz_keyboard_input), cargo-fuzz 配置完整 |
 | `torvox-integration-tests` | **功能** | 4 个集成测试 (parse_then_verify_terminal, scrollback_preserved_on_scroll, sgr_color_persists_across_cells, session_spawn_and_write) |
 | `torvox-bench` | **功能** | 4 个 criterion 基准测试 (plain_text, sgr, cursor, 1k_lines) |
 | Android Kotlin | **功能** | TorvoxApp, MainActivity, TerminalViewModel (+settings), TerminalScreen (+topbar), ModifierBar, SettingsScreen (+theme/shell/font), ForegroundService, ExecInstaller |
@@ -341,6 +341,12 @@
 | 17 | bridge.rs `shell: String` 无法表达 "系统默认" | 改为 `Shell` 枚举 (SystemDefault/Custom)，与 core 的 Shell 对齐，避免空字符串 hack | 本次修复 |
 | 18 | boltffi `#[export]` 在 impl 块上要求 `pub` 方法 | 方法必须是 `pub` 才能生成 C 导出函数。私有方法不会产生 `boltffi_torvox_bridge_*` 符号 | 本次修复 |
 | 19 | UniFFI 与 boltffi 绑定不兼容 | UniFFI 生成 `uniffi_*` 函数名，boltffi 生成 `boltffi_*` 函数名。切换 FFI 框架后 Kotlin 绑定必须重写 | 本次修复 |
+| 20 | `AndroidSurface.write_to_pty` 调用 `vt_write` 而非 PTY | Surface 需拥有 `Session` (PTY+terminal+parser)，而非独立的 GhosttyTerminal。`write_to_pty` 必须走 `Session::write()` → PTY master fd | P3 修复 |
+| 21 | Grid scrollback `Vec::remove(0)` O(n) | 改为 `VecDeque<Line>`，`push_back` + `pop_front` 均 O(1)。`drain(..excess)` 也替换为循环 `pop_front()` | P3 修复 |
+| 22 | 手写 unicode.rs 缺少 ZWJ/variation selector | 替换为 `unicode-width 0.2` crate (no_std + CJK feature)，完整 UAX #11 实现 | P3 修复 |
+| 23 | Nightly CI 缺少 Zig + libghostty-vt patch | fuzz/miri/bench/geiger job 都依赖 libghostty-vt-sys 编译，需要 Zig + `git clone + git apply` | P3 修复 |
+| 24 | `GhosttyTerminal.history_size()` 不存在 | libghostty-vt Terminal API 是 `scrollback_rows()` 而非 `history_size()`。API 命名与自建 TerminalState 不同 | P3 修复 |
+| 25 | GhosttyTerminal channel-based 后 `resize()` 签名变更 | `resize` 只需 `(rows, cols)` 两参数，不再需要 `(cell_width, cell_height)` — libghostty-vt 内部管理 | P3 修复 |
 
 ---
 
@@ -367,12 +373,7 @@ cd android && ./gradlew lint                       # Kotlin lint
 cd android && ./gradlew test                       # Kotlin 测试
 
 # ── boltffi 绑定生成 ──────────────────────────────────
-# 先构建 cdylib，再生成 Kotlin 绑定:
-cargo build -p torvox-gui-android
-boltffi pack android \
-  target/debug/libtorvox_android.so \
-  --language kotlin \
-  --output-dir android/app/src/main/java/io/torvox/bridge/
+nu scripts/generate-bindings.nu # 构建并生成 Kotlin 绑定
 
 # ── 质量门 ───────────────────────────────────────────
 nu scripts/quality-gate.nu                          # 8 步全量质量门
@@ -420,33 +421,7 @@ nix develop --command cargo nextest  # 直接运行
 
 # 第七部分: 技术版本锁定
 
-完整版本表见 `docs/ARCHITECTURE.md`。以下是最关键的锁定项:
-
-| 技术 | 版本 | 注意 |
-|------|------|------|
-| Rust edition | 2024 | workspace 强制 |
-| Rust MSRV | 1.95 | package.rust-version |
-| wgpu | 29 | Surface API 变更: InstanceDescriptor.display 是 Option |
-| vte | 0.15 | VT 解析器 (Paul Williams 状态机) |
-| nix | 0.31 | PTY (openpty/fork/ioctl) |
-| cosmic-text | 0.19 | 文本整形 |
-| swash | 0.2.7 | 字体光栅化 (内部用 skrifa 做 scaling) |
-| guillotiere | 0.7 | 货架打包图集 |
-| boltffi | 0.25 | Kotlin 绑定生成 |
-| flume | 0.12 | 无锁 SPSC 通道 (PTY→解析器) |
-| thiserror | 2 | 错误类型 (torvox-core 中 optional) |
-| proptest | 1.11 | 属性测试 |
-| AGP | 9.0.1 | |
-| Kotlin | 2.3.21 | compose 插件 |
-| Compose BOM | 2026.05.00 | |
-| Hilt | 2.59.2 | 需 AGP 9.0+ |
-| KSP | 2.3.9 | 替代 kapt |
-| Gradle | 9 | |
-| JDK | 17 (Temurin) | |
-| NDK | 29.0.14206865 (r29) | |
-| minSdk / targetSdk | 33 / 36 | Android 13+ / 16 |
-
-**不要自行升级版本**。如需变更，先更新 ARCHITECTURE.md 版本锁定表，再改 Cargo.toml / build.gradle.kts。
+完整版本锁定表见 `docs/ARCHITECTURE.md §技术版本锁定`。**不要自行升级版本**。如需变更，先更新 ARCHITECTURE.md 版本锁定表，再改 Cargo.toml / build.gradle.kts。
 
 ---
 
@@ -482,7 +457,7 @@ nix develop --command cargo nextest  # 直接运行
 | 格式化 | `ktfmt` 强制 | |
 | 渲染 | SurfaceView 宿主 Rust wgpu v29 Surface，**不用 Canvas** | ADR 003 |
 | 前台服务 | `FOREGROUND_SERVICE_SPECIAL_USE` | AndroidManifest 中声明 foregroundServiceType |
-| JNA | `net.java.dev.jna:jna:5.17.0@aar` | boltffi 运行时依赖 |
+| JNA | `net.java.dev.jna:jna:5.18.1@aar` | boltffi 运行时依赖 |
 | AGP 插件 | 不使用 `org.jetbrains.kotlin.android` — AGP 9.0+ 内置 Kotlin | 用 KSP 2.3.9 替代 kapt |
 
 ## Git
@@ -493,6 +468,41 @@ nix develop --command cargo nextest  # 直接运行
 | 分支 | `phase-N/*` 用于阶段工作，`fix/*` 用于修复 | |
 | PR | Squash merge 到 `main`。每个 PR 一个逻辑提交 | 保持历史清晰 |
 | Cargo.lock | 提交到版本控制 | 二进制项目需要可复现构建 |
+
+## Nix
+
+| 约定 | 规则 | 理由/注意 |
+|------|------|-----------|
+| 表达式风格 | 不写 `let in` — 用 `let body = ...; in body` 或直接 `{ ... }` | `let in` 增加嵌套，不利于阅读 |
+| `rec` | 不使用 `rec` — 用 `self` 参数或拆分定义 | rec 引入惰性求值陷阱 |
+| `with` | 限制使用 `with` — 仅在顶级 shell 环境引入 | `with` 遮蔽作用域，难以调试 |
+| 中间变量 | 减少中间变量，不定义只用一次的变量 | inline 表达式更清晰 |
+| 命名 | 不缩写单词 (`system` 不写成 `s`, `pkgs` 是惯例但 body 内不缩写) | 可读性优先 |
+| 单行 | 简单映射 ({ a = b; }) 可单行，复杂逻辑拆多行 | |
+| flake inputs | 优先用 flake-parts，不用 flake-utils | flake-parts 更现代，支持 system 枚举 |
+
+## Nushell
+
+| 约定 | 规则 | 理由/注意 |
+|------|------|-----------|
+| 首行 | 每个 .nu 文件首行 `#!/usr/bin/env nu` | shebang 确保直接执行 |
+| 错误处理 | 所有外部命令调用检查退出码 (`try`/`catch` 或 `| complete`) | 避免静默失败 |
+| 管道风格 | 每步一行，`|` 在行尾 | 可读性 |
+| 变量命名 | `snake_case`，不缩写 | |
+| 环境变量 | 用 `$env.VAR = "val"`，不用 `load-env` | |
+| 外部命令 | 用 `^command` 调用外部命令 | 避免与 builtin 冲突 |
+
+## GitHub Actions
+
+| 约定 | 规则 | 理由/注意 |
+|------|------|-----------|
+| Action 版本 | 使用精确标签 (`@v4`) 而非分支 (`@main`) | 可复现构建 |
+| Step `name` | 不设置 `name` 字段 — 消息在 run 命令中自解释 | 减少 YAML 冗余 |
+| 空行 | 不在 workflow 文件中添加无实际作用的空行 | 简洁性 |
+| `uses` 参数 | `uses` 紧接 action 路径 + 版本，不换行 | |
+| Job 名 | 短横线命名 (`rust-checks`, `no-std-check`) | |
+| 权限 | 显式声明 `permissions:` | 最小权限原则 |
+| `run` 命令 | 多行命令用 `\|` 多行块，避免 `&&` 链过长 |
 
 ---
 
@@ -508,7 +518,7 @@ nix develop --command cargo nextest  # 直接运行
 | L1 单元 | `cargo nextest` + 内联 `#[test]` | 每 PR | 每个公共函数 |
 | L2 属性 | `proptest 1.11` (10K+ 用例) | 每 PR | VT 解析器、Grid、PTY 编码 |
 | L3 集成 | `torvox-integration-tests` | 每 PR | 跨 crate 交互、会话生命周期 |
-| L4 模糊 | `cargo-fuzz` (3 目标, 1B+ 迭代/夜) | 每夜 | 零崩溃 |
+| L4 模糊 | `cargo-fuzz` (4 目标, 1B+ 迭代/夜) | 每夜 | 零崩溃 |
 
 ## 确定性回放测试
 
@@ -535,7 +545,7 @@ nix develop --command cargo nextest  # 直接运行
 ```
 torvox-core (no_std, 零依赖)
       ↑
-torvox-terminal (nix, vte, crossbeam)
+torvox-terminal (nix, libghostty-vt, flume)
       ↑
 torvox-renderer (wgpu, cosmic-text, swash, guillotiere)
       ↑
@@ -546,24 +556,16 @@ torvox-gui-android (boltffi, 依赖上述所有)
 
 ## 线程模型
 
-| 线程 | 职责 | 注意 |
-|------|------|------|
-| PTY 读取线程 | `read()` → crossbeam SPSC → VT 解析器 | 阻塞 I/O，独立线程 |
-| VT 解析器线程 | 消费 SPSC，更新 Grid | Arc<Mutex<Grid>> |
-| 渲染线程 | DirtyMask → 图集查找 → 实例缓冲区 → wgpu submit | **单线程** (wgpu 设备在自己线程) |
-| wgpu 内部线程 | 1-2 个 Vulkan 内部线程 | wgpu 管理 |
-| Android 主线程 | Compose UI, 事件分发 | 不做重计算 |
+完整线程模型见 `docs/ARCHITECTURE.md §线程模型`。
 
-空闲时总线程数: 4-5
+关键要点:
+- PTY 读取线程: 阻塞 `read()` → flume bounded channel → GhosttyTerminal (channel-based)
+- 渲染线程: 单线程, 每会话独立, DirtyMask 驱动
+- 空闲时总线程数: 4-5
 
 ## 数据流
 
-```
-PTY write → kernel → read() → raw bytes → crossbeam SPSC
-  → VT Parser → Grid + DirtyMask (Vec<u64>分区) → notify
-  → RenderThread → glyph atlas lookup → instance buffer
-  → wgpu submit → SurfaceView
-```
+完整数据流见 `docs/ARCHITECTURE.md §数据流`。
 
 ## 关键不变量
 
@@ -670,8 +672,8 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 | 1 | `torvox-bench` 已有基准骨架 | ✅ 已修复 | criterion benchmarks 已添加 |
 | 2 | CI `@main` 引用 | ✅ 已修复 | 所有 actions 固定到 v4/v3/v2 |
 | 3 | `extractSelectedText()` 返回占位符 | 待修 | 需要从 grid 读取实际内容 |
-| 4 | Grid scrollback 使用 `Vec::remove(0)` | 待优化 | 性能问题，需 ring buffer |
-| 5 | Unicode 宽度实现不完整 | 待修 | 缺少 ZWJ、variation selector 等 |
+| 4 | Grid scrollback 使用 `Vec::remove(0)` | ✅ 已修复 | 改为 `VecDeque`，`push_back` + `pop_front` O(1) |
+| 5 | Unicode 宽度实现不完整 | ✅ 已修复 | 替换为 `unicode-width 0.2` crate (no_std + CJK) |
 | 6 | boltffi `#[export]` 要求 `pub` 方法 | ✅ 已修复 | 所有 bridge 方法已改为 pub |
 | 7 | CI 模拟器测试需 Rust 交叉编译 | ✅ 已修复 | CI 已添加 cargo-ndk 步骤 |
 | 8 | ~~`echo_cells()` 是空操作~~ | ✅ 已移除 | 已在本次会话中删除 |

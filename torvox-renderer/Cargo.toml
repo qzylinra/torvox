@@ -17,6 +17,7 @@ swash = { workspace = true }
 guillotiere = { workspace = true }
 thiserror = { workspace = true }
 raw-window-handle = { workspace = true }
+lru = { workspace = true }
 pollster = "0.4"
 winit = { version = "0.30", optional = true }
 

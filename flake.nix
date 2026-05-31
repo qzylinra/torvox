@@ -1,12 +1,10 @@
 {
   description = "Torvox — Android 终端模拟器";
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
     fenix.url = "github:nix-community/fenix";
   };
-
   outputs =
     inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
@@ -14,16 +12,24 @@
         "x86_64-linux"
         "aarch64-linux"
       ];
-
       perSystem =
-        { pkgs, system, ... }:
+        {
+          pkgs,
+          system,
+          ...
+        }:
         {
           _module.args.pkgs = import inputs.nixpkgs {
             inherit system;
-            config.allowUnfree = true;
+            config.allowUnfreePredicate =
+              pkg:
+              builtins.elem pkg.pname [
+                "androidsdk"
+                "android-studio-stable"
+                "jdk"
+              ];
             overlays = [ inputs.fenix.overlays.default ];
           };
-
           packages.rust-toolchain = pkgs.fenix.stable.withComponents [
             "cargo"
             "clippy"
@@ -31,14 +37,11 @@
             "rustc"
             "rustfmt"
           ];
-
-          # ── 格式化器 ──────────────────────────────────────
           formatter = pkgs.nixfmt-tree.override {
-            nixfmtPackage = pkgs.nixfmt-rs;
+            nixfmtPackage = pkgs.nixfmt;
             runtimeInputs = [
               pkgs.taplo
               pkgs.yamlfmt
-              pkgs.shfmt
             ];
             settings.formatter = {
               toml = {
@@ -53,23 +56,8 @@
                   "*.yml"
                 ];
               };
-              shell = {
-                command = "shfmt";
-                options = [
-                  "-w"
-                  "-i"
-                  "2"
-                  "-ci"
-                ];
-                includes = [
-                  "*.sh"
-                  "*.bash"
-                ];
-              };
             };
           };
-
-          # ── 质量检查 ──────────────────────────────────────
           checks =
             let
               toolchain = pkgs.fenix.stable.withComponents [
@@ -79,99 +67,90 @@
                 "rustc"
                 "rustfmt"
               ];
-              native-dependencies = [
+              native_dependencies = [
                 toolchain
                 pkgs.cargo-nextest
                 pkgs.pkg-config
                 pkgs.openssl
               ];
-              copy-source = "cp -r ${./.} . && chmod -R u+w .";
+              copy_source = "cp -r ${./.} . && chmod -R u+w .";
             in
             {
               clippy =
                 pkgs.runCommand "check-clippy"
                   {
-                    nativeBuildInputs = native-dependencies;
-                    RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+                    nativeBuildInputs = native_dependencies;
                     LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
                       pkgs.pkg-config
                       pkgs.openssl
                     ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     cargo clippy -- -D warnings
                     touch $out
                   '';
-
               fmt =
                 pkgs.runCommand "check-fmt"
                   {
                     nativeBuildInputs = [ toolchain ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     cargo fmt --check
                     touch $out
                   '';
-
               tests =
                 pkgs.runCommand "check-tests"
                   {
-                    nativeBuildInputs = native-dependencies;
-                    RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+                    nativeBuildInputs = native_dependencies;
                     LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
                       pkgs.pkg-config
                       pkgs.openssl
                     ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     cargo nextest run --workspace
                     touch $out
                   '';
-
               proptest =
                 pkgs.runCommand "check-proptest"
                   {
-                    nativeBuildInputs = native-dependencies;
-                    RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+                    nativeBuildInputs = native_dependencies;
                     LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
                       pkgs.pkg-config
                       pkgs.openssl
                     ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     cargo test --workspace -- proptest
                     touch $out
                   '';
-
               typos =
                 pkgs.runCommand "check-typos"
                   {
                     nativeBuildInputs = [ pkgs.typos ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     typos
                     touch $out
                   '';
-
               nixfmt =
                 pkgs.runCommand "check-nixfmt"
                   {
-                    nativeBuildInputs = [ pkgs.nixfmt-rs ];
+                    nativeBuildInputs = [ pkgs.nixfmt ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     find . -name '*.nix' \
                       -not -path './target/*' \
                       -not -path './.git/*' \
                       -exec nixfmt --check {} +
                     touch $out
                   '';
-
               cargo-deny =
                 pkgs.runCommand "check-cargo-deny"
                   {
@@ -181,11 +160,10 @@
                     ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     cargo deny check
                     touch $out
                   '';
-
               cargo-audit =
                 pkgs.runCommand "check-cargo-audit"
                   {
@@ -195,11 +173,10 @@
                     ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     cargo audit
                     touch $out
                   '';
-
               cargo-machete =
                 pkgs.runCommand "check-cargo-machete"
                   {
@@ -209,20 +186,17 @@
                     ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     cargo machete
                     touch $out
                   '';
-
               markdownlint =
                 pkgs.runCommand "check-markdownlint"
                   {
-                    nativeBuildInputs = [
-                      pkgs.nodePackages.markdownlint-cli
-                    ];
+                    nativeBuildInputs = [ pkgs.nodePackages.markdownlint-cli ];
                   }
                   ''
-                    ${copy-source}
+                    ${copy_source}
                     find . -name '*.md' \
                       -not -path './target/*' \
                       -not -path './.git/*' \
@@ -231,12 +205,9 @@
                     touch $out
                   '';
             };
-
-          # ── 开发环境 ──────────────────────────────────────
           devShells.default = pkgs.mkShell {
             name = "torvox-dev";
             packages = [
-              # Rust
               (pkgs.fenix.stable.withComponents [
                 "cargo"
                 "clippy"
@@ -252,23 +223,16 @@
               pkgs.cargo-deny
               pkgs.cargo-machete
               pkgs.rust-analyzer
-
-              # Android
               pkgs.kotlin
               pkgs.gradle_9
               pkgs.ktfmt
               pkgs.ktlint
               pkgs.android-tools
-
-              # 代码质量
               pkgs.nushell
               pkgs.taplo
               pkgs.yamlfmt
-              pkgs.shfmt
               pkgs.typos
               pkgs.nodePackages.markdownlint-cli
-
-              # 原生依赖
               pkgs.pkg-config
               pkgs.openssl
             ];

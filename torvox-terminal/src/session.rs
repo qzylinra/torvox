@@ -127,7 +127,7 @@ impl Session {
 
     pub fn resize(&mut self, rows: u32, cols: u32) -> Result<(), SessionError> {
         self.pty.resize(rows as u16, cols as u16)?;
-        self.terminal.resize(rows, cols, 8, 16);
+        self.terminal.resize(rows, cols);
         Ok(())
     }
 
@@ -151,6 +151,10 @@ impl Session {
 
     pub fn is_exited(&self) -> bool {
         self.exited.load(Ordering::Acquire)
+    }
+
+    pub fn exited_flag(&self) -> Arc<AtomicBool> {
+        self.exited.clone()
     }
 
     pub fn terminal(&self) -> &GhosttyTerminal {

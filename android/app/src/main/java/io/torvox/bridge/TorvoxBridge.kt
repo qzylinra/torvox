@@ -228,6 +228,8 @@ private interface TorvoxNative : Library {
     fun boltffi_torvox_bridge_set_native_window(
         handle: Long,
         window_ptr: Long,
+        width: Int,
+        height: Int,
     ): Pointer?
 
     fun boltffi_torvox_bridge_render(handle: Long): Pointer?
@@ -263,6 +265,11 @@ private interface TorvoxNative : Library {
     fun boltffi_torvox_bridge_get_theme_names(handle: Long): Pointer?
 
     fun boltffi_torvox_bridge_list_fonts(handle: Long): Pointer?
+
+    fun boltffi_torvox_bridge_search_in_scrollback(
+        handle: Long,
+        query: String?,
+    ): Pointer?
 
     fun boltffi_last_error_message(): ByteArray?
 }
@@ -323,7 +330,13 @@ class TorvoxBridge(
         cols: UInt,
     ): Int = callOk({ it.boltffi_torvox_bridge_spawn_terminal(handle, rows.toInt(), cols.toInt()) }) { it.readI32() }
 
-    fun setNativeWindow(windowPtr: Long) = callUnit { it.boltffi_torvox_bridge_set_native_window(handle, windowPtr) }
+    fun setNativeWindow(
+        windowPtr: Long,
+        width: Int,
+        height: Int,
+    ) = callUnit {
+        it.boltffi_torvox_bridge_set_native_window(handle, windowPtr, width, height)
+    }
 
     fun render() = callUnit { it.boltffi_torvox_bridge_render(handle) }
 
@@ -360,6 +373,16 @@ class TorvoxBridge(
     fun listFonts(): List<String> {
         val p = ensureLib().boltffi_torvox_bridge_list_fonts(handle) ?: return emptyList()
         return WireReader(readWireBytes(readFfiBuf(p))).readList { it.readString() }
+    }
+
+    fun searchInScrollback(query: String): Pair<Int, Int>? {
+        val p = ensureLib().boltffi_torvox_bridge_search_in_scrollback(handle, query) ?: return null
+        val r = WireReader(readWireBytes(readFfiBuf(p)))
+        val tag = r.readByte()
+        if (tag == 0.toByte()) return null
+        val s = r.readString()
+        val parts = s.split(',')
+        return if (parts.size == 2) parts[0].toInt() to parts[1].toInt() else null
     }
 
     override fun close() {

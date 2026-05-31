@@ -210,6 +210,7 @@ impl From<TerminalConfig> for torvox_core::config::TerminalConfig {
             rows: c.rows,
             cols: c.cols,
             scrollback_lines: c.scrollback_lines,
+            font_size_tenths: c.font_size_tenths,
         }
     }
 }
@@ -221,7 +222,7 @@ impl From<torvox_core::config::TerminalConfig> for TerminalConfig {
             rows: c.rows,
             cols: c.cols,
             scrollback_lines: c.scrollback_lines,
-            font_size_tenths: 140,
+            font_size_tenths: c.font_size_tenths,
             theme: torvox_core::config::Theme::catppuccin_mocha().into(),
         }
     }
@@ -337,30 +338,53 @@ impl TorvoxBridge {
         "pong".to_string()
     }
 
-    pub fn spawn_terminal(&self, rows: u32, cols: u32) -> Result<i32, TerminalError> {
+    pub fn spawn_terminal(&self, _rows: u32, _cols: u32) -> Result<i32, TerminalError> {
         let shell: torvox_core::config::Shell = self.config.shell.clone().into();
         let shell_path = match &shell {
             torvox_core::config::Shell::SystemDefault => "/system/bin/sh",
             torvox_core::config::Shell::Custom(path) => path.as_str(),
         };
-        let pty =
-            torvox_terminal::PtyPair::spawn(shell_path, rows as u16, cols as u16).map_err(|e| {
-                TerminalError::PtyError {
-                    detail: e.to_string(),
-                }
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        let surface = surface_guard.as_mut().ok_or(TerminalError::InvalidConfig {
+            detail: "no surface — call set_native_window first".to_string(),
+        })?;
+        surface
+            .spawn_session(shell_path)
+            .map_err(|e| TerminalError::PtyError {
+                detail: e.to_string(),
             })?;
-        Ok(pty.child_pid().as_raw())
+        Ok(0)
     }
 
-    pub fn set_native_window(&self, window_ptr: i64) -> Result<(), TerminalError> {
+    pub fn set_native_window(
+        &self,
+        window_ptr: i64,
+        width: u32,
+        height: u32,
+    ) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
         if surface_guard.is_none() {
-            let mut surface =
-                crate::surface::AndroidSurface::new(self.config.rows, self.config.cols);
+            let mut surface = crate::surface::AndroidSurface::new(
+                self.config.rows,
+                self.config.cols,
+                self.config.scrollback_lines,
+            );
             surface
-                .set_native_window(window_ptr as *mut std::ffi::c_void)
+                .set_native_window(window_ptr as *mut std::ffi::c_void, width, height)
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
+            let shell: torvox_core::config::Shell = self.config.shell.clone().into();
+            let shell_path = match &shell {
+                torvox_core::config::Shell::SystemDefault => "/system/bin/sh",
+                torvox_core::config::Shell::Custom(path) => path.as_str(),
+            };
+            surface
+                .spawn_session(shell_path)
                 .map_err(|e| TerminalError::PtyError {
                     detail: e.to_string(),
                 })?;
@@ -449,6 +473,14 @@ impl TorvoxBridge {
             surface.set_theme(theme.into());
         }
         Ok(())
+    }
+
+    pub fn search_in_scrollback(&self, query: String) -> Option<String> {
+        self.surface.lock().ok().and_then(|g| {
+            g.as_ref()
+                .and_then(|s| s.terminal().search_in_scrollback(&query))
+                .map(|(r, c)| format!("{r},{c}"))
+        })
     }
 
     pub fn list_fonts(&self) -> Vec<String> {

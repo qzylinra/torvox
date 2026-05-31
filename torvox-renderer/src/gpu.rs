@@ -272,6 +272,8 @@ impl GpuContext {
     pub fn set_surface_from_native_window(
         &mut self,
         window_ptr: *mut std::ffi::c_void,
+        initial_width: u32,
+        initial_height: u32,
     ) -> Result<(), GpuError> {
         use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle};
 
@@ -307,8 +309,8 @@ impl GpuContext {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
-            width: 1080,
-            height: 1920,
+            width: initial_width,
+            height: initial_height,
             present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: caps
                 .alpha_modes
@@ -486,6 +488,16 @@ impl GpuContext {
         }));
     }
 
+    pub fn resize_surface(&mut self, width: u32, height: u32) {
+        if let Some(config) = &mut self.surface_config {
+            config.width = width;
+            config.height = height;
+            if let Some(surface) = &self.surface {
+                surface.configure(&self.device, config);
+            }
+        }
+    }
+
     pub fn warmup(&self) {
         let mut encoder = self
             .device
@@ -625,6 +637,7 @@ pub fn orthographic_projection(width: f32, height: f32) -> [[f32; 4]; 4] {
     ]
 }
 
+#[allow(dead_code)]
 pub fn build_cell_instances(
     grid: &dyn torvox_core::grid::GridSnapshot,
     font_pipeline: &mut crate::font::FontPipeline,
@@ -760,6 +773,7 @@ impl FlatGrid {
     }
 }
 
+#[allow(dead_code)]
 pub fn build_cell_instances_from_flat(
     flat: &FlatGrid,
     font_pipeline: &mut crate::font::FontPipeline,
@@ -805,92 +819,67 @@ pub fn build_cell_instances_from_flat(
 }
 
 #[allow(clippy::collapsible_if)]
-pub fn build_cell_instances_from_ghostty(
-    ghostty: &torvox_terminal::ghostty_terminal::GhosttyTerminal,
+pub fn build_cell_instances_from_snapshot(
+    snapshot: &torvox_terminal::ghostty_terminal::GridSnapshot,
     font_pipeline: &mut crate::font::FontPipeline,
-    _cell_width: f32,
-    _cell_height: f32,
     atlas_width: f32,
     atlas_height: f32,
+    dirty_rows: Option<&[bool]>,
 ) -> Vec<CellInstance> {
-    let rows = ghostty.rows();
-    let cols = ghostty.cols();
+    let rows = snapshot.rows;
+    let cols = snapshot.cols;
     let mut instances = Vec::with_capacity((rows * cols) as usize);
 
-    use libghostty_vt::terminal::Point;
-    use libghostty_vt::terminal::PointCoordinate;
-
     for row in 0..rows {
-        for col in 0..cols {
-            let coord = PointCoordinate {
-                x: col as u16,
-                y: row,
-            };
-            let mut ch = ' ';
-            let mut fg_r: f32 = 1.0;
-            let mut fg_g: f32 = 1.0;
-            let mut fg_b: f32 = 1.0;
-            let mut bg_r: f32 = 0.0;
-            let mut bg_g: f32 = 0.0;
-            let mut bg_b: f32 = 0.0;
-            let mut bold = false;
-            let mut italic = false;
-            let mut underline = false;
-            let mut reverse = false;
-
-            if let Ok(point) = ghostty.terminal().grid_ref(Point::Viewport(coord)) {
-                if let Ok(cell) = point.cell() {
-                    let cp = cell.codepoint().unwrap_or(0);
-                    if cp != 0 {
-                        if let Some(c) = char::from_u32(cp) {
-                            ch = c;
-                        }
-                    }
+        if let Some(dirty) = dirty_rows {
+            if row < dirty.len() as u32 && !dirty[row as usize] {
+                for col in 0..cols {
+                    instances.push(CellInstance {
+                        cell_pos: [col as f32, row as f32],
+                        atlas_offset: [0.0; 2],
+                        atlas_size: [0.0; 2],
+                        fg_color: [0.0; 4],
+                        bg_color: [0.0; 4],
+                        flags: 0.0,
+                        _pad: [0.0; 3],
+                    });
                 }
-                if let Ok(style) = point.style() {
-                    use libghostty_vt::style::StyleColor;
-                    if let StyleColor::Rgb(c) = style.fg_color {
-                        fg_r = c.r as f32 / 255.0;
-                        fg_g = c.g as f32 / 255.0;
-                        fg_b = c.b as f32 / 255.0;
-                    }
-                    if let StyleColor::Rgb(c) = style.bg_color {
-                        bg_r = c.r as f32 / 255.0;
-                        bg_g = c.g as f32 / 255.0;
-                        bg_b = c.b as f32 / 255.0;
-                    }
-                    bold = style.bold;
-                    italic = style.italic;
-                    underline = !matches!(style.underline, libghostty_vt::style::Underline::None);
-                    reverse = style.inverse;
-                }
+                continue;
             }
+        }
+        for col in 0..cols {
+            let idx = (row * cols + col) as usize;
+            let cell = &snapshot.cells[idx];
 
-            if ch == ' ' {
+            if cell.codepoint == 0 || cell.codepoint == 0x20 {
                 instances.push(CellInstance {
                     cell_pos: [col as f32, row as f32],
                     atlas_offset: [0.0, 0.0],
                     atlas_size: [0.0, 0.0],
                     fg_color: [0.0, 0.0, 0.0, 0.0],
-                    bg_color: [bg_r, bg_g, bg_b, 1.0],
+                    bg_color: cell.bg,
                     flags: 0.0,
                     _pad: [0.0; 3],
                 });
-            } else if let Some(info) = font_pipeline.glyph_info(ch) {
+                continue;
+            }
+
+            let ch = char::from_u32(cell.codepoint).unwrap_or('\u{FFFD}');
+            if let Some(info) = font_pipeline.glyph_info(ch) {
                 let uv_x = info.atlas_x as f32 / atlas_width;
                 let uv_y = info.atlas_y as f32 / atlas_height;
                 let uv_w = info.width as f32 / atlas_width;
                 let uv_h = info.height as f32 / atlas_height;
 
-                let flags = if bold { 1.0 } else { 0.0 }
-                    + if italic { 2.0 } else { 0.0 }
-                    + if reverse { 4.0 } else { 0.0 }
-                    + if underline { 8.0 } else { 0.0 };
+                let flags = if cell.bold { 1.0 } else { 0.0 }
+                    + if cell.italic { 2.0 } else { 0.0 }
+                    + if cell.reverse { 4.0 } else { 0.0 }
+                    + if cell.underline { 8.0 } else { 0.0 };
 
-                let (fg, bg) = if reverse {
-                    ([bg_r, bg_g, bg_b, 1.0], [fg_r, fg_g, fg_b, 1.0])
+                let (fg, bg) = if cell.reverse {
+                    (cell.bg, cell.fg)
                 } else {
-                    ([fg_r, fg_g, fg_b, 1.0], [bg_r, bg_g, bg_b, 1.0])
+                    (cell.fg, cell.bg)
                 };
 
                 instances.push(CellInstance {

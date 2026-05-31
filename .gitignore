@@ -50,3 +50,4 @@ android/app/src/main/java/io/torvox/bridge/kotlin/
 # opencode (配置已版本控制, 忽略临时文件)
 .opencode/sessions/
 .opencode/cache/
+libghostty-rs-patch/

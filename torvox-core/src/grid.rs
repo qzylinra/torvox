@@ -1,3 +1,4 @@
+use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
@@ -38,7 +39,7 @@ pub struct Grid {
     dirty: DirtyMask,
     rows: u32,
     cols: u32,
-    scrollback: Vec<Line>,
+    scrollback: VecDeque<Line>,
     max_scrollback: usize,
 }
 
@@ -52,7 +53,7 @@ impl Grid {
             dirty,
             rows,
             cols,
-            scrollback: Vec::new(),
+            scrollback: VecDeque::new(),
             max_scrollback: 50_000,
         }
     }
@@ -66,7 +67,7 @@ impl Grid {
             dirty,
             rows,
             cols,
-            scrollback: Vec::new(),
+            scrollback: VecDeque::new(),
             max_scrollback,
         }
     }
@@ -84,8 +85,9 @@ impl Grid {
     }
 
     pub fn get_mut(&mut self, row: u32) -> Option<&mut Line> {
+        let line = self.lines.get_mut(row as usize)?;
         self.dirty.mark(row);
-        self.lines.get_mut(row as usize)
+        Some(line)
     }
 
     pub fn dirty(&self) -> &DirtyMask {
@@ -112,10 +114,14 @@ impl Grid {
     }
 
     pub fn cell_mut(&mut self, row: u32, col: u32) -> Option<&mut crate::cell::Cell> {
-        self.dirty.mark(row);
-        self.lines
+        let result = self
+            .lines
             .get_mut(row as usize)
-            .and_then(|line| line.get_mut(col))
+            .and_then(|line| line.get_mut(col));
+        if result.is_some() {
+            self.dirty.mark(row);
+        }
+        result
     }
 
     pub fn cell(&self, row: u32, col: u32) -> Option<&crate::cell::Cell> {
@@ -144,10 +150,9 @@ impl Grid {
         let b = bottom as usize;
         if top == 0 {
             let removed = self.lines.remove(t);
-            self.scrollback.push(removed);
-            if self.scrollback.len() > self.max_scrollback {
-                let excess = self.scrollback.len() - self.max_scrollback;
-                self.scrollback.drain(..excess);
+            self.scrollback.push_back(removed);
+            while self.scrollback.len() > self.max_scrollback {
+                self.scrollback.pop_front();
             }
             self.lines.insert(b - 1, Line::new(cols));
         } else {

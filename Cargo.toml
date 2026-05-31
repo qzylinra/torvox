@@ -23,7 +23,6 @@ torvox-terminal = { path = "torvox-terminal" }
 torvox-renderer = { path = "torvox-renderer", default-features = false }
 torvox-gui-android = { path = "torvox-gui-android" }
 
-vte = "0.15"
 libc = "0.2"
 nix = { version = "0.31.3", features = ["term", "process", "signal", "fs"] }
 serde = { version = "1", default-features = false, features = [
@@ -38,13 +37,19 @@ fontdb = "0.23"
 swash = "0.2.7"
 guillotiere = "0.7"
 
-boltffi = "0.25.1"
+boltffi = "0.25.2"
 
 flume = "0.12"
 bitflags = "2"
+lru = "0.12"
 proptest = "1.11"
 raw-window-handle = "0.6"
 
+# libghostty-vt patched for Android targets.
+# Patch file: patches/libghostty-vt-android.patch
+# Apply before cargo build:
+#   git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
+#   cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
 [patch.crates-io]
 libghostty-vt = { path = "libghostty-rs-patch/crates/libghostty-vt" }
 libghostty-vt-sys = { path = "libghostty-rs-patch/crates/libghostty-vt-sys" }

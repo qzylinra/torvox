@@ -2,7 +2,7 @@
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    use torvox_core::grid::Grid;
+    use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
     if data.len() < 4 {
         return;
@@ -13,14 +13,14 @@ fuzz_target!(|data: &[u8]| {
     } else {
         80
     };
-    let mut grid = Grid::new(rows, cols);
-    for (i, &byte) in data.iter().enumerate().skip(8) {
-        let row = (i as u32) % rows;
-        let col = (byte as u32) % cols;
-        grid.mark_row_dirty(row);
-        if let Some(cell) = grid.get_mut(row).and_then(|l| l.get_mut(col)) {
-            cell.char = (byte as char).max(' ');
-        }
+
+    let Ok(mut terminal) = GhosttyTerminal::new(rows, cols, 1000) else {
+        return;
+    };
+
+    // Feed some data then resize
+    if data.len() > 8 {
+        terminal.vt_write(&data[8..]);
     }
-    grid.scroll_up(0, rows, cols);
+    terminal.resize(rows + 1, cols + 1);
 });

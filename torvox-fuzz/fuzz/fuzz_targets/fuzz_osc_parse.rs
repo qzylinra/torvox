@@ -2,13 +2,11 @@
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    use torvox_terminal::parser::VtParser;
-    use torvox_terminal::terminal::TerminalState;
+    use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
-    let Ok(mut state) = TerminalState::new(24, 80) else {
+    let Ok(mut terminal) = GhosttyTerminal::new(24, 80, 1000) else {
         return;
     };
-    let mut parser = VtParser::new();
 
     // Prepend OSC escape sequence prefix to exercise OSC parsing paths.
     // OSC = ESC ] ... BEL (0x07) or ST (ESC \)
@@ -17,5 +15,5 @@ fuzz_target!(|data: &[u8]| {
     input.extend_from_slice(data);
     input.push(0x07); // BEL terminates OSC
 
-    parser.advance(&mut state, &input);
+    terminal.vt_write(&input);
 });

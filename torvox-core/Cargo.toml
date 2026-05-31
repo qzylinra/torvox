@@ -8,6 +8,10 @@ license.workspace = true
 [dependencies]
 serde = { workspace = true }
 thiserror = { workspace = true, optional = true }
+unicode-width = { version = "0.2", default-features = false, features = [
+  "no_std",
+  "cjk",
+] }
 
 [features]
 default = ["std", "alloc"]

@@ -9,6 +9,7 @@ pub struct TerminalConfig {
     pub cols: u32,
     pub scrollback_lines: u32,
     pub shell: Shell,
+    pub font_size_tenths: u32,
 }
 
 impl Default for TerminalConfig {
@@ -18,6 +19,7 @@ impl Default for TerminalConfig {
             cols: 80,
             scrollback_lines: 50_000,
             shell: Shell::default(),
+            font_size_tenths: 140,
         }
     }
 }
@@ -534,6 +536,7 @@ mod tests {
         assert_eq!(c.rows, 24);
         assert_eq!(c.cols, 80);
         assert_eq!(c.scrollback_lines, 50_000);
+        assert_eq!(c.font_size_tenths, 140);
     }
 
     #[test]
