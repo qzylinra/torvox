@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import io.torvox.runtime.TorvoxRuntime
 import io.torvox.settings.SettingsRepository
 import io.torvox.ui.ModifierKey
 import io.torvox.ui.defaultModifierKeys
@@ -55,6 +56,7 @@ class TerminalViewModel
     constructor(
         @ApplicationContext private val context: Context,
         private val settingsRepository: SettingsRepository,
+        val runtime: TorvoxRuntime,
     ) : ViewModel() {
         private val _state = MutableStateFlow(TerminalState())
         val state: StateFlow<TerminalState> = _state.asStateFlow()
@@ -192,6 +194,8 @@ class TerminalViewModel
         private fun extractSelectedText(selection: SelectionState): String {
             val start = selection.start ?: return ""
             val end = selection.end ?: return ""
+            val bridge = runtime.bridge() ?: return ""
+            val scrollbackLen = bridge.scrollbackLen().toInt()
             val (lo, hi) =
                 if (start.row < end.row || (start.row == end.row && start.col <= end.col)) {
                     start to end
@@ -201,24 +205,48 @@ class TerminalViewModel
             return when (selection.mode) {
                 SelectionMode.Char, SelectionMode.Word -> {
                     if (lo.row == hi.row) {
-                        "selection[${lo.row}:${lo.col}-${hi.col}]"
+                        val line = bridge.scrollbackLine((scrollbackLen + lo.row).toUInt()) ?: ""
+                        line.substring(lo.col.coerceAtMost(line.length), hi.col.coerceAtMost(line.length))
                     } else {
-                        "selection[${lo.row}:${lo.col}-${hi.row}:${hi.col}]"
+                        val parts = mutableListOf<String>()
+                        for (r in lo.row..hi.row) {
+                            val line = bridge.scrollbackLine((scrollbackLen + r).toUInt()) ?: ""
+                            val startCol = if (r == lo.row) lo.col else 0
+                            val endCol = if (r == hi.row) hi.col.coerceAtMost(line.length) else line.length
+                            if (startCol < line.length) {
+                                parts.add(line.substring(startCol, endCol.coerceAtMost(line.length)))
+                            }
+                        }
+                        parts.joinToString("\n")
                     }
                 }
 
                 SelectionMode.Line -> {
-                    "selection[line:${lo.row}-${hi.row}]"
+                    val parts = mutableListOf<String>()
+                    for (r in lo.row..hi.row) {
+                        val line = bridge.scrollbackLine((scrollbackLen + r).toUInt()) ?: ""
+                        parts.add(line)
+                    }
+                    parts.joinToString("\n")
                 }
 
                 SelectionMode.Block -> {
-                    "selection[block:${lo.row}:${lo.col}-${hi.row}:${hi.col}]"
+                    val parts = mutableListOf<String>()
+                    for (r in lo.row..hi.row) {
+                        val line = bridge.scrollbackLine((scrollbackLen + r).toUInt()) ?: ""
+                        val startCol = lo.col.coerceAtMost(line.length)
+                        val endCol = hi.col.coerceAtMost(line.length)
+                        if (startCol < line.length) {
+                            parts.add(line.substring(startCol, endCol))
+                        }
+                    }
+                    parts.joinToString("\n")
                 }
             }
         }
 
         fun writeToPty(data: ByteArray) {
-            _state.value = _state.value.copy(pendingInput = data)
+            runtime.writeToPty(data)
         }
 
         fun consumePendingInput(): ByteArray? {
@@ -233,5 +261,30 @@ class TerminalViewModel
 
         fun resetModifierKeys() {
             _state.value = _state.value.copy(modifierKeys = defaultModifierKeys)
+        }
+
+        fun createSession() {
+            val nextId = _state.value.sessionId + 1
+            _state.value =
+                _state.value.copy(
+                    sessionId = nextId,
+                    isRunning = true,
+                    title = "Torvox $nextId",
+                    selection = SelectionState(),
+                    pendingInput = null,
+                )
+        }
+
+        fun closeSession() {
+            _state.value =
+                _state.value.copy(
+                    isRunning = false,
+                    selection = SelectionState(),
+                    pendingInput = null,
+                )
+        }
+
+        fun setSessionTitle(title: String) {
+            _state.value = _state.value.copy(title = title)
         }
     }

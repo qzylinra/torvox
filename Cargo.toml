@@ -10,9 +10,12 @@ members = [
   "torvox-integration-tests",
   "torvox-bench",
 ]
-package.edition = "2024"
-package.rust-version = "1.95"
-package.license = "UNLICENSED"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "UNLICENSED"
 
 [workspace.dependencies]
 torvox-core = { path = "torvox-core" }
@@ -35,9 +38,13 @@ fontdb = "0.23"
 swash = "0.2.7"
 guillotiere = "0.7"
 
-boltffi = "0.25"
+boltffi = "0.25.1"
 
-flume = "0.11"
+flume = "0.12"
 bitflags = "2"
 proptest = "1.11"
 raw-window-handle = "0.6"
+
+[patch.crates-io]
+libghostty-vt = { path = "libghostty-rs-patch/crates/libghostty-vt" }
+libghostty-vt-sys = { path = "libghostty-rs-patch/crates/libghostty-vt-sys" }

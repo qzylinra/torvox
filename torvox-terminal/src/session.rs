@@ -1,14 +1,13 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
-use flume::{bounded, Receiver};
+use flume::{Receiver, bounded};
 use thiserror::Error;
 
-use crate::parser::VtParser;
+use crate::ghostty_terminal::GhosttyTerminal;
 use crate::pty::{PtyError, PtyPair};
-use crate::terminal::{TerminalState, TerminalStateError};
 
 const READ_BUF_SIZE: usize = 8192;
 
@@ -18,16 +17,15 @@ pub enum SessionError {
     Pty(#[from] PtyError),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("terminal state error: {0}")]
-    TerminalState(#[from] TerminalStateError),
+    #[error("ghostty error: {0}")]
+    Ghostty(String),
     #[error("session closed")]
     Closed,
 }
 
 pub struct Session {
     pty: PtyPair,
-    terminal: TerminalState,
-    parser: VtParser,
+    terminal: GhosttyTerminal,
     output_rx: Receiver<Vec<u8>>,
     output_notify: Arc<(Mutex<bool>, Condvar)>,
     exited: Arc<AtomicBool>,
@@ -43,11 +41,8 @@ impl Session {
         let exited = Arc::new(AtomicBool::new(false));
         let output_notify = Arc::new((Mutex::new(false), Condvar::new()));
 
-        let (output_tx, output_rx) = bounded::<Vec<u8>>(64);
+        let (output_tx, output_rx) = bounded::<Vec<u8>>(128);
 
-        // SAFETY: dup() is safe because pty.master_fd() returns a valid fd
-        // owned by PtyPair. We duplicate it so the reader thread has its own
-        // fd to close on exit without interfering with the original.
         let read_fd = unsafe { libc::dup(pty.master_fd()) };
         if read_fd < 0 {
             return Err(SessionError::Io(std::io::Error::last_os_error()));
@@ -55,7 +50,7 @@ impl Session {
 
         fn notify_output(notify: &Arc<(Mutex<bool>, Condvar)>) {
             let (lock, cvar) = &**notify;
-            let mut pending = lock.lock().unwrap();
+            let mut pending = lock.lock().unwrap_or_else(|e| e.into_inner());
             *pending = true;
             cvar.notify_one();
         }
@@ -68,10 +63,6 @@ impl Session {
                 if exited_read.load(Ordering::Acquire) {
                     break;
                 }
-                // SAFETY: read_fd is a valid fd (dup'd from PtyPair's master).
-                // read_buf is a stack-allocated array with known size. The
-                // read call is blocking but the fd is set to nonblocking mode.
-                // We pass a valid pointer and length — no memory safety issue.
                 let n = unsafe {
                     libc::read(
                         read_fd,
@@ -100,9 +91,6 @@ impl Session {
                     }
                 }
             }
-            // SAFETY: read_fd was created by libc::dup() and is only used
-            // in this thread. Closing it here is safe and necessary to
-            // prevent fd leaks. No other code references this fd after close.
             unsafe {
                 libc::close(read_fd);
             }
@@ -115,10 +103,11 @@ impl Session {
             exited_wait.store(true, Ordering::Release);
         });
 
+        let terminal = GhosttyTerminal::new(rows, cols, 50000).map_err(SessionError::Ghostty)?;
+
         Ok(Self {
             pty,
-            terminal: TerminalState::new(rows, cols)?,
-            parser: VtParser::new(),
+            terminal,
             output_rx,
             output_notify,
             exited,
@@ -138,15 +127,15 @@ impl Session {
 
     pub fn resize(&mut self, rows: u32, cols: u32) -> Result<(), SessionError> {
         self.pty.resize(rows as u16, cols as u16)?;
-        self.terminal.resize(rows, cols);
+        self.terminal.resize(rows, cols, 8, 16);
         Ok(())
     }
 
     pub fn wait_for_output(&self) {
         let (lock, cvar) = &*self.output_notify;
-        let mut pending = lock.lock().unwrap();
+        let mut pending = lock.lock().unwrap_or_else(|e| e.into_inner());
         while !*pending {
-            pending = cvar.wait(pending).unwrap();
+            pending = cvar.wait(pending).unwrap_or_else(|e| e.into_inner());
         }
         *pending = false;
     }
@@ -154,7 +143,7 @@ impl Session {
     pub fn process_output(&mut self) -> bool {
         let mut changed = false;
         while let Ok(data) = self.output_rx.try_recv() {
-            self.parser.advance(&mut self.terminal, &data);
+            self.terminal.vt_write(&data);
             changed = true;
         }
         changed
@@ -164,11 +153,11 @@ impl Session {
         self.exited.load(Ordering::Acquire)
     }
 
-    pub fn terminal(&self) -> &TerminalState {
+    pub fn terminal(&self) -> &GhosttyTerminal {
         &self.terminal
     }
 
-    pub fn terminal_mut(&mut self) -> &mut TerminalState {
+    pub fn terminal_mut(&mut self) -> &mut GhosttyTerminal {
         &mut self.terminal
     }
 }
@@ -176,9 +165,6 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.exited.store(true, Ordering::Release);
-        // PtyPair::drop kills the child process, which closes the master fd.
-        // This causes the reader thread's read() to return 0 or error, breaking
-        // the loop. The reader checks `exited` each iteration as a safety net.
         if let Some(h) = self.reader_handle.take() {
             let _ = h.join();
         }
@@ -202,24 +188,6 @@ mod tests {
         }
     }
 
-    fn grid_text(session: &Session) -> String {
-        let grid = &session.terminal().grid;
-        let mut text = String::new();
-        for row in 0..grid.rows() {
-            if let Some(line) = grid.get(row) {
-                let mut line_text = String::new();
-                for col in 0..line.len() {
-                    if let Some(cell) = line.get(col) {
-                        line_text.push(cell.char);
-                    }
-                }
-                text.push_str(line_text.trim_end());
-                text.push('\n');
-            }
-        }
-        text
-    }
-
     #[test]
     fn session_spawn_and_exit() {
         let mut session = Session::spawn("/bin/sh", 24, 80).expect("spawn failed");
@@ -237,14 +205,21 @@ mod tests {
         let mut found = false;
         while std::time::Instant::now() < deadline {
             session.process_output();
-            let text = grid_text(&session);
-            if text.contains("hello_p12") {
-                found = true;
+            let rows = session.terminal().rows();
+            for row in 0..rows {
+                if let Some(line) = session.terminal().read_line_text(row)
+                    && line.contains("hello_p12")
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if found {
                 break;
             }
             std::thread::sleep(Duration::from_millis(10));
         }
-        assert!(found, "did not find 'hello_p12' in grid");
+        assert!(found, "did not find 'hello_p12' in terminal");
     }
 
     #[test]

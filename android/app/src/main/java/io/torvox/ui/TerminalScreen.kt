@@ -70,8 +70,16 @@ fun TerminalScreen(
                     factory = { context ->
                         io.torvox.ui.TerminalSurface(context).apply {
                             initialize(viewModel)
-                            setDimensions(24, 80)
-                            setMaxScrollback(50000)
+                            val cfg = viewModel.runtime.state.value
+                            setDimensions(cfg.rows, cfg.cols)
+                            val bridge = viewModel.runtime.bridge()
+                            val scrollbackLimit =
+                                try {
+                                    bridge?.scrollbackLen()?.toInt() ?: 50000
+                                } catch (_: Exception) {
+                                    50000
+                                }
+                            setMaxScrollback(scrollbackLimit)
                             onSwipeLeft = {
                                 viewModel.writeToPty("\u001b".toByteArray())
                             }

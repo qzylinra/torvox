@@ -363,6 +363,165 @@ impl Theme {
             Self::rose_pine(),
         ]
     }
+
+    pub fn parse_custom(content: &str) -> Option<Self> {
+        let mut name = String::new();
+        let mut bg = [0u8; 3];
+        let mut fg = [205u8, 214u8, 244u8];
+        let mut cursor = [245u8, 224u8, 220u8];
+        let mut ansi = [[0u8; 3]; 16];
+        let mut found = false;
+
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Some((key, value)) = line.split_once('=') {
+                let key = key.trim();
+                let value = value.trim().trim_matches('"').trim_matches('\'');
+                match key {
+                    "name" => {
+                        name = String::from(value);
+                        found = true;
+                    }
+                    "background" | "bg" => {
+                        if let Some(c) = parse_color(value) {
+                            bg = c;
+                        }
+                    }
+                    "foreground" | "fg" => {
+                        if let Some(c) = parse_color(value) {
+                            fg = c;
+                        }
+                    }
+                    "cursor" => {
+                        if let Some(c) = parse_color(value) {
+                            cursor = c;
+                        }
+                    }
+                    "ansi0" | "black" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[0] = c;
+                        }
+                    }
+                    "ansi1" | "red" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[1] = c;
+                        }
+                    }
+                    "ansi2" | "green" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[2] = c;
+                        }
+                    }
+                    "ansi3" | "yellow" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[3] = c;
+                        }
+                    }
+                    "ansi4" | "blue" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[4] = c;
+                        }
+                    }
+                    "ansi5" | "magenta" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[5] = c;
+                        }
+                    }
+                    "ansi6" | "cyan" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[6] = c;
+                        }
+                    }
+                    "ansi7" | "white" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[7] = c;
+                        }
+                    }
+                    "ansi8" | "bright_black" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[8] = c;
+                        }
+                    }
+                    "ansi9" | "bright_red" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[9] = c;
+                        }
+                    }
+                    "ansi10" | "bright_green" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[10] = c;
+                        }
+                    }
+                    "ansi11" | "bright_yellow" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[11] = c;
+                        }
+                    }
+                    "ansi12" | "bright_blue" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[12] = c;
+                        }
+                    }
+                    "ansi13" | "bright_magenta" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[13] = c;
+                        }
+                    }
+                    "ansi14" | "bright_cyan" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[14] = c;
+                        }
+                    }
+                    "ansi15" | "bright_white" => {
+                        if let Some(c) = parse_color(value) {
+                            ansi[15] = c;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if !found {
+            return None;
+        }
+
+        Some(Self {
+            name,
+            bg,
+            fg,
+            cursor,
+            ansi,
+        })
+    }
+}
+
+fn parse_color(s: &str) -> Option<[u8; 3]> {
+    let s = s.trim();
+    if s.starts_with('#') && s.len() == 7 {
+        let r = u8::from_str_radix(&s[1..3], 16).ok()?;
+        let g = u8::from_str_radix(&s[3..5], 16).ok()?;
+        let b = u8::from_str_radix(&s[5..7], 16).ok()?;
+        Some([r, g, b])
+    } else if s.starts_with('#') && s.len() == 4 {
+        let r = u8::from_str_radix(&s[1..2], 16).ok()?;
+        let g = u8::from_str_radix(&s[2..3], 16).ok()?;
+        let b = u8::from_str_radix(&s[3..4], 16).ok()?;
+        Some([r * 17, g * 17, b * 17])
+    } else {
+        let parts: Vec<&str> = s.split(',').collect();
+        if parts.len() == 3 {
+            let r = parts[0].trim().parse().ok()?;
+            let g = parts[1].trim().parse().ok()?;
+            let b = parts[2].trim().parse().ok()?;
+            Some([r, g, b])
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -398,5 +557,61 @@ mod tests {
         for theme in &themes {
             assert!(!theme.name.is_empty(), "Theme missing name");
         }
+    }
+
+    #[test]
+    fn parse_custom_theme_hex() {
+        let mut content = String::new();
+        content.push_str("name = My Theme\n");
+        content.push_str("bg = #1a1b26\n");
+        content.push_str("fg = #c0caf5\n");
+        content.push_str("cursor = #c0caf5\n");
+        content.push_str("red = #f7768e\n");
+        content.push_str("green = #98c379\n");
+        content.push_str("blue = #82aaff\n");
+        let theme = Theme::parse_custom(&content).unwrap();
+        assert_eq!(theme.name, "My Theme");
+        assert_eq!(theme.bg, [0x1a, 0x1b, 0x26]);
+        assert_eq!(theme.fg, [0xc0, 0xca, 0xf5]);
+        assert_eq!(theme.ansi[1], [0xf7, 0x76, 0x8e]);
+        assert_eq!(theme.ansi[2], [0x98, 0xc3, 0x79]);
+        assert_eq!(theme.ansi[4], [0x82, 0xaa, 0xff]);
+    }
+
+    #[test]
+    fn parse_custom_theme_rgb() {
+        let mut content = String::new();
+        content.push_str("name = Test\n");
+        content.push_str("bg = 30, 30, 46\n");
+        content.push_str("fg = 205, 214, 244\n");
+        let theme = Theme::parse_custom(&content).unwrap();
+        assert_eq!(theme.bg, [30, 30, 46]);
+        assert_eq!(theme.fg, [205, 214, 244]);
+    }
+
+    #[test]
+    fn parse_custom_theme_short_hex() {
+        let mut content = String::new();
+        content.push_str("name = Short\n");
+        content.push_str("bg = #abc\n");
+        let theme = Theme::parse_custom(&content).unwrap();
+        assert_eq!(theme.bg, [0xaa, 0xbb, 0xcc]);
+    }
+
+    #[test]
+    fn parse_custom_theme_no_name_returns_none() {
+        let content = "bg = #000000\nfg = #ffffff\n";
+        assert!(Theme::parse_custom(content).is_none());
+    }
+
+    #[test]
+    fn parse_custom_theme_comments_ignored() {
+        let mut content = String::new();
+        content.push_str("# This is a comment\n");
+        content.push_str("name = Commented\n");
+        content.push_str("# Another comment\n");
+        content.push_str("bg = #112233\n");
+        let theme = Theme::parse_custom(&content).unwrap();
+        assert_eq!(theme.bg, [0x11, 0x22, 0x33]);
     }
 }

@@ -3,15 +3,26 @@ use serde::{Deserialize, Serialize};
 
 use crate::cell::Cell;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum LineAttr {
+    #[default]
+    Normal,
+    DoubleWidth,
+    DoubleHeightTop,
+    DoubleHeightBottom,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Line {
     cells: Vec<Cell>,
+    pub attr: LineAttr,
 }
 
 impl Line {
     pub fn new(cols: u32) -> Self {
         Self {
             cells: alloc::vec![Cell::default(); cols as usize],
+            attr: LineAttr::Normal,
         }
     }
 

@@ -1,8 +1,7 @@
 use thiserror::Error;
 use torvox_renderer::font::FontPipeline;
 use torvox_renderer::gpu::GpuContext;
-use torvox_terminal::parser::VtParser;
-use torvox_terminal::terminal::TerminalState;
+use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
 #[derive(Debug, Error)]
 pub enum SurfaceError {
@@ -19,10 +18,10 @@ pub enum SurfaceError {
 pub struct AndroidSurface {
     gpu: GpuContext,
     font_pipeline: FontPipeline,
-    terminal: TerminalState,
-    parser: VtParser,
+    terminal: GhosttyTerminal,
     atlas_width: u32,
     atlas_height: u32,
+    theme: torvox_core::config::Theme,
 }
 
 impl AndroidSurface {
@@ -31,15 +30,16 @@ impl AndroidSurface {
         let atlas_height = 2048;
         let mut font_pipeline = FontPipeline::new(atlas_width as i32, atlas_height as i32, 14.0);
         font_pipeline.rasterize_ascii();
-        let terminal = TerminalState::new(rows, cols).expect("failed to create TerminalState");
+        let terminal =
+            GhosttyTerminal::new(rows, cols, 50000).expect("failed to create GhosttyTerminal");
 
         Self {
             gpu: GpuContext::new_with_no_surface(),
             font_pipeline,
             terminal,
-            parser: VtParser::new(),
             atlas_width,
             atlas_height,
+            theme: torvox_core::config::Theme::catppuccin_mocha(),
         }
     }
 
@@ -64,8 +64,8 @@ impl AndroidSurface {
     }
 
     pub fn render(&mut self) -> Result<(), SurfaceError> {
-        let instances = torvox_renderer::gpu::build_cell_instances(
-            &self.terminal.grid,
+        let instances = torvox_renderer::gpu::build_cell_instances_from_ghostty(
+            &self.terminal,
             &mut self.font_pipeline,
             8.0,
             16.0,
@@ -78,11 +78,11 @@ impl AndroidSurface {
             .map_err(|e| SurfaceError::Render(e.to_string()))
     }
 
-    pub fn terminal(&self) -> &TerminalState {
+    pub fn terminal(&self) -> &GhosttyTerminal {
         &self.terminal
     }
 
-    pub fn terminal_mut(&mut self) -> &mut TerminalState {
+    pub fn terminal_mut(&mut self) -> &mut GhosttyTerminal {
         &mut self.terminal
     }
 
@@ -91,11 +91,11 @@ impl AndroidSurface {
     }
 
     pub fn resize(&mut self, rows: u32, cols: u32) {
-        self.terminal.resize(rows, cols);
+        self.terminal.resize(rows, cols, 8, 16);
     }
 
     pub fn write_to_pty(&mut self, data: &[u8]) {
-        self.parser.advance(&mut self.terminal, data);
+        self.terminal.vt_write(data);
     }
 
     pub fn set_font_size(&mut self, size: f32) {
@@ -108,8 +108,11 @@ impl AndroidSurface {
         self.gpu.upload_atlas(&atlas_data, aw, ah);
     }
 
-    pub fn set_theme(&mut self, _theme: torvox_core::config::Theme) {
-        // Theme colors are applied per-cell in build_cell_instances.
-        // The clear color and default fg/bg will be updated on next render.
+    pub fn set_theme(&mut self, theme: torvox_core::config::Theme) {
+        self.theme = theme;
+    }
+
+    pub fn theme(&self) -> &torvox_core::config::Theme {
+        &self.theme
     }
 }

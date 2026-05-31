@@ -119,6 +119,19 @@ fun SettingsScreen(
             }
 
             item {
+                Spacer(modifier = Modifier.height(8.dp))
+                SectionHeader("Session")
+                SessionActions(
+                    isRunning =
+                        viewModel.state
+                            .collectAsState()
+                            .value.isRunning,
+                    onCreate = { viewModel.createSession() },
+                    onClose = { viewModel.closeSession() },
+                )
+            }
+
+            item {
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -322,6 +335,45 @@ private fun ShellSelector(
     }
 }
 
+@Composable
+private fun SessionActions(
+    isRunning: Boolean,
+    onCreate: () -> Unit,
+    onClose: () -> Unit,
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onCreate() }
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "+ New Session",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (isRunning) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { onClose() }
+                    .padding(vertical = 12.dp, horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "Close Session",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
 @Composable
 private fun ScrollbackSlider(
     value: Float,

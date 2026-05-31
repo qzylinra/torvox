@@ -123,6 +123,21 @@
 - **开发方法**: 规范驱动开发 (SDD) — 先写规范，再 AI 生成实现
 - **许可证**: UNLICENSED — 仅作者和 AI 使用，不添加 license 声明
 
+## 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 核心引擎 | Rust (stable, Edition 2024, MSRV 1.95) |
+| GPU 渲染 | wgpu 29 (Vulkan) |
+| VT 解析器 | vte 0.15 (Paul Williams FSM) |
+| FFI 绑定 | boltffi 0.25 (Rust 宏) / UniFFI 生成的 Kotlin 绑定 (待用 boltffi 重新生成) |
+| Android UI | Kotlin 2.3.21 + Compose BOM 2026.05.00 + Material 3 |
+| DI | Hilt 2.59.2 + KSP 2.3.9 |
+| 持久化 | DataStore Preferences |
+| 最低 SDK | Android 13 (API 33, Vulkan 1.3) |
+
+完整版本锁定见 `docs/ARCHITECTURE.md §技术版本锁定`。
+
 ## 设计哲学 (摘要，详见 VISION.md)
 
 1. **库优先** — `torvox-core` 零 Android 依赖，可嵌入任何应用
@@ -156,7 +171,7 @@
 | 文件 | 重要性 | 用途 | 何时阅读 |
 |------|--------|------|----------|
 | `docs/ADR/001-language-choice.md` | ★★★☆☆ | 为什么 Rust+Kotlin 混合 | 质疑语言选择时 |
-| `docs/ADR/002-architecture-pattern.md` | ★★★☆☆ | 为什么库优先分层、事件驱动、crossbeam 而非 tokio | 修改架构时 |
+| `docs/ADR/002-architecture-pattern.md` | ★★★☆☆ | 为什么库优先分层、事件驱动、flume 而非 tokio | 修改架构时 |
 | `docs/ADR/003-rendering-pipeline.md` | ★★★☆☆ | 为什么 wgpu v29 + cosmic-text + swash/skrifa + 实例化四边形 | 修改渲染时 |
 | `docs/ADR/005-ai-workflow-and-tooling.md` | ★★★☆☆ | AI 工作流、SDD 方法论 | 规划 AI 协作流程时 |
 | `docs/DEVELOPMENT.md` | ★★★☆☆ | 构建步骤、命令、CI/CD、开发工作流 | 构建或调试问题时 |
@@ -172,7 +187,7 @@
 | `torvox-core/src/grid.rs` | Grid, DirtyMask (Vec<u64> 分区位标志) | 任意行数 |
 | `torvox-terminal/src/pty.rs` | PtyPair (spawn, resize, Read/Write, Drop) | 唯一允许 fork unsafe 的位置 |
 | `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
-| `torvox-gui-android/uniffi.toml` | boltffi 配置文件 | 已移除 (boltffi 不需要配置文件) |
+| `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
 | `scripts/build-android-libs.nu` | cargo-ndk 交叉编译 + torvox-exec 构建 | 替代 rust-android-gradle |
 | `scripts/quality-gate.nu` | 8 步质量门 | 提交前必须通过 |
 | `flake.nix` | 完整 Nix 开发环境 | 使用 flake-parts，需要 allowUnfree |
@@ -223,16 +238,16 @@
 | `torvox-core` (9 模块) | **完整** | Cell, Attrs (10 SGR), Color, DirtyMask (Vec<u64>), Grid (含 scrollback + GridSnapshot trait), Line, Config, Cursor, Selection, Unicode, Event, Ansi |
 | `torvox-terminal/pty.rs` | **完整** | PtyPair: spawn, resize, read/write, Drop (增量终止), 非阻塞, 4 个 Linux 测试 |
 | `torvox-terminal/parser.rs` | **完整** | VtParser 包装 vte::Parser, advance 方法 |
-| `torvox-terminal/terminal.rs` | **完整** | TerminalState + vte::Perform impl, 76 测试 (含 proptest), 就地 insert/delete chars |
-| `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + TerminalState + parser + crossbeam channel + Condvar 事件通知, 5 个集成测试 |
+| `torvox-terminal/terminal.rs` | **完整** | TerminalState + vte::Perform impl, 132 测试 (含 proptest), 就地 insert/delete chars |
+| `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + TerminalState + parser + flume channel + Condvar 事件通知, 4 个集成测试 |
 | `torvox-terminal/keyboard.rs` | **完整** | InputEngine: Kitty 协议 + VT 传统编码 + 鼠标 SGR, 43 个测试 |
-| `torvox-renderer` | **完整** | FontPipeline (fontdb+cosmic-text+swash+guillotiere, 7 测试), GpuContext (wgpu v29, 缓存 instance_buffer, cell.wgsl, cursor.wgsl, 3 测试), Android Surface 支持 (set_surface_from_native_window), 已移除空壳 atlas.rs/pipeline.rs, 无 torvox-terminal 依赖 |
-| `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
+| `torvox-renderer` | **完整** | FontPipeline (fontdb+cosmic-text+swash+guillotiere, LRU eviction, 7 测试), GpuContext (wgpu v29, cell.wgsl, 7 测试), Android Surface 支持 |
+| `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), BridgeTheme, Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
 | `torvox-gui-android/surface.rs` | **完整** | AndroidSurface: GPU 管线 + 字体 + 终端状态, set_native_window, render (使用 GridSnapshot) |
 | `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |
-| `torvox-fuzz` | **空** | 仅有 src/lib.rs 存根 |
-| `torvox-integration-tests` | **空** | 仅有 src/lib.rs 存根 |
-| `torvox-bench` | **空** | 仅有 src/lib.rs 存根 |
+| `torvox-fuzz` | **功能** | 3 个模糊目标 (fuzz_vt_parser, fuzz_osc_parse, fuzz_grid_resize), cargo-fuzz 配置完整 |
+| `torvox-integration-tests` | **功能** | 4 个集成测试 (parse_then_verify_terminal, scrollback_preserved_on_scroll, sgr_color_persists_across_cells, session_spawn_and_write) |
+| `torvox-bench` | **功能** | 4 个 criterion 基准测试 (plain_text, sgr, cursor, 1k_lines) |
 | Android Kotlin | **功能** | TorvoxApp, MainActivity, TerminalViewModel (+settings), TerminalScreen (+topbar), ModifierBar, SettingsScreen (+theme/shell/font), ForegroundService, ExecInstaller |
 
 ## 已删除/合并的组件
@@ -324,6 +339,8 @@
 | 15 | `#[error]` 枚举在 boltffi 中仅适用于枚举 | 不适用于结构体 | P0.6 |
 | 16 | `DirtyMask(Vec<u64>)` 不再是 `Copy` | 含 Vec 的类型不能 Copy。DirtyMask 失去 Copy，需 Clone。Grid 的 Clone 仍可用 | P0.2→本次修复 |
 | 17 | bridge.rs `shell: String` 无法表达 "系统默认" | 改为 `Shell` 枚举 (SystemDefault/Custom)，与 core 的 Shell 对齐，避免空字符串 hack | 本次修复 |
+| 18 | boltffi `#[export]` 在 impl 块上要求 `pub` 方法 | 方法必须是 `pub` 才能生成 C 导出函数。私有方法不会产生 `boltffi_torvox_bridge_*` 符号 | 本次修复 |
+| 19 | UniFFI 与 boltffi 绑定不兼容 | UniFFI 生成 `uniffi_*` 函数名，boltffi 生成 `boltffi_*` 函数名。切换 FFI 框架后 Kotlin 绑定必须重写 | 本次修复 |
 
 ---
 
@@ -383,7 +400,7 @@ cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --f
 | cargo-audit | 0.22 | 漏洞扫描 |
 | cargo-ndk | latest | Android 交叉编译 |
 | rust-analyzer | latest | IDE 支持 |
-| JDK (Temurin) | 25 | Android 构建 |
+| JDK (Temurin) | 17 | Android 构建 |
 | Kotlin | nixpkgs latest | |
 | Gradle | 9 | |
 | ktfmt | nixpkgs latest | Kotlin 格式化 |
@@ -414,12 +431,10 @@ nix develop --command cargo nextest  # 直接运行
 | nix | 0.31 | PTY (openpty/fork/ioctl) |
 | cosmic-text | 0.19 | 文本整形 |
 | swash | 0.2.7 | 字体光栅化 (内部用 skrifa 做 scaling) |
-| etagere | 0.3 | 字形图集打包 |
+| guillotiere | 0.7 | 货架打包图集 |
 | boltffi | 0.25 | Kotlin 绑定生成 |
-| postcard | 1.1 | 已移除 (原用于测试序列化) |
+| flume | 0.12 | 无锁 SPSC 通道 (PTY→解析器) |
 | thiserror | 2 | 错误类型 (torvox-core 中 optional) |
-| tokio | 1.43 | 仅异步运行时 (热路径用 crossbeam) |
-| crossbeam | 0.8 | 无锁 SPSC 队列 (PTY→解析器) |
 | proptest | 1.11 | 属性测试 |
 | AGP | 9.0.1 | |
 | Kotlin | 2.3.21 | compose 插件 |
@@ -427,7 +442,7 @@ nix develop --command cargo nextest  # 直接运行
 | Hilt | 2.59.2 | 需 AGP 9.0+ |
 | KSP | 2.3.9 | 替代 kapt |
 | Gradle | 9 | |
-| JDK | 25 (Temurin) | |
+| JDK | 17 (Temurin) | |
 | NDK | 29.0.14206865 (r29) | |
 | minSdk / targetSdk | 33 / 36 | Android 13+ / 16 |
 
@@ -522,7 +537,7 @@ torvox-core (no_std, 零依赖)
       ↑
 torvox-terminal (nix, vte, crossbeam)
       ↑
-torvox-renderer (wgpu, cosmic-text, swash, etagere)
+torvox-renderer (wgpu, cosmic-text, swash, guillotiere)
       ↑
 torvox-gui-android (boltffi, 依赖上述所有)
 ```
@@ -557,7 +572,7 @@ PTY write → kernel → read() → raw bytes → crossbeam SPSC
 - **torvox-renderer 是单线程** (wgpu 设备在自己线程上)。
 - **FFI 边界传递结构化事件**，不是原始字节 (boltffi #[data]/#[error])。
 - **DirtyMask** `Vec<u64>` 分区，每 u64 覆盖 64 行，支持任意行数。不再有行数限制。
-- **热路径用 crossbeam**，不用 tokio。crossbeam 零分配、无锁、有界反压。
+- **热路径用 flume**，不用 tokio。flume 零分配、无锁、有界反压。
 
 ## 渲染管线
 
@@ -652,8 +667,14 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 
 | # | 问题 | 状态 | 计划 |
 |---|------|------|------|
-| 1 | `torvox-bench/benches/` 不存在 | 待建 | 性能基准无法运行 |
-| 2 | CI 使用 `@main` 引用 | 待修 | 应固定到 SHA 或 tag |
+| 1 | `torvox-bench` 已有基准骨架 | ✅ 已修复 | criterion benchmarks 已添加 |
+| 2 | CI `@main` 引用 | ✅ 已修复 | 所有 actions 固定到 v4/v3/v2 |
+| 3 | `extractSelectedText()` 返回占位符 | 待修 | 需要从 grid 读取实际内容 |
+| 4 | Grid scrollback 使用 `Vec::remove(0)` | 待优化 | 性能问题，需 ring buffer |
+| 5 | Unicode 宽度实现不完整 | 待修 | 缺少 ZWJ、variation selector 等 |
+| 6 | boltffi `#[export]` 要求 `pub` 方法 | ✅ 已修复 | 所有 bridge 方法已改为 pub |
+| 7 | CI 模拟器测试需 Rust 交叉编译 | ✅ 已修复 | CI 已添加 cargo-ndk 步骤 |
+| 8 | ~~`echo_cells()` 是空操作~~ | ✅ 已移除 | 已在本次会话中删除 |
 
 ---
 

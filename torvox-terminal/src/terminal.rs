@@ -883,6 +883,30 @@ impl vte::Perform for TerminalState {
             (b'0', [b'(']) => self.charsets[0] = Charset::SpecialGraphics,
             (b'B', [b')']) => self.charsets[1] = Charset::Ascii,
             (b'0', [b')']) => self.charsets[1] = Charset::SpecialGraphics,
+            (b'3', [b'#']) => {
+                let row = self.effective_row();
+                if let Some(line) = self.grid.get_mut(row) {
+                    line.attr = torvox_core::line::LineAttr::DoubleHeightTop;
+                }
+            }
+            (b'4', [b'#']) => {
+                let row = self.effective_row();
+                if let Some(line) = self.grid.get_mut(row) {
+                    line.attr = torvox_core::line::LineAttr::DoubleHeightBottom;
+                }
+            }
+            (b'5', [b'#']) => {
+                let row = self.effective_row();
+                if let Some(line) = self.grid.get_mut(row) {
+                    line.attr = torvox_core::line::LineAttr::Normal;
+                }
+            }
+            (b'6', [b'#']) => {
+                let row = self.effective_row();
+                if let Some(line) = self.grid.get_mut(row) {
+                    line.attr = torvox_core::line::LineAttr::DoubleWidth;
+                }
+            }
             (b'=', []) => {}
             (b'>', []) => {}
             (b'\\', []) => {}
@@ -1623,6 +1647,74 @@ mod tests {
             parser.advance(&mut state, b"\x1b[1S");
             prop_assert_eq!(state.grid.cell(0, 0).unwrap().char, 'B');
             prop_assert_eq!(state.grid.cell(rows - 1, 0).unwrap().char, ' ');
+        }
+
+        #[test]
+        fn sgr_random_sequences_never_panic(
+            sequences in proptest::collection::vec(
+                proptest::collection::vec(0u8..=127u8, 1..20),
+                1..50
+            )
+        ) {
+            let mut state = TerminalState::new(24, 80).unwrap();
+            let mut parser = crate::parser::VtParser::new();
+            for seq in sequences {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"\x1b[");
+                bytes.extend_from_slice(&seq);
+                bytes.push(b'm');
+                parser.advance(&mut state, &bytes);
+            }
+        }
+
+        #[test]
+        fn cursor_movement_random_never_panic(
+            sequences in proptest::collection::vec(
+                proptest::collection::vec(0u8..=127u8, 1..10),
+                1..100
+            )
+        ) {
+            let mut state = TerminalState::new(24, 80).unwrap();
+            let mut parser = crate::parser::VtParser::new();
+            for seq in sequences {
+                let mut bytes = Vec::new();
+                bytes.extend_from_slice(b"\x1b[");
+                bytes.extend_from_slice(&seq);
+                bytes.push(b'A');
+                parser.advance(&mut state, &bytes);
+            }
+        }
+
+        #[test]
+        fn mixed_content_never_panic(
+            content in proptest::collection::vec(0u8..=0xffu8, 1..2000)
+        ) {
+            let mut state = TerminalState::new(24, 80).unwrap();
+            let mut parser = crate::parser::VtParser::new();
+            for chunk in content.chunks(64) {
+                parser.advance(&mut state, chunk);
+            }
+        }
+
+        #[test]
+        fn erase_operations_never_panic(
+            params in proptest::collection::vec(0u8..=127u8, 1..10),
+            count in 1u32..=200u32,
+        ) {
+            let mut state = TerminalState::new(24, 80).unwrap();
+            let mut parser = crate::parser::VtParser::new();
+            let mut bytes = Vec::new();
+            bytes.extend_from_slice(b"\x1b[");
+            bytes.extend_from_slice(&params);
+            bytes.push(b'J');
+            parser.advance(&mut state, &bytes);
+
+            let mut bytes2 = Vec::new();
+            bytes2.extend_from_slice(b"\x1b[");
+            let n_str = count.to_string();
+            bytes2.extend_from_slice(n_str.as_bytes());
+            bytes2.push(b'X');
+            parser.advance(&mut state, &bytes2);
         }
     }
 }

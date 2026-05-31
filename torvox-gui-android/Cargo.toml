@@ -1,9 +1,9 @@
 [package]
 name = "torvox-gui-android"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "Android BoltFFI bridge for Torvox terminal UI"
-license = "UNLICENSED"
+license.workspace = true
 
 [lib]
 name = "torvox_android"

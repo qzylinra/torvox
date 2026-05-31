@@ -486,6 +486,43 @@ impl GpuContext {
         }));
     }
 
+    pub fn warmup(&self) {
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Warmup Encoder"),
+            });
+
+        if let Some(surface) = &self.surface {
+            let output = match surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(tex)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(tex) => tex,
+                _ => return,
+            };
+            let view = output
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            {
+                let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Warmup Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    ..Default::default()
+                });
+            }
+            self.queue.submit(std::iter::once(encoder.finish()));
+            output.present();
+        }
+    }
+
     pub fn render_frame(&mut self, instances: &[CellInstance]) -> Result<(), GpuError> {
         let surface = self
             .surface
@@ -628,6 +665,15 @@ pub fn build_cell_instances(
                         let uv_w = info.width as f32 / atlas_width;
                         let uv_h = info.height as f32 / atlas_height;
 
+                        let flags = if cell.attrs.bold { 1.0 } else { 0.0 }
+                            + if cell.attrs.italic { 2.0 } else { 0.0 }
+                            + if cell.attrs.reverse { 4.0 } else { 0.0 }
+                            + if cell.attrs.underline { 8.0 } else { 0.0 }
+                            + if cell.attrs.dim { 16.0 } else { 0.0 }
+                            + if cell.attrs.hidden { 32.0 } else { 0.0 }
+                            + if cell.attrs.strikethrough { 64.0 } else { 0.0 }
+                            + if cell.attrs.overline { 128.0 } else { 0.0 };
+
                         instances.push(CellInstance {
                             cell_pos: [col as f32, row as f32],
                             atlas_offset: [uv_x, uv_y],
@@ -644,6 +690,21 @@ pub fn build_cell_instances(
                                 bg.b as f32 / 255.0,
                                 1.0,
                             ],
+                            flags,
+                            _pad: [0.0; 3],
+                        });
+                    } else {
+                        instances.push(CellInstance {
+                            cell_pos: [col as f32, row as f32],
+                            atlas_offset: [0.0, 0.0],
+                            atlas_size: [0.0, 0.0],
+                            fg_color: [0.8, 0.8, 0.8, 1.0],
+                            bg_color: [
+                                bg.r as f32 / 255.0,
+                                bg.g as f32 / 255.0,
+                                bg.b as f32 / 255.0,
+                                1.0,
+                            ],
                             flags: 0.0,
                             _pad: [0.0; 3],
                         });
@@ -652,7 +713,6 @@ pub fn build_cell_instances(
             }
         }
     }
-
     instances
 }
 
@@ -741,6 +801,110 @@ pub fn build_cell_instances_from_flat(
         }
     }
 
+    instances
+}
+
+#[allow(clippy::collapsible_if)]
+pub fn build_cell_instances_from_ghostty(
+    ghostty: &torvox_terminal::ghostty_terminal::GhosttyTerminal,
+    font_pipeline: &mut crate::font::FontPipeline,
+    _cell_width: f32,
+    _cell_height: f32,
+    atlas_width: f32,
+    atlas_height: f32,
+) -> Vec<CellInstance> {
+    let rows = ghostty.rows();
+    let cols = ghostty.cols();
+    let mut instances = Vec::with_capacity((rows * cols) as usize);
+
+    use libghostty_vt::terminal::Point;
+    use libghostty_vt::terminal::PointCoordinate;
+
+    for row in 0..rows {
+        for col in 0..cols {
+            let coord = PointCoordinate {
+                x: col as u16,
+                y: row,
+            };
+            let mut ch = ' ';
+            let mut fg_r: f32 = 1.0;
+            let mut fg_g: f32 = 1.0;
+            let mut fg_b: f32 = 1.0;
+            let mut bg_r: f32 = 0.0;
+            let mut bg_g: f32 = 0.0;
+            let mut bg_b: f32 = 0.0;
+            let mut bold = false;
+            let mut italic = false;
+            let mut underline = false;
+            let mut reverse = false;
+
+            if let Ok(point) = ghostty.terminal().grid_ref(Point::Viewport(coord)) {
+                if let Ok(cell) = point.cell() {
+                    let cp = cell.codepoint().unwrap_or(0);
+                    if cp != 0 {
+                        if let Some(c) = char::from_u32(cp) {
+                            ch = c;
+                        }
+                    }
+                }
+                if let Ok(style) = point.style() {
+                    use libghostty_vt::style::StyleColor;
+                    if let StyleColor::Rgb(c) = style.fg_color {
+                        fg_r = c.r as f32 / 255.0;
+                        fg_g = c.g as f32 / 255.0;
+                        fg_b = c.b as f32 / 255.0;
+                    }
+                    if let StyleColor::Rgb(c) = style.bg_color {
+                        bg_r = c.r as f32 / 255.0;
+                        bg_g = c.g as f32 / 255.0;
+                        bg_b = c.b as f32 / 255.0;
+                    }
+                    bold = style.bold;
+                    italic = style.italic;
+                    underline = !matches!(style.underline, libghostty_vt::style::Underline::None);
+                    reverse = style.inverse;
+                }
+            }
+
+            if ch == ' ' {
+                instances.push(CellInstance {
+                    cell_pos: [col as f32, row as f32],
+                    atlas_offset: [0.0, 0.0],
+                    atlas_size: [0.0, 0.0],
+                    fg_color: [0.0, 0.0, 0.0, 0.0],
+                    bg_color: [bg_r, bg_g, bg_b, 1.0],
+                    flags: 0.0,
+                    _pad: [0.0; 3],
+                });
+            } else if let Some(info) = font_pipeline.glyph_info(ch) {
+                let uv_x = info.atlas_x as f32 / atlas_width;
+                let uv_y = info.atlas_y as f32 / atlas_height;
+                let uv_w = info.width as f32 / atlas_width;
+                let uv_h = info.height as f32 / atlas_height;
+
+                let flags = if bold { 1.0 } else { 0.0 }
+                    + if italic { 2.0 } else { 0.0 }
+                    + if reverse { 4.0 } else { 0.0 }
+                    + if underline { 8.0 } else { 0.0 };
+
+                let (fg, bg) = if reverse {
+                    ([bg_r, bg_g, bg_b, 1.0], [fg_r, fg_g, fg_b, 1.0])
+                } else {
+                    ([fg_r, fg_g, fg_b, 1.0], [bg_r, bg_g, bg_b, 1.0])
+                };
+
+                instances.push(CellInstance {
+                    cell_pos: [col as f32, row as f32],
+                    atlas_offset: [uv_x, uv_y],
+                    atlas_size: [uv_w, uv_h],
+                    fg_color: fg,
+                    bg_color: bg,
+                    flags,
+                    _pad: [0.0; 3],
+                });
+            }
+        }
+    }
     instances
 }
 

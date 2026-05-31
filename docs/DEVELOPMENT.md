@@ -14,8 +14,8 @@
 | Android Studio / SDK | Meerkat (2025.3.4+) | Android 构建 |
 | Android NDK | r29 | 交叉编译 Rust 为 Android |
 | cargo-ndk | v4 (重大变更: 与 v3 不兼容) | `cargo ndk` 命令 |
-| JDK | 25+ | Kotlin/JVM 编译 |
-| Gradle | 9.4.1+ | Android 构建系统 |
+| JDK | 17+ (Temurin recommended) | Kotlin/JVM 编译 |
+| Gradle | 9+ | Android 构建系统 |
 
 ### 可选 (推荐)
 
@@ -182,10 +182,9 @@ cargo audit
 
 | 工作流 | 触发 | 检查 | 超时 |
 |--------|------|------|------|
-| `ci.yml` | 每个 PR 到 `main` | cargo fmt, clippy, nextest, proptest, geiger, gradle lint, gradle test | 30 分钟 |
-| `nightly.yml` | 每日 UTC 03:00 | 模糊测试 (3 目标×1h), MIRI, cargo bench, cargo audit | 4 小时 |
-| `release.yml` | 标签 `v*` | cargo ndk build → assembleRelease → 签名 → GitHub Release | 60 分钟 |
-| `android-ci.yml` | PR (仅 android/ 变更) | gradle lint, gradle test, assembleDebug | 20 分钟 |
+| `ci.yml` | push/PR 到 `main` | cargo fmt, clippy, nextest, proptest, gradle lint, gradle test, emulator test | 30 分钟 |
+| `nightly.yml` | 每日 UTC 03:00 | 模糊测试 (3 目标×4min), MIRI, cargo audit | 4 小时 |
+| `release.yml` | 标签 `v*` / workflow_dispatch | cargo ndk build → torvox-exec → assembleRelease | 60 分钟 |
 
 ### CI 管线
 
@@ -193,9 +192,9 @@ cargo audit
 
 | 工作流 | 触发 | 关键步骤 |
 |--------|------|----------|
-| `ci.yml` | PR → main | cargo fmt/clippy/nextest/proptest/geiger + gradle lint/test |
-| `nightly.yml` | 每日 UTC 03:00 | cargo fuzz (3 目标×1h) + MIRI + bench + audit |
-| `release.yml` | 标签 `v*` | cargo ndk build → assembleRelease → 签名 → GitHub Release |
+| `ci.yml` | push/PR → main | cargo fmt/clippy/nextest/proptest + gradle lint/test + emulator |
+| `nightly.yml` | 每日 UTC 03:00 | cargo fuzz (3 目标×4min) + MIRI + audit |
+| `release.yml` | 标签 `v*` / workflow_dispatch | cargo ndk build + torvox-exec → assembleRelease |
 
 ## 构建架构
 

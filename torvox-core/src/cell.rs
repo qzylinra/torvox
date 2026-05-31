@@ -6,6 +6,7 @@ pub struct Cell {
     pub fg: Color,
     pub bg: Color,
     pub attrs: Attrs,
+    pub width: u8,
 }
 
 impl Default for Cell {
@@ -15,6 +16,7 @@ impl Default for Cell {
             fg: Color::default(),
             bg: Color::default(),
             attrs: Attrs::default(),
+            width: 1,
         }
     }
 }

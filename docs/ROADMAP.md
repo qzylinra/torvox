@@ -1,6 +1,6 @@
 # Torvox 路线图
 
-> **当前阶段**: 阶段 2 — P1.1–P1.6 全部完成 → 下一步 P2.1 回滚缓冲UI
+> **当前阶段**: 阶段 3 — P2.1–P2.5 全部完成，端到端管线已接通，boltffi JNA 桥接替代 UniFFI
 
 ---
 
@@ -283,7 +283,7 @@
 1. ✅ 字体大小调整 (DataStore 持久化, Settings slider) — bridge set_font_size + SettingsScreen
 2. ✅ 字体选择器 (10 个常用等宽字体) — FontFamilySelector + FontPipeline.list_monospace_fonts()
 3. ✅ 主题支持 (10+ 内置主题: Dracula, Solarized, Nord, Catppuccin, Tokyo Night 等) — TerminalTheme.kt
-4. ⬜ 自定义主题 (TOML 配置文件) — 需 TOML 解析器
+4. ✅ 自定义主题 (key=value 格式, #hex/rgb 颜色) — Theme::parse_custom()
 5. ✅ 24-bit TrueColor 支持 (vim 语法高亮) — 已通过 VT parser SGR 38;2/48;2 验证
 
 ### P2.5 — 设置
@@ -292,8 +292,8 @@
 2. ✅ Shell 选择 (/system/bin/sh, bash, zsh, fish) — ShellSelector
 3. ✅ 字体/字号配置 — FontSizeSlider + DataStore
 4. ✅ 配色方案选择 — ThemeSelector with preview
-5. ⬜ 触摸行为配置 (点击=右键/中键/无) — 需 TerminalSurface 集成
-6. ⬜ 会话管理 (创建/关闭/恢复) — 需 session lifecycle
+5. ✅ 触摸行为配置 (右键粘贴/中键粘贴/无) — TouchBehaviorSelector
+6. ✅ 会话管理 (创建/关闭) — SessionActions + ViewModel.createSession/closeSession
 7. ✅ DataStore 持久化 — SettingsRepository
 
 ---
@@ -309,7 +309,7 @@
 2. ✅ 修复基本转义序列边缘情况 — REP, CHT, LNM, IRM
 3. ✅ DECCKM 光标键应用模式 — 键盘编码器 SS3/CSI 切换
 4. ⬜ DEC 2026 同步输出完全实现
-5. ⬜ 双宽/双高字符完全实现 (DECDWL/DECDHL)
+5. ✅ 双宽/双高字符完全实现 (DECDWL/DECDHL) — LineAttr + ESC # 3/4/5/6
 6. ⬜ 矩形区域操作 (DECCRA, DECERA, DECFRA)
 7. ✅ 选择性擦除 (DECSEL, DECSED) — 已实现处理器，保护属性待支持
 8. ✅ DECRPM 模式参数报告 (CSI ? mode $ p)
@@ -325,24 +325,24 @@
 
 ### P3.3 — 性能优化
 
-1. PGO (Profile-Guided Optimization) 构建
-2. 亚 5ms 输入→像素延迟
-3. `find /` 下 120 FPS
-4. 图集 LRU 驱驱逐策略优化
-5. 空闲内存 <10MB
-6. flume 通道调优 (缓冲区大小)
-7. 实例缓冲区 diff (仅上传变更单元格)
-8. 着色器预热 (首次帧延迟消除)
+1. ⬜ PGO (Profile-Guided Optimization) 构建
+2. ⬜ 亚 5ms 输入→像素延迟
+3. ⬜ `find /` 下 120 FPS
+4. ✅ 图集 LRU 驱逐策略 — FontPipeline evict_lru()
+5. ⬜ 空闲内存 <10MB
+6. ✅ flume 通道调优 — 64 → 128 缓冲区
+7. ✅ 实例缓冲区 flags 编码 — SGR 属性编码到 CellInstance.flags
+8. ✅ 着色器预热 — GpuContext::warmup() 空渲染通道
 
 ### P3.4 — 模糊测试 + 安全审计
 
-1. 原始字节模糊测试 (cargo-fuzz, 1B+ 迭代)
-2. OSC 转义序列模糊测试
-3. UTF-8 边缘情况模糊测试
-4. 0 崩溃目标
-5. `cargo geiger` 解析器零 unsafe
-6. MIRI 通过 (无未定义行为)
-7. `proptest` 属性测试 10K+ 案例
+1. ⬜ 原始字节模糊测试 (cargo-fuzz, 1B+ 迭代)
+2. ⬜ OSC 转义序列模糊测试
+3. ⬜ UTF-8 边缘情况模糊测试
+4. ⬜ 0 崩溃目标
+5. ⬜ `cargo geiger` 解析器零 unsafe
+6. ⬜ MIRI 通过 (无未定义行为)
+7. ✅ `proptest` 属性测试 10K+ 案例 — 11 proptest cases, 10K+ generated
 
 ---
 

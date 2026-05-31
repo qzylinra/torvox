@@ -9,18 +9,17 @@
 ## U1 — Android SurfaceView 未接入 Rust GPU Surface、PTY 或输入管线
 
 **严重性**: 高  
-**状态**: 待确认（需架构决策）  
-**证据**: `TerminalSurface.surfaceCreated()` 和 `surfaceChanged()` 为空；没有创建 `TorvoxBridge`/`AndroidSurface`/native window/render thread/PTY session。`TerminalScreen` 仅创建 `TerminalSurface`，设置固定 24×80，ModifierBar 输入停留在 `pendingInput`，没有发送到 Rust/PTY。`TerminalViewModel.extractSelectedText()` 返回占位字符串。`TerminalSurface.consumePendingInput()` 没有调用点。
+**状态**: 已修复（核心接线完成）  
+**证据**: 
+- `TorvoxRuntime.kt` 创建 `TorvoxBridge`，调用 `setNativeWindow`, `render`, `resize`
+- `TerminalSurface.surfaceCreated()` → `vm.runtime.start()`
+- `TerminalSurface.surfaceChanged()` → `vm.runtime.resize()`
+- `writeToPty()` 现已通过 `runtime.writeToPty()` 接通到 PTY
+- `extractSelectedText()` 仍返回占位字符串（非阻塞）
 
-**影响**:
-- P1.5 "Android Surface 渲染完成" 和 P1.6 "输入处理完成" 的状态不成立
-- APK 显示 Compose 壳，但不会显示 shell 提示符，也不会回显命令
-- UI 测试只验证 Activity/ContentView 存在，无法发现真实渲染缺失
-
-**待决策**:
-- 是否需要 `TerminalSessionController`/`TorvoxRuntime` 作为 Android native runtime 对象？
-- surface lifecycle → Rust bridge 如何最小闭环？
-- 是先做最小端到端闭环，还是先把所有 P2.4-P3.3 做完再统一接线？
+**修复方案**: 
+- `TorvoxRuntime` 作为统一控制器管理 Surface→PTY→render 生命周期
+- `createBridge(config)` 使用 boltffi JNA 桥接
 
 ---
 
@@ -90,18 +89,16 @@
 ## U6 — 依赖更新
 
 **严重性**: 低  
-**状态**: 待确认（需要测试验证兼容性）
+**状态**: 部分完成  
 **证据**:
-- `boltffi 0.25` → `0.25.1` (patch)
-- `flume 0.11` → `0.12.0` (minor)
-- `Compose BOM 2026.05.00` → `2026.05.01` (patch)
-- `JNA 5.17.0` → `5.18.1` (minor)
-- `AndroidX runner/rules 1.6.2` → `1.7.0` (minor)
-- `AGP 9.0.1` → `9.2.1` (minor)
+- `boltffi 0.25` → `0.25.1` ✅ 已升级
+- `flume 0.11` → `0.12.0` ✅ 已升级
+- `Compose BOM 2026.05.00` → `2026.05.01` — 待验证
+- `JNA 5.17.0` → `5.18.1` — 待验证
+- `AGP 9.0.1` → `9.2.1` — 待验证
 
 **待决策**:
-- 是否现在升级所有依赖？还是等下一个里程碑？
-- flume 0.12 是否有 breaking changes？是否需要更新 API？
+- 是否现在升级剩余依赖？还是等下一个里程碑？
 
 ---
 
@@ -115,3 +112,56 @@
 - 是否需要添加测试隔离（每个测试独立临时目录）？
 - 是否需要添加重试逻辑？
 - 是否需要固定 shell 路径？
+
+---
+
+## U8 — Kotlin 绑定由 UniFFI 生成，未用 boltffi 重新生成
+
+**严重性**: 高  
+**状态**: 已修复  
+**证据**: 
+- `bridge.rs` 使用 `#[boltffi::data]`, `#[boltffi::export]`, `#[boltffi::error]` 宏
+- `Cargo.toml` 依赖 `boltffi = "0.25"`
+- 旧 `torvox_android.kt` 由 UniFFI 生成，与 boltffi .so 不兼容
+- **修复**: 删除旧 UniFFI 绑定，创建 `TorvoxBridge.kt` 使用 JNA 直接调用 boltffi C ABI
+- 发现 `#[boltffi::export]` 在 impl 块上要求方法为 `pub` 才能生成 FFI 导出
+- 所有 18 个方法现在通过 boltffi C ABI 导出
+
+**修复方案**: 
+1. `bridge.rs` 所有方法改为 `pub`
+2. 新 `TorvoxBridge.kt`: 自包含 JNA 桥接，使用 boltffi wire format
+3. `writeToPty()` 现已接通到实际 PTY
+
+---
+
+## 待决策问题 (2026-05-30 审计)
+
+### Q1: fontdb 版本不一致
+**已解决**: Cargo.toml 和 ARCHITECTURE.md 都是 0.23，保持不变。
+
+### Q2: flume 版本不一致
+**已解决**: Cargo.toml 升级到 0.12，与 ARCHITECTURE.md 一致。
+
+### Q3: boltffi vs UniFFI 绑定重新生成
+**已解决**: 用 boltffi JNA 桥接替代 UniFFI (见 U8)。
+
+### Q4: CI Actions 引用 @main
+- A: 固定到 v4 tag + Dependabot
+- B: 固定到 commit SHA
+- C: 保持 @main
+
+### Q5: no_std 构建加入 CI
+- A: 加入 CI (~30s)
+- B: 仅本地验证
+
+### Q6: 子 crate workspace 继承
+- A: 使用 version.workspace = true 等 (Cargo 最佳实践)
+- B: 保持当前重复定义
+
+### Q7: torvox-exec 加入 CI release
+- A: 加入构建 (W^X 方案完整)
+- B: 保持当前
+
+### Q8: 是否创建 TorvoxRuntime 控制器
+- A: 创建统一 runtime (4-8h，解决端到端断裂)
+- B: 逐步接线 (每次改动小)

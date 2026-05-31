@@ -9,5 +9,13 @@ fuzz_target!(|data: &[u8]| {
         return;
     };
     let mut parser = VtParser::new();
-    parser.advance(&mut state, data);
+
+    // Prepend OSC escape sequence prefix to exercise OSC parsing paths.
+    // OSC = ESC ] ... BEL (0x07) or ST (ESC \)
+    let mut input = Vec::with_capacity(data.len() + 4);
+    input.extend_from_slice(b"\x1b]");
+    input.extend_from_slice(data);
+    input.push(0x07); // BEL terminates OSC
+
+    parser.advance(&mut state, &input);
 });

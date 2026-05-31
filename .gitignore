@@ -27,6 +27,7 @@ Thumbs.db
 
 # Generated
 *.log
+boltffi.toml
 
 # Nix
 result/
@@ -43,8 +44,8 @@ massif.out.*
 # Test results
 test-results/
 
-# UniFFI generated (由构建时生成)
-android/app/src/main/java/io/torvox/bridge/uniffi/
+# boltffi generated (由构建时生成)
+android/app/src/main/java/io/torvox/bridge/kotlin/
 
 # opencode (配置已版本控制, 忽略临时文件)
 .opencode/sessions/

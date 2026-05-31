@@ -35,6 +35,8 @@ pub struct FontPipeline {
     scaler_context: ScaleContext,
     atlas: guillotiere::AtlasAllocator,
     glyph_cache: HashMap<GlyphKey, GlyphInfo>,
+    glyph_access: HashMap<GlyphKey, u64>,
+    access_counter: u64,
     atlas_bitmap: Vec<u8>,
     atlas_width: u32,
     atlas_height: u32,
@@ -54,6 +56,8 @@ impl FontPipeline {
             scaler_context,
             atlas,
             glyph_cache: HashMap::new(),
+            glyph_access: HashMap::new(),
+            access_counter: 0,
             atlas_bitmap,
             atlas_width: atlas_width as u32,
             atlas_height: atlas_height as u32,
@@ -91,6 +95,8 @@ impl FontPipeline {
         };
 
         if let Some(info) = self.glyph_cache.get(&key) {
+            self.access_counter += 1;
+            self.glyph_access.insert(key, self.access_counter);
             return Some(info.clone());
         }
 
@@ -135,9 +141,17 @@ impl FontPipeline {
             return Some(info);
         }
 
-        let allocation = self
+        let allocation = match self
             .atlas
-            .allocate(guillotiere::size2(width + 1, height + 1))?;
+            .allocate(guillotiere::size2(width + 1, height + 1))
+        {
+            Some(a) => a,
+            None => {
+                self.evict_lru();
+                self.atlas
+                    .allocate(guillotiere::size2(width + 1, height + 1))?
+            }
+        };
         let rect = allocation.rectangle;
         let ax = rect.min.x as i32;
         let ay = rect.min.y as i32;
@@ -187,6 +201,8 @@ impl FontPipeline {
             placement: image.placement,
         };
 
+        self.access_counter += 1;
+        self.glyph_access.insert(key, self.access_counter);
         self.glyph_cache.insert(key, info.clone());
         Some(info)
     }
@@ -194,6 +210,18 @@ impl FontPipeline {
     pub fn rasterize_ascii(&mut self) {
         for ch in 32u8..127u8 {
             self.glyph_info(ch as char);
+        }
+    }
+
+    fn evict_lru(&mut self) {
+        let evict_count = (self.glyph_cache.len() / 4).max(1);
+        let mut entries: Vec<(GlyphKey, u64)> =
+            self.glyph_access.iter().map(|(&k, &v)| (k, v)).collect();
+        entries.sort_by_key(|(_, access)| *access);
+
+        for (key, _) in entries.into_iter().take(evict_count) {
+            self.glyph_cache.remove(&key);
+            self.glyph_access.remove(&key);
         }
     }
 

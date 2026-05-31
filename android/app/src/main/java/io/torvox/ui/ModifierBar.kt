@@ -96,7 +96,6 @@ fun ModifierBar(
                                     } else {
                                         val prefix =
                                             buildString {
-                                                if (activeToggles["Ctrl"] == true) append("\u0003")
                                                 if (activeToggles["Alt"] == true) append("\u001b")
                                             }
                                         onKeySend(prefix + key.vtSequence)

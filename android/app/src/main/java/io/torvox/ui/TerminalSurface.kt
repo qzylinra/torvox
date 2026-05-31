@@ -8,6 +8,9 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import io.torvox.SelectionMode
 import io.torvox.TerminalViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class TerminalSurface
     @JvmOverloads
@@ -155,16 +158,31 @@ class TerminalSurface
             return handled || super.onTouchEvent(event)
         }
 
-        override fun surfaceCreated(holder: SurfaceHolder) {}
+        override fun surfaceCreated(holder: SurfaceHolder) {
+            viewModel?.let { vm ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    vm.runtime.start(holder.surface, width, height)
+                }
+            }
+        }
 
         override fun surfaceChanged(
             holder: SurfaceHolder,
             format: Int,
             width: Int,
             height: Int,
-        ) {}
+        ) {
+            viewModel?.let { vm ->
+                val cellWidth = 8f
+                val cellHeight = 16f
+                val cols = (width / cellWidth).toInt().coerceIn(20, 300)
+                val rows = (height / cellHeight).toInt().coerceIn(5, 100)
+                vm.runtime.resize(rows, cols)
+            }
+        }
 
         override fun surfaceDestroyed(holder: SurfaceHolder) {
+            viewModel?.runtime?.stop()
             isScrolling = false
             scrollOffset = 0
         }

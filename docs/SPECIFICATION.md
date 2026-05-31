@@ -26,7 +26,7 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | 256 调色板 | ✅ | `Colin's 256colors2.pl` |
 | 粗体/斜体/下划线/删除线 | ✅ | SGR 1-9, 21-29, 51-55 |
 | 彩色下划线 (5 种样式) | ❌ | SGR 58:2/59:2 — 未实现。基本下划线存在 (SGR 4), 但彩色下划线未实现 |
-| 双宽字符 | ❌ | DECDHL, DECSWL, DECDWL — 均未实现 |
+| 双宽字符 | ⚠️ 部分 | DECDHL/DECDWL: LineAttr 支持 + ESC # 3/4/5/6。渲染器缩放待实现 |
 | 括号粘贴模式 | ✅ | DEC 2004 |
 | 鼠标跟踪 | ✅ | X10, VT200, SGR, SGR-pixels (DEC 1016) |
 | DEC 定位器 | ❌ | CSI DECELR, DECRQLR — 未实现 |
@@ -36,9 +36,9 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 | Kitty 图形协议 | ❌ | 未实现 |
 | iTerm2 图像协议 | ❌ | 未实现 |
 | **Kitty 键盘协议** | ✅ | 渐进增强: CSI u, push/pop/restore 配置。完整按键编码。 |
-| **OSC 8 超链接** | ❌ | 未实现 |
-| **OSC 52 剪贴板** | ❌ | 未实现 (未来工作) |
-| **OSC 133 Shell 集成** | ❌ | 未实现 |
+| **OSC 8 超链接** | ✅ | URI 追踪, 查询响应 |
+| **OSC 52 剪贴板** | ✅ | 选择检测, 读写响应 |
+| **OSC 133 Shell 集成** | ✅ | prompt/marker/exec 语义 |
 | **OSC 7 CWD** | ❌ | 未实现 |
 | **OSC 4/10/11/12/17/19/110/111/112/708** | ❌ | 未实现 |
 | **DECRQSS** | ❌ | 未实现 |
