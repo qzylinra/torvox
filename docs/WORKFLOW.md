@@ -101,7 +101,7 @@ docs/
 │   ├── 001-language-choice.md
 │   ├── 002-architecture-pattern.md
 │   └── ...
-├── AUDIT.md              # 审计报告 (当前状态)
+├── AUDIT.md              # 审计报告 (已合并到 AGENTS.md §已知问题与待办)
 └── WORKFLOW.md           # 本文件 (工作流)
 ```
 
@@ -121,37 +121,26 @@ docs/
 
 ### 2.1 项目状态文件
 
-**AUDIT.md** — 当前状态的唯一真相来源
+**AGENTS.md §已知问题与待办** — 当前已知问题的唯一真相来源
 
 ```markdown
-# 当前状态
-
-## 已完成
-- [x] P0.1-P0.6 基础设施
-- [x] P1.1 VT 解析器
-
-## 进行中
-- [ ] P2.1 回滚缓冲 UI
-
-## 待办
-- [ ] P2.2 文本选择
-
-## 已知问题
-1. [严重] 描述问题...
-2. [重要] 描述问题...
+# 已知问题与待办
+## ✅ 已修复 (27 项)
+## ⚠️ 部分修复
+## 🔲 仍待修复
 ```
 
 **更新时机**:
-- 每次代码变更后更新 AUDIT.md
-- 每次规范变更后更新 AUDIT.md
-- 每次发现新问题后更新 AUDIT.md
+- 每次代码变更后更新 AGENTS.md §已知问题与待办
+- 每次规范变更后更新 AGENTS.md §已知问题与待办
+- 每次发现新问题后更新 AGENTS.md §已知问题与待办
 
 ### 2.2 状态同步流程
 
 ```
-代码变更 → 更新 AUDIT.md → 提交 (代码 + 文档)
-规范变更 → 更新 AUDIT.md → 提交 (代码 + 文档)
-发现 bug → 更新 AUDIT.md → 提交修复
+代码变更 → 更新 AGENTS.md §已知问题与待办 → 提交 (代码 + 文档)
+规范变更 → 更新 AGENTS.md §已知问题与待办 → 提交 (代码 + 文档)
+发现 bug → 更新 AGENTS.md §已知问题与待办 → 提交修复
 ```
 
 **关键原则**: 代码和文档必须在同一个提交中更新，不允许分离。
@@ -226,7 +215,7 @@ docs/
 ### 4.3 问题生命周期
 
 ```
-发现 → 记录到 AUDIT.md → 分类/定级 → 修复 → 验证 → 关闭
+发现 → 记录到 AGENTS.md §已知问题与待办 → 分类/定级 → 修复 → 验证 → 关闭
 ```
 
 ---
@@ -269,7 +258,7 @@ docs/
 ### 6.1 会话开始
 
 1. 读取 AGENTS.md (项目上下文)
-2. 读取 AUDIT.md (当前状态)
+2. 读取 AGENTS.md §当前状态 + §已知问题与待办
 3. 读取 WORKFLOW.md (本文件)
 4. 读取 SPECIFICATION.md (规范)
 5. 确认当前阶段可达
@@ -282,7 +271,7 @@ docs/
 2. 类型先行: 先定义类型，再实现行为
 3. 小步提交: 每个逻辑步骤提交
 4. 验证: 每步 clippy + tests
-5. 同步: 代码变更 → 更新 AUDIT.md
+5. 同步: 代码变更 → 更新 AGENTS.md §已知问题与待办
 6. 提交: 代码 + 文档一起提交
 ```
 
@@ -291,7 +280,7 @@ docs/
 ```
 [ ] 是否需要更新 SPECIFICATION.md?
 [ ] 是否需要创建/更新 ADR?
-[ ] 是否需要更新 AUDIT.md?
+[ ] 是否需要更新 AGENTS.md §已知问题与待办?
 [ ] 是否需要更新 ARCHITECTURE.md?
 [ ] 是否需要更新 AGENTS.md?
 [ ] 是否需要更新 ROADMAP.md?
@@ -344,7 +333,7 @@ nix fmt
 
 ### 7.4 文档检查
 
-- [ ] AUDIT.md 是否反映当前状态?
+- [ ] AGENTS.md §已知问题与待办 是否反映当前状态?
 - [ ] SPECIFICATION.md 是否与代码一致?
 - [ ] ARCHITECTURE.md 是否与代码一致?
 - [ ] ADR 是否记录了所有重要决策?
@@ -358,7 +347,7 @@ nix fmt
 |------|-----------|------|--------------|
 | 规范存储 | 无 (README) | 无 | docs/SPECIFICATION.md ✅ |
 | 决策记录 | 无 | 无 | docs/ADR/ ✅ |
-| 状态管理 | GitHub Issues | 内部工具 | AUDIT.md ✅ |
+| 状态管理 | GitHub Issues | 内部工具 | AGENTS.md §已知问题与待办 ✅ |
 | CI/CD | GitHub Actions | 内部 | GitHub Actions ✅ |
 | 提交规范 | Conventional | 内部 | Conventional ✅ |
 | AI 集成 | 无 | Oz (闭源) | opencode ✅ |
@@ -432,7 +421,7 @@ nix fmt
 ### 10.1 已完成
 
 1. ✅ 本文件 (WORKFLOW.md) — 工作流定义
-2. ✅ 更新 AUDIT.md — 反映当前状态
+2. ✅ 更新 AGENTS.md §已知问题与待办 — 反映当前状态
 3. ✅ 更新 AGENTS.md — 引用本文件
 4. ✅ flake.nix — 添加 formatter/checks
 5. ✅ scripts — Nushell (.nu) 格式化
@@ -440,7 +429,7 @@ nix fmt
 ### 10.2 持续执行
 
 1. 每次代码变更同步更新文档
-2. 每次发现新问题记录到 AUDIT.md
+2. 每次发现新问题记录到 AGENTS.md §已知问题与待办
 3. 每次重要决策创建 ADR
 4. 使用 `nix fmt` 格式化代码
 5. 使用 `nix flake check` 验证质量

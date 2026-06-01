@@ -42,8 +42,9 @@ boltffi = "0.25.2"
 flume = "0.12"
 bitflags = "2"
 lru = "0.12"
-proptest = "1.11"
-raw-window-handle = "0.6"
+quickcheck = "1"
+quickcheck_macros = "1"
+futures = "0.3"
 
 # libghostty-vt patched for Android targets.
 # Patch file: patches/libghostty-vt-android.patch

@@ -187,7 +187,6 @@
 | `torvox-core/src/grid.rs` | Grid, DirtyMask (Vec<u64> 分区位标志) | 任意行数 |
 | `torvox-terminal/src/pty.rs` | PtyPair (spawn, resize, Read/Write, Drop) | 唯一允许 fork unsafe 的位置 |
 | `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
-| `torvox-gui-android/src/bridge.rs` | boltffi 导出类型 + TorvoxBridge | 唯一允许导出的位置 |
 | `scripts/build-android-libs.nu` | cargo-ndk 交叉编译 + torvox-exec 构建 | 替代 rust-android-gradle |
 | `scripts/generate-bindings.nu` | boltffi Kotlin 绑定生成 | 替代旧 generate-bindings.sh |
 | `scripts/quality-gate.nu` | 8 步质量门 | 提交前必须通过 |
@@ -198,7 +197,8 @@
 # 第四部分: 当前状态
 
 - **阶段**: 2 完成 — P0.1–P0.6, P1.1–P1.6, P2.1–P2.5 全部完成
-- **下一步**: P3 审计修复 (已完成大部分)
+- **下一步**: P2.2 放大镜, P3.1 DEC 2026/矩形操作, P3.2 图形协议, P3.3 性能优化, P3.4 模糊测试
+- **审计修复**: 28 项已修复 (含本轮 pollster→futures, proptest→quickcheck, raw-window-handle→wgpu re-export, coding standards 全仓清理, docs 合并), 7 项仍待修
 
 ## 阶段 0 完成内容
 
@@ -665,20 +665,61 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 
 # 第十三部分: 已知问题与待办
 
-以下问题已知但尚未修复。不要在新代码中重复这些错误:
+以下问题汇总自项目审计 (原 docs/AUDIT.md) 和开发历史，是 AGENTS.md 作为单一权威源的已知问题跟踪。
+已修复的标记 ✅，部分修复的标记 ⚠️，仍待修复的标记 🔲。
 
-| # | 问题 | 状态 | 计划 |
-|---|------|------|------|
-| 1 | `torvox-bench` 已有基准骨架 | ✅ 已修复 | criterion benchmarks 已添加 |
-| 2 | CI `@main` 引用 | ✅ 已修复 | 所有 actions 固定到 v4/v3/v2 |
-| 3 | `extractSelectedText()` 返回占位符 | 待修 | 需要从 grid 读取实际内容 |
-| 4 | Grid scrollback 使用 `Vec::remove(0)` | ✅ 已修复 | 改为 `VecDeque`，`push_back` + `pop_front` O(1) |
-| 5 | Unicode 宽度实现不完整 | ✅ 已修复 | 替换为 `unicode-width 0.2` crate (no_std + CJK) |
-| 6 | boltffi `#[export]` 要求 `pub` 方法 | ✅ 已修复 | 所有 bridge 方法已改为 pub |
-| 7 | CI 模拟器测试需 Rust 交叉编译 | ✅ 已修复 | CI 已添加 cargo-ndk 步骤 |
-| 8 | ~~`echo_cells()` 是空操作~~ | ✅ 已移除 | 已在本次会话中删除 |
+### ✅ 已修复 (27 项)
 
----
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | `torvox-bench` 基准骨架 | criterion benchmarks 已添加 |
+| 2 | CI `@main` 引用 | 所有 actions 固定到 v4/v3/v2 |
+| 3 | Grid scrollback `Vec::remove(0)` O(n) | 改为 `VecDeque<Line>`，`push_back` + `pop_front` O(1) |
+| 4 | 手写 unicode.rs 缺少 ZWJ/variation selector | 替换为 `unicode-width 0.2` crate (no_std + CJK) |
+| 5 | boltffi `#[export]` 要求 `pub` 方法 | 所有 bridge 方法已改为 pub |
+| 6 | CI 模拟器测试需 Rust 交叉编译 | CI 已添加 cargo-ndk 步骤 |
+| 7 | `echo_cells()` 空操作 | 已移除 |
+| 8 | `AndroidSurface.write_to_pty` 调用 vt_write 而非 PTY | 改走 `Session::write()` → PTY master fd |
+| 9 | GhosttyTerminal `history_size()` 不存在 | 改用 `scrollback_rows()` API |
+| 10 | GhosttyTerminal channel-based 后 `resize()` 签名变更 | 只需 `(rows, cols)`，去掉 cell_width/cell_height |
+| 11 | Nightly CI 缺少 Zig + libghostty-vt patch | 添加 Zig + `git clone + git apply` 步骤 |
+| 12 | build-android-libs.nu env var bug | str replace 修复 |
+| 13 | GhosttyTerminal unsafe Send/Sync | channel-based 架构消除 |
+| 14 | release APK debug 签名 | 添加 release signing config |
+| 15 | CI 缺少 boltffi 绑定校验 | 添加 bindings diff step |
+| 16 | Grid::get_mut 幽灵脏位 | 先检查行存在再标脏 |
+| 17 | GpuContext 硬编码 1080×1920 | 参数化 width/height |
+| 18 | 双 VT 引擎策略 | GhosttyTerminal 唯一引擎 |
+| 19 | 渲染线程跨会话共享 | 每会话独立线程 |
+| 20 | LRU cache O(n log n) sort | 改用 `lru` crate O(1) |
+| 21 | ROADMAP "etagere" 过时引用 | 改为 "guillotiere" |
+| 22 | ROADMAP .sh → .nu 脚本引用 | 已修正 |
+| 23 | quality-gate.nu 使用 cargo test | 改为 cargo nextest |
+| 24 | JNA 5.17.0 → 5.18.1 | 已升级 |
+| 25 | ARCHITECTURE.md bridge 路径 | 修正为 TorvoxBridge.kt |
+| 26 | CI Zig 步骤无注释 | 添加注释 |
+| 27 | libghostty-vt commit hash 记录 | patch + build.rs |
+
+### ⚠️ 部分修复
+
+| # | 问题 | 已修复 | 剩余 |
+|---|------|--------|------|
+| 1 | render_frame 全量实例构建 | snapshot 支持 dirty_rows | 渲染循环未传入 dirty_mask |
+| 2 | release.yml 缺少 GitHub Release | signing config 已添加 | 无 GitHub Release 创建步骤 |
+| 3 | `extractSelectedText()` 返回占位符 | — | 需要从 grid 读取实际内容 |
+
+### 🔲 仍待修复
+
+| # | 问题 | 位置 | 优先级 |
+|---|------|------|--------|
+| 1 | GpuUniforms 硬编码 cell_size [8, 16] | gpu.rs | 低 |
+| 2 | FontPipeline atlas 驱逐不回收空间 | font.rs | 中 |
+| 3 | FontPipeline bitmap 溢出检查不足 | font.rs | 低 |
+| 4 | build_cell_instances 重复代码 (三套函数 85% 重复) | gpu.rs | 低 |
+| 5 | ANativeWindow 生命周期风险 (需强制 drop 顺序) | surface.rs | 中 |
+| 6 | flake.nix 缺少 Android SDK/NDK 配置 | flake.nix | 中 |
+| 7 | Grid 分散分配 (Vec<Vec<Cell>>) | grid.rs (P3.3) | 中 |
+| 8 | quality-gate.nu cargo audit 仅 warn 不 fail | quality-gate.nu | 低 |
 
 # 附录: 术语表
 

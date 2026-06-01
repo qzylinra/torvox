@@ -22,11 +22,11 @@ jobs:
     - run: |
         git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
         cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-    - run: |
-        cargo install cargo-fuzz
-        cargo +nightly fuzz --fuzz-dir torvox-fuzz/fuzz run ${{ matrix.target }} -- -max_total_time=240
-      - if: failure()
-        uses: actions/upload-artifact@v4
+      - run: |
+          cargo install cargo-fuzz
+          cargo +nightly fuzz --fuzz-dir torvox-fuzz/fuzz run ${{ matrix.target }} -- -max_total_time=240
+      - uses: actions/upload-artifact@v4
+        if: failure()
         with:
           name: fuzz-crash-${{ matrix.target }}
           path: torvox-fuzz/fuzz/artifacts/

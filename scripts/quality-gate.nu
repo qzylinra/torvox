@@ -1,45 +1,46 @@
+#!/usr/bin/env nu
 # Torvox 质量门 (nushell)
 # 使用: nu scripts/quality-gate.nu
 
 print "=== Torvox 质量门 ==="
-print $"Java: (java -version 2>&1 | complete | get stdout | lines | get 0)"
+print $"Java: (^java -version 2>&1 | complete | get stdout | lines | get 0)"
 
-let failed = (mutable [])
+mut failed = []
 
 # [1/8] cargo fmt --check
 print "[1/8] cargo fmt --check"
-if not (cargo fmt --check | complete | get exit_code == 0) {
-    $failed | append "cargo fmt"
-    print "FAIL: cargo fmt --check"
+if not (^cargo fmt --check | complete | get exit_code == 0) {
+    $failed = ($failed | append "cargo fmt")
+    print "FAIL: cargo fmt"
 }
 
 # [2/8] cargo clippy
 print "[2/8] cargo clippy -- -D warnings"
-if not (cargo clippy --workspace --all-targets -- -D warnings | complete | get exit_code == 0) {
-    $failed | append "cargo clippy"
+if not (^cargo clippy --workspace --all-targets -- -D warnings | complete | get exit_code == 0) {
+    $failed = ($failed | append "cargo clippy")
     print "FAIL: cargo clippy"
 }
 
-# [3/8] cargo nextest (replaces cargo test)
+# [3/8] cargo nextest
 print "[3/8] cargo nextest run --workspace"
-if not (cargo nextest run --workspace | complete | get exit_code == 0) {
-    $failed | append "cargo nextest"
+if not (^cargo nextest run --workspace | complete | get exit_code == 0) {
+    $failed = ($failed | append "cargo nextest")
     print "FAIL: cargo nextest"
 }
 
 # [4/8] proptest
 print "[4/8] proptest"
-if not (cargo test --workspace -- proptest | complete | get exit_code == 0) {
-    $failed | append "proptest"
+if not (^cargo test --workspace -- proptest | complete | get exit_code == 0) {
+    $failed = ($failed | append "proptest")
     print "FAIL: proptest"
 }
 
 # [5/8] cargo geiger
 print "[5/8] cargo geiger"
 if (which cargo-geiger | length) > 0 {
-    let result = (cargo geiger --all-features 2>/dev/null | complete)
+    let result = (^cargo geiger --all-features 2>/dev/null | complete)
     if $result.exit_code != 0 {
-        $failed | append "cargo geiger"
+        $failed = ($failed | append "cargo geiger")
         print "FAIL: cargo geiger"
     }
 } else {
@@ -50,8 +51,8 @@ if (which cargo-geiger | length) > 0 {
 print "[6/8] Android lint"
 if ("android" | path exists) and ($env.JAVA_HOME? | default "") != "" {
     cd android
-    if not (./gradlew lint --quiet | complete | get exit_code == 0) {
-        $failed | append "Android lint"
+    if not (^./gradlew lint --quiet | complete | get exit_code == 0) {
+        $failed = ($failed | append "Android lint")
         print "FAIL: Android lint"
     }
     cd ..
@@ -63,8 +64,8 @@ if ("android" | path exists) and ($env.JAVA_HOME? | default "") != "" {
 print "[7/8] Android test"
 if ("android" | path exists) and ($env.JAVA_HOME? | default "") != "" {
     cd android
-    if not (./gradlew test --quiet | complete | get exit_code == 0) {
-        $failed | append "Android test"
+    if not (^./gradlew test --quiet | complete | get exit_code == 0) {
+        $failed = ($failed | append "Android test")
         print "FAIL: Android test"
     }
     cd ..
@@ -75,20 +76,20 @@ if ("android" | path exists) and ($env.JAVA_HOME? | default "") != "" {
 # [8/8] cargo audit
 print "[8/8] cargo audit"
 if (which cargo-audit | length) > 0 {
-    if not (cargo audit | complete | get exit_code == 0) {
-        $failed | append "cargo audit"
+    if not (^cargo audit | complete | get exit_code == 0) {
+        $failed = ($failed | append "cargo audit")
         print "FAIL: cargo audit found vulnerabilities"
     }
 } else {
     print "SKIP: cargo-audit not installed"
 }
 
-# [9/8] APK build verification
-print "[9/8] APK build (assembleDebug)"
+# [9/9] APK build verification
+print "[9/9] APK build (assembleDebug)"
 if ("android" | path exists) and ($env.JAVA_HOME? | default "") != "" {
     cd android
-    if not (./gradlew assembleDebug --quiet | complete | get exit_code == 0) {
-        $failed | append "APK build"
+    if not (^./gradlew assembleDebug --quiet | complete | get exit_code == 0) {
+        $failed = ($failed | append "APK build")
         print "FAIL: APK build"
     }
     cd ..

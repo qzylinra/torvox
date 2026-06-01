@@ -242,7 +242,7 @@ impl GpuContext {
 
     pub fn new_with_no_surface() -> Self {
         let (instance, adapter, device, queue) =
-            pollster::block_on(Self::init_instance_adapter_device())
+            futures::executor::block_on(Self::init_instance_adapter_device())
                 .expect("no GPU adapter/device found");
         let cell_pipeline = Self::create_cell_pipeline(&device);
         let quad_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -275,7 +275,7 @@ impl GpuContext {
         initial_width: u32,
         initial_height: u32,
     ) -> Result<(), GpuError> {
-        use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle};
+        use wgpu::raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle};
 
         let non_null = std::ptr::NonNull::new(window_ptr)
             .ok_or_else(|| GpuError::Surface("null window pointer".to_string()))?;
@@ -283,8 +283,8 @@ impl GpuContext {
         let android_handle = AndroidNdkWindowHandle::new(non_null);
         let display_handle = AndroidDisplayHandle::new();
 
-        let raw_win_handle = raw_window_handle::RawWindowHandle::AndroidNdk(android_handle);
-        let raw_display_handle = raw_window_handle::RawDisplayHandle::Android(display_handle);
+        let raw_win_handle = wgpu::raw_window_handle::RawWindowHandle::AndroidNdk(android_handle);
+        let raw_display_handle = wgpu::raw_window_handle::RawDisplayHandle::Android(display_handle);
 
         // SAFETY: wgpu requires the window handle to remain valid for the lifetime
         // of the surface. The caller (AndroidSurface) ensures the ANativeWindow

@@ -221,76 +221,21 @@ cargo audit
 3. APK 打包 Rust 原生库
 
 ```bash
-# scripts/build-android-libs.nu 中
+# scripts/build-android-libs.nu 中 (不要直接运行 cargo ndk)
 cargo ndk -t arm64-v8a -t x86_64 -o android/app/src/main/jniLibs build --release
 ```
 
 ## 性能分析
 
-### Android
-
 ```bash
-# 帧时间 (关键: 目标 <8ms/帧)
+# 帧时间 (目标: <8ms/帧)
 adb shell dumpsys gfxinfo io.torvox
 
-# 内存 (关键: 空闲 <10MB)
+# 内存 (目标: 空闲 <10MB)
 adb shell dumpsys meminfo io.torvox
 
-# CPU (关键: 空闲 <0.5%)
-adb shell top -n 1 | grep torvox
-
-# GPU (Vulkan 状态)
-adb shell dumpsys gpu
-
-# Systrace (详细帧分析)
-python $ANDROID_SDK/platform-tools/systrace/systrace.py \
-  --app io.torvox gfx view input
-```
-
-### Rust
-
-```bash
-# 基准
+# 基准测试
 cargo bench
-
-# Flamegraph
-cargo flamegraph --bin torvox-bench
-
-# Perf (仅 Linux)
-cargo build --release
-perf record ./target/release/torvox-bench
-perf report
-
-# Heap 分析 (valgrind massif)
-valgrind --tool=massif ./target/release/torvox-bench
-ms_print massif.out.*
-```
-
-## 发布流程
-
-```bash
-# 1. 版本升级 (semver)
-# 更新版本于:
-# - android/app/build.gradle.kts (versionCode + versionName)
-# - torvox-core/Cargo.toml
-# - torvox-terminal/Cargo.toml
-# - torvox-renderer/Cargo.toml
-# - torvox-gui-android/Cargo.toml
-
-# 2. 质量门
-nu scripts/quality-gate.nu
-
-# 3. 构建 + 签名
-cd android && ./gradlew assembleRelease
-
-# 4. 测试发布 APK
-adb install -r android/app/build/outputs/apk/release/app-release.apk
-
-# 5. 标签 + 推送
-git tag -a v0.1.0 -m "v0.1.0 — MVP: 基础终端渲染"
-git push origin v0.1.0
-
-# 6. CI 构建签名 APK + 创建 GitHub Release
 ```
 
 ---

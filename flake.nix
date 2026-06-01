@@ -22,8 +22,8 @@
           _module.args.pkgs = import inputs.nixpkgs {
             inherit system;
             config.allowUnfreePredicate =
-              pkg:
-              builtins.elem pkg.pname [
+              package:
+              builtins.elem package.pname [
                 "androidsdk"
                 "android-studio-stable"
                 "jdk"
@@ -67,144 +67,140 @@
                 "rustc"
                 "rustfmt"
               ];
-              native_dependencies = [
+              nativeDependencies = [
                 toolchain
                 pkgs.cargo-nextest
                 pkgs.pkg-config
                 pkgs.openssl
               ];
+              libraryPath = pkgs.lib.makeLibraryPath [
+                pkgs.pkg-config
+                pkgs.openssl
+              ];
               copy_source = "cp -r ${./.} . && chmod -R u+w .";
+              body = {
+                clippy =
+                  pkgs.runCommand "check-clippy"
+                    {
+                      nativeBuildInputs = nativeDependencies;
+                      LD_LIBRARY_PATH = libraryPath;
+                    }
+                    ''
+                      ${copy_source}
+                      cargo clippy -- -D warnings
+                      touch $out
+                    '';
+                fmt =
+                  pkgs.runCommand "check-fmt"
+                    {
+                      nativeBuildInputs = [ toolchain ];
+                    }
+                    ''
+                      ${copy_source}
+                      cargo fmt --check
+                      touch $out
+                    '';
+                tests =
+                  pkgs.runCommand "check-tests"
+                    {
+                      nativeBuildInputs = nativeDependencies;
+                      LD_LIBRARY_PATH = libraryPath;
+                    }
+                    ''
+                      ${copy_source}
+                      cargo nextest run --workspace
+                      touch $out
+                    '';
+                proptest =
+                  pkgs.runCommand "check-proptest"
+                    {
+                      nativeBuildInputs = nativeDependencies;
+                      LD_LIBRARY_PATH = libraryPath;
+                    }
+                    ''
+                      ${copy_source}
+                      cargo test --workspace -- proptest
+                      touch $out
+                    '';
+                typos =
+                  pkgs.runCommand "check-typos"
+                    {
+                      nativeBuildInputs = [ pkgs.typos ];
+                    }
+                    ''
+                      ${copy_source}
+                      typos
+                      touch $out
+                    '';
+                nixfmt =
+                  pkgs.runCommand "check-nixfmt"
+                    {
+                      nativeBuildInputs = [ pkgs.nixfmt ];
+                    }
+                    ''
+                      ${copy_source}
+                      find . -name '*.nix' \
+                        -not -path './target/*' \
+                        -not -path './.git/*' \
+                        -exec nixfmt --check {} +
+                      touch $out
+                    '';
+                cargo-deny =
+                  pkgs.runCommand "check-cargo-deny"
+                    {
+                      nativeBuildInputs = [
+                        toolchain
+                        pkgs.cargo-deny
+                      ];
+                    }
+                    ''
+                      ${copy_source}
+                      cargo deny check
+                      touch $out
+                    '';
+                cargo-audit =
+                  pkgs.runCommand "check-cargo-audit"
+                    {
+                      nativeBuildInputs = [
+                        toolchain
+                        pkgs.cargo-audit
+                      ];
+                    }
+                    ''
+                      ${copy_source}
+                      cargo audit
+                      touch $out
+                    '';
+                cargo-machete =
+                  pkgs.runCommand "check-cargo-machete"
+                    {
+                      nativeBuildInputs = [
+                        toolchain
+                        pkgs.cargo-machete
+                      ];
+                    }
+                    ''
+                      ${copy_source}
+                      cargo machete
+                      touch $out
+                    '';
+                markdownlint =
+                  pkgs.runCommand "check-markdownlint"
+                    {
+                      nativeBuildInputs = [ pkgs.nodePackages.markdownlint-cli ];
+                    }
+                    ''
+                      ${copy_source}
+                      find . -name '*.md' \
+                        -not -path './target/*' \
+                        -not -path './.git/*' \
+                        -not -path './.opencode/*' \
+                        -exec markdownlint {} +
+                      touch $out
+                    '';
+              };
             in
-            {
-              clippy =
-                pkgs.runCommand "check-clippy"
-                  {
-                    nativeBuildInputs = native_dependencies;
-                    LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                      pkgs.pkg-config
-                      pkgs.openssl
-                    ];
-                  }
-                  ''
-                    ${copy_source}
-                    cargo clippy -- -D warnings
-                    touch $out
-                  '';
-              fmt =
-                pkgs.runCommand "check-fmt"
-                  {
-                    nativeBuildInputs = [ toolchain ];
-                  }
-                  ''
-                    ${copy_source}
-                    cargo fmt --check
-                    touch $out
-                  '';
-              tests =
-                pkgs.runCommand "check-tests"
-                  {
-                    nativeBuildInputs = native_dependencies;
-                    LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                      pkgs.pkg-config
-                      pkgs.openssl
-                    ];
-                  }
-                  ''
-                    ${copy_source}
-                    cargo nextest run --workspace
-                    touch $out
-                  '';
-              proptest =
-                pkgs.runCommand "check-proptest"
-                  {
-                    nativeBuildInputs = native_dependencies;
-                    LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-                      pkgs.pkg-config
-                      pkgs.openssl
-                    ];
-                  }
-                  ''
-                    ${copy_source}
-                    cargo test --workspace -- proptest
-                    touch $out
-                  '';
-              typos =
-                pkgs.runCommand "check-typos"
-                  {
-                    nativeBuildInputs = [ pkgs.typos ];
-                  }
-                  ''
-                    ${copy_source}
-                    typos
-                    touch $out
-                  '';
-              nixfmt =
-                pkgs.runCommand "check-nixfmt"
-                  {
-                    nativeBuildInputs = [ pkgs.nixfmt ];
-                  }
-                  ''
-                    ${copy_source}
-                    find . -name '*.nix' \
-                      -not -path './target/*' \
-                      -not -path './.git/*' \
-                      -exec nixfmt --check {} +
-                    touch $out
-                  '';
-              cargo-deny =
-                pkgs.runCommand "check-cargo-deny"
-                  {
-                    nativeBuildInputs = [
-                      toolchain
-                      pkgs.cargo-deny
-                    ];
-                  }
-                  ''
-                    ${copy_source}
-                    cargo deny check
-                    touch $out
-                  '';
-              cargo-audit =
-                pkgs.runCommand "check-cargo-audit"
-                  {
-                    nativeBuildInputs = [
-                      toolchain
-                      pkgs.cargo-audit
-                    ];
-                  }
-                  ''
-                    ${copy_source}
-                    cargo audit
-                    touch $out
-                  '';
-              cargo-machete =
-                pkgs.runCommand "check-cargo-machete"
-                  {
-                    nativeBuildInputs = [
-                      toolchain
-                      pkgs.cargo-machete
-                    ];
-                  }
-                  ''
-                    ${copy_source}
-                    cargo machete
-                    touch $out
-                  '';
-              markdownlint =
-                pkgs.runCommand "check-markdownlint"
-                  {
-                    nativeBuildInputs = [ pkgs.nodePackages.markdownlint-cli ];
-                  }
-                  ''
-                    ${copy_source}
-                    find . -name '*.md' \
-                      -not -path './target/*' \
-                      -not -path './.git/*' \
-                      -not -path './.opencode/*' \
-                      -exec markdownlint {} +
-                    touch $out
-                  '';
-            };
+            body;
           devShells.default = pkgs.mkShell {
             name = "torvox-dev";
             packages = [

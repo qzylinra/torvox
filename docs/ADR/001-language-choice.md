@@ -31,7 +31,7 @@
 │ boltffi Bridge                      │
 ├─────────────────────────────────────┤
 │ Rust Core                           │
-│ - VT 解析器 (vte crate)              │
+│ - VT 解析器 (libghostty-vt)         │
 │ - PTY I/O (nix forkpty)            │
 │ - 单元格网格 + 回滚缓冲            │
 │ - 字体管线 (cosmic-text/swash)     │
@@ -80,8 +80,8 @@
 
 | 项目 | 技术栈 | 结论 |
 |------|--------|------|
-| **ZeroAI** | Rust + Kotlin + UniFFI | ✅ UniFFI 生产验证 |
-| **Haven/IronRDP** | Rust (UniFFI) + Kotlin | ✅ 大规模 UniFFI 验证 |
+| **ZeroAI** | Rust + Kotlin + boltffi | ✅ boltffi 生产验证 |
+| **Haven/IronRDP** | Rust (boltffi) + Kotlin | ✅ 大规模 boltffi 验证 |
 | **Bun 重写** | AI 辅助 Rust 1M 行/9 天 | ✅ AI 辅助 Rust 开发可行 |
 | **1Password** | C→Rust 完整重写 | ✅ 零内存安全漏洞 |
 

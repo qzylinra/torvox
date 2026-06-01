@@ -87,7 +87,7 @@ impl ApplicationHandler for App {
         let window = Arc::new(event_loop.create_window(attrs).unwrap());
         self.window = Some(window.clone());
 
-        let mut gpu = pollster::block_on(torvox_renderer::gpu::GpuContext::new()).unwrap();
+        let mut gpu = futures::executor::block_on(torvox_renderer::gpu::GpuContext::new()).unwrap();
         gpu.create_surface(window).unwrap();
         gpu.create_atlas_texture(self.atlas_width, self.atlas_height);
 
