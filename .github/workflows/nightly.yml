@@ -20,20 +20,19 @@ jobs:
           - fuzz_selection
           - fuzz_attrs
     steps:
-      - uses: actions/checkout@main
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: nightly
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
       - run: |
           curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
           tar -xf /tmp/zig.tar.xz -C /tmp
           echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: |
           git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
           cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
       - run: |
           cargo install cargo-fuzz
           cargo +nightly fuzz --fuzz-dir torvox-fuzz/fuzz run ${{ matrix.target }} -- -max_total_time=240
-      - uses: actions/upload-artifact@main
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: fuzz-crash-${{ matrix.target }}
@@ -41,53 +40,50 @@ jobs:
   miri:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@main
-      - uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
         with:
-          toolchain: nightly
           components: miri
       - run: |
           curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
           tar -xf /tmp/zig.tar.xz -C /tmp
           echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: |
           git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
           cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
       - run: MIRIFLAGS="-Zmiri-isolation-error=warn" cargo +nightly miri test -p torvox-core
   bench:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@main
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - run: |
           curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
           tar -xf /tmp/zig.tar.xz -C /tmp
           echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: |
           git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
           cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
       - run: cargo bench --workspace
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@main
+      - uses: actions/checkout@v4
       - run: |
           cargo install cargo-audit
           cargo audit
   geiger:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@main
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - run: |
           curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
           tar -xf /tmp/zig.tar.xz -C /tmp
           echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
+      - run: |
           git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
           cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
       - run: |
           cargo install cargo-geiger
-          cd torvox-core && cargo geiger
-        continue-on-error: true
+          cargo geiger

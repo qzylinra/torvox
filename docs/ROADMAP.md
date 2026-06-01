@@ -1,7 +1,7 @@
 # Torvox 路线图
 
 > **当前阶段**: 阶段 3 完成 (合规性 + 性能) — P0.1–P0.6, P1.1–P1.6, P2.1–P2.5, P3.1–P3.4 全部完成。
-> P4 完成 4 项 (P4.1 前台服务加固 + 会话持久化, P4.4 MCP 服务器, P4.5 hyperlink 追踪+渲染)。
+> P4 完成 2 项 (P4.1 前台服务加固, P4.4 MCP 服务器)。
 > P5 不在当前范围 — 见底部说明。
 
 ---
@@ -351,7 +351,7 @@
 
 ## 阶段 4: 打磨 & 发布
 
-> ⚠️ **不在当前范围。** 阶段 4 是发布计划，P4.1, P4.4 完成, P4.2 (部分: 会话持久化) 和 P4.5 (部分: hyperlink 追踪+渲染) 完成。
+> ⚠️ **不在当前范围。** 阶段 4 是发布计划，仅 P4.1 和 P4.4 完成 (在阶段 3 之前未达)。
 
 **主题**: "发布它"
 **退出标准**: v1.0.0-beta.1 — GitHub Releases 上的签名 APK。
@@ -359,8 +359,8 @@
 ### P4.1 — 前台服务 + 持久化
 
 1. ✅ `FOREGROUND_SERVICE_SPECIAL_USE` 前台服务带通知
-2. ✅ 跨死亡/OOM 的会话持久化 (rkyv 序列化, save_session/restore_session/has_saved_session on bridge + surface.rs + Drop autosave)
-3. ✅ 自动恢复上次会话 (TerminalViewModel.onCleared → ON_PAUSE → TorvoxRuntime.start restore)
+2. ⬜ 跨死亡/OOM 的会话持久化 (postcard 序列化)
+3. ⬜ 自动恢复上次会话
 4. ✅ Wake lock 管理 (30 分钟最大超时, ref-counted, 通知点击回到 MainActivity)
 
 ### P4.2 — 无障碍
@@ -389,8 +389,6 @@
 2. F-Droid 提交
 3. 崩溃报告 (用户同意)
 4. 更新日志
-5. ✅ OSC 8 hyperlink 追踪 (CellSnapshot.uri, GridSnapshot::uri_at, populate_uri in build_snapshot + build_dumped_grid)
-6. ✅ OSC 8 hyperlink 渲染 (mouse position tracking, hyperlink 着色 flag, WGSL shader 蓝色 tint, get_hovered_url bridge)
 
 ---
 

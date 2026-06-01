@@ -47,7 +47,6 @@ quickcheck = "1"
 quickcheck_macros = "1"
 futures = "0.3"
 raw-window-handle = "0.6"
-rkyv = { version = "0.8", default-features = false }
 
 # libghostty-vt patched for Android targets.
 # Patch file: patches/libghostty-vt-android.patch

@@ -229,7 +229,6 @@
               pkgs.yamlfmt
               pkgs.typos
               pkgs.markdownlint-cli2
-              pkgs.openspec
               pkgs.pkg-config
               pkgs.openssl
               pkgs.zig_0_15

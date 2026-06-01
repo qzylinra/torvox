@@ -884,8 +884,7 @@ pub fn build_cell_instances_from_snapshot(
                 let flags = if cell.bold { 1.0 } else { 0.0 }
                     + if cell.italic { 2.0 } else { 0.0 }
                     + if cell.reverse { 4.0 } else { 0.0 }
-                    + if cell.underline { 8.0 } else { 0.0 }
-                    + if cell.uri.is_some() { 16.0 } else { 0.0 };
+                    + if cell.underline { 8.0 } else { 0.0 };
 
                 let (fg, bg) = if cell.reverse {
                     (cell.bg, cell.fg)

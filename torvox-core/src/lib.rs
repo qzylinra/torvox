@@ -10,5 +10,4 @@ pub mod event;
 pub mod grid;
 pub mod line;
 pub mod selection;
-pub mod snapshot;
 pub mod unicode;

@@ -13,24 +13,7 @@ pub struct GridSnapshot {
     pub cells: Vec<CellSnapshot>,
 }
 
-impl GridSnapshot {
-    pub fn uri_at(&self, row: u32, col: u32) -> Option<&str> {
-        if row >= self.rows || col >= self.cols {
-            return None;
-        }
-        let idx = (row * self.cols + col) as usize;
-        self.cells.get(idx).and_then(|c| c.uri.as_deref())
-    }
-}
-
-pub struct DumpedGrid {
-    pub rows: u32,
-    pub cols: u32,
-    pub visible: Vec<CellSnapshot>,
-    pub scrollback: Vec<Vec<CellSnapshot>>,
-}
-
-#[derive(Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug)]
 pub struct CellSnapshot {
     pub codepoint: u32,
     pub fg: [f32; 4],
@@ -39,7 +22,6 @@ pub struct CellSnapshot {
     pub italic: bool,
     pub underline: bool,
     pub reverse: bool,
-    pub uri: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -58,9 +40,6 @@ enum Command {
     SearchInScrollback {
         query: String,
         tx: Sender<Option<(u32, u32)>>,
-    },
-    DumpGrid {
-        tx: Sender<DumpedGrid>,
     },
     Rows(Sender<u32>),
     Cols(Sender<u32>),
@@ -141,10 +120,6 @@ impl GhosttyTerminal {
                 Command::Title(tx) => {
                     let _ = tx.send(terminal.title().unwrap_or("").to_string());
                 }
-                Command::DumpGrid { tx } => {
-                    let dumped = Self::build_dumped_grid(&terminal);
-                    let _ = tx.send(dumped);
-                }
                 Command::Terminate => break,
             }
         }
@@ -203,140 +178,7 @@ impl GhosttyTerminal {
         rx.recv().unwrap_or(None)
     }
 
-    pub fn dump_grid(&self) -> DumpedGrid {
-        let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::DumpGrid { tx });
-        rx.recv().unwrap_or(DumpedGrid {
-            rows: 0,
-            cols: 0,
-            visible: Vec::new(),
-            scrollback: Vec::new(),
-        })
-    }
-
     // ── Internal helpers (executed on terminal thread) ───
-
-    fn populate_uri(point: &libghostty_vt::screen::GridRef, data: &mut CellSnapshot) {
-        if let Ok(cell) = point.cell()
-            && cell.has_hyperlink().unwrap_or(false)
-        {
-            let mut buf = [0u8; 4096];
-            if let Ok(len) = point.hyperlink_uri(&mut buf)
-                && len > 0
-            {
-                data.uri = Some(String::from_utf8_lossy(&buf[..len]).to_string());
-            }
-        }
-    }
-
-    fn build_dumped_grid(terminal: &Terminal) -> DumpedGrid {
-        let rows = terminal.rows().unwrap_or(24) as u32;
-        let cols = terminal.cols().unwrap_or(80) as u32;
-        let scrollback_rows = terminal.scrollback_rows().unwrap_or(0) as u32;
-
-        let mut visible = Vec::with_capacity((rows * cols) as usize);
-        for row in 0..rows {
-            for col in 0..cols {
-                let coord = PointCoordinate {
-                    x: col as u16,
-                    y: row,
-                };
-                let mut data = CellSnapshot::default();
-                if let Ok(point) = terminal.grid_ref(Point::Viewport(coord)) {
-                    if let Ok(cell) = point.cell() {
-                        data.codepoint = cell.codepoint().unwrap_or(0);
-                    }
-                    if let Ok(style) = point.style() {
-                        if let StyleColor::Rgb(c) = style.fg_color {
-                            data.fg = [
-                                c.r as f32 / 255.0,
-                                c.g as f32 / 255.0,
-                                c.b as f32 / 255.0,
-                                1.0,
-                            ];
-                        }
-                        if let StyleColor::Rgb(c) = style.bg_color {
-                            data.bg = [
-                                c.r as f32 / 255.0,
-                                c.g as f32 / 255.0,
-                                c.b as f32 / 255.0,
-                                1.0,
-                            ];
-                        }
-                        data.bold = style.bold;
-                        data.italic = style.italic;
-                        data.underline = matches!(
-                            style.underline,
-                            libghostty_vt::style::Underline::Single
-                                | libghostty_vt::style::Underline::Double
-                                | libghostty_vt::style::Underline::Curly
-                                | libghostty_vt::style::Underline::Dashed
-                                | libghostty_vt::style::Underline::Dotted
-                        );
-                        data.reverse = style.inverse;
-                    }
-                    Self::populate_uri(&point, &mut data);
-                }
-                visible.push(data);
-            }
-        }
-
-        let mut scrollback = Vec::with_capacity(scrollback_rows as usize);
-        for i in 0..scrollback_rows {
-            let mut row_cells = Vec::with_capacity(cols as usize);
-            for col in 0..cols {
-                let coord = PointCoordinate {
-                    x: col as u16,
-                    y: i,
-                };
-                let mut data = CellSnapshot::default();
-                if let Ok(point) = terminal.grid_ref(Point::History(coord)) {
-                    if let Ok(cell) = point.cell() {
-                        data.codepoint = cell.codepoint().unwrap_or(0);
-                    }
-                    if let Ok(style) = point.style() {
-                        if let StyleColor::Rgb(c) = style.fg_color {
-                            data.fg = [
-                                c.r as f32 / 255.0,
-                                c.g as f32 / 255.0,
-                                c.b as f32 / 255.0,
-                                1.0,
-                            ];
-                        }
-                        if let StyleColor::Rgb(c) = style.bg_color {
-                            data.bg = [
-                                c.r as f32 / 255.0,
-                                c.g as f32 / 255.0,
-                                c.b as f32 / 255.0,
-                                1.0,
-                            ];
-                        }
-                        data.bold = style.bold;
-                        data.italic = style.italic;
-                        data.underline = matches!(
-                            style.underline,
-                            libghostty_vt::style::Underline::Single
-                                | libghostty_vt::style::Underline::Double
-                                | libghostty_vt::style::Underline::Curly
-                                | libghostty_vt::style::Underline::Dashed
-                                | libghostty_vt::style::Underline::Dotted
-                        );
-                        data.reverse = style.inverse;
-                    }
-                    Self::populate_uri(&point, &mut data);
-                }
-                row_cells.push(data);
-            }
-            scrollback.push(row_cells);
-        }
-
-        DumpedGrid {
-            rows,
-            cols,
-            visible,
-            scrollback,
-        }
-    }
 
     fn build_snapshot(terminal: &Terminal) -> GridSnapshot {
         let rows = terminal.rows().unwrap_or(24) as u32;
@@ -358,7 +200,6 @@ impl GhosttyTerminal {
                     italic: false,
                     underline: false,
                     reverse: false,
-                    uri: None,
                 };
 
                 if let Ok(point) = terminal.grid_ref(Point::Viewport(coord)) {
@@ -395,7 +236,6 @@ impl GhosttyTerminal {
                         data.underline = underline;
                         data.reverse = style.inverse;
                     }
-                    Self::populate_uri(&point, &mut data);
                 }
 
                 cells.push(data);

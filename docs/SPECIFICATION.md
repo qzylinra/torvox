@@ -188,7 +188,16 @@ GUI 集成 (真实 `SessionStore` 实现) 仍为 P5 任务。
 
 ### 核心工具 (P4.4 已实现)
 
-8 个工具: list_sessions, read_grid, read_scrollback, read_cursor, read_selection, read_title, send_input, send_signal。
+| 工具 | 参数 | 返回 | 权限 |
+|------|------|------|------|
+| `list_sessions` | `{}` | `{sessions: [...]}` | 读 |
+| `read_grid` | `{session_id}` | `{rows, cols, cells: [...]}` | 读 |
+| `read_scrollback` | `{session_id, max_lines}` | `{lines: [...]}` | 读 |
+| `read_cursor` | `{session_id}` | `{row, col, visible}` | 读 |
+| `read_selection` | `{session_id}` | `{text: "..."}` | 读 |
+| `read_title` | `{session_id}` | `{title: "..."}` | 读 |
+| `send_input` | `{session_id, data}` | `{accepted}` | 写 (需 `--mcp-allow-write`) |
+| `send_signal` | `{session_id, signal}` | `{accepted}` | 写 (需 `--mcp-allow-write`) |
 
 详见 `docs/MCP.md` 和 `docs/ADR/007-mcp-server.md`。
 

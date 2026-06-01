@@ -4,10 +4,6 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub struct TerminalConfig {
     pub rows: u32,
     pub cols: u32,
@@ -29,10 +25,6 @@ impl Default for TerminalConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub enum Shell {
     #[default]
     SystemDefault,
@@ -40,10 +32,6 @@ pub enum Shell {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub struct RenderConfig {
     pub font: FontConfig,
     pub theme: Theme,
@@ -61,10 +49,6 @@ impl Default for RenderConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub struct FontConfig {
     pub family: String,
     pub size: u16,
@@ -82,10 +66,6 @@ impl Default for FontConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub struct Theme {
     pub name: String,
     pub bg: [u8; 3],

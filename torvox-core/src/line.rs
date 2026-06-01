@@ -4,10 +4,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::cell::Cell;
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LineAttr {
     #[default]
@@ -20,11 +16,7 @@ pub enum LineAttr {
 /// Terminal line: fixed-capacity `Box<[Cell]>` for stable address + small
 /// inline `attr`. `Box<[Cell]>` avoids the capacity/len overhead of `Vec` and
 /// is the natural choice for a line whose size is known at construction.
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Line {
     cells: Box<[Cell]>,
     pub attr: LineAttr,

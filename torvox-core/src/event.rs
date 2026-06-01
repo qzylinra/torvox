@@ -5,10 +5,6 @@ use crate::cursor::CursorState;
 use crate::selection::Selection;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub enum TerminalEvent {
     OutputReady,
     Bell,
@@ -22,10 +18,6 @@ pub enum TerminalEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub struct DirtyRegion {
     pub start_row: u32,
     pub end_row: u32,

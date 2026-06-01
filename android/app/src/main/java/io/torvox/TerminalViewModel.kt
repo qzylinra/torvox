@@ -287,9 +287,4 @@ class TerminalViewModel
         fun setSessionTitle(title: String) {
             _state.value = _state.value.copy(title = title)
         }
-
-        override fun onCleared() {
-            runtime.saveSession()
-            super.onCleared()
-        }
     }

@@ -37,12 +37,6 @@ class WireReader(
     private val data = data
     private var pos = 0
 
-    fun readBool(): Boolean {
-        val v = data[pos]
-        pos += 1
-        return v != 0.toByte()
-    }
-
     fun readByte(): Byte {
         val v = data[pos]
         pos += 1
@@ -268,22 +262,6 @@ private interface TorvoxNative : Library {
         size_tenths: Int,
     ): Pointer?
 
-    fun boltffi_torvox_bridge_set_save_path(
-        handle: Long,
-        path: String?,
-    ): Pointer?
-
-    fun boltffi_torvox_bridge_set_theme(
-        handle: Long,
-        theme_ptr: ByteArray?,
-        theme_len: Int,
-    ): Pointer?
-
-    fun boltffi_torvox_bridge_get_theme(
-        handle: Long,
-        name: String?,
-    ): Pointer?
-
     fun boltffi_torvox_bridge_get_theme_names(handle: Long): Pointer?
 
     fun boltffi_torvox_bridge_list_fonts(handle: Long): Pointer?
@@ -291,21 +269,6 @@ private interface TorvoxNative : Library {
     fun boltffi_torvox_bridge_search_in_scrollback(
         handle: Long,
         query: String?,
-    ): Pointer?
-
-    fun boltffi_torvox_bridge_save_session(
-        handle: Long,
-        path: String?,
-    ): Pointer?
-
-    fun boltffi_torvox_bridge_restore_session(
-        handle: Long,
-        path: String?,
-    ): Pointer?
-
-    fun boltffi_torvox_bridge_has_saved_session(
-        handle: Long,
-        path: String?,
     ): Pointer?
 
     fun boltffi_last_error_message(): ByteArray?
@@ -400,8 +363,6 @@ class TorvoxBridge(
 
     fun setFontSize(sizeTenths: UInt) = callUnit { it.boltffi_torvox_bridge_set_font_size(handle, sizeTenths.toInt()) }
 
-    fun setSavePath(path: String) = callUnit { it.boltffi_torvox_bridge_set_save_path(handle, path) }
-
     fun getConfig(): TerminalConfig = callOk({ it.boltffi_torvox_bridge_get_config(handle) }) { TerminalConfig.wireDecode(it) }
 
     fun getThemeNames(): List<String> {
@@ -412,15 +373,6 @@ class TorvoxBridge(
     fun listFonts(): List<String> {
         val p = ensureLib().boltffi_torvox_bridge_list_fonts(handle) ?: return emptyList()
         return WireReader(readWireBytes(readFfiBuf(p))).readList { it.readString() }
-    }
-
-    fun saveSession(path: String) = callUnit { it.boltffi_torvox_bridge_save_session(handle, path) }
-
-    fun restoreSession(path: String) = callUnit { it.boltffi_torvox_bridge_restore_session(handle, path) }
-
-    fun hasSavedSession(path: String): Boolean {
-        val p = ensureLib().boltffi_torvox_bridge_has_saved_session(handle, path) ?: return false
-        return WireReader(readWireBytes(readFfiBuf(p))).readBool()
     }
 
     fun searchInScrollback(query: String): Pair<Int, Int>? {

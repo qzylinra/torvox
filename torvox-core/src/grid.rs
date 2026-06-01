@@ -34,10 +34,6 @@ impl GridSnapshot for Grid {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 pub struct Grid {
     lines: Vec<Line>,
     dirty: DirtyMask,
@@ -268,17 +264,6 @@ impl Grid {
 
     pub fn clear_scrollback(&mut self) {
         self.scrollback.clear();
-    }
-
-    pub fn max_scrollback(&self) -> usize {
-        self.max_scrollback
-    }
-
-    pub fn push_scrollback(&mut self, line: Line) {
-        self.scrollback.push_back(line);
-        while self.scrollback.len() > self.max_scrollback {
-            self.scrollback.pop_front();
-        }
     }
 }
 

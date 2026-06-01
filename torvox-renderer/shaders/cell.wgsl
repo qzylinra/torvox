@@ -66,17 +66,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Alpha is the glyph coverage
     let glyph_alpha = atlas_sample.a;
 
-    // Flags: bit 0=bold, 1=italic, 2=reverse, 3=underline, 4=hyperlink
-    let is_hyperlink = (u32(in.flags) & 16u) != 0u;
-
-    // Tint foreground blue for hyperlinks
-    var fg = in.fg_color.rgb;
-    if is_hyperlink {
-        fg = mix(fg, vec3<f32>(0.2, 0.5, 1.0), 0.3);
-    }
-
     // Blend: background where no glyph, foreground where glyph exists
-    let color = mix(in.bg_color.rgb, fg, glyph_alpha);
+    let color = mix(in.bg_color.rgb, in.fg_color.rgb, glyph_alpha);
 
     return vec4<f32>(color, 1.0);
 }

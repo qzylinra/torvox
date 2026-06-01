@@ -491,65 +491,6 @@ impl TorvoxBridge {
             .unwrap_or_default()
     }
 
-    pub fn set_save_path(&self, path: String) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
-        if let Some(surface) = surface_guard.as_mut() {
-            surface.set_save_path(path);
-        }
-        Ok(())
-    }
-
-    pub fn save_session(&self, path: String) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
-        if let Some(surface) = surface_guard.as_mut() {
-            surface
-                .save_session(&path)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
-        }
-        Ok(())
-    }
-
-    pub fn restore_session(&self, path: String) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
-        if let Some(surface) = surface_guard.as_mut() {
-            surface
-                .restore_session(&path)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
-        }
-        Ok(())
-    }
-
-    pub fn has_saved_session(&self, path: String) -> bool {
-        crate::surface::AndroidSurface::has_saved_session(&path)
-    }
-
-    pub fn set_mouse_position(&self, row: u32, col: u32) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
-        if let Some(surface) = surface_guard.as_mut() {
-            surface.set_mouse_position(row, col);
-        }
-        Ok(())
-    }
-
-    pub fn get_hovered_url(&self) -> Option<String> {
-        self.surface
-            .lock()
-            .ok()
-            .and_then(|g| g.as_ref().and_then(|s| s.get_hovered_url()))
-    }
-
     pub fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
