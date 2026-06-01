@@ -31,7 +31,27 @@ path = "fuzz_targets/fuzz_keyboard_input.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "fuzz_grid_ops"
+path = "fuzz_targets/fuzz_grid_ops.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "fuzz_selection"
+path = "fuzz_targets/fuzz_selection.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "fuzz_attrs"
+path = "fuzz_targets/fuzz_attrs.rs"
+test = false
+bench = false
+
 [dependencies]
 torvox-core = { path = "../../torvox-core" }
 torvox-terminal = { path = "../../torvox-terminal" }
 libfuzzer-sys = "0.4"
+serde = { workspace = true }
+serde_json = "1"

@@ -175,25 +175,22 @@ Torvox 追求所有 Android 终端模拟器中最全面的 VT 标准覆盖。合
 
 ## 6. MCP 服务器规范
 
-Agent 传输协议是本地回环上的 JSON-RPC 2.0 服务器。**注意: 本节描述的 MCP 服务器是阶段 2+ 功能, 尚未实现。**
+Agent 传输协议是本地回环上的 JSON-RPC 2.0 / MCP 2024-11-05 服务器。
+**状态: P4.4 已实现骨架** (`torvox-mcp` crate, 8 工具, 11 测试, 端到端验证)。
+GUI 集成 (真实 `SessionStore` 实现) 仍为 P5 任务。
 
 ### 启动
 
-- 端口: 动态分配, 写入 `app/agent.sock`
-- 认证: Unix 域套接字权限 (0700)
-- 默认: **关闭**。通过 Settings → Agent Access 启用。
+- 端口: 动态分配, `--socket <path>` 显式指定
+- 传输: Unix 域套接字 (默认权限 0o755)
+- 默认: **关闭**。必须显式启用 (`--socket <path>` flag)
+- 写权限: 默认拒绝, 需 `--mcp-allow-write` flag
 
-### 核心工具 (阶段 2+)
+### 核心工具 (P4.4 已实现)
 
-| 工具 | 参数 | 返回 | 备注 |
-|------|------|------|------|
-| `session.create` | `{shell: "bash"}` | `{session_id}` | 生成新终端会话 |
-| `session.write` | `{session_id, input}` | `{accepted}` | 写入 PTY 输入 |
-| `session.read` | `{session_id, timeout_ms}` | `{output}` | 阻塞读取带超时 |
-| `session.resize` | `{session_id, rows, cols}` | `{accepted}` | 终端调整大小 |
-| `session.state` | `{session_id}` | `{grid, cursor, ...}` | 可见状态快照 |
-| `session.list` | `{}` | `{sessions: [...]}` | 所有活跃会话 |
-| `session.close` | `{session_id}` | `{accepted}` | 优雅终止会话 |
+8 个工具: list_sessions, read_grid, read_scrollback, read_cursor, read_selection, read_title, send_input, send_signal。
+
+详见 `docs/MCP.md` 和 `docs/ADR/007-mcp-server.md`。
 
 ## 7. 性能目标 (Android Pixel 7)
 

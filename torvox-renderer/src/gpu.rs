@@ -275,7 +275,7 @@ impl GpuContext {
         initial_width: u32,
         initial_height: u32,
     ) -> Result<(), GpuError> {
-        use wgpu::raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle};
+        use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle};
 
         let non_null = std::ptr::NonNull::new(window_ptr)
             .ok_or_else(|| GpuError::Surface("null window pointer".to_string()))?;
@@ -283,8 +283,8 @@ impl GpuContext {
         let android_handle = AndroidNdkWindowHandle::new(non_null);
         let display_handle = AndroidDisplayHandle::new();
 
-        let raw_win_handle = wgpu::raw_window_handle::RawWindowHandle::AndroidNdk(android_handle);
-        let raw_display_handle = wgpu::raw_window_handle::RawDisplayHandle::Android(display_handle);
+        let raw_win_handle = raw_window_handle::RawWindowHandle::AndroidNdk(android_handle);
+        let raw_display_handle = raw_window_handle::RawDisplayHandle::Android(display_handle);
 
         // SAFETY: wgpu requires the window handle to remain valid for the lifetime
         // of the surface. The caller (AndroidSurface) ensures the ANativeWindow
@@ -429,7 +429,13 @@ impl GpuContext {
         }
     }
 
-    pub fn update_bind_group(&mut self, atlas_width: f32, atlas_height: f32) {
+    pub fn update_bind_group(
+        &mut self,
+        atlas_width: f32,
+        atlas_height: f32,
+        cell_width: f32,
+        cell_height: f32,
+    ) {
         let config = match self.surface_config.as_ref() {
             Some(c) => c,
             None => return,
@@ -448,7 +454,7 @@ impl GpuContext {
 
         let uniforms = GpuUniforms {
             projection: proj,
-            cell_size: [8.0, 16.0],
+            cell_size: [cell_width, cell_height],
             atlas_size: [atlas_width, atlas_height],
         };
 
@@ -496,6 +502,10 @@ impl GpuContext {
                 surface.configure(&self.device, config);
             }
         }
+    }
+
+    pub fn has_surface(&self) -> bool {
+        self.surface.is_some()
     }
 
     pub fn warmup(&self) {
@@ -874,7 +884,8 @@ pub fn build_cell_instances_from_snapshot(
                 let flags = if cell.bold { 1.0 } else { 0.0 }
                     + if cell.italic { 2.0 } else { 0.0 }
                     + if cell.reverse { 4.0 } else { 0.0 }
-                    + if cell.underline { 8.0 } else { 0.0 };
+                    + if cell.underline { 8.0 } else { 0.0 }
+                    + if cell.uri.is_some() { 16.0 } else { 0.0 };
 
                 let (fg, bg) = if cell.reverse {
                     (cell.bg, cell.fg)

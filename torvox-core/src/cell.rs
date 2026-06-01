@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
     pub char: char,
@@ -21,6 +25,10 @@ impl Default for Cell {
     }
 }
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
     pub r: u8,
@@ -40,6 +48,10 @@ impl Default for Color {
     }
 }
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Attrs {
     pub bold: bool,
@@ -56,6 +68,10 @@ pub struct Attrs {
 
 const BITS_PER_PARTITION: u32 = 64;
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirtyMask {
     partitions: alloc::vec::Vec<u64>,

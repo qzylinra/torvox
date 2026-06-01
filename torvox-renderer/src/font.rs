@@ -156,13 +156,21 @@ impl FontPipeline {
 
         match image.content {
             swash::scale::image::Content::Mask => {
+                let atlas_w = self.atlas_width as usize;
+                let atlas_h = self.atlas_height as usize;
                 for y in 0..height as usize {
+                    let dst_y = ay as usize + y;
+                    if dst_y >= atlas_h {
+                        break;
+                    }
                     for x in 0..width as usize {
                         let src_idx = y * width as usize + x;
                         let alpha = image.data.get(src_idx).copied().unwrap_or(0);
                         let dst_x = ax as usize + x;
-                        let dst_y = ay as usize + y;
-                        let dst_idx = (dst_y * self.atlas_width as usize + dst_x) * 4;
+                        if dst_x >= atlas_w {
+                            break;
+                        }
+                        let dst_idx = (dst_y * atlas_w + dst_x) * 4;
                         if dst_idx + 3 < self.atlas_bitmap.len() {
                             self.atlas_bitmap[dst_idx] = 255;
                             self.atlas_bitmap[dst_idx + 1] = 255;
@@ -173,13 +181,21 @@ impl FontPipeline {
                 }
             }
             _ => {
+                let atlas_w = self.atlas_width as usize;
+                let atlas_h = self.atlas_height as usize;
                 let bpp = 4;
                 for y in 0..height as usize {
+                    let dst_y = ay as usize + y;
+                    if dst_y >= atlas_h {
+                        break;
+                    }
                     for x in 0..width as usize {
-                        let src_idx = (y * width as usize + x) * bpp;
                         let dst_x = ax as usize + x;
-                        let dst_y = ay as usize + y;
-                        let dst_idx = (dst_y * self.atlas_width as usize + dst_x) * 4;
+                        if dst_x >= atlas_w {
+                            break;
+                        }
+                        let src_idx = (y * width as usize + x) * bpp;
+                        let dst_idx = (dst_y * atlas_w + dst_x) * 4;
                         if dst_idx + 3 < self.atlas_bitmap.len() && src_idx + 3 < image.data.len() {
                             self.atlas_bitmap[dst_idx] = image.data[src_idx];
                             self.atlas_bitmap[dst_idx + 1] = image.data[src_idx + 1];
@@ -240,6 +256,39 @@ impl FontPipeline {
 
     pub fn has_font(&self) -> bool {
         self.font_id.is_some()
+    }
+
+    /// Returns the monospace cell dimensions (cell_width, cell_height) in pixels.
+    /// Uses the font's ascent + descent for the line height (the most reliable
+    /// signal across monospace fonts). The cell width is computed from the
+    /// font's `max_width` (from hmtx table) for monospace fonts, or estimated
+    /// at 0.6 × font_size as a fallback.
+    pub fn cell_metrics(&self) -> (f32, f32) {
+        if let Some(font_id) = self.font_id {
+            let db = self.font_system.db();
+            let result = db.with_face_data(font_id, |font_data, face_index| {
+                let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
+                let metrics = font_ref.metrics(&[]);
+                let upem = metrics.units_per_em as f32;
+                if upem == 0.0 {
+                    return None;
+                }
+                let scale = self.font_size / upem;
+                let ascent = metrics.ascent * scale;
+                let descent = -metrics.descent * scale;
+                let cell_height = if ascent + descent > 0.0 {
+                    ascent + descent
+                } else {
+                    self.font_size * 1.2
+                };
+                let cell_width = self.font_size * 0.6;
+                Some((cell_width, cell_height))
+            });
+            if let Some(Some(m)) = result {
+                return m;
+            }
+        }
+        (self.font_size * 0.6, self.font_size * 1.2)
     }
 }
 
@@ -302,5 +351,23 @@ mod tests {
         pipeline.glyph_info('A');
         let bitmap = pipeline.atlas_bitmap();
         assert!(bitmap.iter().any(|&b| b != 0));
+    }
+
+    #[test]
+    fn cell_metrics_returns_positive_dimensions() {
+        let pipeline = FontPipeline::new(2048, 2048, 14.0);
+        let (cw, ch) = pipeline.cell_metrics();
+        assert!(cw > 0.0, "cell_width must be > 0, got {cw}");
+        assert!(ch > 0.0, "cell_height must be > 0, got {ch}");
+    }
+
+    #[test]
+    fn cell_metrics_scales_with_font_size() {
+        let small = FontPipeline::new(2048, 2048, 10.0);
+        let large = FontPipeline::new(2048, 2048, 20.0);
+        let (sw, sh) = small.cell_metrics();
+        let (lw, lh) = large.cell_metrics();
+        assert!(lw > sw, "larger font must have wider cell");
+        assert!(lh > sh, "larger font must have taller cell");
     }
 }

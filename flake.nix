@@ -187,7 +187,7 @@
                 markdownlint =
                   pkgs.runCommand "check-markdownlint"
                     {
-                      nativeBuildInputs = [ pkgs.nodePackages.markdownlint-cli ];
+                      nativeBuildInputs = [ pkgs.markdownlint-cli2 ];
                     }
                     ''
                       ${copy_source}
@@ -195,7 +195,7 @@
                         -not -path './target/*' \
                         -not -path './.git/*' \
                         -not -path './.opencode/*' \
-                        -exec markdownlint {} +
+                        -exec markdownlint-cli2 {} +
                       touch $out
                     '';
               };
@@ -228,9 +228,12 @@
               pkgs.taplo
               pkgs.yamlfmt
               pkgs.typos
-              pkgs.nodePackages.markdownlint-cli
+              pkgs.markdownlint-cli2
+              pkgs.openspec
               pkgs.pkg-config
               pkgs.openssl
+              pkgs.zig_0_15
+              pkgs.git
             ];
             env = {
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [

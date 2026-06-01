@@ -6,6 +6,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.widget.Magnifier
 import io.torvox.SelectionMode
 import io.torvox.TerminalViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +27,8 @@ class TerminalSurface
         private var isScrolling: Boolean = false
         private var scrollOffset: Int = 0
         private var maxScrollOffset: Int = 0
+
+        private var magnifier: Magnifier? = null
 
         var onScrollChanged: ((offset: Int) -> Unit)? = null
         var onScrollingStateChanged: ((isScrolling: Boolean) -> Unit)? = null
@@ -102,6 +105,8 @@ class TerminalSurface
                     val row = (e.y / 16f).toInt().coerceIn(0, rows - 1)
                     val col = (e.x / 8f).toInt().coerceIn(0, cols - 1)
                     viewModel?.startSelection(row, col)
+                    magnifier = magnifier ?: Magnifier.Builder(this@TerminalSurface).build()
+                    magnifier?.show(e.rawX, e.rawY)
                 }
             }
 
@@ -151,9 +156,12 @@ class TerminalSurface
                 val row = (event.y / 16f).toInt().coerceIn(0, rows - 1)
                 val col = (event.x / 8f).toInt().coerceIn(0, cols - 1)
                 viewModel?.updateSelection(row, col)
+                magnifier?.show(event.rawX, event.rawY)
             }
             if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
                 viewModel?.endSelection()
+                magnifier?.dismiss()
+                magnifier = null
             }
             return handled || super.onTouchEvent(event)
         }

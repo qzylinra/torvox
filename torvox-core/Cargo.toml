@@ -12,8 +12,16 @@ unicode-width = { version = "0.2", default-features = false, features = [
   "no_std",
   "cjk",
 ] }
+rkyv = { workspace = true, default-features = false, features = [
+  "alloc",
+], optional = true }
 
 [features]
 default = ["std", "alloc"]
 std = ["thiserror", "serde/std"]
 alloc = ["serde/alloc"]
+rkyv = ["dep:rkyv"]
+
+[dev-dependencies]
+quickcheck = { workspace = true }
+quickcheck_macros = { workspace = true }

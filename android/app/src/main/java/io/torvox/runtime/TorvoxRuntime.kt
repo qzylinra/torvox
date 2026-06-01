@@ -40,6 +40,9 @@ class TorvoxRuntime
         private var renderThread: Thread? = null
         private var running = false
 
+        private val sessionSavePath: String
+            get() = "${context.filesDir.absolutePath}/session.bin"
+
         suspend fun start(
             surface: Surface,
             width: Int,
@@ -93,6 +96,12 @@ class TorvoxRuntime
                 )
 
             bridge = createBridge(config)
+            bridge?.setSavePath(sessionSavePath)
+
+            val savePath = sessionSavePath
+            if (bridge?.hasSavedSession(savePath) == true) {
+                bridge?.restoreSession(savePath)
+            }
 
             val windowPtr = getNativeWindowPtr(surface)
             bridge?.setNativeWindow(windowPtr, width.toInt(), height.toInt())
@@ -133,6 +142,12 @@ class TorvoxRuntime
         }
 
         fun bridge(): io.torvox.bridge.TorvoxBridge? = bridge
+
+        fun saveSession() {
+            val savePath = sessionSavePath
+            bridge?.setSavePath(savePath)
+            bridge?.saveSession(savePath)
+        }
 
         fun stop() {
             running = false

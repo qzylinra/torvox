@@ -196,65 +196,9 @@
 
 # 第四部分: 当前状态
 
-- **阶段**: 2 完成 — P0.1–P0.6, P1.1–P1.6, P2.1–P2.5 全部完成
-- **下一步**: P2.2 放大镜, P3.1 DEC 2026/矩形操作, P3.2 图形协议, P3.3 性能优化, P3.4 模糊测试
-- **审计修复**: 28 项已修复 (含本轮 pollster→futures, proptest→quickcheck, raw-window-handle→wgpu re-export, coding standards 全仓清理, docs 合并), 7 项仍待修
-
-## 阶段 0 完成内容
-
-| 里程碑 | 交付物 | 状态 |
-|--------|--------|------|
-| P0.1 | Rust workspace 8 个 crate + Cargo.toml | ✅ |
-| P0.2 | `torvox-core` 完整类型系统 (9 模块, no_std) | ✅ |
-| P0.3 | Android 项目 + Kotlin + Hilt + Compose | ✅ |
-| P0.4 | 文档 + CI + 质量门 | ✅ |
-| P0.5 | PtyPair (spawn, 原始模式, 非阻塞, kill_on_drop) + W^X 多调用二进制 | ✅ |
-| P0.6 | boltffi 桥接验证 (bridge.rs + 生成 Kotlin 绑定) | ✅ |
-
-## 阶段 1 待完成内容 (详见 ROADMAP.md)
-
-| 里程碑 | 交付物 | 状态 |
-|--------|--------|------|
-| P1.1 | VT 解析器 (libghostty-vt, GhosttyTerminal) | ✅ 完成 |
-| P1.2 | PTY 会话集成 (flume SPSC) | ✅ 完成 |
-| P1.3 | 字体管线 (fontdb → cosmic-text → swash/skrifa → guillotiere) | ✅ 完成 |
-| P1.4 | GPU 渲染管线 (实例化四边形, WGSL 着色器) | ✅ 完成 |
-| P1.5 | Android Surface 渲染 (wgpu v29 SurfaceView) | ✅ 完成 |
-| P1.6 | 输入处理 (触摸/键盘 → VT 转义序列 → PTY 写入) | ✅ 完成 |
-
-## 阶段 2 进行中 (详见 ROADMAP.md)
-
-| 里程碑 | 交付物 | 状态 |
-|--------|--------|------|
-| P2.1 | 回滚缓冲 (scrollback + 触摸滚动) | ✅ 完成 |
-| P2.2 | 选择 (字符/词/行/块 + 复制剪贴板) | ✅ 完成 |
-| P2.3 | 修饰键栏 (Ctrl/Alt/Esc/Tab + 粘滞模式) | ✅ 完成 |
-| P2.4 | 字体 + 主题 (10 内置主题 + 字体大小 + TrueColor) | ✅ 完成 |
-| P2.5 | 设置 (Compose UI + DataStore + Shell 选择) | ✅ 完成 |
-
-## 当前代码状态
-
-| 组件 | 状态 | 说明 |
-|------|------|------|
-| `torvox-core` (9 模块) | **完整** | Cell, Attrs (10 SGR), Color, DirtyMask (Vec<u64>), Grid (含 scrollback + GridSnapshot trait), Line, Config, Cursor, Selection, Unicode, Event, Ansi |
-| `torvox-terminal/pty.rs` | **完整** | PtyPair: spawn, resize, read/write, Drop (增量终止), 非阻塞, 4 个 Linux 测试 |
-| `torvox-terminal/ghostty_terminal.rs` | **完整** | Channel-based GhosttyTerminal: flume command channel + 专用线程, GridSnapshot, 11 公共方法 |
-| `torvox-terminal/session.rs` | **完整** | Session orchestrator: PtyPair + GhosttyTerminal + flume channel + Condvar 事件通知, 4 个集成测试 |
-| `torvox-terminal/keyboard.rs` | **完整** | InputEngine: Kitty 协议 + VT 传统编码 + 鼠标 SGR, 43 个测试 |
-| `torvox-renderer` | **完整** | FontPipeline (fontdb+cosmic-text+swash+guillotiere, LRU eviction, 7 测试), GpuContext (wgpu v29, cell.wgsl, 7 测试), Android Surface 支持 |
-| `torvox-gui-android/bridge.rs` | **完整** | BridgeCell(+BridgeAttrs), BridgeTheme, Shell(Enum), TerminalConfig, TerminalEvent(8变体), TerminalError(detail), TorvoxBridge; From/Into 转换 core 类型 |
-| `torvox-gui-android/surface.rs` | **完整** | AndroidSurface: GPU 管线 + 字体 + Session (PTY+terminal+parser), set_native_window (自动 spawn), render, write_to_pty (真正写 PTY) |
-| `torvox-exec` | **完整** | argv[0] 多调用二进制, 符号链接模式 + 直接调用模式 |
-| `torvox-fuzz` | **功能** | 4 个模糊目标 (fuzz_vt_parser, fuzz_osc_parse, fuzz_grid_resize, fuzz_keyboard_input), cargo-fuzz 配置完整 |
-| `torvox-integration-tests` | **功能** | 4 个集成测试 (parse_then_verify_terminal, scrollback_preserved_on_scroll, sgr_color_persists_across_cells, session_spawn_and_write) |
-| `torvox-bench` | **功能** | 4 个 criterion 基准测试 (plain_text, sgr, cursor, 1k_lines) |
-| Android Kotlin | **功能** | TorvoxApp, MainActivity, TerminalViewModel (+settings), TerminalScreen (+topbar), ModifierBar, SettingsScreen (+theme/shell/font), ForegroundService, ExecInstaller |
-
-## 已删除/合并的组件
-
-- `torvox-bridge-types/` — **已删除**。boltffi 库模式只允许一个导出位置，
-  跨 crate derive 会导致 Kotlin 生成重复脚手架。所有 boltffi 类型合并到
-  `torvox-gui-android/src/bridge.rs`。文档中如仍引用此 crate 视为过时。
+- **阶段**: 3 完成。P4 进行中 (P4.1 前台服务+持久化, P4.4 MCP 服务器, P4.5 hyperlink 追踪+渲染 已完成)。详见 `docs/ROADMAP.md`。
+- **下一步**: P4.3 i18n, P4.2 无障碍, P4.5 APK 构建发布
+- **审计修复**: 44 项已修复, 5 项仍部分修复 (P3.2 图像协议 + 真实设备性能)
 
 ---
 
@@ -347,75 +291,24 @@
 | 23 | Nightly CI 缺少 Zig + libghostty-vt patch | fuzz/miri/bench/geiger job 都依赖 libghostty-vt-sys 编译，需要 Zig + `git clone + git apply` | P3 修复 |
 | 24 | `GhosttyTerminal.history_size()` 不存在 | libghostty-vt Terminal API 是 `scrollback_rows()` 而非 `history_size()`。API 命名与自建 TerminalState 不同 | P3 修复 |
 | 25 | GhosttyTerminal channel-based 后 `resize()` 签名变更 | `resize` 只需 `(rows, cols)` 两参数，不再需要 `(cell_width, cell_height)` — libghostty-vt 内部管理 | P3 修复 |
+| 26 | `boltffi generate kotlin` 不生成桥接方法 | boltffi 0.25.2 CLI 对复杂依赖树 (wgpu, cosmic-text) 静默失败，只生成 WireReader/WireWriter/Native 基础设施，不检测 `#[boltffi::export]` 方法。已验证三种命名变体 (TorvoxGuiAndroid.kt, Torvox.kt, TorvoxAndroid.kt) 均无效。解决方案：JNA 手动绑定 (TorvoxBridge.kt，已验证 24 个符号全部导出)。由 `nm` 确认 `libtorvox_android.so` 正确导出所有 `boltffi_torvox_bridge_*` 符号。 | P4 |
+| 27 | libghostty-vt hyperlink URI 不走 Style API | 超链接 URI 通过 `GridRef::hyperlink_uri(buf)` 获取，而非 `point.style()`。需要先 `cell.has_hyperlink()` 判断，再单独调用 `hyperlink_uri()`。Style 无 hyperlink 字段。 | P4 |
+| 28 | rkyv `to_bytes` 需要 ArrayVec 容量 | `rkyv::api::high::to_bytes::<T, 4096>(&val)` 需要 const generic 容量参数 (4096 bytes 通常足够)。`from_bytes::<T, rancor::Error>(&bytes)` 需 `std` + `bytecheck` 特性。rkyv 0.8 通过 `rkyv::rancor` 导出 rancor。 | P4 |
 
 ---
 
 # 第六部分: 构建命令
 
 ```bash
-# ── Nix 开发环境 (推荐) ──────────────────────────────
-nix develop                                        # 进入 devshell
-nix develop --command cargo build --workspace      # 直接构建
-
-# ── Rust 构建与测试 (需已安装 Rust stable + cargo-nextest) ──
-cargo build                                        # Debug 构建 (workspace)
-cargo build -p torvox-core                         # 单 crate 构建
-cargo build -p torvox-core --no-default-features --features alloc # no_std 构建 (验证无 std)
+# ── 日常开发最常用 ────────────────────────────────────
+cargo build                                        # Debug 构建
 cargo nextest --workspace                          # 全部测试
-cargo nextest -p torvox-core                       # 单 crate 测试
 cargo clippy -- -D warnings                        # 零警告 (必须)
 cargo fmt --check                                  # 格式检查
-
-# ── Android 构建 ─────────────────────────────────────
-./scripts/build-android-libs.nu                    # 交叉编译 Rust → Android .so + exec
-cd android && ./gradlew assembleDebug              # 构建 APK (需要先运行上方脚本)
-cd android && ./gradlew lint                       # Kotlin lint
-cd android && ./gradlew test                       # Kotlin 测试
-
-# ── boltffi 绑定生成 ──────────────────────────────────
-nu scripts/generate-bindings.nu # 构建并生成 Kotlin 绑定
-
-# ── 质量门 ───────────────────────────────────────────
 nu scripts/quality-gate.nu                          # 8 步全量质量门
-
-# ── 安全检查 ─────────────────────────────────────────
-cargo geiger                                       # 检查 unsafe 使用
-cargo audit                                        # 检查已知漏洞
-
-# ── no_std 验证 ──────────────────────────────────────
-cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --features alloc
 ```
 
 完整命令见 `docs/DEVELOPMENT.md`。
-
-## Nix DevShell
-
-项目包含 `flake.nix`，提供完整开发环境:
-
-| 工具 | 版本 | 说明 |
-|------|------|------|
-| Rust (fenix stable) | 1.95 | rust-toolchain.toml 锁定 |
-| cargo-nextest | 0.9.136 | 替代 cargo test |
-| cargo-fuzz | 0.13 | 模糊测试 |
-| cargo-geiger | 0.13 | unsafe 审计 |
-| cargo-audit | 0.22 | 漏洞扫描 |
-| cargo-ndk | latest | Android 交叉编译 |
-| rust-analyzer | latest | IDE 支持 |
-| JDK (Temurin) | 17 | Android 构建 |
-| Kotlin | nixpkgs latest | |
-| Gradle | 9 | |
-| ktfmt | nixpkgs latest | Kotlin 格式化 |
-| ktlint | nixpkgs latest | Kotlin lint |
-| Android SDK | platform 36/33, build-tools 36.0.0, cmdLineTools 16.0 | |
-| Android NDK | 29.0.14206865 (r29) | |
-| android-tools | nixpkgs latest | adb 等 |
-
-使用 `flake-parts` (非 `flake-utils`)。Android SDK 需要 `allowUnfree`。
-
-```bash
-nix develop                    # 进入 shell
-nix develop --command cargo nextest  # 直接运行
-```
 
 ---
 
@@ -427,82 +320,7 @@ nix develop --command cargo nextest  # 直接运行
 
 # 第八部分: 约定
 
-## Rust
-
-| 约定 | 规则 | 理由/注意 |
-|------|------|-----------|
-| Edition | 2024 | workspace 强制 |
-| 格式化 | `cargo fmt` 强制 | 不合规不合并 |
-| Clippy | `--deny warnings` 每 PR 必需 | 零警告策略 |
-| `unsafe` | `torvox-core` 中 **零**。仅 `torvox-gui-android` FFI 桥接和 `torvox-terminal::pty` 中 | 每个 unsafe 块注释安全不变量 |
-| 错误处理 | `thiserror 2` (库) + `eyre` (二进制)。**库 crate 中无 `anyhow`** | thiserror 在 torvox-core 中 optional (需 std feature) |
-| 序列化 | `serde derive` (不用 bincode/postcard，已废弃) | |
-| 测试 | `cargo nextest` 替代 `cargo test`。内联 `#[cfg(test)] mod tests` | 集成测试在 `torvox-integration-tests` |
-| 属性测试 | `proptest 1.11` — VT 解析器和 Grid 必须有 | 最少 10K 用例 |
-| 命名 | 函数/变量 `snake_case`，类型 `PascalCase`，常量 `SCREAMING_SNAKE` | |
-| 导出 | 每个 crate 最小公共 API 表面。用 `pub(crate)` 隐藏内部 | |
-| `no_std` | `torvox-core` 必须 `no_std` 兼容。`extern crate alloc` 用于 Vec/String | 验证: `cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --features alloc` |
-| Copy 语义 | 不要盲目 derive Copy。含 String/Vec 的类型不能 Copy | Shell::Custom(String) 使 TerminalConfig 失去 Copy |
-
-## Kotlin
-
-| 约定 | 规则 | 理由/注意 |
-|------|------|-----------|
-| Kotlin | 2.3.21+，Compose BOM 2026.05.00 | |
-| DI | Hilt 2.59.2 (需 AGP 9.0+) | @HiltAndroidApp + @AndroidEntryPoint |
-| 架构 | MVVM with StateFlow/SharedFlow | 单向数据流 |
-| UI | Jetpack Compose, Material 3 | |
-| 命名 | 函数/变量 `camelCase`，类 `PascalCase` | |
-| 可空性 | 默认非空。`?` 仅在真正可空处 | |
-| 格式化 | `ktfmt` 强制 | |
-| 渲染 | SurfaceView 宿主 Rust wgpu v29 Surface，**不用 Canvas** | ADR 003 |
-| 前台服务 | `FOREGROUND_SERVICE_SPECIAL_USE` | AndroidManifest 中声明 foregroundServiceType |
-| JNA | `net.java.dev.jna:jna:5.18.1@aar` | boltffi 运行时依赖 |
-| AGP 插件 | 不使用 `org.jetbrains.kotlin.android` — AGP 9.0+ 内置 Kotlin | 用 KSP 2.3.9 替代 kapt |
-
-## Git
-
-| 约定 | 规则 | 理由/注意 |
-|------|------|-----------|
-| 提交 | Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`) | |
-| 分支 | `phase-N/*` 用于阶段工作，`fix/*` 用于修复 | |
-| PR | Squash merge 到 `main`。每个 PR 一个逻辑提交 | 保持历史清晰 |
-| Cargo.lock | 提交到版本控制 | 二进制项目需要可复现构建 |
-
-## Nix
-
-| 约定 | 规则 | 理由/注意 |
-|------|------|-----------|
-| 表达式风格 | 不写 `let in` — 用 `let body = ...; in body` 或直接 `{ ... }` | `let in` 增加嵌套，不利于阅读 |
-| `rec` | 不使用 `rec` — 用 `self` 参数或拆分定义 | rec 引入惰性求值陷阱 |
-| `with` | 限制使用 `with` — 仅在顶级 shell 环境引入 | `with` 遮蔽作用域，难以调试 |
-| 中间变量 | 减少中间变量，不定义只用一次的变量 | inline 表达式更清晰 |
-| 命名 | 不缩写单词 (`system` 不写成 `s`, `pkgs` 是惯例但 body 内不缩写) | 可读性优先 |
-| 单行 | 简单映射 ({ a = b; }) 可单行，复杂逻辑拆多行 | |
-| flake inputs | 优先用 flake-parts，不用 flake-utils | flake-parts 更现代，支持 system 枚举 |
-
-## Nushell
-
-| 约定 | 规则 | 理由/注意 |
-|------|------|-----------|
-| 首行 | 每个 .nu 文件首行 `#!/usr/bin/env nu` | shebang 确保直接执行 |
-| 错误处理 | 所有外部命令调用检查退出码 (`try`/`catch` 或 `| complete`) | 避免静默失败 |
-| 管道风格 | 每步一行，`|` 在行尾 | 可读性 |
-| 变量命名 | `snake_case`，不缩写 | |
-| 环境变量 | 用 `$env.VAR = "val"`，不用 `load-env` | |
-| 外部命令 | 用 `^command` 调用外部命令 | 避免与 builtin 冲突 |
-
-## GitHub Actions
-
-| 约定 | 规则 | 理由/注意 |
-|------|------|-----------|
-| Action 版本 | 使用精确标签 (`@v4`) 而非分支 (`@main`) | 可复现构建 |
-| Step `name` | 不设置 `name` 字段 — 消息在 run 命令中自解释 | 减少 YAML 冗余 |
-| 空行 | 不在 workflow 文件中添加无实际作用的空行 | 简洁性 |
-| `uses` 参数 | `uses` 紧接 action 路径 + 版本，不换行 | |
-| Job 名 | 短横线命名 (`rust-checks`, `no-std-check`) | |
-| 权限 | 显式声明 `permissions:` | 最小权限原则 |
-| `run` 命令 | 多行命令用 `\|` 多行块，避免 `&&` 链过长 |
+**所有编码规范 (Rust, Kotlin, Git, Nix, Nushell, GitHub Actions) 见 `docs/WORKFLOW.md §九`。**
 
 ---
 
@@ -520,11 +338,6 @@ nix develop --command cargo nextest  # 直接运行
 | L3 集成 | `torvox-integration-tests` | 每 PR | 跨 crate 交互、会话生命周期 |
 | L4 模糊 | `cargo-fuzz` (4 目标, 1B+ 迭代/夜) | 每夜 | 零崩溃 |
 
-## 确定性回放测试
-
-记录 PTY 输出 → postcard 序列化 → 回放 → 断言 Grid 状态。
-用于回归验证和跨平台一致性检查。
-
 ## 具体测试要求
 
 - **每个公共函数**: 必须有单元测试
@@ -538,53 +351,11 @@ nix develop --command cargo nextest  # 直接运行
 
 # 第十部分: 架构关键点
 
-完整架构见 `docs/ARCHITECTURE.md`。以下是智能体必须记住的关键点:
+完整架构见 `docs/ARCHITECTURE.md`。智能体必须记住:
 
-## Crate 依赖方向 (严格单向)
-
-```
-torvox-core (no_std, 零依赖)
-      ↑
-torvox-terminal (nix, libghostty-vt, flume)
-      ↑
-torvox-renderer (wgpu, cosmic-text, swash, guillotiere)
-      ↑
-torvox-gui-android (boltffi, 依赖上述所有)
-```
-
-**依赖只能从下往上**。torvox-core 不能知道 torvox-terminal 的存在。
-
-## 线程模型
-
-完整线程模型见 `docs/ARCHITECTURE.md §线程模型`。
-
-关键要点:
-- PTY 读取线程: 阻塞 `read()` → flume bounded channel → GhosttyTerminal (channel-based)
-- 渲染线程: 单线程, 每会话独立, DirtyMask 驱动
-- 空闲时总线程数: 4-5
-
-## 数据流
-
-完整数据流见 `docs/ARCHITECTURE.md §数据流`。
-
-## 关键不变量
-
-- **torvox-core 需要 `alloc`** (no_std + alloc)。Vec/String 通过 `extern crate alloc` 支持，`no_std` 环境需启用 `alloc` feature。
-- **torvox-terminal 拥有所有 PTY I/O** 在专用线程中。fork 是唯一 unsafe。
-- **torvox-renderer 是单线程** (wgpu 设备在自己线程上)。
-- **FFI 边界传递结构化事件**，不是原始字节 (boltffi #[data]/#[error])。
-- **DirtyMask** `Vec<u64>` 分区，每 u64 覆盖 64 行，支持任意行数。不再有行数限制。
-- **热路径用 flume**，不用 tokio。flume 零分配、无锁、有界反压。
-
-## 渲染管线
-
-```
-fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrifa 做 scaling)
-  → guillotiere 0.7 (shelf packing 图集) → 实例化四边形 → 单次 draw call
-```
-
-- swash 0.2.x: scaling 完全由内部 skrifa 处理，**不需要单独依赖 skrifa crate**
-- SurfaceView (不是 AHardwareBuffer): 零拷贝，wgpu 原生支持
+- **Crate 依赖方向 (严格单向)**: `torvox-core` → `torvox-terminal` → `torvox-renderer` → `torvox-gui-android`。依赖只能从下往上。
+- **关键不变量**: torvox-core 需 `alloc` (no_std)；terminal 拥有所有 PTY I/O (fork 是唯一 unsafe)；renderer 单线程；FFI 传递结构化事件；热路径用 flume 不用 tokio。
+- **渲染管线**: fontdb → cosmic-text → swash → guillotiere → 实例化四边形 → 单次 draw call。详见 ARCHITECTURE.md §渲染管线。
 
 ---
 
@@ -668,7 +439,7 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 以下问题汇总自项目审计 (原 docs/AUDIT.md) 和开发历史，是 AGENTS.md 作为单一权威源的已知问题跟踪。
 已修复的标记 ✅，部分修复的标记 ⚠️，仍待修复的标记 🔲。
 
-### ✅ 已修复 (27 项)
+### ✅ 已修复 (46 项)
 
 | # | 问题 | 修复 |
 |---|------|------|
@@ -699,27 +470,35 @@ fontdb → cosmic-text 0.19 (整形) → swash 0.2.7 (光栅化, 内部用 skrif
 | 25 | ARCHITECTURE.md bridge 路径 | 修正为 TorvoxBridge.kt |
 | 26 | CI Zig 步骤无注释 | 添加注释 |
 | 27 | libghostty-vt commit hash 记录 | patch + build.rs |
+| 28 | pollster → futures | 改用 `futures::executor::block_on` |
+| 29 | proptest → quickcheck | 改用 `quickcheck 1.1` |
+| 30 | raw-window-handle → wgpu re-export | 添加 raw-window-handle 直接依赖 (wgpu 29 不再 re-export) |
+| 31 | GpuUniforms 硬编码 cell_size [8, 16] | 添加 FontPipeline::cell_metrics() 基于真实字体度量 |
+| 32 | build_cell_instances 重复代码 | 移除 `build_cell_instances_from_flat` 死代码 |
+| 33 | ANativeWindow 生命周期风险 | 添加 AndroidSurface::Drop + GpuContext::has_surface() |
+| 34 | quality-gate.nu cargo audit 仅 warn | 改用 `--json` + 检查 `vulnerabilities.found` |
+| 35 | Grid 分散分配 | Line 改用 `Box<[Cell]>`，添加 `row_cells()` 直接访问器 |
+| 36 | lru 0.12.5 RUSTSEC-2026-0002 unsound | 升级到 lru 0.16 (修补版本) |
+| 37 | P3.1 DEC 2026 / DECCRA / DECERA 缺失测试 | 添加 3 个集成测试 (libghostty-vt 处理) |
+| 38 | P3.3.1 PGO 缺失 | 添加 `scripts/build-pgo.nu` (3 阶段流程) |
+| 39 | P3.3.5 <10MB 内存预算无验证 | 添加 `torvox-core/examples/memory_check.rs`，45KB idle PASS |
+| 40 | P3.4 fuzz 目标只有 4 个 | 添加 3 个 (fuzz_grid_ops, fuzz_selection, fuzz_attrs) |
+| 41 | P4.1 foreground service 无 wake lock / 计数 | 添加 wake lock + session count + onTaskRemoved + 通知点击 |
+| 42 | P4.4 MCP server 缺失 | 添加 `torvox-mcp` crate (8 工具，11 测试，端到端验证) |
+| 43 | CI quickcheck 属性测试 | 添加 `QUICKCHECK_TESTS=10000 cargo test --workspace` |
+| 44 | P4.2 会话持久化缺失 | 添加 save_session/restore_session/has_saved_session 到 bridge、surface、Drop handler、Android lifecycle |
+| 45 | P4.5 OSC 8 hyperlink 追踪缺失 | 添加 uri: Option<String> 到 CellSnapshot, populate_uri 在 build_snapshot/build_dumped_grid, GridSnapshot::uri_at |
+| 46 | P4.5 OSC 8 hyperlink 渲染缺失 | 添加 mouse position 跟踪, shader blue tint flag (bit 4), WGSL hyperlink 着色, get_hovered_url bridge |
 
 ### ⚠️ 部分修复
 
 | # | 问题 | 已修复 | 剩余 |
 |---|------|--------|------|
-| 1 | render_frame 全量实例构建 | snapshot 支持 dirty_rows | 渲染循环未传入 dirty_mask |
-| 2 | release.yml 缺少 GitHub Release | signing config 已添加 | 无 GitHub Release 创建步骤 |
-| 3 | `extractSelectedText()` 返回占位符 | — | 需要从 grid 读取实际内容 |
-
-### 🔲 仍待修复
-
-| # | 问题 | 位置 | 优先级 |
-|---|------|------|--------|
-| 1 | GpuUniforms 硬编码 cell_size [8, 16] | gpu.rs | 低 |
-| 2 | FontPipeline atlas 驱逐不回收空间 | font.rs | 中 |
-| 3 | FontPipeline bitmap 溢出检查不足 | font.rs | 低 |
-| 4 | build_cell_instances 重复代码 (三套函数 85% 重复) | gpu.rs | 低 |
-| 5 | ANativeWindow 生命周期风险 (需强制 drop 顺序) | surface.rs | 中 |
-| 6 | flake.nix 缺少 Android SDK/NDK 配置 | flake.nix | 中 |
-| 7 | Grid 分散分配 (Vec<Vec<Cell>>) | grid.rs (P3.3) | 中 |
-| 8 | quality-gate.nu cargo audit 仅 warn 不 fail | quality-gate.nu | 低 |
+| 1 | render_frame 全量实例构建 | snapshot 支持 dirty_rows | dirty_rows 需 libghostty-vt 暴露行级脏标记 |
+| 2 | release.yml 缺少 GitHub Release | 添加 `softprops/action-gh-release@v2` | 需 `v*` tag 触发 |
+| 3 | `extractSelectedText()` 返回占位符 | 使用 `bridge.scrollbackLine()` | 实际可用 |
+| 4 | P3.2 Sixel/Kitty/iTerm2 图像协议 | 无 | libghostty-vt 不支持 + 需要新 GPU 纹理管线 |
+| 5 | P3.3.2 5ms 延迟 / P3.3.3 120 FPS / P3.3.5 真实设备 | 内存 PASS | 需要真实 Android 设备性能分析 |
 
 # 附录: 术语表
 

@@ -4,35 +4,41 @@ on:
     tags: ['v*']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@main
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: stable
           components: clippy, rustfmt
           targets: aarch64-linux-android,x86_64-linux-android
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@master
+      - uses: actions/setup-java@main
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@main
+      - uses: nicolastarzia/cargo-ndk-cache@main
+        with:
+          ndk-version: 29.0.14206865
       - run: |
           curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
           tar -xf /tmp/zig.tar.xz -C /tmp
           echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: |
           git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
           cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@v3
       - run: |
           cargo fmt --check
           cargo clippy --all-targets --all-features -- -D warnings
-      - run: cargo install cargo-ndk@4.1.2
-      - run: cargo ndk -t arm64-v8a -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --release
       - run: |
+          cargo install cargo-ndk@4.1.2
+          cargo ndk -t arm64-v8a -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --release
+          NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -type d -name "[0-9]*" | sort -V | tail -1)
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang
           cargo build -p torvox-exec --target aarch64-linux-android --release
           cargo build -p torvox-exec --target x86_64-linux-android --release
           mkdir -p android/app/src/main/assets/bin/arm64-v8a
@@ -41,7 +47,13 @@ jobs:
           cp target/x86_64-linux-android/release/torvox-exec android/app/src/main/assets/bin/x86_64/
       - working-directory: android
         run: ./gradlew assembleRelease
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@main
         with:
           name: torvox-release
           path: android/app/build/outputs/apk/release/*.apk
+      - uses: softprops/action-gh-release@master
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          generate_release_notes: true
+          files: |
+            android/app/build/outputs/apk/release/*.apk

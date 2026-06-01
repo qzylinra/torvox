@@ -60,9 +60,10 @@ impl App {
                 config.width as f32,
                 config.height as f32,
             );
+            let (cw, ch) = self.font_pipeline.cell_metrics();
             let uniforms = torvox_renderer::gpu::GpuUniforms {
                 projection: proj,
-                cell_size: [8.0, 16.0],
+                cell_size: [cw, ch],
                 atlas_size: [self.atlas_width as f32, self.atlas_height as f32],
             };
             if let Some(buf) = &gpu.cell_uniform_buffer {
@@ -92,7 +93,8 @@ impl ApplicationHandler for App {
         gpu.create_atlas_texture(self.atlas_width, self.atlas_height);
 
         let (aw, ah) = self.font_pipeline.atlas_dimensions();
-        gpu.update_bind_group(aw as f32, ah as f32);
+        let (cw, ch) = self.font_pipeline.cell_metrics();
+        gpu.update_bind_group(aw as f32, ah as f32, cw, ch);
 
         let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
         gpu.upload_atlas(&atlas_data, aw, ah);
@@ -123,11 +125,12 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(gpu), Some(window)) = (&mut self.gpu, &self.window) {
+                    let (cw, ch) = self.font_pipeline.cell_metrics();
                     let instances = torvox_renderer::gpu::build_cell_instances(
                         &self.grid,
                         &mut self.font_pipeline,
-                        8.0,
-                        16.0,
+                        cw,
+                        ch,
                         self.atlas_width as f32,
                         self.atlas_height as f32,
                     );

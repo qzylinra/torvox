@@ -18,6 +18,7 @@ guillotiere = { workspace = true }
 thiserror = { workspace = true }
 lru = { workspace = true }
 futures = { workspace = true }
+raw-window-handle = { workspace = true }
 winit = { version = "0.30", optional = true }
 
 [features]

@@ -1,8 +1,13 @@
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::cell::Cell;
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LineAttr {
     #[default]
@@ -12,16 +17,24 @@ pub enum LineAttr {
     DoubleHeightBottom,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Terminal line: fixed-capacity `Box<[Cell]>` for stable address + small
+/// inline `attr`. `Box<[Cell]>` avoids the capacity/len overhead of `Vec` and
+/// is the natural choice for a line whose size is known at construction.
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Line {
-    cells: Vec<Cell>,
+    cells: Box<[Cell]>,
     pub attr: LineAttr,
 }
 
 impl Line {
     pub fn new(cols: u32) -> Self {
+        let cells: Box<[Cell]> = (0..cols).map(|_| Cell::default()).collect();
         Self {
-            cells: alloc::vec![Cell::default(); cols as usize],
+            cells,
             attr: LineAttr::Normal,
         }
     }
@@ -43,7 +56,15 @@ impl Line {
     }
 
     pub fn resize(&mut self, new_cols: u32) {
-        self.cells.resize(new_cols as usize, Cell::default());
+        let new_len = new_cols as usize;
+        if new_len == self.cells.len() {
+            return;
+        }
+        let mut new_cells = Vec::with_capacity(new_len);
+        new_cells.resize(new_len, Cell::default());
+        let copy_len = new_len.min(self.cells.len());
+        new_cells[..copy_len].clone_from_slice(&self.cells[..copy_len]);
+        self.cells = new_cells.into_boxed_slice();
     }
 
     pub fn cells(&self) -> &[Cell] {
@@ -116,5 +137,28 @@ mod tests {
         let mut l = Line::new(2);
         l.resize(3);
         assert_eq!(l.get(2).unwrap().char, ' ');
+    }
+
+    #[test]
+    fn line_resize_preserves_existing_cells() {
+        let mut l = Line::new(3);
+        l.get_mut(0).unwrap().char = 'A';
+        l.get_mut(1).unwrap().char = 'B';
+        l.resize(5);
+        assert_eq!(l.get(0).unwrap().char, 'A');
+        assert_eq!(l.get(1).unwrap().char, 'B');
+        assert_eq!(l.get(2).unwrap().char, ' ');
+        assert_eq!(l.get(3).unwrap().char, ' ');
+    }
+
+    #[test]
+    fn line_resize_shrink_keeps_prefix() {
+        let mut l = Line::new(5);
+        l.get_mut(0).unwrap().char = 'A';
+        l.get_mut(1).unwrap().char = 'B';
+        l.resize(2);
+        assert_eq!(l.len(), 2);
+        assert_eq!(l.get(0).unwrap().char, 'A');
+        assert_eq!(l.get(1).unwrap().char, 'B');
     }
 }

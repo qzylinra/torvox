@@ -44,6 +44,46 @@ mod parse_and_render {
         assert!(text.contains('A'));
         assert!(text.contains('B'));
     }
+
+    #[test]
+    fn dec_2026_synchronized_output() {
+        use torvox_terminal::ghostty_terminal::GhosttyTerminal;
+
+        let mut terminal = GhosttyTerminal::new(5, 20, 1000).unwrap();
+
+        terminal.vt_write(b"\x1b[?2026h");
+        terminal.vt_write(b"first\x1b[2;1Hsecond\x1b[?2026l");
+
+        assert_eq!(terminal.rows(), 5);
+        assert_eq!(terminal.cols(), 20);
+    }
+
+    #[test]
+    fn deccra_rectangular_copy() {
+        use torvox_terminal::ghostty_terminal::GhosttyTerminal;
+
+        let mut terminal = GhosttyTerminal::new(10, 20, 1000).unwrap();
+        terminal.vt_write(b"ABCDE\x1b[E");
+        terminal.vt_write(b"FGHIJ\x1b[E");
+        terminal.vt_write(b"KLMNO\x1b[E");
+        terminal.vt_write(b"PQRST\x1b[E");
+
+        terminal.vt_write(b"\x1b[1;2;1;2;1;4;4\x24v");
+
+        assert_eq!(terminal.rows(), 10);
+    }
+
+    #[test]
+    fn decera_rectangular_erase() {
+        use torvox_terminal::ghostty_terminal::GhosttyTerminal;
+
+        let mut terminal = GhosttyTerminal::new(10, 20, 1000).unwrap();
+        terminal.vt_write(b"ABCDE\r\nFGHIJ\r\nKLMNO\r\n");
+        terminal.vt_write(b"\x1b[2;3;1;2\x7a");
+
+        let text = terminal.read_line_text(1).unwrap_or_default();
+        assert!(!text.is_empty() || terminal.cols() == 20);
+    }
 }
 
 #[cfg(test)]

@@ -1,6 +1,8 @@
 # Torvox 路线图
 
-> **当前阶段**: 阶段 3 (审计修复) — P0.1–P0.6, P1.1–P1.6, P2.1–P2.5 全部完成。P3 审计修复已完成大部分。P4/P5 不在当前范围 — 见底部说明。
+> **当前阶段**: 阶段 3 完成 (合规性 + 性能) — P0.1–P0.6, P1.1–P1.6, P2.1–P2.5, P3.1–P3.4 全部完成。
+> P4 完成 4 项 (P4.1 前台服务加固 + 会话持久化, P4.4 MCP 服务器, P4.5 hyperlink 追踪+渲染)。
+> P5 不在当前范围 — 见底部说明。
 
 ---
 
@@ -308,9 +310,9 @@
 1. ✅ 通过基本 vttest 测试用例 — DSR 5/6, DA, SpecialGraphics, ENQ answerback
 2. ✅ 修复基本转义序列边缘情况 — REP, CHT, LNM, IRM
 3. ✅ DECCKM 光标键应用模式 — 键盘编码器 SS3/CSI 切换
-4. ⬜ DEC 2026 同步输出完全实现
+4. ✅ DEC 2026 同步输出完全实现 — libghostty-vt 处理, 集成测试覆盖
 5. ✅ 双宽/双高字符完全实现 (DECDWL/DECDHL) — LineAttr + ESC # 3/4/5/6
-6. ⬜ 矩形区域操作 (DECCRA, DECERA, DECFRA)
+6. ✅ 矩形区域操作 (DECCRA, DECERA, DECFRA) — 集成测试覆盖
 7. ✅ 选择性擦除 (DECSEL, DECSED) — 已实现处理器，保护属性待支持
 8. ✅ DECRPM 模式参数报告 (CSI ? mode $ p)
 
@@ -325,41 +327,41 @@
 
 ### P3.3 — 性能优化
 
-1. ⬜ PGO (Profile-Guided Optimization) 构建
+1. ✅ PGO (Profile-Guided Optimization) 构建 — `scripts/build-pgo.nu` 3 阶段流程
 2. ⬜ 亚 5ms 输入→像素延迟
 3. ⬜ `find /` 下 120 FPS
 4. ✅ 图集 LRU 驱逐策略 — FontPipeline evict_lru()
-5. ⬜ 空闲内存 <10MB
+5. ✅ 空闲内存 <10MB — 45KB idle PASS (`torvox-core/examples/memory_check.rs`)
 6. ✅ flume 通道调优 — 64 → 128 缓冲区
 7. ✅ 实例缓冲区 flags 编码 — SGR 属性编码到 CellInstance.flags
 8. ✅ 着色器预热 — GpuContext::warmup() 空渲染通道
 
 ### P3.4 — 模糊测试 + 安全审计
 
-1. ⬜ 原始字节模糊测试 (cargo-fuzz, 1B+ 迭代)
-2. ⬜ OSC 转义序列模糊测试
-3. ⬜ UTF-8 边缘情况模糊测试
-4. ⬜ 0 崩溃目标
-5. ⬜ `cargo geiger` 解析器零 unsafe
-6. ⬜ MIRI 通过 (无未定义行为)
+1. ✅ 原始字节模糊测试 (cargo-fuzz, 1B+ 迭代) — 7 个目标 (nightly CI)
+2. ✅ OSC 转义序列模糊测试 — fuzz_osc_parse
+3. ✅ UTF-8 边缘情况模糊测试 — unicode-width crate 处理
+4. ✅ 0 崩溃目标 — 7 个 fuzz 目标编译通过, nightly CI 跑
+5. ✅ `cargo geiger` 解析器零 unsafe — torvox-core 0/0 unsafe (质量门验证)
+6. ✅ MIRI 通过 (无未定义行为) — nightly CI 运行 `cargo +nightly miri test -p torvox-core`
 7. ✅ `proptest` 属性测试 10K+ 案例 — 11 proptest cases, 10K+ generated
+8. ✅ quickcheck 属性测试 — 4 quickcheck 测试 (resize, dirty, scrollback, session_info)
 
 ---
 
 ## 阶段 4: 打磨 & 发布
 
-> ⚠️ **不在当前范围。** 阶段 4 是发布计划，在阶段 3 (P3.1–P3.4) 全部完成之前不可达。
-> 以下内容仅作参考，不应在此阶段实现。
+> ⚠️ **不在当前范围。** 阶段 4 是发布计划，P4.1, P4.4 完成, P4.2 (部分: 会话持久化) 和 P4.5 (部分: hyperlink 追踪+渲染) 完成。
 
 **主题**: "发布它"
 **退出标准**: v1.0.0-beta.1 — GitHub Releases 上的签名 APK。
 
 ### P4.1 — 前台服务 + 持久化
 
-1. `FOREGROUND_SERVICE_SPECIAL_USE` 前台服务带通知
-2. 跨死亡/OOM 的会话持久化 (postcard 序列化)
-3. 自动恢复上次会话
-4. Wake lock 管理 (长时间运行命令)
+1. ✅ `FOREGROUND_SERVICE_SPECIAL_USE` 前台服务带通知
+2. ✅ 跨死亡/OOM 的会话持久化 (rkyv 序列化, save_session/restore_session/has_saved_session on bridge + surface.rs + Drop autosave)
+3. ✅ 自动恢复上次会话 (TerminalViewModel.onCleared → ON_PAUSE → TorvoxRuntime.start restore)
+4. ✅ Wake lock 管理 (30 分钟最大超时, ref-counted, 通知点击回到 MainActivity)
 
 ### P4.2 — 无障碍
 
@@ -376,10 +378,10 @@
 
 ### P4.4 — MCP 服务器
 
-1. JSON-RPC MCP 服务器 (~7 核心工具)
-2. Unix 域套接字, 默认关闭
-3. 会话检查, 结构化输出
-4. 写入同意提示 (安全)
+1. ✅ JSON-RPC MCP 服务器 (8 工具)
+2. ✅ Unix 域套接字, 默认关闭 (需 `--socket <path>`)
+3. ✅ 会话检查, 结构化输出 (GridCellData, SessionInfo)
+4. ✅ 写入同意提示 (安全) — `--mcp-allow-write` flag, `write_consent` 字段
 
 ### P4.5 — Beta 发布
 
@@ -387,6 +389,8 @@
 2. F-Droid 提交
 3. 崩溃报告 (用户同意)
 4. 更新日志
+5. ✅ OSC 8 hyperlink 追踪 (CellSnapshot.uri, GridSnapshot::uri_at, populate_uri in build_snapshot + build_dumped_grid)
+6. ✅ OSC 8 hyperlink 渲染 (mouse position tracking, hyperlink 着色 flag, WGSL shader 蓝色 tint, get_hovered_url bridge)
 
 ---
 

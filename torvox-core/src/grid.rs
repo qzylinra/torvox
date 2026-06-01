@@ -34,6 +34,10 @@ impl GridSnapshot for Grid {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Grid {
     lines: Vec<Line>,
     dirty: DirtyMask,
@@ -82,6 +86,13 @@ impl Grid {
 
     pub fn get(&self, row: u32) -> Option<&Line> {
         self.lines.get(row as usize)
+    }
+
+    /// Returns the cells of `row` as a contiguous slice (no allocation, no
+    /// indirection). Faster than `get(row).map(|l| l.cells())` for the render
+    /// hot path.
+    pub fn row_cells(&self, row: u32) -> Option<&[Cell]> {
+        self.lines.get(row as usize).map(|l| l.cells())
     }
 
     pub fn get_mut(&mut self, row: u32) -> Option<&mut Line> {
@@ -258,11 +269,23 @@ impl Grid {
     pub fn clear_scrollback(&mut self) {
         self.scrollback.clear();
     }
+
+    pub fn max_scrollback(&self) -> usize {
+        self.max_scrollback
+    }
+
+    pub fn push_scrollback(&mut self, line: Line) {
+        self.scrollback.push_back(line);
+        while self.scrollback.len() > self.max_scrollback {
+            self.scrollback.pop_front();
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck_macros::quickcheck;
 
     #[test]
     fn grid_new_dimensions() {
@@ -339,6 +362,21 @@ mod tests {
     }
 
     #[test]
+    fn grid_row_cells_returns_full_slice() {
+        let mut g = Grid::new(3, 5);
+        g.fill_cells(1, 'X', 0, 5);
+        let row1 = g.row_cells(1).unwrap();
+        assert_eq!(row1.len(), 5);
+        assert!(row1.iter().all(|c| c.char == 'X'));
+    }
+
+    #[test]
+    fn grid_row_cells_out_of_bounds() {
+        let g = Grid::new(3, 5);
+        assert!(g.row_cells(3).is_none());
+    }
+
+    #[test]
     fn dirty_mask_bit_ops() {
         let mut m = DirtyMask::new(24);
         assert!(!m.any_dirty());
@@ -395,5 +433,44 @@ mod tests {
         assert_eq!(g.scrollback_len(), 1);
         g.clear_scrollback();
         assert_eq!(g.scrollback_len(), 0);
+    }
+
+    #[quickcheck]
+    fn prop_grid_resize_preserves_cols(rows: u32, cols: u32, new_rows: u32, new_cols: u32) -> bool {
+        let rows = rows.clamp(1, 200);
+        let cols = cols.clamp(1, 200);
+        let new_rows = new_rows.clamp(1, 200);
+        let new_cols = new_cols.clamp(1, 200);
+        let mut g = Grid::new(rows, cols);
+        g.mark_clean();
+        g.resize(new_rows, new_cols);
+        g.rows() == new_rows && g.cols() == new_cols
+    }
+
+    #[quickcheck]
+    fn prop_dirty_mask_mark_then_clear(rows: u8) -> bool {
+        let rows = rows.clamp(1, 200) as u32;
+        let mut m = DirtyMask::new(rows);
+        m.clear();
+        for r in 0..rows {
+            m.mark(r);
+            if !m.is_dirty(r) {
+                return false;
+            }
+        }
+        m.clear();
+        !m.any_dirty()
+    }
+
+    #[quickcheck]
+    fn prop_scrollback_bounded(max_lines: u8, scrolls: u8) -> bool {
+        let max_lines = (max_lines.clamp(1, 100)) as u32;
+        let scrolls = scrolls.clamp(0, 200);
+        let mut g = Grid::with_scrollback(2, 5, max_lines as usize);
+        for _ in 0..scrolls {
+            g.fill_cells(0, 'A', 0, 5);
+            g.scroll_up(0, 2, 5);
+        }
+        g.scrollback_len() <= max_lines as usize
     }
 }

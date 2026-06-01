@@ -6,6 +6,7 @@ members = [
   "torvox-renderer",
   "torvox-gui-android",
   "torvox-exec",
+  "torvox-mcp",
   "torvox-fuzz/fuzz",
   "torvox-integration-tests",
   "torvox-bench",
@@ -41,10 +42,12 @@ boltffi = "0.25.2"
 
 flume = "0.12"
 bitflags = "2"
-lru = "0.12"
+lru = "0.16"
 quickcheck = "1"
 quickcheck_macros = "1"
 futures = "0.3"
+raw-window-handle = "0.6"
+rkyv = { version = "0.8", default-features = false }
 
 # libghostty-vt patched for Android targets.
 # Patch file: patches/libghostty-vt-android.patch

@@ -386,12 +386,17 @@ nix fmt
 
 | 规范 | 说明 |
 |------|------|
-| Action 版本 | 使用精确标签 (`@v4`)，不用分支 (`@main`) |
+| Action 版本 | 所有 action 使用默认分支 (`@main` 或 `@master`)，不用标签或 rev |
 | Step `name` | 不设置 — 消息在 run 命令中自解释 |
 | 空行 | 不添加无实际作用的空行 |
 | `uses` | 紧接 action 路径 + 版本，不换行 |
+| `run` 合并 | 相邻 `run:` 步骤合并为一个多行块 |
+| `run` 命令 | 多行命令用 `\|` 多行块，避免 `&&` 链过长 |
+| `\|\|` 禁止 | 不在任何 run 命令或脚本中使用 `\|\|` |
 | Job 命名 | 短横线命名 (`rust-checks`, `no-std-check`) |
 | 权限 | 显式声明 `permissions:` |
+| `dtolnay/rust-toolchain` | 使用 `@master` + `with: toolchain: "..."` 指定版本 |
+| `taiki-e/install-action` | 使用 `@main` + `with: tool: nextest` |
 
 ### 9.4 Nix 表达式
 
