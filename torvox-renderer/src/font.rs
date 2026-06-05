@@ -6,6 +6,16 @@ use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Placement;
 use thiserror::Error;
 
+const FONT_DATA: &[u8] = include_bytes!("../fonts/JetBrainsMonoNerdFont-Regular.ttf");
+
+#[derive(Clone)]
+struct FontBytes(&'static [u8]);
+impl AsRef<[u8]> for FontBytes {
+    fn as_ref(&self) -> &[u8] {
+        self.0
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum FontError {
     #[error("no monospace font found")]
@@ -41,11 +51,24 @@ pub struct FontPipeline {
     atlas_height: u32,
     font_id: Option<fontdb::ID>,
     font_size: f32,
+    atlas_generation: u64,
 }
 
 impl FontPipeline {
     pub fn new(atlas_width: i32, atlas_height: i32, font_size: f32) -> Self {
-        let font_system = FontSystem::new();
+        let mut font_system = FontSystem::new();
+        let db = font_system.db_mut();
+        let data: std::sync::Arc<dyn AsRef<[u8]> + std::marker::Send + std::marker::Sync> =
+            std::sync::Arc::new(FontBytes(FONT_DATA));
+        let ids = db.load_font_source(fontdb::Source::Binary(data));
+        let bundled_font_id = ids.first().copied();
+        log::info!(
+            "FONT_LOAD: bundled font IDs={:?} (first={:?}), has_font={}",
+            ids,
+            bundled_font_id,
+            bundled_font_id.is_some(),
+        );
+        let _ = db;
         let scaler_context = ScaleContext::new();
         let atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(atlas_width, atlas_height));
         let atlas_bitmap = vec![0u8; (atlas_width * atlas_height * 4) as usize];
@@ -58,11 +81,14 @@ impl FontPipeline {
             atlas_bitmap,
             atlas_width: atlas_width as u32,
             atlas_height: atlas_height as u32,
-            font_id: None,
+            font_id: bundled_font_id,
             font_size,
+            atlas_generation: 0,
         };
 
-        pipeline.find_monospace_font();
+        if pipeline.font_id.is_none() {
+            pipeline.find_monospace_font();
+        }
         pipeline
     }
 
@@ -70,10 +96,37 @@ impl FontPipeline {
         let db = self.font_system.db();
         for face in db.faces() {
             if face.monospaced {
+                let name: String = face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_default();
+                log::info!(
+                    "FONT_FALLBACK: found monospace font id={:?} name='{}'",
+                    face.id,
+                    name
+                );
                 self.font_id = Some(face.id);
                 break;
             }
         }
+        if self.font_id.is_none() {
+            log::warn!("FONT_FALLBACK: no monospace font found in system!");
+        }
+    }
+
+    pub fn set_font_family(&mut self, family_name: &str) -> bool {
+        let db = self.font_system.db_mut();
+        for face in db.faces() {
+            for (family, _) in &face.families {
+                if family.eq_ignore_ascii_case(family_name) {
+                    self.font_id = Some(face.id);
+                    self.glyph_cache.clear();
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn glyph_info(&mut self, ch: char) -> Option<GlyphInfo> {
@@ -216,13 +269,26 @@ impl FontPipeline {
         };
 
         self.glyph_cache.put(key, info.clone());
+        self.atlas_generation += 1;
         Some(info)
     }
 
+    pub fn atlas_generation(&self) -> u64 {
+        self.atlas_generation
+    }
+
     pub fn rasterize_ascii(&mut self) {
+        let before = self.cache_len();
         for ch in 32u8..127u8 {
             self.glyph_info(ch as char);
         }
+        let after = self.cache_len();
+        log::info!(
+            "FONT_RASTERIZE_ASCII: before={} after={} font_id={:?}",
+            before,
+            after,
+            self.font_id
+        );
     }
 
     pub fn cache_len(&self) -> usize {
@@ -258,11 +324,9 @@ impl FontPipeline {
         self.font_id.is_some()
     }
 
-    /// Returns the monospace cell dimensions (cell_width, cell_height) in pixels.
-    /// Uses the font's ascent + descent for the line height (the most reliable
-    /// signal across monospace fonts). The cell width is computed from the
-    /// font's `max_width` (from hmtx table) for monospace fonts, or estimated
-    /// at 0.6 × font_size as a fallback.
+    /// 返回等宽单元格尺寸（cell_width, cell_height），单位为像素。
+    /// 使用字体的 ascent + descent 作为行高（跨等宽字体最可靠的指标）。
+    /// 单元格宽度从字体的 `max_width`（hmtx 表）计算，或以 0.6 × font_size 作为回退。
     pub fn cell_metrics(&self) -> (f32, f32) {
         if let Some(font_id) = self.font_id {
             let db = self.font_system.db();
@@ -281,7 +345,14 @@ impl FontPipeline {
                 } else {
                     self.font_size * 1.2
                 };
-                let cell_width = self.font_size * 0.6;
+                let charmap = font_ref.charmap();
+                let glyph_id = charmap.map('W' as u32);
+                let advance = font_ref.glyph_metrics(&[]).advance_width(glyph_id);
+                let cell_width = if advance > 0.0 {
+                    advance * scale
+                } else {
+                    self.font_size * 0.6
+                };
                 Some((cell_width, cell_height))
             });
             if let Some(Some(m)) = result {

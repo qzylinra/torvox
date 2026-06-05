@@ -35,14 +35,41 @@ pub struct Session {
 
 impl Session {
     pub fn spawn(shell: &str, rows: u32, cols: u32) -> Result<Self, SessionError> {
-        let pty = PtyPair::spawn(shell, rows as u16, cols as u16)?;
-        pty.set_nonblocking()?;
+        Self::spawn_with_theme(shell, rows, cols, [30, 30, 46], [205, 214, 244])
+    }
 
+    pub fn spawn_with_theme(
+        shell: &str,
+        rows: u32,
+        cols: u32,
+        initial_bg: [u8; 3],
+        initial_fg: [u8; 3],
+    ) -> Result<Self, SessionError> {
+        log::info!("Session::spawn: shell='{shell}', rows={rows}, cols={cols}");
+        let pty = match PtyPair::spawn(shell, rows as u16, cols as u16) {
+            Ok(p) => {
+                log::info!("Session::spawn: PtyPair::spawn OK");
+                p
+            }
+            Err(e) => {
+                log::info!("Session::spawn: PtyPair::spawn error: {e}");
+                return Err(e.into());
+            }
+        };
+        match pty.set_nonblocking() {
+            Ok(()) => log::info!("Session::spawn: set_nonblocking OK"),
+            Err(e) => {
+                log::info!("Session::spawn: set_nonblocking error: {e}");
+                return Err(e.into());
+            }
+        }
+
+        log::info!("Session::spawn: creating Arc/Channel");
         let exited = Arc::new(AtomicBool::new(false));
         let output_notify = Arc::new((Mutex::new(false), Condvar::new()));
-
         let (output_tx, output_rx) = bounded::<Vec<u8>>(128);
 
+        log::info!("Session::spawn: dup master fd");
         let read_fd = unsafe { libc::dup(pty.master_fd()) };
         if read_fd < 0 {
             return Err(SessionError::Io(std::io::Error::last_os_error()));
@@ -55,12 +82,14 @@ impl Session {
             cvar.notify_one();
         }
 
+        log::info!("Session::spawn: spawning reader thread");
         let exited_read = exited.clone();
         let notify_read = output_notify.clone();
         let reader_handle = std::thread::spawn(move || {
             let mut read_buf = [0u8; READ_BUF_SIZE];
             loop {
                 if exited_read.load(Ordering::Acquire) {
+                    log::info!("reader thread: exiting due to exited flag");
                     break;
                 }
                 let n = unsafe {
@@ -71,12 +100,19 @@ impl Session {
                     )
                 };
                 if n > 0 {
+                    log::info!(
+                        "reader thread: read {} bytes from PTY: {:02x?}",
+                        n,
+                        &read_buf[..n.min(128) as usize]
+                    );
                     let data = read_buf[..n as usize].to_vec();
                     if output_tx.send(data).is_err() {
+                        log::info!("reader thread: output channel closed");
                         break;
                     }
                     notify_output(&notify_read);
                 } else if n == 0 {
+                    log::info!("reader thread: EOF from PTY");
                     exited_read.store(true, Ordering::Release);
                     notify_output(&notify_read);
                     break;
@@ -85,6 +121,7 @@ impl Session {
                     if err.kind() == std::io::ErrorKind::WouldBlock {
                         std::thread::sleep(Duration::from_millis(2));
                     } else {
+                        log::info!("reader thread: read error: {err}");
                         exited_read.store(true, Ordering::Release);
                         notify_output(&notify_read);
                         break;
@@ -99,11 +136,14 @@ impl Session {
         let exited_wait = exited.clone();
         let child_pid = pty.child_pid();
         let wait_handle = std::thread::spawn(move || {
-            let _ = nix::sys::wait::waitpid(child_pid, None);
+            log::info!("wait thread: waiting for child pid={child_pid}");
+            let status = nix::sys::wait::waitpid(child_pid, None);
+            log::info!("wait thread: child exited: {status:?}");
             exited_wait.store(true, Ordering::Release);
         });
 
-        let terminal = GhosttyTerminal::new(rows, cols, 50000).map_err(SessionError::Ghostty)?;
+        let terminal = GhosttyTerminal::new_with_theme(rows, cols, 50000, initial_bg, initial_fg)
+            .map_err(SessionError::Ghostty)?;
 
         Ok(Self {
             pty,
@@ -142,9 +182,17 @@ impl Session {
 
     pub fn process_output(&mut self) -> bool {
         let mut changed = false;
+        let mut count = 0u32;
         while let Ok(data) = self.output_rx.try_recv() {
             self.terminal.vt_write(&data);
             changed = true;
+            count += 1;
+        }
+        if count > 0 {
+            log::info!("process_output: processed {count} chunks");
+        }
+        if changed {
+            self.terminal.flush();
         }
         changed
     }
@@ -169,6 +217,13 @@ impl Session {
 impl Drop for Session {
     fn drop(&mut self) {
         self.exited.store(true, Ordering::Release);
+
+        let pid = self.pty.child_pid();
+        nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGHUP).ok();
+        nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGCONT).ok();
+        std::thread::sleep(Duration::from_millis(50));
+        nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGKILL).ok();
+
         if let Some(h) = self.reader_handle.take() {
             let _ = h.join();
         }

@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
     pub char: char,
@@ -21,6 +25,10 @@ impl Default for Cell {
     }
 }
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
     pub r: u8,
@@ -40,6 +48,10 @@ impl Default for Color {
     }
 }
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Attrs {
     pub bold: bool,
@@ -56,6 +68,10 @@ pub struct Attrs {
 
 const BITS_PER_PARTITION: u32 = 64;
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirtyMask {
     partitions: alloc::vec::Vec<u64>,
@@ -234,5 +250,352 @@ mod tests {
         assert!(!m.is_dirty(100));
         m.mark(150);
         assert!(m.is_dirty(150));
+    }
+
+    #[test]
+    fn dirty_mask_zero_rows_has_no_dirty() {
+        let m = DirtyMask::new(0);
+        assert!(!m.any_dirty());
+    }
+
+    #[test]
+    fn dirty_mask_single_row() {
+        let mut m = DirtyMask::new(1);
+        m.mark(0);
+        assert!(m.is_dirty(0));
+        assert!(m.any_dirty());
+        m.clear();
+        assert!(!m.any_dirty());
+    }
+
+    #[test]
+    fn dirty_mask_exactly_64_rows_one_partition() {
+        let mut m = DirtyMask::new(64);
+        for i in 0..64 {
+            m.mark(i);
+        }
+        for i in 0..64 {
+            assert!(m.is_dirty(i));
+        }
+    }
+
+    #[test]
+    fn dirty_mask_65_rows_two_partitions() {
+        let mut m = DirtyMask::new(65);
+        m.mark(0);
+        m.mark(63);
+        m.mark(64);
+        assert!(m.is_dirty(0));
+        assert!(m.is_dirty(63));
+        assert!(m.is_dirty(64));
+        assert!(!m.is_dirty(1));
+        assert!(!m.is_dirty(62));
+        assert!(!m.is_dirty(65));
+    }
+
+    #[test]
+    fn dirty_mask_mark_all_exact_partition_boundary() {
+        let mut m = DirtyMask::new(64);
+        m.mark_all(64);
+        for i in 0..64 {
+            assert!(m.is_dirty(i));
+        }
+    }
+
+    #[test]
+    fn dirty_mask_mark_all_partial_last_partition() {
+        let mut m = DirtyMask::new(100);
+        m.mark_all(100);
+        for i in 0..100 {
+            assert!(m.is_dirty(i));
+        }
+        assert!(!m.is_dirty(100));
+    }
+
+    #[test]
+    fn dirty_mask_mark_all_one_row() {
+        let mut m = DirtyMask::new(1);
+        m.mark_all(1);
+        assert!(m.is_dirty(0));
+    }
+
+    #[test]
+    fn dirty_mask_resize_smaller_keeps_early_marks() {
+        let mut m = DirtyMask::new(200);
+        m.mark(0);
+        m.mark(50);
+        m.resize(10);
+        assert!(m.is_dirty(0));
+        assert!(m.is_dirty(50));
+        assert!(!m.is_dirty(9));
+    }
+
+    #[test]
+    fn dirty_mask_resize_larger_starts_clean() {
+        let mut m = DirtyMask::new(10);
+        m.mark(5);
+        m.resize(1000);
+        assert!(m.is_dirty(5));
+        assert!(!m.is_dirty(500));
+    }
+
+    #[test]
+    fn dirty_mask_mark_idempotent() {
+        let mut m = DirtyMask::new(100);
+        m.mark(42);
+        m.mark(42);
+        m.mark(42);
+        assert!(m.is_dirty(42));
+    }
+
+    #[test]
+    fn dirty_mask_mark_all_then_clear() {
+        let mut m = DirtyMask::new(200);
+        m.mark_all(200);
+        assert!(m.any_dirty());
+        m.clear();
+        assert!(!m.any_dirty());
+        for i in 0..200 {
+            assert!(!m.is_dirty(i));
+        }
+    }
+
+    #[test]
+    fn dirty_mask_partial_clear() {
+        let mut m = DirtyMask::new(100);
+        m.mark(10);
+        m.mark(20);
+        m.clear();
+        assert!(!m.is_dirty(10));
+        assert!(!m.is_dirty(20));
+    }
+
+    #[test]
+    fn color_from_ansi_all_16() {
+        for i in 0..16u8 {
+            let c = Color::from_ansi(i);
+            let expected = Color {
+                r: crate::ansi::ansi_to_rgb(i)[0],
+                g: crate::ansi::ansi_to_rgb(i)[1],
+                b: crate::ansi::ansi_to_rgb(i)[2],
+                a: 255,
+            };
+            assert_eq!(c, expected);
+        }
+    }
+
+    #[test]
+    fn color_from_ansi_all_216_cube() {
+        for i in 16..232u8 {
+            let c = Color::from_ansi(i);
+            let expected = Color {
+                r: crate::ansi::ansi_to_rgb(i)[0],
+                g: crate::ansi::ansi_to_rgb(i)[1],
+                b: crate::ansi::ansi_to_rgb(i)[2],
+                a: 255,
+            };
+            assert_eq!(c, expected);
+        }
+    }
+
+    #[test]
+    fn color_from_ansi_all_24_grayscale() {
+        for i in 232..=255u8 {
+            let c = Color::from_ansi(i);
+            let expected = Color {
+                r: crate::ansi::ansi_to_rgb(i)[0],
+                g: crate::ansi::ansi_to_rgb(i)[1],
+                b: crate::ansi::ansi_to_rgb(i)[2],
+                a: 255,
+            };
+            assert_eq!(c, expected);
+        }
+    }
+
+    #[test]
+    fn color_from_ansi_alpha_always_255() {
+        for i in 0..=255u8 {
+            let c = Color::from_ansi(i);
+            assert_eq!(c.a, 255);
+        }
+    }
+
+    #[test]
+    fn color_default_is_white_opaque() {
+        let c = Color::default();
+        assert_eq!(c, Color::new(255, 255, 255));
+    }
+
+    #[test]
+    fn color_equality() {
+        assert_eq!(Color::new(1, 2, 3), Color::new(1, 2, 3));
+        assert_ne!(Color::new(1, 2, 3), Color::new(1, 2, 4));
+        assert_ne!(Color::new(1, 2, 3), Color::new(2, 2, 3));
+    }
+
+    #[test]
+    fn cell_equality_full() {
+        let c1 = Cell {
+            char: 'A',
+            fg: Color::new(1, 2, 3),
+            bg: Color::new(4, 5, 6),
+            attrs: Attrs {
+                bold: true,
+                ..Default::default()
+            },
+            width: 1,
+        };
+        let c2 = c1;
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn cell_inequality_different_char() {
+        let c1 = Cell::with_char('A');
+        let c2 = Cell::with_char('B');
+        assert_ne!(c1, c2);
+    }
+
+    #[test]
+    fn cell_inequality_different_width() {
+        let c1 = Cell {
+            char: 'A',
+            width: 1,
+            ..Default::default()
+        };
+        let c2 = Cell {
+            char: 'A',
+            width: 2,
+            ..Default::default()
+        };
+        assert_ne!(c1, c2);
+    }
+
+    #[test]
+    fn cell_inequality_different_attrs() {
+        let mut c1 = Cell::with_char('A');
+        c1.attrs.bold = true;
+        let c2 = Cell::with_char('A');
+        assert_ne!(c1, c2);
+    }
+
+    #[test]
+    fn cell_with_char_keeps_default_colors() {
+        let c = Cell::with_char('日');
+        assert_eq!(c.char, '日');
+        assert_eq!(c.fg, Color::default());
+        assert_eq!(c.bg, Color::default());
+        assert_eq!(c.width, 1);
+    }
+
+    #[test]
+    fn attrs_serde_json_roundtrip() {
+        let a = Attrs {
+            bold: true,
+            dim: false,
+            italic: true,
+            underline: false,
+            double_underline: true,
+            reverse: false,
+            strikethrough: true,
+            blink: false,
+            hidden: true,
+            overline: false,
+        };
+        let json = serde_json::to_string(&a).expect("ser");
+        let back: Attrs = serde_json::from_str(&json).expect("de");
+        assert_eq!(a, back);
+    }
+
+    #[test]
+    fn color_serde_json_roundtrip() {
+        let c = Color::new(10, 20, 30);
+        let json = serde_json::to_string(&c).expect("ser");
+        let back: Color = serde_json::from_str(&json).expect("de");
+        assert_eq!(c, back);
+    }
+
+    #[test]
+    fn cell_serde_json_roundtrip() {
+        let c = Cell {
+            char: 'X',
+            fg: Color::new(1, 2, 3),
+            bg: Color::new(4, 5, 6),
+            attrs: Attrs {
+                bold: true,
+                italic: true,
+                ..Default::default()
+            },
+            width: 2,
+        };
+        let json = serde_json::to_string(&c).expect("ser");
+        let back: Cell = serde_json::from_str(&json).expect("de");
+        assert_eq!(c, back);
+    }
+
+    #[test]
+    fn dirty_mask_serde_json_roundtrip() {
+        let mut m = DirtyMask::new(100);
+        m.mark(0);
+        m.mark(50);
+        m.mark(99);
+        let json = serde_json::to_string(&m).expect("ser");
+        let back: DirtyMask = serde_json::from_str(&json).expect("de");
+        for i in 0..100 {
+            assert_eq!(m.is_dirty(i), back.is_dirty(i));
+        }
+    }
+
+    #[test]
+    fn dirty_mask_clone_preserves_state() {
+        let mut m = DirtyMask::new(50);
+        m.mark(10);
+        m.mark(20);
+        let m2 = m.clone();
+        assert!(m2.is_dirty(10));
+        assert!(m2.is_dirty(20));
+        assert!(!m2.is_dirty(11));
+    }
+
+    #[test]
+    fn attrs_all_true() {
+        let a = Attrs {
+            bold: true,
+            dim: true,
+            italic: true,
+            underline: true,
+            double_underline: true,
+            reverse: true,
+            strikethrough: true,
+            blink: true,
+            hidden: true,
+            overline: true,
+        };
+        let json = serde_json::to_string(&a).unwrap();
+        let back: Attrs = serde_json::from_str(&json).unwrap();
+        assert_eq!(a, back);
+    }
+
+    #[test]
+    fn dirty_mask_partition_boundary_63_64() {
+        let mut m = DirtyMask::new(128);
+        m.mark(63);
+        m.mark(64);
+        assert!(m.is_dirty(63));
+        assert!(m.is_dirty(64));
+        assert!(!m.is_dirty(62));
+        assert!(!m.is_dirty(65));
+    }
+
+    #[test]
+    fn dirty_mask_clear_then_mark() {
+        let mut m = DirtyMask::new(10);
+        m.mark(0);
+        m.mark(5);
+        m.clear();
+        m.mark(7);
+        assert!(!m.is_dirty(0));
+        assert!(!m.is_dirty(5));
+        assert!(m.is_dirty(7));
     }
 }

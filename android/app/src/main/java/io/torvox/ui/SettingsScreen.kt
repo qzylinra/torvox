@@ -1,7 +1,12 @@
 package io.torvox.ui
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,26 +24,37 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.torvox.R
 import io.torvox.TerminalViewModel
-import io.torvox.ui.theme.BuiltInThemes
+import io.torvox.ui.theme.TerminalTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,122 +64,240 @@ fun SettingsScreen(
 ) {
     val fontSize by viewModel.fontSize.collectAsState()
     val fontFamily by viewModel.fontFamily.collectAsState()
-    val themeName by viewModel.themeName.collectAsState()
+    val dayThemeName by viewModel.dayThemeName.collectAsState()
+    val nightThemeName by viewModel.nightThemeName.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
     val selectedShell by viewModel.shell.collectAsState()
     val scrollbackLines by viewModel.scrollbackLines.collectAsState()
-    val touchBehavior by viewModel.touchBehavior.collectAsState()
+    val materialYouEnabled by viewModel.materialYouEnabled.collectAsState()
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("Settings") },
-            navigationIcon = {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    val isDark = themeMode == "night" || (themeMode == "follow_system" && isSystemDarkTheme())
+    val bgColor = if (isDark) Color(0xFF1E1E2E) else Color(0xFFF5F0EB)
+    val textColor = if (isDark) Color(0xFFCDD6F4) else Color(0xFF1C1B1F)
+    val secondaryText = if (isDark) Color(0xFFA6ADC8) else Color(0xFF5F5E63)
+    val cardBg = if (isDark) Color(0xFF313244) else Color(0xFFFFFFFF)
+    val accentColor = if (isDark) Color(0xFF89B4FA) else Color(0xFF1E66F5)
+    val sectionTitleColor = if (isDark) Color(0xFF89B4FA) else Color(0xFF1E66F5)
+
+    var availableFonts by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        val fonts = viewModel.runtime.bridge()?.listFonts() ?: emptyList()
+        availableFonts = fonts
+    }
+
+    val customFontLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri: Uri? ->
+            if (uri != null) {
+                val fileName = viewModel.getFileNameFromUri(uri) ?: uri.lastPathSegment ?: "custom"
+                viewModel.setFontFamily(fileName)
+            }
+        }
+
+    Surface(
+        modifier = Modifier.fillMaxSize().testTag("SettingsScreen"),
+        color = bgColor,
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBack, modifier = Modifier.testTag("SettingsBackButton")) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back),
+                                tint = textColor,
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.settings),
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = textColor,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
-            },
-            colors =
-                TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-        )
 
-        LazyColumn(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            item {
-                SectionHeader("Appearance")
-                FontSizeSlider(
-                    value = fontSize,
-                    onValueChange = { viewModel.setFontSize(it) },
-                )
-                FontFamilySelector(
-                    selectedFamily = fontFamily,
-                    onFamilySelected = { viewModel.setFontFamily(it) },
-                )
-            }
+                item {
+                    SectionHeader(stringResource(R.string.appearance), sectionTitleColor)
+                    SettingsCard(cardBg) {
+                        FontSizeSlider(
+                            modifier = Modifier.testTag("FontSizeSlider"),
+                            value = fontSize,
+                            onValueChange = { viewModel.setFontSize(it) },
+                            textColor = textColor,
+                            secondaryText = secondaryText,
+                            accentColor = accentColor,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        SystemFontSelector(
+                            selectedFamily = fontFamily,
+                            onFamilySelected = { viewModel.setFontFamily(it) },
+                            textColor = textColor,
+                            cardBg = bgColor,
+                            accentColor = accentColor,
+                            fonts = availableFonts,
+                            onPickFontFile = { customFontLauncher.launch(arrayOf("font/*", "application/octet-stream")) },
+                        )
+                    }
+                }
 
-            item {
-                ThemeSelector(
-                    selectedTheme = themeName,
-                    onThemeSelected = { viewModel.setThemeName(it) },
-                )
-            }
+                item {
+                    SectionHeader(stringResource(R.string.theme), sectionTitleColor)
+                    SettingsCard(cardBg) {
+                        MaterialYouToggle(
+                            enabled = materialYouEnabled,
+                            onToggle = { viewModel.setMaterialYouEnabled(it) },
+                            textColor = textColor,
+                            secondaryText = secondaryText,
+                        )
+                        if (!materialYouEnabled) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            ThemeModeSelector(
+                                selectedMode = themeMode,
+                                onModeSelected = { viewModel.setThemeMode(it) },
+                                textColor = textColor,
+                                secondaryText = secondaryText,
+                                cardBg = bgColor,
+                                accentColor = accentColor,
+                            )
+                            if (themeMode == "follow_system") {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                ThemeSelector(
+                                    label = stringResource(R.string.night_theme),
+                                    selectedTheme = nightThemeName,
+                                    themes = io.torvox.ui.theme.BuiltInThemes.darkThemes,
+                                    onThemeSelected = { viewModel.setNightThemeName(it) },
+                                    textColor = textColor,
+                                    cardBg = bgColor,
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                ThemeSelector(
+                                    label = stringResource(R.string.day_theme),
+                                    selectedTheme = dayThemeName,
+                                    themes = io.torvox.ui.theme.BuiltInThemes.lightThemes,
+                                    onThemeSelected = { viewModel.setDayThemeName(it) },
+                                    textColor = textColor,
+                                    cardBg = bgColor,
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                ThemeSelector(
+                                    label =
+                                        if (themeMode ==
+                                            "day"
+                                        ) {
+                                            stringResource(R.string.day_theme)
+                                        } else {
+                                            stringResource(R.string.night_theme)
+                                        },
+                                    selectedTheme = if (themeMode == "day") dayThemeName else nightThemeName,
+                                    themes =
+                                        if (themeMode ==
+                                            "day"
+                                        ) {
+                                            io.torvox.ui.theme.BuiltInThemes.lightThemes
+                                        } else {
+                                            io.torvox.ui.theme.BuiltInThemes.darkThemes
+                                        },
+                                    onThemeSelected = {
+                                        if (themeMode == "day") viewModel.setDayThemeName(it) else viewModel.setNightThemeName(it)
+                                    },
+                                    textColor = textColor,
+                                    cardBg = bgColor,
+                                )
+                            }
+                        }
+                    }
+                }
 
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SectionHeader("Terminal")
-                ShellSelector(
-                    selectedShell = selectedShell,
-                    onShellSelected = { viewModel.setShell(it) },
-                )
-            }
+                item {
+                    SectionHeader(stringResource(R.string.terminal), sectionTitleColor)
+                    SettingsCard(cardBg) {
+                        ShellInput(
+                            shellPath = selectedShell,
+                            onShellChanged = { viewModel.setShell(it) },
+                            textColor = textColor,
+                            accentColor = accentColor,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ScrollbackSlider(
+                            value = scrollbackLines.toFloat(),
+                            onValueChange = { viewModel.setScrollbackLines(it.toInt()) },
+                            textColor = textColor,
+                            secondaryText = secondaryText,
+                            accentColor = accentColor,
+                        )
+                    }
+                }
 
-            item {
-                ScrollbackSlider(
-                    value = scrollbackLines.toFloat(),
-                    onValueChange = { viewModel.setScrollbackLines(it.toInt()) },
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SectionHeader("Input")
-                TouchBehaviorSelector(
-                    selectedBehavior = touchBehavior,
-                    onBehaviorSelected = { viewModel.setTouchBehavior(it) },
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                SectionHeader("Session")
-                SessionActions(
-                    isRunning =
-                        viewModel.state
-                            .collectAsState()
-                            .value.isRunning,
-                    onCreate = { viewModel.createSession() },
-                    onClose = { viewModel.closeSession() },
-                )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
             }
         }
     }
 }
 
 @Composable
-private fun SectionHeader(title: String) {
+private fun SettingsCard(
+    cardBg: Color,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(cardBg)
+                .padding(16.dp),
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun SectionHeader(
+    title: String,
+    textColor: Color,
+) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleSmall,
+        style = MaterialTheme.typography.titleMedium,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(vertical = 8.dp),
+        color = textColor,
+        modifier = Modifier.padding(vertical = 4.dp),
     )
 }
 
 @Composable
 private fun FontSizeSlider(
+    modifier: Modifier = Modifier,
     value: Float,
     onValueChange: (Float) -> Unit,
+    textColor: Color,
+    secondaryText: Color,
+    accentColor: Color,
 ) {
-    Column {
+    Column(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("Font Size", style = MaterialTheme.typography.bodyLarge)
+            Text(stringResource(R.string.font_size), style = MaterialTheme.typography.bodyLarge, color = textColor)
             Text(
-                text = "%.0f sp".format(value),
+                text = "%.0f".format(value),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = secondaryText,
             )
         }
         Slider(
@@ -171,227 +305,254 @@ private fun FontSizeSlider(
             onValueChange = onValueChange,
             valueRange = 8f..32f,
             steps = 23,
+            colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+        )
+    }
+}
+
+@Composable
+private fun SystemFontSelector(
+    selectedFamily: String,
+    onFamilySelected: (String) -> Unit,
+    textColor: Color,
+    cardBg: Color,
+    accentColor: Color,
+    fonts: List<String> = emptyList(),
+    onPickFontFile: (() -> Unit)? = null,
+) {
+    val systemFonts = remember(fonts) { (fonts + "default").distinct().sorted() }
+
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(stringResource(R.string.font_family), style = MaterialTheme.typography.bodyLarge, color = textColor)
+    Spacer(modifier = Modifier.height(4.dp))
+    var showFontPicker by remember { mutableStateOf(false) }
+
+    Box {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(cardBg)
+                    .clickable {
+                        showFontPicker = true
+                    }.padding(horizontal = 12.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(text = if (selectedFamily.isEmpty()) stringResource(R.string.system_default) else selectedFamily, color = textColor)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = stringResource(R.string.change), color = accentColor, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        if (showFontPicker) {
+            FontPickerDialog(
+                fonts = systemFonts,
+                selectedFamily = selectedFamily,
+                onFamilySelected = { font ->
+                    onFamilySelected(font)
+                    showFontPicker = false
+                },
+                onDismiss = { showFontPicker = false },
+                textColor = textColor,
+                cardBg = cardBg,
+                accentColor = accentColor,
+                onPickFontFile = { onPickFontFile?.invoke() },
+            )
+        }
+    }
+}
+
+@Composable
+private fun FontPickerDialog(
+    fonts: List<String>,
+    selectedFamily: String,
+    onFamilySelected: (String) -> Unit,
+    onDismiss: () -> Unit,
+    textColor: Color,
+    cardBg: Color,
+    accentColor: Color,
+    onPickFontFile: (() -> Unit)? = null,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.select_font_family), color = textColor) },
+        text = {
+            LazyColumn {
+                item {
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    onPickFontFile?.invoke()
+                                    onDismiss()
+                                }.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(text = stringResource(R.string.pick_font_file), color = accentColor, fontWeight = FontWeight.Bold)
+                    }
+                }
+                items(fonts) { font ->
+                    Row(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onFamilySelected(font) }
+                                .background(
+                                    if (selectedFamily == font) {
+                                        accentColor.copy(alpha = 0.2f)
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                ).padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = font,
+                            color = if (selectedFamily == font) accentColor else textColor,
+                            fontWeight = if (selectedFamily == font) FontWeight.Bold else FontWeight.Normal,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = textColor) } },
+        containerColor = cardBg,
+    )
+}
+
+@Composable
+private fun ThemeModeSelector(
+    selectedMode: String,
+    onModeSelected: (String) -> Unit,
+    textColor: Color,
+    secondaryText: Color,
+    cardBg: Color,
+    accentColor: Color,
+) {
+    Column {
+        Text(stringResource(R.string.theme_mode), style = MaterialTheme.typography.bodyLarge, color = textColor)
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf(
+                "follow_system" to stringResource(R.string.follow_system),
+                "day" to stringResource(R.string.day),
+                "night" to stringResource(R.string.night),
+            ).forEach { (mode, label) ->
+                val isSelected = selectedMode == mode
+                Box(
+                    modifier =
+                        Modifier
+                            .weight(
+                                1f,
+                            ).clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) accentColor else cardBg)
+                            .clickable {
+                                onModeSelected(mode)
+                            }.padding(vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = label, color = if (isSelected) Color.White else textColor, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaterialYouToggle(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+    textColor: Color,
+    secondaryText: Color,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(8.dp))
+                .clickable {
+                    onToggle(!enabled)
+                }.padding(vertical = 12.dp, horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Material You", style = MaterialTheme.typography.bodyLarge, color = textColor)
+            Text(
+                text = "Use wallpaper-based dynamic colors (Android 12+)",
+                style = MaterialTheme.typography.bodySmall,
+                color = secondaryText,
+            )
+        }
+        androidx.compose.material3.Switch(checked = enabled, onCheckedChange = onToggle)
+    }
+}
+
+@Composable
+private fun ShellInput(
+    shellPath: String,
+    onShellChanged: (String) -> Unit,
+    textColor: Color,
+    accentColor: Color,
+) {
+    Column {
+        Text(stringResource(R.string.shell), style = MaterialTheme.typography.bodyLarge, color = textColor)
+        Spacer(modifier = Modifier.height(4.dp))
+        var text by remember(shellPath) { mutableStateOf(shellPath) }
+        OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                onShellChanged(it)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            placeholder = { Text(stringResource(R.string.shell_placeholder), color = textColor.copy(alpha = 0.5f)) },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
             colors =
-                SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
+                OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = textColor,
+                    unfocusedTextColor = textColor,
+                    cursorColor = accentColor,
+                    focusedBorderColor = accentColor,
+                    unfocusedBorderColor = textColor.copy(alpha = 0.5f),
                 ),
         )
     }
 }
 
 @Composable
-private fun FontFamilySelector(
-    selectedFamily: String,
-    onFamilySelected: (String) -> Unit,
-) {
-    val fontFamilies =
-        listOf(
-            "JetBrains Mono Nerd Font",
-            "Fira Code",
-            "Source Code Pro",
-            "Cascadia Code",
-            "Hack",
-            "MesloLGS NF",
-            "Iosevka",
-            "DejaVu Sans Mono",
-            "Droid Sans Mono",
-            "monospace",
-        )
-
-    Spacer(modifier = Modifier.height(8.dp))
-    Text("Font Family", style = MaterialTheme.typography.bodyLarge)
-    Spacer(modifier = Modifier.height(4.dp))
-    fontFamilies.forEach { family ->
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onFamilySelected(family) }
-                    .padding(vertical = 10.dp, horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(16.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(
-                            if (selectedFamily == family) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.outline
-                            },
-                        ),
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(family, style = MaterialTheme.typography.bodyLarge)
-        }
-    }
-}
-
-@Composable
-private fun ThemeSelector(
-    selectedTheme: String,
-    onThemeSelected: (String) -> Unit,
-) {
-    Column {
-        Text("Theme", style = MaterialTheme.typography.bodyLarge)
-        Spacer(modifier = Modifier.height(8.dp))
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(BuiltInThemes.all) { theme ->
-                ThemePreview(
-                    theme = theme,
-                    isSelected = theme.name == selectedTheme,
-                    onClick = { onThemeSelected(theme.name) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ThemePreview(
-    theme: io.torvox.ui.theme.TerminalTheme,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier =
-            Modifier
-                .width(80.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(theme.background)
-                .clickable(onClick = onClick)
-                .padding(8.dp),
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            theme.ansi.take(8).forEach { color ->
-                Box(
-                    modifier =
-                        Modifier
-                            .size(8.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(color),
-                )
-            }
-        }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = theme.name,
-            style = MaterialTheme.typography.labelSmall,
-            color = theme.foreground,
-            maxLines = 1,
-        )
-    }
-}
-
-@Composable
-private fun ShellSelector(
-    selectedShell: String,
-    onShellSelected: (String) -> Unit,
-) {
-    val shells =
-        listOf(
-            "/system/bin/sh" to "sh (default)",
-            "/system/bin/bash" to "bash",
-            "/system/bin/zsh" to "zsh",
-            "/system/bin/fish" to "fish",
-        )
-
-    Column {
-        shells.forEach { (path, label) ->
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onShellSelected(path) }
-                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(16.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(
-                                if (selectedShell == path) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.outline
-                                },
-                            ),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(label, style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SessionActions(
-    isRunning: Boolean,
-    onCreate: () -> Unit,
-    onClose: () -> Unit,
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { onCreate() }
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "+ New Session",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        if (isRunning) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { onClose() }
-                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "Close Session",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
-}
-@Composable
 private fun ScrollbackSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
+    textColor: Color,
+    secondaryText: Color,
+    accentColor: Color,
 ) {
     Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text("Scrollback Lines", style = MaterialTheme.typography.bodyLarge)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(stringResource(R.string.scrollback_lines), style = MaterialTheme.typography.bodyLarge, color = textColor)
             Text(
                 text =
                     value.toInt().let {
-                        if (it >= 1000) "${it / 1000}K" else "$it"
+                        if (it >=
+                            1000
+                        ) {
+                            "${it / 1000}K"
+                        } else {
+                            "$it"
+                        }
                     },
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = secondaryText,
             )
         }
         Slider(
@@ -399,53 +560,62 @@ private fun ScrollbackSlider(
             onValueChange = onValueChange,
             valueRange = 1000f..100000f,
             steps = 98,
-            colors =
-                SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                ),
+            colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
         )
     }
 }
 
 @Composable
-private fun TouchBehaviorSelector(
-    selectedBehavior: String,
-    onBehaviorSelected: (String) -> Unit,
+private fun ThemeSelector(
+    label: String,
+    selectedTheme: String,
+    themes: List<TerminalTheme>,
+    onThemeSelected: (String) -> Unit,
+    textColor: Color,
+    cardBg: Color,
 ) {
-    val behaviors =
-        listOf(
-            "right_click" to "Right click (paste)",
-            "middle_click" to "Middle click (paste)",
-            "none" to "No action",
-        )
-
     Column {
-        behaviors.forEach { (value, label) ->
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { onBehaviorSelected(value) }
-                        .padding(vertical = 12.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(16.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(
-                                if (selectedBehavior == value) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.outline
-                                },
-                            ),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = textColor)
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(themes) { theme ->
+                ThemePreview(theme = theme, isSelected = theme.name == selectedTheme, onClick = { onThemeSelected(theme.name) })
             }
         }
     }
+}
+
+@Composable
+private fun ThemePreview(
+    theme: TerminalTheme,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier =
+            Modifier
+                .width(
+                    80.dp,
+                ).clip(
+                    RoundedCornerShape(8.dp),
+                ).background(if (isSelected) theme.background else theme.background.copy(alpha = 0.7f))
+                .clickable(onClick = onClick)
+                .padding(8.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            theme.ansi.take(8).forEach { color ->
+                Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(2.dp)).background(color))
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = theme.name, style = MaterialTheme.typography.labelSmall, color = theme.foreground, maxLines = 1)
+    }
+}
+
+@Composable
+private fun isSystemDarkTheme(): Boolean {
+    val context = LocalContext.current
+    return (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+        android.content.res.Configuration.UI_MODE_NIGHT_YES
 }

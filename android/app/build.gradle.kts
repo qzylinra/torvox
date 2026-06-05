@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
+    id("io.github.takahirom.roborazzi")
 }
 
 android {
@@ -60,7 +61,11 @@ android {
         compose = true
     }
 
-    sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
+    sourceSets["main"].jniLibs.setSrcDirs(listOf(file("src/main/jniLibs")))
 }
 
 dependencies {
@@ -88,6 +93,18 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.18.1@aar")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("io.mockk:mockk:1.14.9")
+    testImplementation("app.cash.turbine:turbine:1.2.1")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+    testImplementation("org.robolectric:robolectric:4.12.1")
+    testImplementation(composeBom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("androidx.compose.ui:ui-test-manifest")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.59.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.59.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.59.0")
+    testImplementation("androidx.test:core:1.7.0")
+
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.test.espresso:espresso-contrib:3.7.0")
@@ -95,4 +112,9 @@ dependencies {
     androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:rules:1.7.0")
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.compose.ui:ui-test-manifest")
+    androidTestImplementation("com.google.dagger:hilt-android-testing:2.59.2")
+    kspAndroidTest("com.google.dagger:hilt-android-compiler:2.59.2")
 }

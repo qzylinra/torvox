@@ -1,0 +1,61 @@
+appId: io.torvox
+name: Full user journey
+tags:
+  - e2e
+  - p0
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 20000
+- tapOn:
+    text: "Wait"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: "TerminalScreen"
+- assertVisible:
+    id: "ModifierBar"
+# Open drawer via session button
+- tapOn:
+    id: "Key_☰"
+- waitForAnimationToEnd
+# Navigate to settings
+- tapOn:
+    id: "SettingsButton"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "SettingsScreen"
+# Verify settings layout
+- assertVisible:
+    text: "Appearance"
+- scrollUntilVisible:
+    element:
+      text: "Theme"
+    direction: DOWN
+- assertVisible:
+    text: "Theme"
+- scrollUntilVisible:
+    element:
+      text: "Terminal"
+    direction: DOWN
+- assertVisible:
+    text: "Terminal"
+# Back to terminal
+- tapOn:
+    id: "SettingsBackButton"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "ModifierBar"
+# Interact with modifier keys
+- tapOn:
+    id: "Key_ESC"
+- tapOn:
+    id: "Key_TAB"
+- tapOn:
+    id: "Key_CTRL"
+- tapOn:
+    id: "Key_ALT"
+- takeScreenshot: full_journey_complete

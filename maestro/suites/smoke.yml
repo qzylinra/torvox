@@ -1,0 +1,8 @@
+suite:
+  name: Torvox Smoke Tests
+  tags:
+    - smoke
+flows:
+  - launch-and-verify
+  - open-settings
+  - modifier-bar-interact

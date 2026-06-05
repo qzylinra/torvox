@@ -323,19 +323,56 @@ pub enum TerminalError {
 pub struct TorvoxBridge {
     config: TerminalConfig,
     surface: std::sync::Mutex<Option<crate::surface::AndroidSurface>>,
+    shell_path: std::ffi::CString,
+}
+fn with_bridge<F, T>(handle: i64, f: F) -> Result<T, TerminalError>
+where
+    F: FnOnce(&TorvoxBridge) -> Result<T, TerminalError>,
+{
+    let ptr = handle as *const TorvoxBridge;
+    if ptr.is_null() {
+        return Err(TerminalError::InvalidConfig {
+            detail: "null bridge handle".to_string(),
+        });
+    }
+    let bridge = unsafe { &*ptr };
+    f(bridge)
 }
 
 #[boltffi::export]
 impl TorvoxBridge {
     pub fn new(config: TerminalConfig) -> Self {
+        #[cfg(target_os = "android")]
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Debug)
+                .with_tag("TorvoxRust"),
+        );
+        std::panic::set_hook(Box::new(|info| {
+            log::error!("PANIC: {info}");
+            if let Some(location) = info.location() {
+                log::error!("  at {}:{}", location.file(), location.line());
+            }
+        }));
+        let shell_path = match &config.shell {
+            Shell::SystemDefault => std::ffi::CString::new("/system/bin/sh").unwrap(),
+            Shell::Custom { path } => std::ffi::CString::new(path.as_str()).unwrap(),
+        };
         Self {
             config,
             surface: std::sync::Mutex::new(None),
+            shell_path,
         }
     }
 
-    pub fn ping(&self) -> String {
-        "pong".to_string()
+    pub fn ping(&self) -> Result<String, TerminalError> {
+        let ptr = self as *const TorvoxBridge;
+        log::info!(
+            "ping: self={:p}, aligned={}",
+            ptr,
+            (ptr as usize).is_multiple_of(8)
+        );
+        Ok("pong".to_string())
     }
 
     pub fn spawn_terminal(&self, _rows: u32, _cols: u32) -> Result<i32, TerminalError> {
@@ -364,10 +401,26 @@ impl TorvoxBridge {
         width: u32,
         height: u32,
     ) -> Result<(), TerminalError> {
+        log::debug!(
+            "set_native_window: window_ptr={:#x}, width={}, height={}",
+            window_ptr,
+            width,
+            height
+        );
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
         if surface_guard.is_none() {
+            // Copy shell path to stack buffer BEFORE any GPU work (heap may be corrupted by wgpu)
+            let mut shell_buf = [0u8; 4096];
+            let shell_len = {
+                let bytes = self.shell_path.to_bytes();
+                let n = bytes.len().min(4095);
+                shell_buf[..n].copy_from_slice(&bytes[..n]);
+                n
+            };
+
+            // GPU init happens here — heap may be corrupted, but stack buffer is safe
             let mut surface = crate::surface::AndroidSurface::new(
                 self.config.rows,
                 self.config.cols,
@@ -378,11 +431,13 @@ impl TorvoxBridge {
                 .map_err(|e| TerminalError::PtyError {
                     detail: e.to_string(),
                 })?;
-            let shell: torvox_core::config::Shell = self.config.shell.clone().into();
-            let shell_path = match &shell {
-                torvox_core::config::Shell::SystemDefault => "/system/bin/sh",
-                torvox_core::config::Shell::Custom(path) => path.as_str(),
-            };
+
+            // Use stack buffer after GPU init (immune to heap corruption)
+            let shell_path = std::str::from_utf8(&shell_buf[..shell_len]).map_err(|_| {
+                TerminalError::PtyError {
+                    detail: "invalid shell path".to_string(),
+                }
+            })?;
             surface
                 .spawn_session(shell_path)
                 .map_err(|e| TerminalError::PtyError {
@@ -401,6 +456,20 @@ impl TorvoxBridge {
             surface.render().map_err(|e| TerminalError::PtyError {
                 detail: e.to_string(),
             })?;
+        }
+        Ok(())
+    }
+
+    pub fn render_software(&self) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface
+                .render_software()
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
         }
         Ok(())
     }
@@ -465,6 +534,21 @@ impl TorvoxBridge {
         Ok(())
     }
 
+    pub fn set_font_family(&self, family_name: String) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        for surface in surface_guard.iter_mut() {
+            if !surface.set_font_family(&family_name) {
+                log::warn!(
+                    "FONT_FAMILY: '{}' not found, using bundled font",
+                    family_name
+                );
+            }
+        }
+        Ok(())
+    }
+
     pub fn set_theme(&self, theme: BridgeTheme) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
@@ -491,6 +575,80 @@ impl TorvoxBridge {
             .unwrap_or_default()
     }
 
+    pub fn set_save_path(&self, path: String) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.set_save_path(path);
+        }
+        Ok(())
+    }
+
+    pub fn save_session(&self, path: String) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface
+                .save_session(&path)
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
+        }
+        Ok(())
+    }
+
+    pub fn restore_session(&self, path: String) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface
+                .restore_session(&path)
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
+        }
+        Ok(())
+    }
+
+    pub fn has_saved_session(&self, path: String) -> bool {
+        crate::surface::AndroidSurface::has_saved_session(&path)
+    }
+
+    pub fn set_mouse_position(&self, row: u32, col: u32) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.set_mouse_position(row, col);
+        }
+        Ok(())
+    }
+
+    pub fn get_hovered_url(&self) -> Option<String> {
+        self.surface
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().and_then(|s| s.get_hovered_url()))
+    }
+
+    pub fn get_terminal_text(&self) -> String {
+        let text = self
+            .surface
+            .lock()
+            .ok()
+            .and_then(|g| g.as_ref().map(|s| s.terminal().read_visible_text()))
+            .unwrap_or_default();
+        log::debug!(
+            "get_terminal_text: len={}, text={:?}",
+            text.len(),
+            &text[..text.len().min(80)]
+        );
+        text
+    }
+
     pub fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
@@ -499,6 +657,343 @@ impl TorvoxBridge {
             surface.write_to_pty(&data);
         }
         Ok(())
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+/// The ANativeWindow pointer reconstructed from `window_ptr_low` and `window_ptr_high` must be a valid, non-null pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_native_window(
+    handle: i64,
+    window_ptr_low: u32,
+    window_ptr_high: u32,
+    width: u32,
+    height: u32,
+) -> i32 {
+    log::debug!(
+        "set_native_window_ffi: handle={handle}, low={window_ptr_low:#x}, high={window_ptr_high:#x}, width={width}, height={height}"
+    );
+    let window_ptr = ((window_ptr_high as i64) << 32) | (window_ptr_low as i64);
+    log::debug!(
+        "set_native_window_ffi: reconstructed window_ptr={:#x}",
+        window_ptr
+    );
+    with_bridge(handle, |bridge| {
+        bridge.set_native_window(window_ptr, width, height)
+    })
+    .map(|_| 0)
+    .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_resize(handle: i64, rows: u32, cols: u32) -> i32 {
+    with_bridge(handle, |bridge| bridge.resize(rows, cols))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_spawn_terminal(handle: i64, rows: u32, cols: u32) -> i32 {
+    with_bridge(handle, |bridge| bridge.spawn_terminal(rows, cols))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+// SAFETY: callers must ensure `ptr` is valid for reads of `len` bytes.
+fn read_string(ptr: *const u8, len: i32) -> String {
+    if ptr.is_null() || len <= 0 {
+        String::new()
+    } else {
+        let slice = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
+        String::from_utf8_lossy(slice).to_string()
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_release_surface(handle: i64) {
+    let ptr = handle as *const TorvoxBridge;
+    if !ptr.is_null() {
+        unsafe {
+            (*ptr).release_surface();
+        }
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+/// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_save_path(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> i32 {
+    let path = read_string(path_ptr, path_len);
+    with_bridge(handle, |bridge| bridge.set_save_path(path))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
+/// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_has_saved_session(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> bool {
+    let path = read_string(path_ptr, path_len);
+    let ptr = handle as *const TorvoxBridge;
+    if ptr.is_null() {
+        return false;
+    }
+    unsafe { &*ptr }.has_saved_session(path)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+/// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_save_session(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> i32 {
+    let path = read_string(path_ptr, path_len);
+    with_bridge(handle, |bridge| bridge.save_session(path))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+/// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_restore_session(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> i32 {
+    let path = read_string(path_ptr, path_len);
+    with_bridge(handle, |bridge| bridge.restore_session(path))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+/// `data_ptr` must be valid for reads of `data_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_write_to_pty(
+    handle: i64,
+    data_ptr: *const u8,
+    data_len: i32,
+) -> i32 {
+    let data = if data_ptr.is_null() || data_len <= 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(data_ptr, data_len as usize) }.to_vec()
+    };
+    with_bridge(handle, |bridge| bridge.write_to_pty(data))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_get_terminal_text(handle: i64) -> i64 {
+    let ptr = handle as *const TorvoxBridge;
+    if ptr.is_null() {
+        return 0;
+    }
+    let text = unsafe { &*ptr }.get_terminal_text();
+    if text.is_empty() {
+        return 0;
+    }
+    let c_str = std::ffi::CString::new(text).unwrap_or_default();
+    c_str.into_raw() as i64
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_font_size(handle: i64, size_tenths: u32) -> i32 {
+    with_bridge(handle, |bridge| bridge.set_font_size(size_tenths))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+/// `family_ptr` must be valid for reads of `family_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_font_family(
+    handle: i64,
+    family_ptr: *const u8,
+    family_len: i32,
+) -> i32 {
+    let family = read_string(family_ptr, family_len);
+    with_bridge(handle, |bridge| bridge.set_font_family(family))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+/// `theme_ptr` must be valid for reads of `theme_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_theme(
+    handle: i64,
+    theme_ptr: *const u8,
+    theme_len: i32,
+) -> i32 {
+    if theme_ptr.is_null() || theme_len <= 0 {
+        return -1;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(theme_ptr, theme_len as usize) };
+    // 从 boltffi 线格式反序列化 BridgeTheme
+    let mut pos = 0usize;
+    let read_string = |bytes: &[u8], pos: &mut usize| -> String {
+        let len = u32::from_le_bytes(bytes[*pos..*pos + 4].try_into().unwrap()) as usize;
+        *pos += 4;
+        let s = String::from_utf8_lossy(&bytes[*pos..*pos + len]).to_string();
+        *pos += len;
+        s
+    };
+    let read_u32 = |bytes: &[u8], pos: &mut usize| -> u32 {
+        let v = u32::from_le_bytes(bytes[*pos..*pos + 4].try_into().unwrap());
+        *pos += 4;
+        v
+    };
+    let theme = BridgeTheme {
+        name: read_string(bytes, &mut pos),
+        bg: read_u32(bytes, &mut pos),
+        fg: read_u32(bytes, &mut pos),
+        cursor: read_u32(bytes, &mut pos),
+        selection_bg: read_u32(bytes, &mut pos),
+        ansi0: read_u32(bytes, &mut pos),
+        ansi1: read_u32(bytes, &mut pos),
+        ansi2: read_u32(bytes, &mut pos),
+        ansi3: read_u32(bytes, &mut pos),
+        ansi4: read_u32(bytes, &mut pos),
+        ansi5: read_u32(bytes, &mut pos),
+        ansi6: read_u32(bytes, &mut pos),
+        ansi7: read_u32(bytes, &mut pos),
+        ansi8: read_u32(bytes, &mut pos),
+        ansi9: read_u32(bytes, &mut pos),
+        ansi10: read_u32(bytes, &mut pos),
+        ansi11: read_u32(bytes, &mut pos),
+        ansi12: read_u32(bytes, &mut pos),
+        ansi13: read_u32(bytes, &mut pos),
+        ansi14: read_u32(bytes, &mut pos),
+        ansi15: read_u32(bytes, &mut pos),
+    };
+    with_bridge(handle, |bridge| bridge.set_theme(theme))
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_scrollback_line(handle: i64, index: u32) -> i64 {
+    let ptr = handle as *const TorvoxBridge;
+    if ptr.is_null() {
+        return 0;
+    }
+    match unsafe { &*ptr }.scrollback_line(index) {
+        Some(s) => {
+            // 泄露字符串并返回指针；调用者必须调用 torvox_bridge_free_string
+            let c_str = std::ffi::CString::new(s).unwrap_or_default();
+            c_str.into_raw() as i64
+        }
+        None => 0,
+    }
+}
+
+/// # Safety
+/// `s` must be a valid C string pointer previously returned by `torvox_bridge_scrollback_line` or `torvox_bridge_search_in_scrollback`, or zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_free_string(s: i64) {
+    if s != 0 {
+        unsafe {
+            let _ = std::ffi::CString::from_raw(s as *mut std::ffi::c_char);
+        }
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid bridge handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_ping(handle: i64) -> i32 {
+    log::debug!("torvox_bridge_ping: handle={handle:#x}");
+    match with_bridge(handle, |bridge| bridge.ping()) {
+        Ok(_) => 0,
+        Err(e) => {
+            log::error!("torvox_bridge_ping: error: {e}");
+            -1
+        }
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_render(handle: i64) -> i32 {
+    with_bridge(handle, |bridge| bridge.render())
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_render_software(handle: i64) -> i32 {
+    with_bridge(handle, |bridge| bridge.render_software())
+        .map(|_| 0)
+        .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_scrollback_len(handle: i64) -> u32 {
+    let ptr = handle as *const TorvoxBridge;
+    if ptr.is_null() {
+        return 0;
+    }
+    unsafe { &*ptr }.scrollback_len()
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
+/// `query_ptr` must be valid for reads of `query_len` bytes, and must not be aliased.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_search_in_scrollback(
+    handle: i64,
+    query_ptr: *const u8,
+    query_len: i32,
+) -> i64 {
+    let query = read_string(query_ptr, query_len);
+    let ptr = handle as *const TorvoxBridge;
+    if ptr.is_null() {
+        return 0;
+    }
+    match unsafe { &*ptr }.search_in_scrollback(query) {
+        Some(s) => {
+            let c_str = std::ffi::CString::new(s).unwrap_or_default();
+            c_str.into_raw() as i64
+        }
+        None => 0,
     }
 }
 
@@ -519,7 +1014,7 @@ mod tests {
             theme: torvox_core::config::Theme::catppuccin_mocha().into(),
         };
         let bridge = TorvoxBridge::new(config);
-        assert_eq!(bridge.ping(), "pong");
+        assert_eq!(bridge.ping().unwrap(), "pong");
     }
 
     #[test]

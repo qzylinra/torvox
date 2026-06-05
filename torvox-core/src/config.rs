@@ -4,6 +4,10 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct TerminalConfig {
     pub rows: u32,
     pub cols: u32,
@@ -25,6 +29,10 @@ impl Default for TerminalConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum Shell {
     #[default]
     SystemDefault,
@@ -32,6 +40,10 @@ pub enum Shell {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct RenderConfig {
     pub font: FontConfig,
     pub theme: Theme,
@@ -49,6 +61,10 @@ impl Default for RenderConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct FontConfig {
     pub family: String,
     pub size: u16,
@@ -66,6 +82,10 @@ impl Default for FontConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Theme {
     pub name: String,
     pub bg: [u8; 3],
@@ -616,5 +636,236 @@ mod tests {
         content.push_str("bg = #112233\n");
         let theme = Theme::parse_custom(&content).unwrap();
         assert_eq!(theme.bg, [0x11, 0x22, 0x33]);
+    }
+
+    #[test]
+    fn terminal_config_serde_roundtrip() {
+        let c = TerminalConfig {
+            rows: 50,
+            cols: 120,
+            scrollback_lines: 10000,
+            shell: Shell::Custom(String::from("/bin/zsh")),
+            font_size_tenths: 160,
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let back: TerminalConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(c, back);
+    }
+
+    #[test]
+    fn shell_default_is_system_default() {
+        assert_eq!(Shell::default(), Shell::SystemDefault);
+    }
+
+    #[test]
+    fn shell_custom_serde() {
+        let s = Shell::Custom(String::from("/usr/local/bin/fish"));
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Shell = serde_json::from_str(&json).unwrap();
+        assert_eq!(s, back);
+    }
+
+    #[test]
+    fn shell_system_default_serde() {
+        let s = Shell::SystemDefault;
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Shell = serde_json::from_str(&json).unwrap();
+        assert_eq!(s, back);
+    }
+
+    #[test]
+    fn shell_variants_not_equal() {
+        assert_ne!(Shell::SystemDefault, Shell::Custom(String::from("/bin/sh")));
+    }
+
+    #[test]
+    fn font_config_default_values() {
+        let f = FontConfig::default();
+        assert_eq!(f.size, 14);
+        assert_eq!(f.line_spacing, 0);
+        assert!(!f.family.is_empty());
+    }
+
+    #[test]
+    fn render_config_default_theme_is_catppuccin() {
+        let r = RenderConfig::default();
+        assert_eq!(r.theme.bg, [30, 30, 46]);
+        assert_eq!(r.theme.fg, [205, 214, 244]);
+    }
+
+    #[test]
+    fn theme_dracula_distinct_from_mocha() {
+        let a = Theme::dracula();
+        let b = Theme::catppuccin_mocha();
+        assert_ne!(a.bg, b.bg);
+        assert_ne!(a.fg, b.fg);
+    }
+
+    #[test]
+    fn theme_all_built_in_unique_names() {
+        let themes = Theme::all_built_in();
+        let mut names: Vec<String> = themes.iter().map(|t| t.name.clone()).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), themes.len());
+    }
+
+    #[test]
+    fn theme_all_built_in_have_dark_backgrounds() {
+        let themes = Theme::all_built_in();
+        for theme in &themes {
+            assert!(
+                theme.bg[0] < 100 && theme.bg[1] < 100 && theme.bg[2] < 100,
+                "Theme {} has light bg {:?}",
+                theme.name,
+                theme.bg
+            );
+        }
+    }
+
+    #[test]
+    fn parse_custom_theme_with_ansi_keys() {
+        let content = "name = Test\nansi0 = #000000\nansi1 = #ff0000\nansi15 = #ffffff\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.ansi[0], [0, 0, 0]);
+        assert_eq!(theme.ansi[1], [255, 0, 0]);
+        assert_eq!(theme.ansi[15], [255, 255, 255]);
+    }
+
+    #[test]
+    fn parse_custom_theme_with_color_names() {
+        let content = "name = Test\nred = #ff0000\ngreen = #00ff00\nblue = #0000ff\nyellow = #ffff00\nmagenta = #ff00ff\ncyan = #00ffff\nblack = #000000\nwhite = #ffffff\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.ansi[1], [255, 0, 0]);
+        assert_eq!(theme.ansi[2], [0, 255, 0]);
+        assert_eq!(theme.ansi[4], [0, 0, 255]);
+        assert_eq!(theme.ansi[3], [255, 255, 0]);
+        assert_eq!(theme.ansi[5], [255, 0, 255]);
+        assert_eq!(theme.ansi[6], [0, 255, 255]);
+    }
+
+    #[test]
+    fn parse_custom_theme_invalid_color_keeps_default() {
+        let content = "name = Test\nbg = not_a_color\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        // bg stays at default 0,0,0
+        assert_eq!(theme.bg, [0, 0, 0]);
+    }
+
+    #[test]
+    fn parse_custom_theme_alternate_keys() {
+        let content = "name = Test\nbackground = #111111\nforeground = #eeeeee\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.bg, [0x11, 0x11, 0x11]);
+        assert_eq!(theme.fg, [0xee, 0xee, 0xee]);
+    }
+
+    #[test]
+    fn parse_custom_theme_cursor() {
+        let content = "name = Test\ncursor = #abcdef\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.cursor, [0xab, 0xcd, 0xef]);
+    }
+
+    #[test]
+    fn parse_custom_theme_bright_keys() {
+        let content = "name = Test\nbright_red = #aa0000\nbright_green = #00aa00\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.ansi[9], [0xaa, 0, 0]);
+        assert_eq!(theme.ansi[10], [0, 0xaa, 0]);
+    }
+
+    #[test]
+    fn catppuccin_mocha_const_can_be_called() {
+        let _ = Theme::catppuccin_mocha();
+    }
+
+    #[test]
+    fn catppuccin_mocha_named_has_name() {
+        let t = Theme::catppuccin_mocha_named();
+        assert_eq!(t.name, "Catppuccin Mocha");
+    }
+
+    #[test]
+    fn all_themes_have_16_ansi_colors() {
+        for theme in Theme::all_built_in() {
+            assert_eq!(theme.ansi.len(), 16);
+        }
+    }
+
+    #[test]
+    fn parse_custom_theme_quoted_value() {
+        let content = "name = \"My Theme\"\nbg = \"#ff0000\"\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.name, "My Theme");
+        assert_eq!(theme.bg, [255, 0, 0]);
+    }
+
+    #[test]
+    fn parse_custom_theme_single_quoted_value() {
+        let content = "name = 'My Theme'\nbg = '#ff0000'\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.name, "My Theme");
+        assert_eq!(theme.bg, [255, 0, 0]);
+    }
+
+    #[test]
+    fn terminal_config_default_uses_system_shell() {
+        let c = TerminalConfig::default();
+        assert_eq!(c.shell, Shell::SystemDefault);
+    }
+
+    #[test]
+    fn render_config_serde_roundtrip() {
+        let r = RenderConfig {
+            font: FontConfig {
+                family: String::from("Mono"),
+                size: 16,
+                line_spacing: 2,
+            },
+            theme: Theme::dracula(),
+            cursor_style: crate::cursor::CursorStyle::Bar,
+        };
+        let json = serde_json::to_string(&r).unwrap();
+        let back: RenderConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(r, back);
+    }
+
+    #[test]
+    fn font_config_serde_roundtrip() {
+        let f = FontConfig {
+            family: String::from("Test"),
+            size: 18,
+            line_spacing: -1,
+        };
+        let json = serde_json::to_string(&f).unwrap();
+        let back: FontConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(f, back);
+    }
+
+    #[test]
+    fn theme_serde_roundtrip() {
+        let t = Theme::nord();
+        let json = serde_json::to_string(&t).unwrap();
+        let back: Theme = serde_json::from_str(&json).unwrap();
+        assert_eq!(t, back);
+    }
+
+    #[test]
+    fn parse_custom_theme_short_hex_with_alpha_in_3() {
+        // short hex is #abc = (0xaa, 0xbb, 0xcc)
+        let content = "name = X\nbg = #fff\n";
+        let t = Theme::parse_custom(content).unwrap();
+        assert_eq!(t.bg, [255, 255, 255]);
+    }
+
+    #[test]
+    fn parse_custom_theme_empty_string_returns_none() {
+        assert!(Theme::parse_custom("").is_none());
+    }
+
+    #[test]
+    fn parse_custom_theme_only_comments_returns_none() {
+        assert!(Theme::parse_custom("# comment\n# another\n").is_none());
     }
 }

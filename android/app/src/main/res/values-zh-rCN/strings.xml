@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Torvox</string>
+
+    <!-- Settings screen -->
+    <string name="settings">设置</string>
+    <string name="back">返回</string>
+
+    <!-- Appearance -->
+    <string name="appearance">外观</string>
+    <string name="font_size">字体大小</string>
+    <string name="font_family">字体</string>
+    <string name="system_default">系统默认</string>
+    <string name="change">更改</string>
+    <string name="select_font_family">选择字体</string>
+    <string name="pick_font_file">从文件选择…</string>
+    <string name="cancel">取消</string>
+
+    <!-- Theme -->
+    <string name="theme">主题</string>
+    <string name="use_wallpaper_colors">使用壁纸颜色 (Material You)</string>
+    <string name="theme_mode">主题模式</string>
+    <string name="day">日间</string>
+    <string name="night">夜间</string>
+    <string name="follow_system">跟随系统</string>
+    <string name="day_theme">日间主题</string>
+    <string name="night_theme">夜间主题</string>
+
+    <!-- Terminal -->
+    <string name="terminal">终端</string>
+    <string name="shell">Shell</string>
+    <string name="shell_placeholder">/system/bin/sh</string>
+    <string name="scrollback_lines">回滚行数</string>
+
+    <!-- Session -->
+    <string name="sessions">会话</string>
+
+    <!-- ModifierBar -->
+    <string name="settings_button">设置</string>
+
+    <!-- Terminal screen -->
+    <string name="terminal_title">Torvox</string>
+    <string name="close">关闭</string>
+
+    <!-- Content descriptions -->
+    <string name="cd_new_session">新建会话</string>
+    <string name="cd_settings">设置</string>
+    <string name="cd_close_session">关闭会话</string>
+</resources>

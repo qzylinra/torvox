@@ -1,0 +1,197 @@
+package io.torvox.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import io.torvox.R
+import io.torvox.TerminalViewModel
+
+private val drawerBg = Color(0xFF1A1A1A)
+private val drawerFg = Color(0xFFE0E0E0)
+private val drawerSecondary = Color(0xFF9E9E9E)
+private val drawerAccent = Color(0xFF22D3EE)
+private val drawerSurface = Color(0xFF252525)
+
+@Composable
+fun SessionDrawer(
+    viewModel: TerminalViewModel,
+    onSettings: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val state by viewModel.state.collectAsState()
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxHeight()
+                .width(280.dp)
+                .background(drawerBg)
+                .padding(top = 48.dp),
+    ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.sessions),
+                color = drawerSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = stringResource(R.string.cd_new_session),
+                tint = drawerAccent,
+                modifier =
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .clickable {
+                            viewModel.createSession()
+                        }.padding(2.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            items(state.sessions) { session ->
+                SessionItem(
+                    title = session.title,
+                    isActive = session.id == state.activeSessionId,
+                    onClick = {
+                        viewModel.switchSession(session.id)
+                        onClose()
+                    },
+                    onClose = {
+                        viewModel.closeSession(session.id)
+                    },
+                )
+            }
+        }
+
+        HorizontalDivider(color = drawerSurface, thickness = 1.dp)
+
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSettings)
+                    .testTag("SettingsButton")
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = stringResource(R.string.cd_settings),
+                tint = drawerSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = "Settings",
+                color = drawerFg,
+                fontSize = 15.sp,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun SessionItem(
+    title: String,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val bgColor = if (isActive) drawerSurface else Color.Transparent
+    val titleColor = if (isActive) drawerFg else drawerSecondary
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(bgColor)
+                .clickable(onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(if (isActive) drawerAccent else drawerSecondary),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = title,
+            color = titleColor,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (!isActive) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = stringResource(R.string.cd_close_session),
+                tint = drawerSecondary,
+                modifier =
+                    Modifier
+                        .size(18.dp)
+                        .clip(CircleShape)
+                        .clickable(onClick = onClose)
+                        .padding(2.dp),
+            )
+        }
+    }
+}

@@ -1,0 +1,98 @@
+{
+  "version": "1.0",
+  "description": "Visual regression test scenarios for Torvox terminal",
+  "format": "png",
+  "pixel_threshold": 0.01,
+  "scenarios": [
+    {
+      "id": "01_plain_text",
+      "description": "Plain ASCII text on dark background",
+      "input": "Hello, World!\nLine 2\nLine 3",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "02_bold_italic",
+      "description": "Bold and italic text",
+      "input": "\u001b[1mBold\u001b[0m \u001b[3mItalic\u001b[0m \u001b[1;3mBoldItalic\u001b[0m",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "03_16_colors",
+      "description": "16-color palette test",
+      "input": "\u001b[30mBlack\u001b[0m \u001b[31mRed\u001b[0m \u001b[32mGreen\u001b[0m \u001b[33mYellow\u001b[0m\n\u001b[34mBlue\u001b[0m \u001b[35mMagenta\u001b[0m \u001b[36mCyan\u001b[0m \u001b[37mWhite\u001b[0m",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "04_256_colors",
+      "description": "256-color palette sample",
+      "input": "\u001b[38;5;196mR\u001b[38;5;46mG\u001b[38;5;21mB\u001b[0m",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "05_cjk",
+      "description": "CJK characters (Chinese, Japanese, Korean)",
+      "input": "\u4e2d\u6587\u6d4b\u8bd5\n\u65e5\u672c\u8a9e\u30c6\u30b9\u30c8\n\ud55c\uad6d\uc5b4",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "06_emoji",
+      "description": "Emoji rendering",
+      "input": "\ud83d\ude00 \ud83d\ude0a \ud83d\udc4d \ud83c\udf89 \u2764\ufe0f",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "07_underline_strike",
+      "description": "Underline, strikethrough, reverse",
+      "input": "\u001b[4mUnderline\u001b[0m \u001b[9mStrike\u001b[0m \u001b[7mReverse\u001b[0m",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "08_box_drawing",
+      "description": "Unicode box drawing characters",
+      "input": "\u250c\u2500\u2500\u2500\u2510\n\u2502   \u2502\n\u2514\u2500\u2500\u2500\u2518",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "09_cursor_movement",
+      "description": "Cursor positioning (CUP)",
+      "input": "Top\u001b[10;20HAt 10,20\u001b[1;1HTop again",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    },
+    {
+      "id": "10_hyperlink",
+      "description": "OSC 8 hyperlink rendering",
+      "input": "\u001b]8;;https://example.com\u001b\\Example\u001b]8;;\u001b\\",
+      "rows": 24,
+      "cols": 80,
+      "theme": "Catppuccin Mocha",
+      "font_size": 14.0
+    }
+  ]
+}

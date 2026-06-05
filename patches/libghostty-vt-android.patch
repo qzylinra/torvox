@@ -1,61 +1,7 @@
---- /tmp/upstream-libghostty/crates/libghostty-vt-sys/build.rs	2026-05-31 04:01:54.283662191 +0000
-+++ libghostty-rs-patch/crates/libghostty-vt-sys/build.rs	2026-05-31 03:24:44.184344736 +0000
-@@ -2,6 +2,10 @@
- use std::path::{Path, PathBuf};
- use std::process::Command;
- 
-+// Torvox patch: This file is patched from upstream libghostty-vt-sys.
-+// Upstream Ghostty commit: b869a6e5ab0a50ce01e8eb5aa408a02b3cbe4f3a
-+// Patch: Added aarch64-linux-android and x86_64-linux-android to zig_target()
-+
- /// Pinned ghostty commit. Update this to pull a newer version.
- const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
- const GHOSTTY_COMMIT: &str = "b869a6e5ab0a50ce01e8eb5aa408a02b3cbe4f3a";
-@@ -389,6 +393,8 @@
-         "aarch64-pc-windows-gnullvm" => "aarch64-windows-gnu",
-         "x86_64-pc-windows-msvc" => "x86_64-windows-msvc",
-         "aarch64-pc-windows-msvc" => "aarch64-windows-msvc",
-+        "aarch64-linux-android" => "aarch64-linux-android",
-+        "x86_64-linux-android" => "x86_64-linux-android",
-         other => panic!("unsupported Rust target for vendored build: {other}"),
-     };
-     value.to_owned()
---- /tmp/upstream-libghostty/crates/libghostty-vt/Cargo.toml	2026-05-31 04:01:54.284127115 +0000
-+++ libghostty-rs-patch/crates/libghostty-vt/Cargo.toml	2026-05-30 23:46:04.326049867 +0000
-@@ -1,11 +1,11 @@
- [package]
- name = "libghostty-vt"
- description = "Safe Rust API for libghostty-vt, the Ghostty terminal emulation library"
--version.workspace = true
--edition.workspace = true
--license.workspace = true
--repository.workspace = true
--rust-version.workspace = true
-+version = "0.1.1"
-+edition = "2024"
-+license = "MIT OR Apache-2.0"
-+repository = "https://github.com/uzaaft/libghostty-rs"
-+rust-version = "1.90"
- 
- [features]
- default = ["kitty-graphics"]
-@@ -18,13 +18,12 @@
- [dependencies]
- allocator-api2 = { version = "0.4.0", optional = true }
- bitflags = "2.11.0"
--libghostty-vt-sys.workspace = true
-+libghostty-vt-sys = { path = "../libghostty-vt-sys", version = "0.1.1" }
- int-enum = "1.2.0"
- png = { version = "0.18.1", optional = true }
- log = { version = "0.4.29", optional = true }
- 
- [dev-dependencies]
--libghostty-vt-sys.workspace = true
- 
- [package.metadata.docs.rs]
- all-features = true
---- /tmp/upstream-libghostty/crates/libghostty-vt-sys/Cargo.toml	2026-05-31 04:01:54.283583422 +0000
-+++ libghostty-rs-patch/crates/libghostty-vt-sys/Cargo.toml	2026-05-30 23:46:06.571090154 +0000
+diff --git a/crates/libghostty-vt-sys/Cargo.toml b/crates/libghostty-vt-sys/Cargo.toml
+index a54f706..5aba513 100644
+--- a/crates/libghostty-vt-sys/Cargo.toml
++++ b/crates/libghostty-vt-sys/Cargo.toml
 @@ -1,11 +1,11 @@
  [package]
  name = "libghostty-vt-sys"
@@ -73,16 +19,54 @@
  links = "ghostty-vt"
  build = "build.rs"
  
-@@ -21,9 +21,9 @@
- kitty-graphics = []
+diff --git a/crates/libghostty-vt-sys/build.rs b/crates/libghostty-vt-sys/build.rs
+index 14cc5ca..c9097f3 100644
+--- a/crates/libghostty-vt-sys/build.rs
++++ b/crates/libghostty-vt-sys/build.rs
+@@ -389,6 +389,10 @@ fn zig_target(target: &str) -> String {
+         "aarch64-pc-windows-gnullvm" => "aarch64-windows-gnu",
+         "x86_64-pc-windows-msvc" => "x86_64-windows-msvc",
+         "aarch64-pc-windows-msvc" => "aarch64-windows-msvc",
++        "aarch64-linux-android" => "aarch64-linux-android",
++        "x86_64-linux-android" => "x86_64-linux-android",
++        "aarch64-linux-android" => "aarch64-linux-android",
++        "x86_64-linux-android" => "x86_64-linux-android",
+         other => panic!("unsupported Rust target for vendored build: {other}"),
+     };
+     value.to_owned()
+diff --git a/crates/libghostty-vt/Cargo.toml b/crates/libghostty-vt/Cargo.toml
+index 2cc0d17..03c730c 100644
+--- a/crates/libghostty-vt/Cargo.toml
++++ b/crates/libghostty-vt/Cargo.toml
+@@ -1,11 +1,11 @@
+ [package]
+ name = "libghostty-vt"
+ description = "Safe Rust API for libghostty-vt, the Ghostty terminal emulation library"
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
+-repository.workspace = true
+-rust-version.workspace = true
++version = "0.1.1"
++edition = "2024"
++license = "MIT OR Apache-2.0"
++repository = "https://github.com/uzaaft/libghostty-rs"
++rust-version = "1.90"
  
+ [features]
+ default = ["kitty-graphics"]
+@@ -18,13 +18,12 @@ link-dynamic = ["libghostty-vt-sys/link-dynamic"]
  [dependencies]
--bindgen = {version = "0.72.1", optional = true}
--libc = {version = "0.2", optional = true}
--heck = {version = "0.5", optional = true}
-+bindgen = { version = "0.72.1", optional = true }
-+libc = { version = "0.2", optional = true }
-+heck = { version = "0.5", optional = true }
+ allocator-api2 = { version = "0.4.0", optional = true }
+ bitflags = "2.11.0"
+-libghostty-vt-sys.workspace = true
++libghostty-vt-sys = { path = "../libghostty-vt-sys", version = "0.1.1" }
+ int-enum = "1.2.0"
+ png = { version = "0.18.1", optional = true }
+ log = { version = "0.4.29", optional = true }
  
- [build-dependencies]
- pkg-config = { version = "0.3", optional = true }
+ [dev-dependencies]
+-libghostty-vt-sys.workspace = true
+ 
+ [package.metadata.docs.rs]
+ all-features = true

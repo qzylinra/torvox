@@ -23,7 +23,9 @@ fuzz_target!(|data: &[u8]| {
     let Some(cols) = read_u16(&mut pos, data) else {
         return;
     };
-    let max_scrollback = 50_000;
+    let rows = (rows % 512) + 1;
+    let cols = (cols % 512) + 1;
+    let max_scrollback = 10_000;
 
     let mut g = Grid::with_scrollback(rows as u32, cols as u32, max_scrollback);
 
@@ -36,6 +38,8 @@ fuzz_target!(|data: &[u8]| {
                     if let (Some(nr), Some(nc)) =
                         (read_u16(&mut pos, data), read_u16(&mut pos, data))
                     {
+                        let nr = (nr % 512) + 1;
+                        let nc = (nc % 512) + 1;
                         g.resize(nr as u32, nc as u32);
                         g.fill_cells(r as u32, 'X', c as u32, nr.min(nc) as u32);
                     }

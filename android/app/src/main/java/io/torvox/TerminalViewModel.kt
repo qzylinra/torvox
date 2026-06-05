@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
+import android.view.Surface
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,6 +43,11 @@ data class SelectionState(
     val selectedText: String = "",
 )
 
+data class SessionInfo(
+    val id: Long,
+    val title: String,
+)
+
 data class TerminalState(
     val sessionId: Long = 0L,
     val isRunning: Boolean = false,
@@ -48,6 +55,10 @@ data class TerminalState(
     val selection: SelectionState = SelectionState(),
     val pendingInput: ByteArray? = null,
     val modifierKeys: List<ModifierKey> = defaultModifierKeys,
+    val ctrlActive: Boolean = false,
+    val altActive: Boolean = false,
+    val sessions: List<SessionInfo> = emptyList(),
+    val activeSessionId: Long = 0L,
 )
 
 @HiltViewModel
@@ -60,6 +71,20 @@ class TerminalViewModel
     ) : ViewModel() {
         private val _state = MutableStateFlow(TerminalState())
         val state: StateFlow<TerminalState> = _state.asStateFlow()
+
+        var currentSurface: Surface? = null
+        var surfaceWidth: Int = 0
+        var surfaceHeight: Int = 0
+
+        fun startRuntime(
+            surface: Surface,
+            width: Int,
+            height: Int,
+        ) {
+            viewModelScope.launch {
+                runtime.start(surface, width, height)
+            }
+        }
 
         val fontSize: StateFlow<Float> =
             settingsRepository.fontSize
@@ -85,15 +110,55 @@ class TerminalViewModel
             settingsRepository.touchBehavior
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "right_click")
 
+        val dayThemeName: StateFlow<String> =
+            settingsRepository.dayThemeName
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Catppuccin Latte")
+
+        val nightThemeName: StateFlow<String> =
+            settingsRepository.nightThemeName
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Catppuccin Mocha")
+
+        val themeMode: StateFlow<String> =
+            settingsRepository.themeMode
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "follow_system")
+
+        val materialYouEnabled: StateFlow<Boolean> =
+            settingsRepository.materialYouEnabled
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+        init {
+            viewModelScope.launch {
+                runtime.state.collect { runtimeState ->
+                    val sessions = runtimeState.sessionIds.map { SessionInfo(id = it, title = "Session $it") }
+                    val active = runtimeState.activeSessionId
+                    if (active != 0L) {
+                        val title = sessions.firstOrNull { it.id == active }?.title ?: "Session $active"
+                        _state.value =
+                            _state.value.copy(
+                                sessionId = active,
+                                isRunning = runtimeState.isRunning,
+                                title = title,
+                                sessions = sessions,
+                                activeSessionId = active,
+                            )
+                    } else {
+                        _state.value = _state.value.copy(sessions = sessions, activeSessionId = active)
+                    }
+                }
+            }
+        }
+
         fun setFontSize(size: Float) {
             viewModelScope.launch {
                 settingsRepository.setFontSize(size)
+                runtime.applySettings()
             }
         }
 
         fun setFontFamily(family: String) {
             viewModelScope.launch {
                 settingsRepository.setFontFamily(family)
+                runtime.applySettings()
             }
         }
 
@@ -106,6 +171,45 @@ class TerminalViewModel
         fun setThemeName(name: String) {
             viewModelScope.launch {
                 settingsRepository.setThemeName(name)
+            }
+        }
+
+        fun setDayThemeName(name: String) {
+            viewModelScope.launch {
+                settingsRepository.setDayThemeName(name)
+                runtime.applySettings()
+            }
+        }
+
+        fun setNightThemeName(name: String) {
+            viewModelScope.launch {
+                settingsRepository.setNightThemeName(name)
+                runtime.applySettings()
+            }
+        }
+
+        fun setThemeMode(mode: String) {
+            viewModelScope.launch {
+                settingsRepository.setThemeMode(mode)
+                runtime.applySettings()
+            }
+        }
+
+        fun setMaterialYouEnabled(enabled: Boolean) {
+            viewModelScope.launch {
+                settingsRepository.setMaterialYouEnabled(enabled)
+            }
+        }
+
+        fun getFileNameFromUri(uri: Uri): String? {
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            return cursor?.use {
+                if (it.moveToFirst()) {
+                    val idx = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) it.getString(idx) else null
+                } else {
+                    null
+                }
             }
         }
 
@@ -263,28 +367,101 @@ class TerminalViewModel
             _state.value = _state.value.copy(modifierKeys = defaultModifierKeys)
         }
 
+        fun setCtrlActive(active: Boolean) {
+            _state.value = _state.value.copy(ctrlActive = active)
+        }
+
+        fun setAltActive(active: Boolean) {
+            _state.value = _state.value.copy(altActive = active)
+        }
+
         fun createSession() {
-            val nextId = _state.value.sessionId + 1
+            val surface = currentSurface ?: return
+            val w = surfaceWidth
+            val h = surfaceHeight
+            if (w == 0 || h == 0) return
+
+            viewModelScope.launch {
+                val newId = runtime.createSession(surface, w, h)
+                if (newId > 0) {
+                    val info = SessionInfo(id = newId, title = "Session $newId")
+                    val newSessions = _state.value.sessions + info
+                    _state.value =
+                        _state.value.copy(
+                            sessionId = newId,
+                            isRunning = true,
+                            title = info.title,
+                            selection = SelectionState(),
+                            pendingInput = null,
+                            sessions = newSessions,
+                            activeSessionId = newId,
+                        )
+                }
+            }
+        }
+
+        fun switchSession(id: Long) {
+            val surface = currentSurface ?: return
+            val w = surfaceWidth
+            val h = surfaceHeight
+            if (w == 0 || h == 0) return
+
+            runtime.switchSession(id, surface, w, h)
+            val session = _state.value.sessions.find { it.id == id } ?: return
             _state.value =
                 _state.value.copy(
-                    sessionId = nextId,
+                    sessionId = id,
                     isRunning = true,
-                    title = "Torvox $nextId",
+                    title = session.title,
+                    activeSessionId = id,
                     selection = SelectionState(),
                     pendingInput = null,
                 )
         }
 
         fun closeSession() {
-            _state.value =
-                _state.value.copy(
-                    isRunning = false,
-                    selection = SelectionState(),
-                    pendingInput = null,
-                )
+            closeSession(_state.value.activeSessionId)
+        }
+
+        fun closeSession(id: Long) {
+            runtime.closeSession(id)
+            val current = _state.value
+            val remaining = current.sessions.filter { it.id != id }
+            if (remaining.isEmpty()) {
+                _state.value =
+                    current.copy(
+                        isRunning = false,
+                        sessions = emptyList(),
+                        activeSessionId = 0L,
+                        selection = SelectionState(),
+                        pendingInput = null,
+                    )
+            } else {
+                val newActive =
+                    if (current.activeSessionId == id) {
+                        remaining.last().id
+                    } else {
+                        current.activeSessionId
+                    }
+                val activeSession = remaining.find { it.id == newActive }
+                _state.value =
+                    current.copy(
+                        sessions = remaining,
+                        activeSessionId = newActive,
+                        sessionId = newActive,
+                        title = activeSession?.title ?: "Torvox",
+                        selection = SelectionState(),
+                        pendingInput = null,
+                    )
+            }
         }
 
         fun setSessionTitle(title: String) {
             _state.value = _state.value.copy(title = title)
+        }
+
+        override fun onCleared() {
+            runtime.saveSession()
+            super.onCleared()
         }
     }

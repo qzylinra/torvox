@@ -20,19 +20,14 @@ jobs:
           - fuzz_selection
           - fuzz_attrs
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - run: |
-          cargo install cargo-fuzz
-          cargo +nightly fuzz --fuzz-dir torvox-fuzz/fuzz run ${{ matrix.target }} -- -max_total_time=240
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
+      - run: nix develop --command cargo fuzz run --fuzz-dir torvox-fuzz/fuzz ${{ matrix.target }} -- -max_total_time=120 -rss_limit_mb=4096
+      - uses: actions/upload-artifact@main
         if: failure()
         with:
           name: fuzz-crash-${{ matrix.target }}
@@ -40,50 +35,55 @@ jobs:
   miri:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
         with:
-          components: miri
-      - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - run: MIRIFLAGS="-Zmiri-isolation-error=warn" cargo +nightly miri test -p torvox-core
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
+      - run: nix develop --command env MIRIFLAGS="-Zmiri-isolation-error=warn" cargo miri test -p torvox-core
   bench:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - run: cargo bench --workspace
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
+      - run: nix develop --command cargo bench --workspace
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: |
-          cargo install cargo-audit
-          cargo audit
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - run: nix develop --command cargo audit
   geiger:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
       - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - run: |
-          cargo install cargo-geiger
-          cargo geiger
+          nix develop --command bash -c '
+            cd torvox-core && cargo geiger 2>&1 | tee ../geiger-output.txt || true
+            if grep -q "torvox-core" ../geiger-output.txt; then
+              core_line=$(grep "torvox-core" ../geiger-output.txt)
+              echo "torvox-core line: $core_line"
+              if echo "$core_line" | grep -qE "0/0.*0/0.*0/0.*0/0.*0/0"; then
+                echo "torvox-core has zero unsafe code"
+                exit 0
+              else
+                echo "torvox-core has unsafe code!"
+                exit 1
+              fi
+            else
+              echo "Could not find torvox-core in geiger output"
+              exit 1
+            fi
+          '

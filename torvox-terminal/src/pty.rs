@@ -1,4 +1,4 @@
-use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::io::{AsRawFd, OwnedFd};
 use std::time::Duration;
 
 use thiserror::Error;
@@ -41,12 +41,26 @@ impl PtyPair {
         let master_fd = result.master;
         let slave_fd = result.slave;
 
-        // SAFETY: fork() is the standard Unix process duplication primitive.
-        // We immediately distinguish parent and child. The child setsid() +
-        // login_tty() to establish a new session, then execvp(). The parent
-        // closes the slave fd and returns. This is the standard forkpty pattern.
-        // Only one unsafe block orchestrates the entire fork — all subsequent
-        // libc calls in the child path are single-threaded and bounded.
+        // 在 fork 之前构建所有子进程数据，避免子进程中任何分配
+        // （多线程进程 fork 后 malloc 堆可能损坏）。
+        let shell_cstr = std::ffi::CString::new(shell).expect("shell path contains null byte");
+        let env_cstrings: Vec<std::ffi::CString> = build_env()
+            .into_iter()
+            .map(|(k, v)| {
+                std::ffi::CString::new(format!("{k}={v}")).expect("env var contains null")
+            })
+            .collect();
+
+        // 在 fork 之前预分配参数和环境数组。
+        // fork 后，子进程不得调用任何分配内存的函数。
+        let shell_ptr = shell_cstr.as_ptr();
+        let args_ptrs: Vec<*const libc::c_char> = vec![shell_ptr, std::ptr::null()];
+        let env_ptrs: Vec<*const libc::c_char> = env_cstrings
+            .iter()
+            .map(|s| s.as_ptr())
+            .chain(std::iter::once(std::ptr::null()))
+            .collect();
+
         match unsafe { nix::unistd::fork()? } {
             nix::unistd::ForkResult::Parent { child } => {
                 nix::unistd::close(slave_fd).ok();
@@ -57,29 +71,41 @@ impl PtyPair {
             }
             nix::unistd::ForkResult::Child => {
                 nix::unistd::close(master_fd).ok();
-                nix::unistd::setsid().ok();
-                // SAFETY: In the child process after fork(), it is safe to
-                // call login_tty because the child has its own address space
-                // and file descriptor table. login_tty sets up the slave as
-                // the controlling terminal for this new session. We check the
-                // return value and exit on failure.
-                let ret = unsafe { libc::login_tty(slave_fd.as_raw_fd()) };
-                if ret != 0 {
+                // 仅使用系统调用手动设置控制终端。
+                // 避免使用 login_tty，因为它可能在内部调用 malloc()，
+                // 在多线程进程 fork 后这是不安全的。
+                if nix::unistd::setsid().is_err() {
                     std::process::exit(1);
                 }
-                configure_raw_mode(slave_fd.as_raw_fd()).ok();
-                let env = build_env();
-                // SAFETY: set_var is unsafe in Rust 1.95+ due to potential
-                // race conditions with other threads. In the child process
-                // after fork(), there is exactly one thread, so no race is
-                // possible. The env vars are bounded local data.
-                for (key, value) in &env {
-                    unsafe { std::env::set_var(key, value) };
+                let slave_raw = slave_fd.as_raw_fd();
+                // SAFETY: 所有这些 libc 调用都是不分配内存的轻量级系统调用封装。
+                // 子进程是单线程的。
+                let ret = unsafe { libc::ioctl(slave_raw, libc::TIOCSCTTY, 0) };
+                if ret < 0 {
+                    std::process::exit(1);
                 }
-                let c_shell = std::ffi::CString::new(shell).expect("shell path contains null byte");
-                let args = [c_shell.as_c_str()];
-                nix::unistd::execvp(c_shell.as_c_str(), &args).unwrap_err();
-                std::process::exit(1);
+                unsafe {
+                    libc::dup2(slave_raw, 0);
+                    libc::dup2(slave_raw, 1);
+                    libc::dup2(slave_raw, 2);
+                }
+                if slave_raw > 2 {
+                    unsafe {
+                        libc::close(slave_raw);
+                    }
+                }
+                // 在 stdin (fd 0, PTY 从设备) 上配置原始模式。
+                // 失败是非致命的（shell 以规范模式运行）。
+                configure_raw_mode(libc::STDIN_FILENO).ok();
+                // 直接使用 libc::execve 和预分配的数组。
+                // nix::unistd::execve 内部通过 collect() 分配 Vec，
+                // 在多线程进程 fork 后这是不安全的。
+                unsafe {
+                    libc::execve(shell_ptr, args_ptrs.as_ptr(), env_ptrs.as_ptr());
+                }
+                unsafe {
+                    libc::_exit(1);
+                }
             }
         }
     }
@@ -166,36 +192,33 @@ impl Drop for PtyPair {
 }
 
 fn configure_raw_mode(fd: std::os::unix::io::RawFd) -> Result<(), PtyError> {
-    use nix::sys::termios::{
-        ControlFlags, InputFlags, LocalFlags, OutputFlags, SetArg, tcgetattr, tcsetattr,
-    };
-    // SAFETY: We create an OwnedFd from a borrowed raw fd solely to use
-    // nix's termios API which requires AsFd. We then mem::forget(owned)
-    // to prevent the OwnedFd from closing the fd on drop. This is the
-    // standard pattern for using nix termios on a borrowed fd. The fd
-    // remains owned by the caller's PtyPair.
-    let owned = unsafe { OwnedFd::from_raw_fd(fd) };
-    let mut termios = tcgetattr(&owned).map_err(PtyError::Termios)?;
-    termios.input_flags &= !(InputFlags::IGNBRK
-        | InputFlags::BRKINT
-        | InputFlags::PARMRK
-        | InputFlags::ISTRIP
-        | InputFlags::INLCR
-        | InputFlags::IGNCR
-        | InputFlags::ICRNL
-        | InputFlags::IXON);
-    termios.output_flags &= !(OutputFlags::OPOST);
-    termios.local_flags &= !(LocalFlags::ECHO
-        | LocalFlags::ECHONL
-        | LocalFlags::ICANON
-        | LocalFlags::ISIG
-        | LocalFlags::IEXTEN);
-    termios.control_flags &= !(ControlFlags::CSIZE | ControlFlags::PARENB);
-    termios.control_flags |= ControlFlags::CS8;
-    termios.control_chars[nix::sys::termios::SpecialCharacterIndices::VMIN as usize] = 1;
-    termios.control_chars[nix::sys::termios::SpecialCharacterIndices::VTIME as usize] = 0;
-    tcsetattr(&owned, SetArg::TCSANOW, &termios).map_err(PtyError::Termios)?;
-    std::mem::forget(owned);
+    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+    // SAFETY: tcgetattr is safe with a valid fd. fd is STDIN_FILENO (0)
+    // after login_tty dup'd the PTY slave, so it's always valid.
+    let ret = unsafe { libc::tcgetattr(fd, termios.as_mut_ptr()) };
+    if ret != 0 {
+        return Err(PtyError::Termios(nix::errno::Errno::last()));
+    }
+    let mut termios = unsafe { termios.assume_init() };
+    termios.c_iflag &= !(libc::IGNBRK
+        | libc::BRKINT
+        | libc::PARMRK
+        | libc::ISTRIP
+        | libc::INLCR
+        | libc::IGNCR
+        | libc::ICRNL
+        | libc::IXON);
+    termios.c_oflag &= !(libc::OPOST);
+    termios.c_lflag &= !(libc::ECHO | libc::ECHONL | libc::ICANON | libc::ISIG | libc::IEXTEN);
+    termios.c_cflag &= !(libc::CSIZE | libc::PARENB);
+    termios.c_cflag |= libc::CS8;
+    termios.c_cc[libc::VMIN] = 1;
+    termios.c_cc[libc::VTIME] = 0;
+    // SAFETY: tcsetattr is safe with a valid fd and valid termios struct.
+    let ret = unsafe { libc::tcsetattr(fd, libc::TCSANOW, &termios) };
+    if ret != 0 {
+        return Err(PtyError::Termios(nix::errno::Errno::last()));
+    }
     Ok(())
 }
 

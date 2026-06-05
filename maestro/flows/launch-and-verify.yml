@@ -1,0 +1,23 @@
+appId: io.torvox
+name: Launch and verify terminal renders
+tags:
+  - smoke
+  - p0
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 20000
+- tapOn:
+    text: "Wait"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: "TerminalScreen"
+- assertVisible:
+    id: "ModifierBar"
+- assertVisible:
+    id: "TerminalContent"
+- takeScreenshot: launch_terminal

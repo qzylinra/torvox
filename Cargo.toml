@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "torvox-core",
+  "torvox-core/kani",
   "torvox-terminal",
   "torvox-renderer",
   "torvox-gui-android",
@@ -47,12 +48,15 @@ quickcheck = "1"
 quickcheck_macros = "1"
 futures = "0.3"
 raw-window-handle = "0.6"
+log = "0.4"
+rkyv = { version = "0.8", default-features = false }
+toml = "0.8"
 
 # libghostty-vt patched for Android targets.
 # Patch file: patches/libghostty-vt-android.patch
 # Apply before cargo build:
-#   git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-#   cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
+#   git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs
+#   cd libghostty-rs && git apply ../patches/libghostty-vt-android.patch
 [patch.crates-io]
-libghostty-vt = { path = "libghostty-rs-patch/crates/libghostty-vt" }
-libghostty-vt-sys = { path = "libghostty-rs-patch/crates/libghostty-vt-sys" }
+libghostty-vt = { path = "libghostty-rs/crates/libghostty-vt" }
+libghostty-vt-sys = { path = "libghostty-rs/crates/libghostty-vt-sys" }

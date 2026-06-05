@@ -1,5 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use torvox_core::grid::Grid;
+use torvox_core::line::Line;
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
 fn bench_vt_parse_plain_text(c: &mut Criterion) {
@@ -82,6 +83,58 @@ fn bench_grid_cell_access(c: &mut Criterion) {
     });
 }
 
+fn bench_grid_resize(c: &mut Criterion) {
+    c.bench_function("grid_resize_24x80_to_50x120", |b| {
+        b.iter(|| {
+            let mut g = Grid::new(24, 80);
+            g.resize(50, 120);
+            std::hint::black_box(&g);
+        });
+    });
+    c.bench_function("grid_resize_50x120_to_24x80", |b| {
+        b.iter(|| {
+            let mut g = Grid::new(50, 120);
+            g.resize(24, 80);
+            std::hint::black_box(&g);
+        });
+    });
+}
+
+fn bench_grid_scrollback(c: &mut Criterion) {
+    c.bench_function("scrollback_push_1k_lines", |b| {
+        b.iter(|| {
+            let mut g = Grid::with_scrollback(24, 80, 100_000);
+            for _ in 0..1000 {
+                let l = Line::new(80);
+                g.push_scrollback(l);
+            }
+            std::hint::black_box(&g);
+        });
+    });
+}
+
+fn bench_grid_fill(c: &mut Criterion) {
+    c.bench_function("grid_fill_row", |b| {
+        let mut g = Grid::new(24, 80);
+        b.iter(|| {
+            g.fill_cells(0, 'X', 0, 80);
+            std::hint::black_box(&g);
+        });
+    });
+}
+
+fn bench_ghostty_screenshot(c: &mut Criterion) {
+    let mut terminal = GhosttyTerminal::new(24, 80, 1000).unwrap();
+    terminal.vt_write(b"Hello, world! This is some sample terminal output.\n");
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    c.bench_function("ghostty_take_snapshot_24x80", |b| {
+        b.iter(|| {
+            let snap = terminal.take_snapshot();
+            std::hint::black_box(snap.cells.len());
+        });
+    });
+}
+
 criterion_group!(
     benches,
     bench_vt_parse_plain_text,
@@ -90,6 +143,10 @@ criterion_group!(
     bench_vt_parse_large_output,
     bench_grid_sizeof,
     bench_grid_cell_access,
+    bench_grid_resize,
+    bench_grid_scrollback,
+    bench_grid_fill,
+    bench_ghostty_screenshot,
 );
 
 criterion_main!(benches);

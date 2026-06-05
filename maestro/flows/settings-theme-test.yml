@@ -1,0 +1,74 @@
+appId: io.torvox
+name: Settings and theme verification
+tags:
+  - e2e
+  - p0
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 20000
+- tapOn:
+    text: "Wait"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: "TerminalScreen"
+# Open drawer -> settings
+- tapOn:
+    id: "Key_☰"
+- waitForAnimationToEnd
+- tapOn:
+    id: "SettingsButton"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "SettingsScreen"
+# Verify Appearance section
+- assertVisible:
+    text: "Appearance"
+- assertVisible:
+    text: "Font Size"
+- assertVisible:
+    text: "Font Family"
+# Verify font size slider exists
+- assertVisible:
+    id: "FontSizeSlider"
+# Verify Theme section
+- scrollUntilVisible:
+    element:
+      text: "Theme"
+    direction: DOWN
+- assertVisible:
+    text: "Theme"
+- assertVisible:
+    text: "Material You"
+# Check theme mode selector (Day/Night/Follow System)
+- assertVisible:
+    text: "Day"
+- assertVisible:
+    text: "Night"
+- assertVisible:
+    text: "Follow System"
+# Verify Terminal section
+- scrollUntilVisible:
+    element:
+      text: "Scrollback Lines"
+    direction: DOWN
+- assertVisible:
+    text: "Terminal"
+- assertVisible:
+    text: "Shell"
+- assertVisible:
+    text: "Scrollback Lines"
+# Verify NO Input section (should have been removed)
+- assertNotVisible:
+    text: "Input"
+# Input should NOT exist - assertNotVisible
+- tapOn:
+    id: "SettingsBackButton"
+- waitForAnimationToEnd
+- assertVisible:
+    id: "TerminalScreen"
+- takeScreenshot: settings_verified

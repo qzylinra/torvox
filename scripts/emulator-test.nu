@@ -2,6 +2,10 @@
 # Torvox 模拟器测试 (nushell)
 # 使用: nu scripts/emulator-test.nu [--unit|--android|--emulator|--all]
 
+if (which nix | length) > 0 and ("NIX_DEVELOP_ENV" not-in $env) {
+    exec nix develop --command nu $env.CURRENT_FILE
+}
+
 let project_dir = ($env.PWD)
 let results_dir = ($project_dir | path join "test-results")
 let apk_path = ($project_dir | path join "android/app/build/outputs/apk/debug/app-debug.apk")

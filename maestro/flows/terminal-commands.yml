@@ -1,0 +1,89 @@
+appId: io.torvox
+name: Terminal command output verification
+tags:
+  - e2e
+  - p0
+---
+# Launch app with fresh state
+- launchApp:
+    clearState: true
+    stopApp: true
+- waitForAnimationToEnd:
+    timeout: 20000
+- tapOn:
+    text: "Wait"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    id: "TerminalScreen"
+- assertVisible:
+    id: "ModifierBar"
+- assertVisible:
+    id: "TerminalContent"
+# Wait for shell prompt to appear
+- waitForAnimationToEnd:
+    timeout: 5000
+# Run 'echo hello' and verify output via screenshot
+- tapOn:
+    id: "TerminalContent"
+- inputText: "echo hello world\n"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: echo_hello
+# Run 'ls' and check result
+- tapOn:
+    id: "TerminalContent"
+- inputText: "ls -la\n"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: ls_la
+# Check pwd
+- tapOn:
+    id: "TerminalContent"
+- inputText: "pwd\n"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: pwd_output
+# Test modifier bar - ESC
+- tapOn:
+    id: "Key_ESC"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: after_esc
+# Test modifier bar - TAB
+- tapOn:
+    id: "Key_TAB"
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: after_tab
+# Test modifier bar - CTRL toggle
+- tapOn:
+    id: "Key_CTRL"
+- waitForAnimationToEnd:
+    timeout: 500
+- tapOn:
+    id: "Key_CTRL"
+- waitForAnimationToEnd:
+    timeout: 500
+# Test modifier bar - ALT toggle
+- tapOn:
+    id: "Key_ALT"
+- waitForAnimationToEnd:
+    timeout: 500
+- tapOn:
+    id: "Key_ALT"
+- waitForAnimationToEnd:
+    timeout: 500
+# Test  ~ key
+- tapOn:
+    id: "Key_~"
+- waitForAnimationToEnd:
+    timeout: 1000
+# Verify terminal is still responsive
+- tapOn:
+    id: "TerminalContent"
+- inputText: "cat /proc/version\n"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: cat_proc_version

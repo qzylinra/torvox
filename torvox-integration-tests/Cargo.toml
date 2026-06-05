@@ -8,3 +8,6 @@ license.workspace = true
 [dependencies]
 torvox-core = { workspace = true }
 torvox-terminal = { workspace = true }
+
+[dev-dependencies]
+toml = { workspace = true }

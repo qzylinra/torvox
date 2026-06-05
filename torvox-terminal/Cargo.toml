@@ -12,6 +12,7 @@ libc = { workspace = true }
 thiserror = { workspace = true }
 flume = { workspace = true }
 bitflags = { workspace = true }
+log = { workspace = true }
 libghostty-vt = "0.1.1"
 
 [dev-dependencies]

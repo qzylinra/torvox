@@ -1,6 +1,13 @@
 package io.torvox.ui.theme
 
+import android.os.Build
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 
 data class TerminalTheme(
     val name: String,
@@ -285,7 +292,115 @@ object BuiltInThemes {
                 ),
         )
 
-    val all: List<TerminalTheme> =
+    val catppuccinLatte =
+        TerminalTheme(
+            name = "Catppuccin Latte",
+            background = Color(0xFFEFF1F5),
+            foreground = Color(0xFF4C4F69),
+            cursor = Color(0xFFDC8A78),
+            ansi =
+                listOf(
+                    Color(0xFF5C5F77),
+                    Color(0xFFD20F39),
+                    Color(0xFF40A02B),
+                    Color(0xFFDF8E1D),
+                    Color(0xFF1E66F5),
+                    Color(0xFF8839EF),
+                    Color(0xFF179299),
+                    Color(0xFF4C4F69),
+                    Color(0xFFACACAC),
+                    Color(0xFFD20F39),
+                    Color(0xFF40A02B),
+                    Color(0xFFDF8E1D),
+                    Color(0xFF1E66F5),
+                    Color(0xFF8839EF),
+                    Color(0xFF179299),
+                    Color(0xFF5C5F77),
+                ),
+        )
+
+    val solarizedLight =
+        TerminalTheme(
+            name = "Solarized Light",
+            background = Color(0xFFFDF6E3),
+            foreground = Color(0xFF657B83),
+            cursor = Color(0xFF657B83),
+            ansi =
+                listOf(
+                    Color(0xFF073642),
+                    Color(0xFFDC322F),
+                    Color(0xFF859900),
+                    Color(0xFFB58900),
+                    Color(0xFF268BD2),
+                    Color(0xFFD33682),
+                    Color(0xFF2AA198),
+                    Color(0xFFEEE8D5),
+                    Color(0xFF002B36),
+                    Color(0xFFCB4B16),
+                    Color(0xFF859900),
+                    Color(0xFFB58900),
+                    Color(0xFF268BD2),
+                    Color(0xFFD33682),
+                    Color(0xFF2AA198),
+                    Color(0xFF586E75),
+                ),
+        )
+
+    val githubLight =
+        TerminalTheme(
+            name = "GitHub Light",
+            background = Color(0xFFFFFFFF),
+            foreground = Color(0xFF24292F),
+            cursor = Color(0xFF24292F),
+            ansi =
+                listOf(
+                    Color(0xFF24292F),
+                    Color(0xFFCF222E),
+                    Color(0xFF116329),
+                    Color(0xFF4D2D00),
+                    Color(0xFF0550AE),
+                    Color(0xFF8250DF),
+                    Color(0xFF1B7C83),
+                    Color(0xFF6E7781),
+                    Color(0xFF6E7781),
+                    Color(0xFFCF222E),
+                    Color(0xFF116329),
+                    Color(0xFF4D2D00),
+                    Color(0xFF0550AE),
+                    Color(0xFF8250DF),
+                    Color(0xFF1B7C83),
+                    Color(0xFF6E7781),
+                ),
+        )
+
+    val nordLight =
+        TerminalTheme(
+            name = "Nord Light",
+            background = Color(0xFFECEFF4),
+            foreground = Color(0xFF2E3440),
+            cursor = Color(0xFF2E3440),
+            ansi =
+                listOf(
+                    Color(0xFF3B4252),
+                    Color(0xFFBF616A),
+                    Color(0xFFA3BE8C),
+                    Color(0xFFEBCB8B),
+                    Color(0xFF81A1C1),
+                    Color(0xFFB48EAD),
+                    Color(0xFF88C0D0),
+                    Color(0xFFE5E9F0),
+                    Color(0xFF4C566A),
+                    Color(0xFFBF616A),
+                    Color(0xFFA3BE8C),
+                    Color(0xFFEBCB8B),
+                    Color(0xFF81A1C1),
+                    Color(0xFFB48EAD),
+                    Color(0xFF88C0D0),
+                    Color(0xFF2E3440),
+                ),
+        )
+
+    val darkThemes: List<TerminalTheme> =
         listOf(
             catppuccinMocha,
             dracula,
@@ -299,5 +414,55 @@ object BuiltInThemes {
             rosePine,
         )
 
+    val lightThemes: List<TerminalTheme> =
+        listOf(
+            catppuccinLatte,
+            solarizedLight,
+            githubLight,
+            nordLight,
+        )
+
+    val all: List<TerminalTheme> = darkThemes + lightThemes
+
     fun byName(name: String): TerminalTheme = all.firstOrNull { it.name == name } ?: catppuccinMocha
+}
+
+enum class ThemeMode(
+    val label: String,
+) {
+    DAY("Day"),
+    NIGHT("Night"),
+    FOLLOW_SYSTEM("Follow System"),
+}
+
+@Composable
+fun dynamicTerminalTheme(isDark: Boolean): TerminalTheme? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+    val context = LocalContext.current
+    val scheme = if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    return TerminalTheme(
+        name = if (isDark) "Material You Dark" else "Material You Light",
+        background = scheme.background,
+        foreground = scheme.onBackground,
+        cursor = scheme.primary,
+        ansi =
+            listOf(
+                scheme.errorContainer, // black
+                scheme.error, // red
+                scheme.primary, // green
+                scheme.tertiary, // yellow
+                scheme.secondary, // blue
+                scheme.tertiaryContainer, // magenta
+                scheme.primaryContainer, // cyan
+                scheme.onBackground, // white
+                scheme.outlineVariant, // bright black
+                scheme.error, // bright red
+                scheme.primary, // bright green
+                scheme.tertiary, // bright yellow
+                scheme.secondary, // bright blue
+                scheme.tertiaryContainer, // bright magenta
+                scheme.primaryContainer, // bright cyan
+                scheme.onSurfaceVariant, // bright white
+            ),
+    )
 }

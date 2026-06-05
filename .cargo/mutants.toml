@@ -1,0 +1,14 @@
+# Torvox cargo-mutants configuration
+# Reference: https://mutants.rs/
+examine_globs = ["torvox-core/src/*.rs", "torvox-terminal/src/*.rs"]
+exclude_globs = [
+  "**/target/**",
+  "**/tests/**",
+  "**/benches/**",
+  "**/examples/**",
+  "**/fuzz/**",
+  "**/test_data/**",
+  "**/build.rs",
+  "torvox-core/src/grid.rs",
+]
+test_tool = "nextest"

@@ -21,8 +21,9 @@
 //! - `read_scrollback`: read last N lines of scrollback
 //! - `read_cursor`: read cursor position and visibility
 //! - `read_selection`: read selected text (if any)
+//! - `read_title`: read session title (OSC 0/2)
 //! - `send_input`: write text to PTY (requires write consent)
-//! - `send_signal`: send signal to child process (SIGINT/SIGTERM/SIGHUP)
+//! - `send_signal`: send signal to child process (SIGINT/SIGTERM/SIGHUP/SIGQUIT)
 
 #![forbid(unsafe_code)]
 
@@ -31,7 +32,7 @@ use std::io::{BufRead, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use flume::{Receiver, Sender};
+use flume::Sender;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -416,6 +417,11 @@ impl McpServer {
                 Ok(json!({ "content": [{ "type": "text", "text": "wrote to PTY" }] }))
             }
             "send_signal" => {
+                if !self.write_consent {
+                    return Err(McpError::InvalidParams(
+                        "send_signal requires --mcp-allow-write consent flag".into(),
+                    ));
+                }
                 let sid = args
                     .get("session_id")
                     .and_then(|v| v.as_u64())
@@ -558,25 +564,6 @@ pub fn serve_unix(
         }
     }
     Ok(())
-}
-
-/// Channel bridge for in-process integration. The GUI side sends commands
-/// through `tx`; the MCP server reads through `rx`.
-pub fn channel_bridge(rx: Receiver<McpCommand>) {
-    while let Ok(cmd) = rx.recv() {
-        match cmd {
-            McpCommand::Read(req, reply) => {
-                let _ = reply.send(Err("no sessions connected".into()));
-                let _ = req;
-            }
-            McpCommand::Write { reply, .. } => {
-                let _ = reply.send(Err("write not supported in headless mode".into()));
-            }
-            McpCommand::Signal { reply, .. } => {
-                let _ = reply.send(Err("signal not supported in headless mode".into()));
-            }
-        }
-    }
 }
 
 #[cfg(test)]

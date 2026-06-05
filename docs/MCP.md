@@ -1,22 +1,22 @@
-# Torvox MCP Server
+<!-- AUDIT: 2026-06-02 — Verified 8 tools, 10 tests + 1 quickcheck (was claimed 11). All architecture claims accurate. -->
+# Torvox MCP 服务器
 
-Model Context Protocol (MCP) server for AI agent inspection of Torvox
-terminal sessions.
+Model Context Protocol (MCP) 服务器，用于 AI 代理检查 Torvox 终端会话。
 
-## Quick start
+## 快速开始
 
 ```bash
-# Build
+# 构建
 cargo build -p torvox-mcp --release
 
-# Start (read-only)
+# 启动（只读）
 ./target/release/torvox-mcp --socket /tmp/torvox-mcp.sock
 
-# Start with write permission (DANGEROUS — only when needed)
+# 启动并启用写入权限（危险 — 仅在需要时使用）
 ./target/release/torvox-mcp --socket /tmp/torvox-mcp.sock --mcp-allow-write
 ```
 
-## Test with Python
+## 使用 Python 测试
 
 ```python
 import socket, json
@@ -34,13 +34,13 @@ def call(req):
         buf += chunk
     return json.loads(buf.decode().split("\n")[0])
 
-# Initialize
+# 初始化
 print(call({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}))
 
-# List tools
+# 列出工具
 print(call({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}))
 
-# Call a tool
+# 调用工具
 print(call({
     "jsonrpc": "2.0",
     "id": 3,
@@ -52,66 +52,73 @@ print(call({
 }))
 ```
 
-## Available tools
+## 可用工具
 
-| Tool | Description | Required permission |
-|------|-------------|---------------------|
-| `list_sessions` | List all active terminal sessions | read |
-| `read_grid` | Read grid cells (text + attributes) | read |
-| `read_scrollback` | Read last N lines of scrollback | read |
-| `read_cursor` | Read cursor row, col, visibility | read |
-| `read_selection` | Read currently selected text | read |
-| `read_title` | Read session title (OSC 0/2) | read |
-| `send_input` | Write text to PTY | write (--mcp-allow-write) |
-| `send_signal` | Send signal to child process | write (--mcp-allow-write) |
+| 工具 | 描述 | 所需权限 |
+|------|------|----------|
+| `list_sessions` | 列出所有活动终端会话 | 读 |
+| `read_grid` | 读取网格单元格（文本 + 属性） | 读 |
+| `read_scrollback` | 读取最后 N 行回滚 | 读 |
+| `read_cursor` | 读取光标行、列、可见性 | 读 |
+| `read_selection` | 读取当前选中文本 | 读 |
+| `read_title` | 读取会话标题 (OSC 0/2) | 读 |
+| `send_input` | 向 PTY 写入文本 | 写 (`--mcp-allow-write`) |
+| `send_signal` | 向子进程发送信号 | 写 (`--mcp-allow-write`) |
 
-## Wire protocol
+## 线路协议
 
-JSON-RPC 2.0 over newline-delimited JSON. One JSON object per line.
+基于换行分隔 JSON 的 JSON-RPC 2.0。每行一个 JSON 对象。
 
 ```text
-client → server:  {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
-server → client:  {"jsonrpc":"2.0","id":1,"result":{...}}
+客户端 → 服务端:  {"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+服务端 → 客户端:  {"jsonrpc":"2.0","id":1,"result":{...}}
 
-client → server:  {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{...}}
-server → client:  {"jsonrpc":"2.0","id":2,"result":{...}}
+客户端 → 服务端:  {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{...}}
+服务端 → 客户端:  {"jsonrpc":"2.0","id":2,"result":{...}}
 ```
 
-Errors follow JSON-RPC 2.0 conventions with `code`, `message`, optional `data`.
+错误遵循 JSON-RPC 2.0 约定，包含 `code`、`message`、可选 `data`。
 
-## Security
-
-- The Unix socket is created with default permissions (0o755). All local users can connect.
-- Use `--mcp-allow-write` only when you need write tools (`send_input`, `send_signal`).
-- Never expose this socket to the network (it's a local IPC only).
-- For multi-user systems, restrict the socket directory permissions.
-
-## Architecture
+## 架构
 
 ```
 ┌─────────────┐
-│ AI Agent    │   Claude Code, Open Interpreter, etc.
+│ AI 代理     │   Claude Code, Open Interpreter 等
 └──────┬──────┘
        │ stdio / socket
        ▼
 ┌─────────────┐
-│ torvox-mcp  │   Independent process (JSON-RPC server)
+│ torvox-mcp  │   独立进程 (JSON-RPC 服务器)
 └──────┬──────┘
-       │ Unix socket (configurable path)
+       │ Unix 套接字（可配置路径）
        ▼
 ┌─────────────┐
-│  Torvox GUI │   Android (Kotlin) or desktop
-│  (process)  │   Owns actual sessions (PTY + terminal + parser)
+│  Torvox GUI │   Android (Kotlin) 或桌面端
+│  (进程)      │   持有实际会话 (PTY + 终端 + 解析器)
 └─────────────┘
 ```
 
-`torvox-mcp` does NOT own any terminal state. It relays requests to the GUI
-process, which has the actual `torvox-terminal::Session` instances.
+`torvox-mcp` **不**持有任何终端状态。它将请求中继到 GUI 进程，由 GUI 进程持有实际的 `torvox-terminal::Session` 实例。
 
-## Integration
+### 为什么是独立进程？
 
-In the GUI process, implement the `SessionStore` trait and pass an
-`Arc<dyn SessionStore>` to `torvox_mcp::serve_unix`:
+| 方案 | 拒绝/选择原因 |
+|------|-------------|
+| A. 集成在 GUI 进程中 | 增加主进程攻击面；MCP bug 影响终端；难复用 |
+| B. 共享库 (cdylib) + CLI 包装 | 桌面平台才需要；增加构建复杂度 |
+| **C. Unix 套接字 (选择)** | **进程隔离；桌面/Android 均适用；协议简单；易测试** |
+
+## 安全
+
+1. **写权限**: 双层验证 — 启动时 `--mcp-allow-write` flag (用户意图) + 运行时 `write_consent` 字段 (GUI 层)
+2. **套接字权限**: 默认 0o755，所有本地用户可连接。未来添加 `--socket-mode 0o600` 限制
+3. **无认证**: 假定本地用户已认证。未来可添加 `--auth-token` + challenge-response
+4. **无加密**: 本地 IPC，不需要 TLS
+5. **多用户系统**: 应限制套接字目录权限
+
+## 集成
+
+在 GUI 进程中，实现 `SessionStore` trait 并将 `Arc<dyn SessionStore>` 传递给 `torvox_mcp::serve_unix`：
 
 ```rust
 use torvox_mcp::{SessionStore, serve_unix};
@@ -120,13 +127,13 @@ struct MyStore { /* ... */ }
 
 impl SessionStore for MyStore {
     fn read(&self, req: ReadRequest) -> Result<ReadResponse, String> {
-        // translate to your session manager
+        // 转接到你的会话管理器
     }
     fn write(&self, session_id: u32, data: Vec<u8>) -> Result<(), String> {
-        // write to PTY
+        // 写入 PTY
     }
     fn signal(&self, session_id: u32, sig: SignalKind) -> Result<(), String> {
-        // send signal to child
+        // 向子进程发送信号
     }
 }
 
@@ -134,11 +141,22 @@ let store: Arc<dyn SessionStore> = Arc::new(MyStore { /* ... */ });
 serve_unix(socket_path, store, write_consent)?;
 ```
 
-## Testing
+## 未来扩展
+
+- `subscribe_*` 工具: 订阅 grid 变化流 (SSE 风格)
+- `eval_lua`/`eval_python`: 在终端上下文中执行脚本 (危险，需要更多同意层)
+- 跨设备: 通过 SSH 隧道暴露套接字 (用户明确)
+- 桌面专用: 启动 `torvox-mcp` 作为 system service (systemd / launchd)
+
+## 测试
 
 ```bash
 cargo test -p torvox-mcp
 ```
 
-11 unit tests cover: initialization, tool listing, write consent, error
-envelopes, Cell conversion, and serde roundtrip with quickcheck properties.
+10 个单元测试 + 1 个 quickcheck 属性测试覆盖：初始化、工具列表、写入同意、错误封装、Cell 转换，以及 serde 往返测试。
+
+## 相关规范
+
+- [Model Context Protocol 规范](https://modelcontextprotocol.io/)
+- JSON-RPC 2.0 规范

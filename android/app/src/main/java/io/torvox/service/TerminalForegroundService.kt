@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.IBinder
 import android.os.PowerManager
 import io.torvox.MainActivity
+import io.torvox.R
 
 class TerminalForegroundService : Service() {
     companion object {
@@ -79,7 +80,7 @@ class TerminalForegroundService : Service() {
                 .Builder(this, CHANNEL_ID)
                 .setContentTitle("Torvox")
                 .setContentText(text)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setSmallIcon(R.drawable.ic_notification)
                 .setOngoing(true)
                 .setContentIntent(pending)
                 .setCategory(Notification.CATEGORY_SERVICE)

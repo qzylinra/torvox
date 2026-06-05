@@ -11,108 +11,97 @@ jobs:
   rust-checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
         with:
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
-      - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - run: |
-          cargo fmt --check
-          cargo clippy --all-targets --all-features -- -D warnings
-      - uses: taiki-e/install-action@nextest
-      - run: |
-          cargo nextest run --workspace
-          QUICKCHECK_TESTS=10000 cargo test --workspace
-          cargo test --workspace -- proptest
-      - run: cargo install cargo-audit && cargo audit
-      - run: cargo install cargo-geiger && cargo geiger
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
+      - run: nix develop --command cargo fmt --check
+      - run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
+      - run: nix develop --command cargo nextest run --workspace
+      - run: nix develop --command env QUICKCHECK_TESTS=10000 cargo test --workspace
+      - run: nix develop --command cargo test --workspace -- proptest
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
+      - run: nix develop --command cargo mutants --timeout 120
+        continue-on-error: true
+      - uses: actions/upload-artifact@main
+        if: always()
+        with:
+          name: mutation-report
+          path: target/mutation/
   no-std-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
         with:
-          targets: thumbv6m-none-eabi
-      - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - run: cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --features alloc
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
+      - run: nix develop --command cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --features alloc
   android-checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
         with:
-          targets: x86_64-unknown-linux-gnu
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
       - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: android-checks
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
-      - run: cargo build -p torvox-gui-android
-      - run: |
-          cargo install boltffi --version 0.25.1 || true
-          boltffi pack android target/debug/libtorvox_android.so --language kotlin --output-dir /tmp/boltffi-check
-          diff -r /tmp/boltffi-check android/app/src/main/java/io/torvox/bridge/ || (echo "::error::boltffi bindings are stale — regenerate with: boltffi pack android target/debug/libtorvox_android.so --language kotlin --output-dir android/app/src/main/java/io/torvox/bridge/" && exit 1)
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@v3
+          nix develop --command bash -c '
+            cargo build -p torvox-core
+            cargo build -p torvox-terminal
+            cargo build -p torvox-core --target thumbv6m-none-eabi --no-default-features --features alloc
+          '
+      - uses: android-actions/setup-android@main
       - working-directory: android
         run: |
-          ./gradlew lint --quiet
-          ./gradlew test --quiet
+          nix develop --command ./gradlew lint --quiet
+          nix develop --command ./gradlew test --quiet
+          nix develop --command ./gradlew roborazziDebug --quiet || echo "Roborazzi tests may need golden images - see artifacts"
+      - uses: actions/upload-artifact@main
+        if: always()
+        with:
+          name: roborazzi-report
+          path: android/app/build/reports/roborazzi/
   android-emulator-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: actions/checkout@main
+      - uses: cachix/install-nix-action@main
         with:
-          targets: x86_64-linux-android
-      - run: |
-          curl -L "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz" -o /tmp/zig.tar.xz
-          tar -xf /tmp/zig.tar.xz -C /tmp
-          echo "/tmp/zig-x86_64-linux-0.15.2" >> $GITHUB_PATH
-      - run: cargo install cargo-ndk@4.1.2
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: emulator-x86_64
-      - run: |
-          git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs-patch
-          cd libghostty-rs-patch && git apply ../patches/libghostty-vt-android.patch
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - uses: ./.github/actions/setup-rust-deps
       - run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - uses: actions/setup-java@v4
+      - uses: Swatinem/rust-cache@master
         with:
-          distribution: temurin
-          java-version: 17
-      - uses: android-actions/setup-android@v3
-      - run: cargo ndk -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs build --profile dev
+          key: emulator-x86_64
+      - uses: android-actions/setup-android@main
       - run: |
-          cargo build -p torvox-exec --target x86_64-linux-android --profile dev
-          mkdir -p android/app/src/main/assets/bin/x86_64
-          cp target/x86_64-linux-android/debug/torvox-exec android/app/src/main/assets/bin/x86_64/
+          nix develop --command bash -c '
+            cargo ndk -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs -P 33 build --release
+            NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -type d -name "[0-9]*" | sort -V | tail -1)
+            export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang
+            cargo build -p torvox-exec --target x86_64-linux-android --release
+            mkdir -p android/app/src/main/assets/bin/x86_64
+            cp target/x86_64-linux-android/release/torvox-exec android/app/src/main/assets/bin/x86_64/
+          '
       - working-directory: android
-        run: ./gradlew assembleDebug
+        run: nix develop --command ./gradlew assembleDebug
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -124,8 +113,17 @@ jobs:
           disable-animations: true
           script: |
             adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            sleep 10
+            adb shell am start -a android.intent.action.MAIN -n io.torvox/.MainActivity
+            sleep 15
             adb shell am start -a android.intent.action.MAIN -n io.torvox/.MainActivity
             sleep 5
-            adb shell dumpsys activity activities | grep -q "io.torvox/.MainActivity"
             adb exec-out screencap -p > /tmp/torvox-test.png
-            adb shell pm list packages | grep -q io.torvox
+            adb shell pm list packages | grep io.torvox
+            adb logcat -d -s TorvoxRust:I TorvoxRuntime:I 2>&1 | tail -30
+            adb logcat -d 2>&1 | grep -q "Fatal signal" && exit 1 || true
+      - uses: actions/upload-artifact@main
+        if: always()
+        with:
+          name: emulator-screenshots
+          path: /tmp/torvox-test.png

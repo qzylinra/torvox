@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Torvox Icon v27
+  Source 70% FORM: Microsoft Codicon "terminal-tmux" (MIT)
+      https://github.com/microsoft/vscode-codicons — terminal-tmux.svg
+      A tiling split-pane terminal — fundamentally different from >_ prompt icons.
+      No other terminal emulator uses this tiling layout as icon.
+      Codicon source: 4 pane tiling (T-split), 16x16, monochrome.
+  Transform 30%: asymmetric 1:2 panes, bezier-arc dividers,
+      cyan edge glow, terminal content rows, cursor, border glow,
+      torvox palette. Form-morphed not recolored.
+  NOT ZSH | NOT Alacritty | NOT Kitty | NOT Ghostty | NOT WezTerm
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="500" android:viewportHeight="500">
+
+  <!-- BACKGROUND: torvox navy -->
+  <path android:pathData="M0,0 L500,0 L500,500 L0,500 Z"
+        android:fillColor="#FF060D18"/>
+
+  <!-- SOURCE (70%): outer tiling boundary — from terminal-tmux rect -->
+  <!-- Codicon: M2,2 to M14,14 (12x12 effective area, 75% of 16x16)
+       v27: M40,40 to M460,460 (420x420, 84% of 500x500, with 40px safe margin) -->
+  <path android:pathData="M40,40 L460,40 L460,460 L40,460 Z"
+        android:fillColor="#FF0D1B2A"
+        android:strokeColor="#FF22D3EE" android:strokeAlpha="0.45"
+        android:strokeWidth="3"/>
+
+  <!-- SOURCE: vertical divider (T-split center) — from terminal-tmux M8,1 H7 -->
+  <!-- Codicon: x=7.5 center vertical, v27: x=170 (34% from left, asymmetric 1:2) -->
+  <!-- TRANSFORM: straight line → curved path with glow -->
+  <path android:pathData="M170,40 C172,200 168,300 170,460"
+        android:strokeColor="#FF22D3EE" android:strokeAlpha="0.40"
+        android:strokeWidth="2.5"/>
+  <!-- Glow aura on divider -->
+  <path android:pathData="M168,40 C170,200 166,300 168,460"
+        android:strokeColor="#FF22D3EE" android:strokeAlpha="0.10"
+        android:strokeWidth="10"/>
+
+  <!-- SOURCE: horizontal divider on left pane — from terminal-tmux M8,7 V1 -->
+  <!-- Codicon: y=7 horizontal split in left pane, v27: y=230 (roughly center of left) -->
+  <!-- TRANSFORM: straight line → slight arc with glow -->
+  <path android:pathData="M40,230 C90,228 130,232 170,230"
+        android:strokeColor="#FF22D3EE" android:strokeAlpha="0.35"
+        android:strokeWidth="2"/>
+  <path android:pathData="M40,228 C90,226 130,230 170,228"
+        android:strokeColor="#FF22D3EE" android:strokeAlpha="0.08"
+        android:strokeWidth="8"/>
+
+  <!-- TRANSFORM: terminal content — left-top pane (3 rows) -->
+  <path android:pathData="M56,62 L152,62 L152,67 L56,67 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.52"/>
+  <path android:pathData="M56,76 L130,76 L130,81 L56,81 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.38"/>
+  <path android:pathData="M56,90 L148,90 L148,95 L56,95 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.26"/>
+
+  <!-- TRANSFORM: cursor in left-top pane -->
+  <path android:pathData="M56,108 L68,108 L68,120 L56,120 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.85"/>
+
+  <!-- TRANSFORM: terminal content — left-bottom pane (3 rows) -->
+  <path android:pathData="M56,252 L140,252 L140,257 L56,257 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.44"/>
+  <path android:pathData="M56,266 L120,266 L120,271 L56,271 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.32"/>
+  <path android:pathData="M56,280 L155,280 L155,285 L56,285 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.20"/>
+
+  <!-- TRANSFORM: terminal content — right pane (5 rows, dominant) -->
+  <path android:pathData="M186,62 L440,62 L440,67 L186,67 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.56"/>
+  <path android:pathData="M186,80 L380,80 L380,85 L186,85 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.42"/>
+  <path android:pathData="M186,98 L450,98 L450,103 L186,103 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.34"/>
+  <path android:pathData="M186,116 L280,116 L280,121 L186,121 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.24"/>
+  <path android:pathData="M186,134 L420,134 L420,139 L186,139 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.16"/>
+
+  <!-- TRANSFORM: cursor in right pane (active session) -->
+  <path android:pathData="M186,156 L200,156 L200,172 L186,172 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.90"/>
+
+  <!-- TRANSFORM: more rows in right pane (depth) -->
+  <path android:pathData="M186,190 L410,190 L410,195 L186,195 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.14"/>
+  <path android:pathData="M186,204 L300,204 L300,209 L186,209 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.10"/>
+  <path android:pathData="M186,218 L445,218 L445,223 L186,223 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.08"/>
+
+  <!-- TRANSFORM: bottom area in right pane (scrolling output) -->
+  <path android:pathData="M186,400 L370,400 L370,405 L186,405 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.18"/>
+  <path android:pathData="M186,414 L260,414 L260,419 L186,419 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.12"/>
+  <path android:pathData="M186,428 L400,428 L400,433 L186,433 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.08"/>
+
+  <!-- TRANSFORM: left-bottom pane content continuation -->
+  <path android:pathData="M56,300 L148,300 L148,305 L56,305 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.15"/>
+  <path android:pathData="M56,314 L100,314 L100,319 L56,319 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.10"/>
+  <path android:pathData="M56,328 L155,328 L155,333 L56,333 Z"
+        android:fillColor="#FF22D3EE" android:fillAlpha="0.06"/>
+
+  <!-- TRANSFORM: outer border glow (source has single rect, we add double glow) -->
+  <path android:pathData="M36,36 L464,36 L464,464 L36,464 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF22D3EE" android:strokeAlpha="0.12"
+        android:strokeWidth="1.5"/>
+  <path android:pathData="M44,44 L456,44 L456,456 L44,456 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FF22D3EE" android:strokeAlpha="0.08"
+        android:strokeWidth="1"/>
+
+</vector>

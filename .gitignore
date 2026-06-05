@@ -44,10 +44,19 @@ massif.out.*
 # Test results
 test-results/
 
+# Maestro test screenshots
+[0-9]*_*.png
+screenshot_*.png
+/tmp/torvox-test-screenshots/
+
+# Mutation testing artifacts
+mutants.out/
+mutants.out.old/
+
 # boltffi generated (由构建时生成)
 android/app/src/main/java/io/torvox/bridge/kotlin/
 
 # opencode (配置已版本控制, 忽略临时文件)
 .opencode/sessions/
 .opencode/cache/
-libghostty-rs-patch/
+libghostty-rs/

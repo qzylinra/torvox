@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum SelectionMode {
     #[default]
     Char,
@@ -10,12 +14,20 @@ pub enum SelectionMode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct SelectionAnchor {
     pub row: u32,
     pub col: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Selection {
     pub start: SelectionAnchor,
     pub end: SelectionAnchor,
@@ -137,5 +149,145 @@ mod tests {
         assert!(s.contains(4, 10));
         assert!(!s.contains(2, 4));
         assert!(!s.contains(3, 11));
+    }
+
+    #[test]
+    fn selection_mode_default_is_char() {
+        assert_eq!(SelectionMode::default(), SelectionMode::Char);
+    }
+
+    #[test]
+    fn selection_all_modes_distinct() {
+        assert_ne!(SelectionMode::Char, SelectionMode::Word);
+        assert_ne!(SelectionMode::Char, SelectionMode::Line);
+        assert_ne!(SelectionMode::Char, SelectionMode::Block);
+        assert_ne!(SelectionMode::Word, SelectionMode::Line);
+        assert_ne!(SelectionMode::Word, SelectionMode::Block);
+        assert_ne!(SelectionMode::Line, SelectionMode::Block);
+    }
+
+    #[test]
+    fn selection_word_mode_same_as_char() {
+        // 词模式使用与字符模式相同的包含逻辑
+        let s = Selection::new(
+            SelectionAnchor { row: 1, col: 2 },
+            SelectionAnchor { row: 3, col: 4 },
+            SelectionMode::Word,
+        );
+        assert!(s.contains(2, 0));
+        assert!(!s.contains(4, 0));
+    }
+
+    #[test]
+    fn selection_line_mode_full_row() {
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 50 },
+            SelectionAnchor { row: 0, col: 10 },
+            SelectionMode::Line,
+        );
+        let (lo, hi) = s.ordered();
+        assert_eq!(lo.row, 0);
+        assert_eq!(hi.row, 0);
+        assert!(s.contains(0, 0));
+        assert!(s.contains(0, 1000));
+    }
+
+    #[test]
+    fn selection_block_outside_rows() {
+        let s = Selection::new(
+            SelectionAnchor { row: 2, col: 5 },
+            SelectionAnchor { row: 4, col: 10 },
+            SelectionMode::Block,
+        );
+        assert!(!s.contains(1, 7));
+        assert!(!s.contains(5, 7));
+    }
+
+    #[test]
+    fn selection_block_inside_cols_outside_rows() {
+        let s = Selection::new(
+            SelectionAnchor { row: 2, col: 5 },
+            SelectionAnchor { row: 4, col: 10 },
+            SelectionMode::Block,
+        );
+        assert!(!s.contains(0, 7));
+        assert!(!s.contains(10, 7));
+    }
+
+    #[test]
+    fn selection_anchor_equality() {
+        let a = SelectionAnchor { row: 1, col: 2 };
+        let b = SelectionAnchor { row: 1, col: 2 };
+        assert_eq!(a, b);
+        let c = SelectionAnchor { row: 1, col: 3 };
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn selection_anchor_copy() {
+        let a = SelectionAnchor { row: 1, col: 2 };
+        let b = a;
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn selection_serde_json_roundtrip() {
+        let s = Selection::new(
+            SelectionAnchor { row: 1, col: 2 },
+            SelectionAnchor { row: 3, col: 4 },
+            SelectionMode::Line,
+        );
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Selection = serde_json::from_str(&json).unwrap();
+        assert_eq!(s, back);
+    }
+
+    #[test]
+    fn selection_ordered_when_start_equals_end() {
+        let s = Selection::new(
+            SelectionAnchor { row: 5, col: 5 },
+            SelectionAnchor { row: 5, col: 5 },
+            SelectionMode::Char,
+        );
+        assert!(s.is_ordered());
+        let (lo, hi) = s.ordered();
+        assert_eq!(lo, hi);
+    }
+
+    #[test]
+    fn selection_char_contains_single_cell() {
+        let s = Selection::new(
+            SelectionAnchor { row: 5, col: 5 },
+            SelectionAnchor { row: 5, col: 5 },
+            SelectionMode::Char,
+        );
+        assert!(s.contains(5, 5));
+        assert!(!s.contains(5, 4));
+        assert!(!s.contains(5, 6));
+    }
+
+    #[test]
+    fn selection_mode_serde() {
+        for mode in [
+            SelectionMode::Char,
+            SelectionMode::Word,
+            SelectionMode::Line,
+            SelectionMode::Block,
+        ] {
+            let json = serde_json::to_string(&mode).unwrap();
+            let back: SelectionMode = serde_json::from_str(&json).unwrap();
+            assert_eq!(mode, back);
+        }
+    }
+
+    #[test]
+    fn selection_is_ordered_just_equals_col() {
+        // same row, end col equal to start col
+        let s = Selection::new(
+            SelectionAnchor { row: 5, col: 10 },
+            SelectionAnchor { row: 5, col: 10 },
+            SelectionMode::Char,
+        );
+        assert!(s.is_ordered());
     }
 }
