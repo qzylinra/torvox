@@ -1,15 +1,28 @@
 //! torvox-mcp binary entry point.
 //!
-//! Usage:
-//!   torvox-mcp --socket /path/to/socket
-//!   torvox-mcp --socket /path/to/socket --mcp-allow-write
-//!
-//! Listens on a Unix domain socket for JSON-RPC 2.0 / MCP requests.
+//! Listens on a Unix domain socket for JSON-RPC 2.0 / MCP requests
+//! that allow AI agents to inspect Torvox terminal sessions.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use clap::Parser;
 use torvox_mcp::{SessionInfo, SessionStore, serve_unix};
+
+#[derive(Parser)]
+#[command(
+    name = "torvox-mcp",
+    about = "Model Context Protocol server for Torvox terminal sessions"
+)]
+struct Cli {
+    /// Unix domain socket path to listen on
+    #[arg(short, long)]
+    socket: PathBuf,
+
+    /// Allow send_input tool to write to terminal PTY (DANGEROUS)
+    #[arg(long)]
+    mcp_allow_write: bool,
+}
 
 struct NoOpStore;
 
@@ -26,46 +39,12 @@ impl SessionStore for NoOpStore {
 }
 
 fn main() -> std::process::ExitCode {
-    let mut socket_path: Option<PathBuf> = None;
-    let mut write_consent = false;
-
-    let mut args = std::env::args().skip(1);
-    while let Some(arg) = args.next() {
-        match arg.as_str() {
-            "--socket" | "-s" => {
-                socket_path = args.next().map(PathBuf::from);
-            }
-            "--mcp-allow-write" => {
-                write_consent = true;
-            }
-            "--help" | "-h" => {
-                eprintln!("torvox-mcp - Model Context Protocol server for Torvox");
-                eprintln!();
-                eprintln!("USAGE:");
-                eprintln!("  torvox-mcp --socket <path> [--mcp-allow-write]");
-                eprintln!();
-                eprintln!("OPTIONS:");
-                eprintln!("  --socket, -s <path>       Unix domain socket path to listen on");
-                eprintln!("  --mcp-allow-write         Allow send_input tool (DANGEROUS)");
-                eprintln!("  --help, -h                Show this help");
-                return std::process::ExitCode::SUCCESS;
-            }
-            other => {
-                eprintln!("unknown argument: {other}");
-                return std::process::ExitCode::from(2);
-            }
-        }
-    }
-
-    let Some(socket_path) = socket_path else {
-        eprintln!("ERROR: --socket <path> is required");
-        return std::process::ExitCode::from(2);
-    };
+    let cli = Cli::parse();
 
     let store: Arc<dyn SessionStore> = Arc::new(NoOpStore);
 
-    if let Err(e) = serve_unix(socket_path, store, write_consent) {
-        eprintln!("mcp: serve failed: {e}");
+    if let Err(error) = serve_unix(cli.socket, store, cli.mcp_allow_write) {
+        eprintln!("mcp: serve failed: {error}");
         return std::process::ExitCode::from(1);
     }
     std::process::ExitCode::SUCCESS

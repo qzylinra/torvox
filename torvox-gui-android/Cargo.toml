@@ -3,7 +3,6 @@ name = "torvox-gui-android"
 version.workspace = true
 edition.workspace = true
 description = "Android BoltFFI bridge for Torvox terminal UI"
-license.workspace = true
 
 [lib]
 name = "torvox_android"
@@ -19,3 +18,13 @@ thiserror = { workspace = true }
 
 log = { workspace = true }
 android_logger = "0.15"
+
+[dev-dependencies]
+proptest = { workspace = true }
+arbitrary = { workspace = true }
+wgpu = { workspace = true, features = ["noop"] }
+futures = { workspace = true }
+bytemuck = { workspace = true }
+
+[lints]
+workspace = true

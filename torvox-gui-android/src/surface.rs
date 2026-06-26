@@ -1,43 +1,31 @@
+// @AndroidSurface rendering, IMPL_ANDR_002, impl, [REQ_ANDR_002]
+// @need-ids: REQ_ANDR_002
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use thiserror::Error;
 use torvox_core::line::Line;
 use torvox_renderer::font::FontPipeline;
 use torvox_renderer::gpu::GpuContext;
+use torvox_renderer::gpu::SelectionRange;
 use torvox_terminal::ghostty_terminal::{CellSnapshot, GhosttyTerminal};
 use torvox_terminal::session::Session;
-
-// ANativeWindow NDK API for software rendering
-#[cfg(target_os = "android")]
-#[repr(C)]
-struct NativeBuffer {
-    width: i32,
-    height: i32,
-    stride: i32,
-    format: i32,
-    bits: *mut std::ffi::c_void,
-    reserved: [u32; 6],
-}
+use torvox_terminal::shell_env::ShellEnv;
 
 #[cfg(target_os = "android")]
 #[link(name = "android")]
 unsafe extern "C" {
-    fn ANativeWindow_lock(
-        window: *mut std::ffi::c_void,
-        buffer: *mut NativeBuffer,
-        dirty: *const std::ffi::c_void,
-    ) -> i32;
-    fn ANativeWindow_unlockAndPost(window: *mut std::ffi::c_void) -> i32;
-    fn ANativeWindow_getWidth(window: *mut std::ffi::c_void) -> i32;
-    fn ANativeWindow_getHeight(window: *mut std::ffi::c_void) -> i32;
+    fn ANativeWindow_release(window: *mut std::ffi::c_void);
     fn ANativeWindow_setBuffersGeometry(
         window: *mut std::ffi::c_void,
         width: i32,
         height: i32,
         format: i32,
     ) -> i32;
+    fn ATrace_beginSection(section_name: *const std::os::raw::c_char);
+    fn ATrace_endSection();
 }
 
 #[derive(Debug, Error)]
@@ -48,10 +36,18 @@ pub enum SurfaceError {
     SurfaceCreation(String),
     #[error("No surface available")]
     NoSurface,
+    #[error("No active session")]
+    NoSession,
     #[error("Render error: {0}")]
     Render(String),
     #[error("session error: {0}")]
     Session(String),
+}
+
+impl From<torvox_renderer::gpu::GpuError> for SurfaceError {
+    fn from(e: torvox_renderer::gpu::GpuError) -> Self {
+        SurfaceError::Render(e.to_string())
+    }
 }
 
 /// Wrap `NonNull<c_void>` for `Send + Sync` (ANativeWindow pointer is thread-safe on Android).
@@ -61,7 +57,8 @@ unsafe impl Send for NativeWindow {}
 unsafe impl Sync for NativeWindow {}
 
 pub struct AndroidSurface {
-    gpu: GpuContext,
+    #[allow(dead_code)]
+    gpu: Option<GpuContext>,
     font_pipeline: FontPipeline,
     session: Option<Session>,
     atlas_width: u32,
@@ -77,6 +74,9 @@ pub struct AndroidSurface {
     surface_width: u32,
     surface_height: u32,
     native_window: Option<NativeWindow>,
+    frame_count: u64,
+    title: String,
+    selection: Option<SelectionRange>,
 }
 
 fn cell_to_line(cells: &[CellSnapshot], cols: u32) -> Line {
@@ -120,13 +120,14 @@ fn to_u8(v: f32) -> u8 {
 }
 
 impl AndroidSurface {
-    pub fn new(rows: u32, cols: u32, _scrollback_lines: u32) -> Self {
+    pub fn new(rows: u32, cols: u32, _scrollback_lines: u32, font_size: f32) -> Self {
         let atlas_width = 2048;
         let atlas_height = 2048;
-        let font_pipeline = FontPipeline::new(atlas_width as i32, atlas_height as i32, 14.0);
+        let font_pipeline = FontPipeline::new(atlas_width as i32, atlas_height as i32, font_size);
 
+        let gpu = Some(GpuContext::new_with_no_surface());
         Self {
-            gpu: GpuContext::new_with_no_surface(),
+            gpu,
             font_pipeline,
             session: None,
             atlas_width,
@@ -142,6 +143,9 @@ impl AndroidSurface {
             surface_width: 0,
             surface_height: 0,
             native_window: None,
+            frame_count: 0,
+            title: String::new(),
+            selection: None,
         }
     }
 
@@ -149,12 +153,86 @@ impl AndroidSurface {
         self.save_path = Some(PathBuf::from(path));
     }
 
-    pub fn spawn_session(&mut self, shell: &str) -> Result<(), SurfaceError> {
+    pub fn spawn_session(&mut self, shell: &str, env: &ShellEnv) -> Result<(), SurfaceError> {
         let (bg, fg) = (self.theme.bg, self.theme.fg);
-        let session = Session::spawn_with_theme(shell, self.rows, self.cols, bg, fg)
+        let ansi = self.theme.ansi;
+        let session = Session::spawn_with_theme(shell, self.rows, self.cols, env, bg, fg, ansi)
             .map_err(|e| SurfaceError::Session(e.to_string()))?;
         self.exited = session.exited_flag().clone();
         self.session = Some(session);
+        if let Some(session) = &mut self.session {
+            session.set_pixel_size(
+                (self.surface_width as u16).min(4096),
+                (self.surface_height as u16).min(4096),
+            );
+        }
+
+        #[cfg(target_os = "android")]
+        unsafe {
+            ATrace_endSection();
+        }
+        Ok(())
+    }
+    pub fn update_native_window(
+        &mut self,
+        window_ptr: *mut std::ffi::c_void,
+        width: u32,
+        height: u32,
+    ) -> Result<(), SurfaceError> {
+        let pointer_changed = self
+            .native_window
+            .as_ref()
+            .map(|nw| nw.0.as_ptr() != window_ptr)
+            .unwrap_or(true);
+        log::info!(
+            "UPDATE_NATIVE_WINDOW: ptr={:#x} {}x{} pointer_changed={}",
+            window_ptr as usize,
+            width,
+            height,
+            pointer_changed,
+        );
+        self.native_window = std::ptr::NonNull::new(window_ptr).map(NativeWindow);
+        self.surface_width = width;
+        self.surface_height = height;
+        // Set ANativeWindow buffer format for wgpu swapchain.
+        // Must use RGBA_8888 (format=1).
+        #[cfg(target_os = "android")]
+        if let Some(nw) = self.native_window.as_ref() {
+            let result = unsafe {
+                ANativeWindow_setBuffersGeometry(
+                    nw.0.as_ptr(),
+                    width as i32,
+                    height as i32,
+                    1, // WINDOW_FORMAT_RGBA_8888
+                )
+            };
+            if result != 0 {
+                log::error!("ANativeWindow_setBuffersGeometry failed: {}", result);
+            }
+        }
+        // Reconfigure or recreate the wgpu surface.
+        // When the ANativeWindow changes (surface destroy/recreate), we must
+        // recreate the wgpu Surface from the new window pointer. A plain
+        // reconfigure on the old (stale) surface produces no visible output.
+        // Also recreate when has_surface() is false (release_gpu_surface was called
+        // to release the ANativeWindow for another bridge to use).
+        #[cfg(target_os = "android")]
+        if let Some(gpu) = &mut self.gpu {
+            if pointer_changed || !gpu.has_surface() {
+                gpu.configure_android_surface(window_ptr, width.max(1), height.max(1))
+                    .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
+            } else {
+                gpu.reconfigure_swapchain(width.max(1), height.max(1));
+            }
+        }
+        // Desktop: always recreate the surface from the new native window pointer.
+        #[cfg(not(target_os = "android"))]
+        if let Some(gpu) = &mut self.gpu {
+            let ptr = window_ptr;
+            gpu.configure_android_surface(ptr, width.max(1), height.max(1))
+                .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
+        }
+        self.recompute_grid(width.max(1), height.max(1));
         Ok(())
     }
 
@@ -163,13 +241,26 @@ impl AndroidSurface {
         window_ptr: *mut std::ffi::c_void,
         width: u32,
         height: u32,
+        font_size_tenths: u32,
     ) -> Result<(), SurfaceError> {
         self.native_window = std::ptr::NonNull::new(window_ptr).map(NativeWindow);
         self.surface_width = width;
         self.surface_height = height;
 
-        // Compute font size to fill surface with the terminal grid
-        let font_size = ((width as f32 / self.cols as f32) * 1.6).max(24.0);
+        // Use configured font size, fall back to geometry-based calc
+        let font_size = if font_size_tenths > 0 {
+            font_size_tenths as f32 / 10.0
+        } else {
+            ((width as f32 / self.cols as f32) * 1.6).max(24.0)
+        };
+
+        log::info!(
+            "SET_FONT_SIZE: font_size_tenths={} font_size={} self.rows={} self.cols={}",
+            font_size_tenths,
+            font_size,
+            self.rows,
+            self.cols,
+        );
 
         self.font_pipeline =
             FontPipeline::new(self.atlas_width as i32, self.atlas_height as i32, font_size);
@@ -177,11 +268,39 @@ impl AndroidSurface {
         let (_aw, _ah) = self.font_pipeline.atlas_dimensions();
         let (cw, ch) = self.font_pipeline.cell_metrics();
 
+        log::info!(
+            "CELL_METRICS: cw={} ch={} (sw={} sh={}) recomputed_cols={} recomputed_rows={}",
+            cw,
+            ch,
+            width,
+            height,
+            (width as f32 / cw).floor(),
+            (height as f32 / ch).floor().clamp(5.0, 200.0),
+        );
+
         // Compute grid dimensions to fill the surface
         let cols = (width as f32 / cw).floor().clamp(20.0, 300.0) as u32;
         let rows = (height as f32 / ch).floor().clamp(5.0, 200.0) as u32;
         self.rows = rows;
         self.cols = cols;
+
+        // Pre-configure ANativeWindow buffer geometry for blit path.
+        // Must use RGBA_8888 (format=1) — ANativeWindow_lock legacy API
+        // does not support AHARDWAREBUFFER formats (format=2+).
+        #[cfg(target_os = "android")]
+        if let Some(nw) = self.native_window.as_ref() {
+            let result = unsafe {
+                ANativeWindow_setBuffersGeometry(
+                    nw.0.as_ptr(),
+                    width as i32,
+                    height as i32,
+                    1, // WINDOW_FORMAT_RGBA_8888
+                )
+            };
+            if result != 0 {
+                log::error!("ANativeWindow_setBuffersGeometry failed: {}", result);
+            }
+        }
 
         log::info!(
             "SURFACE_SET_NATIVE_WINDOW: grid={}x{} surface={}x{}",
@@ -191,63 +310,103 @@ impl AndroidSurface {
             height,
         );
 
-        #[cfg(not(target_os = "android"))]
-        {
-            // Desktop: use wgpu GPU rendering
-            self.gpu
-                .set_surface_from_native_window(window_ptr, width, height)
-                .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
-        }
+        let needs_init = self
+            .gpu
+            .as_ref()
+            .is_none_or(|g| !g.has_pipeline() || !g.has_surface());
 
-        let (aw, ah) = self.font_pipeline.atlas_dimensions();
-        let (cw, ch) = self.font_pipeline.cell_metrics();
-        log::info!(
-            "SURFACE_CELL_METRICS: font_size={} cell={:.1}x{:.1} grid={}x{} surface={}x{} atlas={}x{}",
-            font_size,
-            cw,
-            ch,
-            rows,
-            cols,
-            width,
-            height,
-            aw,
-            ah,
-        );
+        if needs_init {
+            let (aw, ah) = self.font_pipeline.atlas_dimensions();
+            let (cw, ch) = self.font_pipeline.cell_metrics();
+            log::info!(
+                "SURFACE_CELL_METRICS: font_size={} cell={:.1}x{:.1} grid={}x{} surface={}x{} atlas={}x{}",
+                font_size,
+                cw,
+                ch,
+                rows,
+                cols,
+                width,
+                height,
+                aw,
+                ah,
+            );
 
-        #[cfg(not(target_os = "android"))]
-        {
-            self.gpu.create_atlas_texture(aw, ah);
-            let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
-            self.gpu.upload_atlas(&atlas_data, aw, ah);
-            self.gpu.update_bind_group(aw as f32, ah as f32, cw, ch);
+            #[cfg(not(target_os = "android"))]
+            {
+                let gpu = self.gpu.as_mut().unwrap();
+                gpu.set_surface_from_native_window(window_ptr, width, height, true)
+                    .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
+                let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
+                gpu.create_atlas_texture(aw, ah);
+                gpu.upload_atlas(&atlas_data, aw, ah);
+                gpu.update_bind_group(aw as f32, ah as f32);
+            }
+
+            // Android: no-surface path uses device-only pipeline.
+            // Swapchain path creates wgpu Surface from ANativeWindow
+            // for Vulkan/GLES presentation.
+            #[cfg(target_os = "android")]
+            {
+                let gpu = self.gpu.as_mut().unwrap();
+                let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
+                if !window_ptr.is_null() {
+                    // Create swapchain surface for GPU presentation
+                    gpu.configure_android_surface(window_ptr, width, height)
+                        .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
+                }
+                gpu.init_pipeline_and_bind_group(aw, ah, width, height);
+                gpu.upload_atlas(&atlas_data, aw, ah);
+            }
         }
 
         Ok(())
     }
 
     pub fn render(&mut self) -> Result<(), SurfaceError> {
+        let frame_start = Instant::now();
+        #[cfg(target_os = "android")]
+        unsafe {
+            ATrace_beginSection(c"AndroidSurface::render".as_ptr());
+        }
+        log::trace!(
+            "RENDER_ENTER: session={} sw={} sh={} native={}",
+            self.session.is_some(),
+            self.surface_width,
+            self.surface_height,
+            self.native_window.is_some(),
+        );
+
         if let Some(session) = &mut self.session {
             session.process_output();
+        }
+
+        #[cfg(target_os = "android")]
+        unsafe {
+            ATrace_beginSection(c"snapshot+instances".as_ptr());
         }
 
         let snapshot = self
             .session
             .as_ref()
-            .map(|s| s.terminal().take_snapshot())
+            .map(|s| s.terminal())
+            .map(|t| t.take_snapshot())
             .ok_or(SurfaceError::NoSurface)?;
 
         if let (Some(row), Some(col)) = (self.mouse_row, self.mouse_col) {
             self.last_hovered_url = snapshot.uri_at(row, col).map(String::from);
         }
 
-        // Always rasterize glyphs so the atlas is populated for software rendering
+        // Always rasterize glyphs so the atlas is populated for GPU rendering
         let gen_before = self.font_pipeline.atlas_generation();
+        let cursor_color = Some([1.0, 1.0, 1.0, 1.0]);
         let instances = torvox_renderer::gpu::build_cell_instances_from_snapshot(
             &snapshot,
             &mut self.font_pipeline,
             self.atlas_width as f32,
             self.atlas_height as f32,
             None,
+            self.selection,
+            cursor_color,
         );
         let gen_after = self.font_pipeline.atlas_generation();
         if gen_after > gen_before {
@@ -259,204 +418,174 @@ impl AndroidSurface {
                 gen_after,
                 non_zero,
             );
-            #[cfg(not(target_os = "android"))]
-            self.gpu
-                .upload_atlas(&atlas_data, self.atlas_width, self.atlas_height);
+            self.gpu.as_mut().unwrap().upload_atlas(
+                &atlas_data,
+                self.atlas_width,
+                self.atlas_height,
+            );
         }
 
         #[cfg(target_os = "android")]
-        {
-            // Android: software rendering via ANativeWindow_lock
-            // wgpu Fifo present mode blocks ~37s on SwiftShader emulator.
-            drop(instances);
-            self.render_software_with_snapshot(&snapshot)
+        unsafe {
+            ATrace_endSection(); // snapshot+instances
+            ATrace_beginSection(c"swapchain_present".as_ptr());
         }
 
+        if !instances.is_empty() {
+            let first = &instances[0];
+            log::info!(
+                "RENDER_INSTANCES: count={} first_cell=({:.0},{:.0}) bg=({},{},{}) fg=({},{},{}) flags={:.0} uv_size=({:.4},{:.4}) bearing=({:.1},{:.1}) advance_width={:.1}",
+                instances.len(),
+                first.quad_origin[0],
+                first.quad_origin[1],
+                (first.bg_color[0] * 255.0) as u8,
+                (first.bg_color[1] * 255.0) as u8,
+                (first.bg_color[2] * 255.0) as u8,
+                (first.fg_color[0] * 255.0) as u8,
+                (first.fg_color[1] * 255.0) as u8,
+                (first.fg_color[2] * 255.0) as u8,
+                first.flags,
+                first.atlas_size[0],
+                first.atlas_size[1],
+                first.bearing[0],
+                first.bearing[1],
+                first.glyph_advance_width,
+            );
+        } else {
+            log::warn!("RENDER_INSTANCES: ZERO instances — nothing to render!");
+        }
+
+        self.frame_count += 1;
+        if self.frame_count.is_multiple_of(60)
+            && let Some(session) = &mut self.session
+        {
+            self.title = session.terminal().title();
+        }
+
+        // Desktop: direct wgpu swapchain presentation.
         #[cfg(not(target_os = "android"))]
         {
-            log::trace!(
-                "SURFACE_RENDER: snapshot={}x{} instances={}",
-                snapshot.cols,
-                snapshot.rows,
-                instances.len(),
-            );
-            self.gpu
-                .render_frame(&instances)
-                .map_err(|e| SurfaceError::Render(e.to_string()))
-        }
-    }
-
-    #[cfg(target_os = "android")]
-    fn render_software_with_snapshot(
-        &mut self,
-        snapshot: &torvox_terminal::ghostty_terminal::GridSnapshot,
-    ) -> Result<(), SurfaceError> {
-        let window_ptr = self
-            .native_window
-            .as_ref()
-            .map(|p| p.0.as_ptr())
-            .ok_or(SurfaceError::NoSurface)?;
-
-        let w = self.surface_width as i32;
-        let h = self.surface_height as i32;
-
-        unsafe {
-            ANativeWindow_setBuffersGeometry(window_ptr, w, h, 1);
+            let gpu = self.gpu.as_mut().unwrap();
+            if let Err(e) = gpu.render_frame(&instances) {
+                log::error!("RENDER_FRAME_FAILED: {}", e);
+                return Err(SurfaceError::Render(e.to_string()));
+            }
         }
 
-        let mut buffer = NativeBuffer {
-            width: 0,
-            height: 0,
-            stride: 0,
-            format: 0,
-            bits: std::ptr::null_mut(),
-            reserved: [0; 6],
-        };
-
-        let result = unsafe { ANativeWindow_lock(window_ptr, &mut buffer, std::ptr::null()) };
-        if result != 0 {
-            log::error!("ANativeWindow_lock failed: {}", result);
-            return Err(SurfaceError::Render(format!("lock failed: {}", result)));
-        }
-
-        let bw = buffer.width as usize;
-        let bh = buffer.height as usize;
-        let stride = buffer.stride as usize;
-        let bits = buffer.bits as *mut u8;
-
-        if bits.is_null() || bw == 0 || bh == 0 {
-            unsafe { ANativeWindow_unlockAndPost(window_ptr) };
-            return Err(SurfaceError::Render("invalid buffer".to_string()));
-        }
-
-        let cells_w = self.cols as usize;
-        let cells_h = self.rows as usize;
-        let cell_w = bw / cells_w.max(1);
-        let cell_h = bh / cells_h.max(1);
-
-        let atlas_bitmap = self.font_pipeline.atlas_bitmap().to_vec();
-        let (atlas_w, atlas_h) = self.font_pipeline.atlas_dimensions();
-        let atlas_w = atlas_w as usize;
-        let atlas_h = atlas_h as usize;
-
-        for row in 0..cells_h {
-            for col in 0..cells_w {
-                let idx = (row * cells_w + col).min(snapshot.cells.len() - 1);
-                let cell = &snapshot.cells[idx];
-
-                let px = col * cell_w;
-                let py = row * cell_h;
-
-                let bg_r = to_u8(cell.bg[0]);
-                let bg_g = to_u8(cell.bg[1]);
-                let bg_b = to_u8(cell.bg[2]);
-
-                for cy in py..(py + cell_h).min(bh) {
-                    let row_start = cy * stride;
-                    for cx in px..(px + cell_w).min(bw) {
-                        let p = row_start + cx * 4;
-                        unsafe {
-                            *bits.add(p) = bg_r;
-                            *bits.add(p + 1) = bg_g;
-                            *bits.add(p + 2) = bg_b;
-                            *bits.add(p + 3) = 255;
-                        }
-                    }
-                }
-
-                if cell.codepoint != 0 && cell.codepoint != 0x20 {
-                    let ch = char::from_u32(cell.codepoint).unwrap_or('\u{FFFD}');
-                    if let Some(info) = self.font_pipeline.glyph_info(ch) {
-                        if info.width > 0 && info.height > 0 {
-                            let fg_r = to_u8(cell.fg[0]);
-                            let fg_g = to_u8(cell.fg[1]);
-                            let fg_b = to_u8(cell.fg[2]);
-
-                            let gly_x = info.atlas_x as usize;
-                            let gly_y = info.atlas_y as usize;
-                            let gly_w = info.width as usize;
-                            let gly_h = info.height as usize;
-
-                            let off_x = (cell_w.saturating_sub(gly_w)) / 2;
-                            let off_y = (cell_h.saturating_sub(gly_h)) / 2;
-
-                            for gy in 0..gly_h {
-                                let dst_y = py + off_y + gy;
-                                if dst_y >= bh {
-                                    break;
-                                }
-                                for gx in 0..gly_w {
-                                    let dst_x = px + off_x + gx;
-                                    if dst_x >= bw {
-                                        break;
-                                    }
-                                    let atlas_idx = (gly_y + gy) * atlas_w * 4 + (gly_x + gx) * 4;
-                                    let alpha = if atlas_idx + 3 < atlas_bitmap.len() {
-                                        atlas_bitmap[atlas_idx + 3]
-                                    } else {
-                                        0
-                                    };
-                                    if alpha == 0 {
-                                        continue;
-                                    }
-                                    let p = dst_y * stride + dst_x * 4;
-                                    let blend = |bg: u8, fg: u8, a: u8| -> u8 {
-                                        ((bg as u16 * (255 - a as u16) + fg as u16 * a as u16)
-                                            / 255) as u8
-                                    };
-                                    unsafe {
-                                        let eb = *bits.add(p);
-                                        let eg = *bits.add(p + 1);
-                                        let er = *bits.add(p + 2);
-                                        *bits.add(p) = blend(eb, fg_r, alpha);
-                                        *bits.add(p + 1) = blend(eg, fg_g, alpha);
-                                        *bits.add(p + 2) = blend(er, fg_b, alpha);
-                                    }
-                                }
-                            }
-                        }
-                    }
+        // Android: wgpu Vulkan swapchain — sole render path.
+        // No CPU software fallback. If swapchain fails, the error is logged.
+        #[cfg(target_os = "android")]
+        {
+            if self.poll_sync_active() {
+                log::trace!("sync active — skipping GPU frame");
+                unsafe {
+                    ATrace_endSection();
+                } // swapchain_present
+                unsafe {
+                    ATrace_endSection();
+                } // AndroidSurface::render
+                return Ok(());
+            }
+            let gpu = self.gpu.as_mut().unwrap();
+            if gpu.has_surface() {
+                if let Err(e) = gpu.render_frame(&instances) {
+                    log::error!("SWAPCHAIN_FAILED: {}", e);
                 }
             }
         }
 
-        unsafe { ANativeWindow_unlockAndPost(window_ptr) };
+        #[cfg(target_os = "android")]
+        unsafe {
+            ATrace_endSection(); // swapchain_present
+        }
+
+        let elapsed = frame_start.elapsed();
+        let ms = elapsed.as_secs_f64() * 1000.0;
+        if ms >= 16.0 {
+            log::warn!("RENDER_SLOW: {:.1}ms (≥16ms target)", ms);
+        } else {
+            log::trace!("RENDER_OK: {:.1}ms", ms);
+        }
+
         Ok(())
     }
 
-    #[cfg(target_os = "android")]
-    pub fn render_software(&mut self) -> Result<(), SurfaceError> {
+    /// Render a single test frame to an offscreen GPU buffer and write raw RGBA
+    /// data to `{data_dir}/test_frame.rgba`. Returns the file path on success.
+    /// This is a test-only path — NOT used for display.
+    pub fn save_test_frame(&mut self, data_dir: &str) -> Result<String, SurfaceError> {
         let snapshot = self
             .session
             .as_ref()
-            .map(|s| s.terminal().take_snapshot())
+            .map(|s| s.terminal())
+            .map(|t| t.take_snapshot())
             .ok_or(SurfaceError::NoSurface)?;
-        self.render_software_with_snapshot(&snapshot)
+        let cursor_color = Some([1.0, 1.0, 1.0, 1.0]);
+        let instances = torvox_renderer::gpu::build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut self.font_pipeline,
+            self.atlas_width as f32,
+            self.atlas_height as f32,
+            None,
+            self.selection,
+            cursor_color,
+        );
+        let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
+        let gpu = self.gpu.as_mut().unwrap();
+        gpu.upload_atlas(&atlas_data, self.atlas_width, self.atlas_height);
+        let pixels = gpu
+            .render_to_buffer(&instances)
+            .map_err(|e| SurfaceError::Render(e.to_string()))?;
+        let path = format!("{}/test_frame.rgba", data_dir);
+        std::fs::write(&path, &pixels).map_err(|e| SurfaceError::Render(e.to_string()))?;
+        log::info!("SAVED_TEST_FRAME: {} ({} bytes)", path, pixels.len());
+        Ok(path)
     }
 
-    #[cfg(not(target_os = "android"))]
-    pub fn render_software(&mut self) -> Result<(), SurfaceError> {
-        Err(SurfaceError::Render(
-            "software rendering not available".to_string(),
-        ))
-    }
-
-    pub fn terminal(&self) -> &GhosttyTerminal {
+    pub fn terminal(&self) -> Result<&GhosttyTerminal, SurfaceError> {
         self.session
             .as_ref()
             .map(|s| s.terminal())
-            .expect("no session")
+            .ok_or(SurfaceError::NoSession)
     }
 
-    pub fn terminal_mut(&mut self) -> &mut GhosttyTerminal {
+    pub fn terminal_mut(&mut self) -> Result<&mut GhosttyTerminal, SurfaceError> {
         self.session
             .as_mut()
             .map(|s| s.terminal_mut())
-            .expect("no session")
+            .ok_or(SurfaceError::NoSession)
     }
 
     pub fn font_pipeline(&self) -> &FontPipeline {
         &self.font_pipeline
+    }
+
+    pub fn recompute_grid(&mut self, width: u32, height: u32) {
+        let (cw, ch) = self.font_pipeline.cell_metrics();
+        let new_cols = (width as f32 / cw).floor().clamp(20.0, 300.0) as u32;
+        let new_rows = (height as f32 / ch).floor().clamp(5.0, 200.0) as u32;
+
+        if width != self.surface_width || height != self.surface_height {
+            self.surface_width = width;
+            self.surface_height = height;
+        }
+
+        if new_cols != self.cols || new_rows != self.rows {
+            log::info!(
+                "RECOMPUTE_GRID: {}x{} -> {}x{} (cell={:.1}x{:.1})",
+                self.rows,
+                self.cols,
+                new_rows,
+                new_cols,
+                cw,
+                ch,
+            );
+            self.rows = new_rows;
+            self.cols = new_cols;
+            if let Some(session) = &mut self.session {
+                let _ = session.resize(new_rows, new_cols);
+            }
+        }
     }
 
     pub fn resize(&mut self, rows: u32, cols: u32) {
@@ -483,19 +612,66 @@ impl AndroidSurface {
         self.exited.load(Ordering::Acquire)
     }
 
+    pub fn poll_bel(&mut self) -> bool {
+        self.session.as_mut().map(|s| s.poll_bel()).unwrap_or(false)
+    }
+
+    pub fn poll_clipboard(&mut self) -> Option<String> {
+        self.session.as_mut().and_then(|s| s.poll_clipboard())
+    }
+
+    pub fn poll_notification(&mut self) -> Option<(String, String)> {
+        self.session.as_mut().and_then(|s| s.poll_notification())
+    }
+
+    pub fn poll_sync_active(&mut self) -> bool {
+        self.session
+            .as_ref()
+            .map(|s| s.mode_get(2026, 0))
+            .unwrap_or(false)
+    }
+
+    pub fn poll_shell_integration(&mut self) -> u8 {
+        self.session
+            .as_mut()
+            .map(|s| s.poll_shell_integration() as u8)
+            .unwrap_or(0)
+    }
+
+    pub fn cwd(&self) -> String {
+        self.session.as_ref().map(|s| s.cwd()).unwrap_or_default()
+    }
+
+    pub fn focus_event(&mut self, focused: bool) {
+        if let Some(s) = self.session.as_mut() {
+            s.focus_event(focused);
+        }
+    }
+
     pub fn has_session(&self) -> bool {
         self.session.is_some()
     }
 
+    pub fn release_gpu_surface(&mut self) {
+        if let Some(gpu) = &mut self.gpu {
+            gpu.release_gpu_surface();
+        }
+    }
+
     pub fn set_font_size(&mut self, size: f32) {
+        if (self.font_pipeline.font_size() - size).abs() < 0.001 {
+            return;
+        }
         self.font_pipeline =
             FontPipeline::new(self.atlas_width as i32, self.atlas_height as i32, size);
         self.font_pipeline.rasterize_ascii();
         let (aw, ah) = self.font_pipeline.atlas_dimensions();
         let (cw, ch) = self.font_pipeline.cell_metrics();
-        self.gpu.update_bind_group(aw as f32, ah as f32, cw, ch);
-        let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
-        self.gpu.upload_atlas(&atlas_data, aw, ah);
+        if let Some(gpu) = &mut self.gpu {
+            gpu.update_bind_group(aw as f32, ah as f32);
+            let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
+            gpu.upload_atlas(&atlas_data, aw, ah);
+        }
 
         // Recalculate grid dimensions to match new cell size
         if self.surface_width > 0 && self.surface_height > 0 {
@@ -524,9 +700,28 @@ impl AndroidSurface {
         self.font_pipeline.rasterize_ascii();
         let (aw, ah) = self.font_pipeline.atlas_dimensions();
         let (cw, ch) = self.font_pipeline.cell_metrics();
-        self.gpu.update_bind_group(aw as f32, ah as f32, cw, ch);
-        let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
-        self.gpu.upload_atlas(&atlas_data, aw, ah);
+        if let Some(gpu) = &mut self.gpu {
+            gpu.update_bind_group(aw as f32, ah as f32);
+            let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
+            gpu.upload_atlas(&atlas_data, aw, ah);
+        }
+        if self.surface_width > 0 && self.surface_height > 0 {
+            let new_cols = (self.surface_width as f32 / cw).floor().clamp(20.0, 300.0) as u32;
+            let new_rows = (self.surface_height as f32 / ch).floor().clamp(5.0, 200.0) as u32;
+            self.cols = new_cols;
+            self.rows = new_rows;
+            if let Some(session) = &mut self.session {
+                let _ = session.resize(new_rows, new_cols);
+            }
+            log::info!(
+                "set_font_family: family='{}' cells={:.1}x{:.1} grid={}x{}",
+                family_name,
+                cw,
+                ch,
+                new_rows,
+                new_cols,
+            );
+        }
         true
     }
 
@@ -539,12 +734,24 @@ impl AndroidSurface {
         self.last_hovered_url.clone()
     }
 
+    pub fn get_title(&self) -> String {
+        self.title.clone()
+    }
+
     pub fn set_theme(&mut self, theme: torvox_core::config::Theme) {
         let (bg, fg) = (theme.bg, theme.fg);
+        let ansi = theme.ansi;
         self.theme = theme;
         if let Some(session) = &self.session {
-            session.terminal().set_theme(bg, fg);
+            session.terminal().set_theme(bg, fg, ansi);
         }
+        if let Some(gpu) = self.gpu.as_mut() {
+            gpu.set_bg_color(bg);
+        }
+    }
+
+    pub fn set_selection(&mut self, sel: Option<SelectionRange>) {
+        self.selection = sel;
     }
 
     pub fn theme(&self) -> &torvox_core::config::Theme {
@@ -555,7 +762,7 @@ impl AndroidSurface {
         use std::fs;
         use torvox_core::snapshot::SessionSnapshot;
 
-        let dumped = self.terminal().dump_grid();
+        let dumped = self.terminal()?.dump_grid();
         let (rows, cols) = (dumped.rows, dumped.cols);
 
         let mut visible_lines = Vec::with_capacity(rows as usize);
@@ -629,8 +836,15 @@ impl Drop for AndroidSurface {
             let _ = self.save_session(&path.to_string_lossy());
         }
         self.session.take();
-        if self.gpu.has_surface() {
-            self.gpu.warmup();
+        #[cfg(target_os = "android")]
+        if let Some(nw) = &self.native_window {
+            unsafe { ANativeWindow_release(nw.0.as_ptr()) };
+        }
+        #[cfg(not(target_os = "android"))]
+        if let Some(gpu) = &self.gpu
+            && gpu.has_surface()
+        {
+            gpu.warmup();
         }
     }
 }
@@ -657,7 +871,14 @@ mod tests {
                 italic: false,
                 underline: false,
                 reverse: false,
+                strikethrough: false,
+                blink: false,
+                hidden: false,
                 uri: None,
+                semantic: Default::default(),
+                overline: false,
+                dim: false,
+                width: 1,
             },
             CellSnapshot {
                 codepoint: 0x42, // 'B'
@@ -796,5 +1017,13 @@ mod tests {
         assert!(c.attrs.italic);
         assert!(c.attrs.underline);
         assert!(c.attrs.reverse);
+    }
+
+    #[test]
+    fn no_session_terminal_returns_err() {
+        // SurfaceError::NoSession is returned when terminal() is called without an active session.
+        // This prevents the old .expect("no session") panic pattern that caused SIGABRT on device.
+        let err = SurfaceError::NoSession;
+        assert_eq!(err.to_string(), "No active session");
     }
 }

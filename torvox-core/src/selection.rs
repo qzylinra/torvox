@@ -1,3 +1,5 @@
+// @Selection modes, IMPL_CORE_006, impl, [REQ_CORE_006]
+// @need-ids: REQ_CORE_006
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -13,7 +15,7 @@ pub enum SelectionMode {
     Block,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
@@ -23,7 +25,7 @@ pub struct SelectionAnchor {
     pub col: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
@@ -76,6 +78,76 @@ impl Selection {
                 row >= lo.row && row <= hi.row && col >= lo.col && col <= hi.col
             }
         }
+    }
+
+    /// Extract selected text from a grid.
+    pub fn text(&self, grid: &crate::grid::Grid) -> alloc::string::String {
+        use core::fmt::Write;
+        let (lo, hi) = self.ordered();
+        let mut result = alloc::string::String::new();
+        match self.mode {
+            SelectionMode::Char | SelectionMode::Word => {
+                for row in lo.row..=hi.row {
+                    if let Some(cells) = grid.row_cells(row) {
+                        let start_col = if row == lo.row { lo.col } else { 0 };
+                        let end_col = if row == hi.row {
+                            hi.col
+                        } else {
+                            cells.len() as u32 - 1
+                        };
+                        let mut row_str = alloc::string::String::new();
+                        for col in start_col..=end_col {
+                            if let Some(cell) = cells.get(col as usize)
+                                && cell.char != '\0'
+                            {
+                                let _ = row_str.write_char(cell.char);
+                            }
+                        }
+                        if row < hi.row {
+                            let _ = row_str.write_char('\n');
+                        }
+                        let trimmed = row_str.trim_end();
+                        let _ = result.write_str(trimmed);
+                        if row < hi.row && !trimmed.is_empty() {
+                            let _ = result.write_char('\n');
+                        }
+                    }
+                }
+            }
+            SelectionMode::Line => {
+                for row in lo.row..=hi.row {
+                    if let Some(cells) = grid.row_cells(row) {
+                        let text: alloc::string::String = cells
+                            .iter()
+                            .map(|c| if c.char == '\0' { ' ' } else { c.char })
+                            .collect();
+                        let _ = result.write_str(text.trim_end());
+                        if row < hi.row {
+                            let _ = result.write_char('\n');
+                        }
+                    }
+                }
+            }
+            SelectionMode::Block => {
+                for row in lo.row..=hi.row {
+                    if let Some(cells) = grid.row_cells(row) {
+                        for col in lo.col..=hi.col {
+                            if let Some(cell) = cells.get(col as usize) {
+                                let _ = result.write_char(if cell.char == '\0' {
+                                    ' '
+                                } else {
+                                    cell.char
+                                });
+                            }
+                        }
+                        if row < hi.row {
+                            let _ = result.write_char('\n');
+                        }
+                    }
+                }
+            }
+        }
+        result
     }
 }
 
@@ -168,7 +240,7 @@ mod tests {
 
     #[test]
     fn selection_word_mode_same_as_char() {
-        // 词模式使用与字符模式相同的包含逻辑
+        // Word mode uses the same containment logic as char mode
         let s = Selection::new(
             SelectionAnchor { row: 1, col: 2 },
             SelectionAnchor { row: 3, col: 4 },
@@ -289,5 +361,137 @@ mod tests {
             SelectionMode::Char,
         );
         assert!(s.is_ordered());
+    }
+
+    #[test]
+    fn selection_ordered_end_before_start_swaps() {
+        let s = Selection::new(
+            SelectionAnchor { row: 5, col: 10 },
+            SelectionAnchor { row: 3, col: 5 },
+            SelectionMode::Char,
+        );
+        let (lo, hi) = s.ordered();
+        assert_eq!(lo.row, 3);
+        assert_eq!(hi.row, 5);
+    }
+
+    #[test]
+    fn selection_block_contains_middle_row() {
+        let s = Selection::new(
+            SelectionAnchor { row: 2, col: 5 },
+            SelectionAnchor { row: 4, col: 10 },
+            SelectionMode::Block,
+        );
+        assert!(s.contains(3, 7));
+        assert!(!s.contains(3, 3));
+    }
+
+    fn make_grid_with_text(lines: &[&str]) -> crate::grid::Grid {
+        use crate::cell::Cell;
+        let rows = lines.len() as u32;
+        let cols = lines.iter().map(|l| l.len()).max().unwrap_or(1) as u32;
+        let mut grid = crate::grid::Grid::new(rows, cols);
+        for (row_idx, line) in lines.iter().enumerate() {
+            for (col_idx, ch) in line.chars().enumerate() {
+                if let Some(cell) = grid.cell_mut(row_idx as u32, col_idx as u32) {
+                    *cell = Cell {
+                        char: ch,
+                        ..Default::default()
+                    };
+                }
+            }
+        }
+        grid
+    }
+
+    #[test]
+    fn char_text_extraction_single_line() {
+        let grid = make_grid_with_text(&["Hello, World!"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 0 },
+            SelectionAnchor { row: 0, col: 4 },
+            SelectionMode::Char,
+        );
+        assert_eq!(s.text(&grid), "Hello");
+    }
+
+    #[test]
+    fn char_text_extraction_multi_line() {
+        let grid = make_grid_with_text(&["First line", "Second line"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 6 },
+            SelectionAnchor { row: 1, col: 5 },
+            SelectionMode::Char,
+        );
+        let result = s.text(&grid);
+        // Space at end of "line " is part of the selected area (col 9 <= hi.col=9 on row 0)
+        assert!(
+            result.starts_with("line"),
+            "should extract 'line' from first row, got: {result:?}"
+        );
+        assert!(
+            result.ends_with("Second"),
+            "should end with 'Second' from second row, got: {result:?}"
+        );
+        assert!(
+            result.contains('\n'),
+            "should have newline between rows, got: {result:?}"
+        );
+    }
+
+    #[test]
+    fn word_text_extraction() {
+        let grid = make_grid_with_text(&["Hello World"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 0 },
+            SelectionAnchor { row: 0, col: 4 },
+            SelectionMode::Word,
+        );
+        assert_eq!(s.text(&grid), "Hello");
+    }
+
+    #[test]
+    fn line_text_extraction() {
+        let grid = make_grid_with_text(&["Hello", "World", "Test"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 1, col: 2 },
+            SelectionAnchor { row: 2, col: 1 },
+            SelectionMode::Line,
+        );
+        let result = s.text(&grid);
+        assert_eq!(result, "World\nTest");
+    }
+
+    #[test]
+    fn block_text_extraction() {
+        let grid = make_grid_with_text(&["ABCDEFGHIJ", "0123456789"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 2 },
+            SelectionAnchor { row: 1, col: 5 },
+            SelectionMode::Block,
+        );
+        assert_eq!(s.text(&grid), "CDEF\n2345");
+    }
+
+    #[test]
+    fn block_text_extraction_single_cell() {
+        let grid = make_grid_with_text(&["ABCD"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 1 },
+            SelectionAnchor { row: 0, col: 1 },
+            SelectionMode::Block,
+        );
+        assert_eq!(s.text(&grid), "B");
+    }
+
+    #[test]
+    fn text_extraction_reversed_selection() {
+        let grid = make_grid_with_text(&["ABC"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 3 },
+            SelectionAnchor { row: 0, col: 0 },
+            SelectionMode::Char,
+        );
+        assert_eq!(s.text(&grid), "ABC");
     }
 }

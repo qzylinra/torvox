@@ -3,7 +3,6 @@ name = "torvox-integration-tests"
 version.workspace = true
 edition.workspace = true
 description = "Integration tests for Torvox terminal emulator"
-license.workspace = true
 
 [dependencies]
 torvox-core = { workspace = true }
@@ -11,3 +10,6 @@ torvox-terminal = { workspace = true }
 
 [dev-dependencies]
 toml = { workspace = true }
+
+[lints]
+workspace = true

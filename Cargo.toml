@@ -8,7 +8,7 @@ members = [
   "torvox-gui-android",
   "torvox-exec",
   "torvox-mcp",
-  "torvox-fuzz/fuzz",
+  "fuzz",
   "torvox-integration-tests",
   "torvox-bench",
 ]
@@ -17,7 +17,8 @@ members = [
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
-license = "UNLICENSED"
+private = true
+
 
 [workspace.dependencies]
 torvox-core = { path = "torvox-core" }
@@ -26,24 +27,28 @@ torvox-renderer = { path = "torvox-renderer", default-features = false }
 torvox-gui-android = { path = "torvox-gui-android" }
 
 libc = "0.2"
-nix = { version = "0.31.3", features = ["term", "process", "signal", "fs"] }
+nix = { version = "0.31", features = ["term", "process", "signal", "fs"] }
 serde = { version = "1", default-features = false, features = [
   "derive",
   "alloc",
 ] }
 thiserror = { version = "2", default-features = false }
-wgpu = "29.0.3"
+wgpu = "29"
 bytemuck = { version = "1", features = ["derive"] }
 cosmic-text = "0.19"
 fontdb = "0.23"
-swash = "0.2.7"
+swash = "0.2"
 guillotiere = "0.7"
 
-boltffi = "0.25.2"
+boltffi = "0.25"
 
 flume = "0.12"
+
+# Testing infrastructure: proptest for property-based testing, arbitrary for structured fuzz generation
+proptest = "1"
+arbitrary = { version = "1", features = ["derive"] }
 bitflags = "2"
-lru = "0.16"
+lru = "0.18"
 quickcheck = "1"
 quickcheck_macros = "1"
 futures = "0.3"
@@ -52,11 +57,23 @@ log = "0.4"
 rkyv = { version = "0.8", default-features = false }
 toml = "0.8"
 
-# libghostty-vt patched for Android targets.
-# Patch file: patches/libghostty-vt-android.patch
-# Apply before cargo build:
-#   git clone --depth 1 https://github.com/Uzaaft/libghostty-rs.git libghostty-rs
-#   cd libghostty-rs && git apply ../patches/libghostty-vt-android.patch
-[patch.crates-io]
-libghostty-vt = { path = "libghostty-rs/crates/libghostty-vt" }
-libghostty-vt-sys = { path = "libghostty-rs/crates/libghostty-vt-sys" }
+# Upstream libghostty-rs via git (no crates.io release). Pinned via Cargo.lock.
+# Zig correctness patches applied to ghostty source via flake.nix shellHook (GHOSTTY_SOURCE_DIR).
+libghostty-vt = { git = "https://github.com/Uzaaft/libghostty-rs.git", package = "libghostty-vt" }
+libghostty-vt-sys = { git = "https://github.com/Uzaaft/libghostty-rs.git", package = "libghostty-vt-sys" }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "deny"
+expect_used = "warn"
+missing_panics_doc = "warn"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+struct_excessive_bools = "allow"
+doc_markdown = "allow"
+wildcard_imports = "allow"
+module_inception = "allow"
+missing_const_type_fn = "allow"

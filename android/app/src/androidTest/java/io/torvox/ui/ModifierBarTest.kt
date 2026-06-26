@@ -14,10 +14,25 @@ class ModifierBarTest {
     @Test
     fun modifier_bar_renders_all_keys() {
         composeTestRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
-        val expectedLabels =
-            listOf("ESC", "TAB", "CTRL", "ALT", "\u2191", "\u2193", "\u2630", "~", "/", "-", "\u2190", "\u2192", "ENT")
-        expectedLabels.forEach { label ->
-            composeTestRule.onNodeWithTag("Key_$label").assertIsDisplayed()
+        val expectedTags =
+            listOf(
+                "Key_ESC",
+                "Key_DRAWER",
+                "Key_SCROLL",
+                "Key_HOME",
+                "Key_\u2191",
+                "Key_END",
+                "Key_PGUP",
+                "Key_TAB",
+                "Key_CTRL",
+                "Key_ALT",
+                "Key_\u2190",
+                "Key_\u2193",
+                "Key_\u2192",
+                "Key_PGDN",
+            )
+        expectedTags.forEach { tag ->
+            composeTestRule.onNodeWithTag(tag).assertIsDisplayed()
         }
     }
 

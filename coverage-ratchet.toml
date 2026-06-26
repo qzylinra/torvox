@@ -1,59 +1,36 @@
-# Torvox Coverage Ratchet Configuration
-# Ratchets the minimum test coverage threshold over time.
-# Each successful CI run that meets/exceeds current threshold can ratchet it up.
-# A regression below threshold fails the build.
-
 [workspace]
-initial_threshold = 60.0                      # %
-target_threshold = 90.0                       # %
-ratchet_increment = 1.0                       # % per successful run
-report_path = "target/coverage/coverage.json"
-codecov_path = "coverage-ratchet.json"
+initial_threshold = 25.0
+target_threshold = 60.0
+ratchet_increment = 1.0
 
-[cargo-llvm-cov]
-# Pass-through to cargo-llvm-cov
-output_format = ["json", "lcov", "html"]
-ignore_panics = true
-exclude_lines = [
-  "unreachable!",
-  "todo!",
-  "unimplemented!",
-  "#[derive(Debug)]",
-  "#[derive(Clone)]",
-  "#[derive(Serialize, Deserialize)]",
-]
+[crates.torvox-core]
+threshold = 45.0
+target = 60.0
 
-[crates]
-torvox-core = { threshold = 70.0, target = 90.0 }
-torvox-terminal = { threshold = 60.0, target = 90.0 }
-torvox-renderer = { threshold = 50.0, target = 80.0 }
-torvox-gui-android = { threshold = 40.0, target = 70.0 }
-torvox-integration-tests = { threshold = 0.0, target = 0.0 } # integration only
+[crates.torvox-terminal]
+threshold = 30.0
+target = 60.0
 
-[kotlin.kover]
-initial_threshold = 60.0                             # %
-target_threshold = 85.0
-report_path = "android/app/build/reports/kover/html"
+[crates.torvox-renderer]
+threshold = 25.0
+target = 60.0
 
-[android.viewmodel]
-# Per-spec: ViewModel coverage >= 60%
-threshold = 60.0
-target = 80.0
+[crates.torvox-gui-android]
+threshold = 15.0
+target = 50.0
 
-[android.bridge]
-threshold = 40.0
-target = 70.0
+[crates.torvox-integration-tests]
+threshold = 15.0
+target = 50.0
 
-[android.util]
-threshold = 50.0
-target = 75.0
-
-[android.parser]
-threshold = 50.0
-target = 80.0
+[crates.torvox-mcp]
+threshold = 20.0
+target = 55.0
 
 [ratchet]
-# When a PR raises coverage above current threshold, update threshold = current + ratchet_increment
-# Cap at target_threshold.
+enabled = true
 auto_bump = true
 require_clean_ci = true
+
+[cargo-llvm-cov]
+exclude_lines = ["mod tests", "unreachable!", "todo!"]

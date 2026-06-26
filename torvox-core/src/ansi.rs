@@ -1,3 +1,4 @@
+#[allow(clippy::cast_possible_truncation)]
 pub const ANSI_256: [[u8; 3]; 256] = {
     let mut table = [[0u8; 3]; 256];
     let mut i = 0;
@@ -141,32 +142,17 @@ mod tests {
     }
 
     #[test]
-    fn ansi_red_is_pure() {
-        assert_eq!(ansi_to_rgb(9), [255, 0, 0]);
-    }
-
-    #[test]
-    fn ansi_green_is_pure() {
-        assert_eq!(ansi_to_rgb(10), [0, 255, 0]);
-    }
-
-    #[test]
-    fn ansi_blue_is_pure() {
-        assert_eq!(ansi_to_rgb(12), [0, 0, 255]);
-    }
-
-    #[test]
-    fn ansi_yellow_is_pure() {
-        assert_eq!(ansi_to_rgb(11), [255, 255, 0]);
-    }
-
-    #[test]
-    fn ansi_cyan_is_pure() {
-        assert_eq!(ansi_to_rgb(14), [0, 255, 255]);
-    }
-
-    #[test]
-    fn ansi_magenta_is_pure() {
-        assert_eq!(ansi_to_rgb(13), [255, 0, 255]);
+    fn ansi_pure_colors() {
+        let cases = [
+            (9, [255, 0, 0]),    // red
+            (10, [0, 255, 0]),   // green
+            (12, [0, 0, 255]),   // blue
+            (11, [255, 255, 0]), // yellow
+            (14, [0, 255, 255]), // cyan
+            (13, [255, 0, 255]), // magenta
+        ];
+        for (idx, expected) in cases {
+            assert_eq!(ansi_to_rgb(idx), expected, "ANSI index {}", idx);
+        }
     }
 }

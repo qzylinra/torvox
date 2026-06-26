@@ -22,7 +22,7 @@ coverage:
         threshold: 5%
   ignore:
     - "android/benchmark/**"
-    - "torvox-fuzz/**"
+    - "fuzz/**"
     - "torvox-bench/**"
     - "**/examples/**"
     - "**/tests/**"

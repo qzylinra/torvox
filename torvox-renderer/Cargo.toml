@@ -3,14 +3,11 @@ name = "torvox-renderer"
 version.workspace = true
 edition.workspace = true
 description = "GPU-native terminal renderer for Torvox (wgpu 29 + cosmic-text + swash)"
-license.workspace = true
 
 [dependencies]
 torvox-core = { workspace = true }
 torvox-terminal = { workspace = true }
-libghostty-vt = "0.1.1"
-wgpu = { workspace = true, features = ["spirv"] }
-naga = { version = "29.0.3", features = ["wgsl-in", "spv-out"] }
+wgpu = { workspace = true, features = ["spirv", "gles", "vulkan"] }
 bytemuck = { workspace = true }
 cosmic-text = { workspace = true }
 fontdb = { workspace = true }
@@ -21,11 +18,8 @@ lru = { workspace = true }
 futures = { workspace = true }
 raw-window-handle = { workspace = true }
 log = { workspace = true }
-winit = { version = "0.30", optional = true }
 
-[features]
-default = ["winit"]
+[dev-dependencies]
 
-[[example]]
-name = "basic_render"
-required-features = ["winit"]
+[lints]
+workspace = true

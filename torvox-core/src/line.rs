@@ -17,8 +17,9 @@ pub enum LineAttr {
     DoubleHeightBottom,
 }
 
-/// 终端行：固定容量的 `Box<[Cell]>`，提供稳定地址和较小的内联 `attr`。
-/// `Box<[Cell]>` 避免了 `Vec` 的容量/长度开销，是构建时大小已知的行的自然选择。
+/// Terminal line: fixed-capacity `Box<[Cell]>` providing stable addresses and small inline `attr`.
+/// `Box<[Cell]>` avoids the capacity/length overhead of `Vec`, making it a natural choice
+/// for lines whose size is known at construction time.
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
@@ -68,6 +69,10 @@ impl Line {
 
     pub fn cells(&self) -> &[Cell] {
         &self.cells
+    }
+
+    pub fn cells_mut(&mut self) -> &mut [Cell] {
+        &mut self.cells
     }
 }
 
@@ -264,5 +269,95 @@ mod tests {
         assert_eq!(l.attr, LineAttr::DoubleHeightTop);
         l.attr = LineAttr::DoubleHeightBottom;
         assert_eq!(l.attr, LineAttr::DoubleHeightBottom);
+    }
+
+    #[test]
+    fn line_new_from_zero_is_empty() {
+        let l = Line::new(0);
+        assert!(l.is_empty());
+        assert_eq!(l.len(), 0);
+    }
+
+    #[test]
+    fn line_resize_to_zero_empties() {
+        let mut l = Line::new(10);
+        assert!(!l.is_empty());
+        l.resize(0);
+        assert!(l.is_empty());
+        assert_eq!(l.len(), 0);
+    }
+
+    #[test]
+    fn line_resize_from_zero_grows() {
+        let mut l = Line::new(0);
+        l.resize(5);
+        assert!(!l.is_empty());
+        assert_eq!(l.len(), 5);
+        for i in 0..5 {
+            assert_eq!(l.get(i).unwrap().char, ' ');
+        }
+    }
+
+    #[test]
+    fn cells_mut_modifies_cells() {
+        let mut line = Line::new(5);
+        {
+            let cells = line.cells_mut();
+            cells[0] = Cell {
+                char: 'H',
+                ..Cell::default()
+            };
+            cells[1] = Cell {
+                char: 'i',
+                ..Cell::default()
+            };
+        }
+        assert_eq!(line.cells()[0].char, 'H', "first cell should be H");
+        assert_eq!(line.cells()[1].char, 'i', "second cell should be i");
+        assert_eq!(
+            line.cells()[2].char,
+            ' ',
+            "third cell should remain default"
+        );
+    }
+
+    #[test]
+    fn cells_mut_write_and_read_back() {
+        let mut line = Line::new(3);
+        line.cells_mut()[2] = Cell {
+            char: 'Z',
+            ..Cell::default()
+        };
+        assert_eq!(
+            line.get(2).unwrap().char,
+            'Z',
+            "cell at index 2 should be Z"
+        );
+        assert_eq!(
+            line.cells_mut().len(),
+            3,
+            "cells_mut should return full-length slice"
+        );
+    }
+
+    #[test]
+    fn cells_mut_all_cells_accessible() {
+        let mut line = Line::new(10);
+        for i in 0..10 {
+            line.cells_mut()[i] = Cell {
+                char: (b'A' + i as u8) as char,
+                ..Cell::default()
+            };
+        }
+        for i in 0..10 {
+            let expected = (b'A' + i as u8) as char;
+            assert_eq!(
+                line.cells()[i].char,
+                expected,
+                "cell {} should be '{}'",
+                i,
+                expected
+            );
+        }
     }
 }

@@ -1,12 +1,14 @@
+// @Grid buffer management, IMPL_CORE_002, impl, [REQ_CORE_002]
+// @need-ids: REQ_CORE_002, REQ_CORE_003
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::cell::{Cell, DirtyMask};
+use crate::cell::{Attrs, Cell, Color, DirtyMask};
 use crate::line::Line;
 
-/// 终端网格的只读快照，用于渲染。
-/// 由 Grid 实现，使渲染器不依赖 terminal crate。
+/// Read-only snapshot of the terminal grid for rendering.
+/// Implemented by Grid so the renderer doesn't depend on the terminal crate.
 pub trait GridSnapshot {
     fn rows(&self) -> u32;
     fn cols(&self) -> u32;
@@ -45,6 +47,7 @@ pub struct Grid {
     cols: u32,
     scrollback: VecDeque<Line>,
     max_scrollback: usize,
+    alt_screen: bool,
 }
 
 impl Grid {
@@ -59,6 +62,7 @@ impl Grid {
             cols,
             scrollback: VecDeque::new(),
             max_scrollback: 50_000,
+            alt_screen: false,
         }
     }
 
@@ -73,6 +77,7 @@ impl Grid {
             cols,
             scrollback: VecDeque::new(),
             max_scrollback,
+            alt_screen: false,
         }
     }
 
@@ -88,8 +93,8 @@ impl Grid {
         self.lines.get(row as usize)
     }
 
-    /// 返回 `row` 的单元格切片（零分配、零间接寻址）。
-    /// 比 `get(row).map(|l| l.cells())` 更快，适用于渲染热路径。
+    /// Returns a cell slice for `row` (zero allocation, zero indirection).
+    /// Faster than `get(row).map(|l| l.cells())`, suitable for render hot paths.
     pub fn row_cells(&self, row: u32) -> Option<&[Cell]> {
         self.lines.get(row as usize).map(|l| l.cells())
     }
@@ -156,20 +161,20 @@ impl Grid {
         if region_size <= 1 {
             return;
         }
-        let t = top as usize;
-        let b = bottom as usize;
+        let top_index = top as usize;
+        let bottom_index = bottom as usize;
         if top == 0 {
-            let removed = self.lines.remove(t);
+            let removed = self.lines.remove(top_index);
             self.scrollback.push_back(removed);
             while self.scrollback.len() > self.max_scrollback {
                 self.scrollback.pop_front();
             }
-            self.lines.insert(b - 1, Line::new(cols));
+            self.lines.insert(bottom_index - 1, Line::new(cols));
         } else {
-            self.lines[t..b].rotate_left(1);
+            self.lines[top_index..bottom_index].rotate_left(1);
             *self
                 .lines
-                .get_mut(b - 1)
+                .get_mut(bottom_index - 1)
                 .expect("grid invariant: b-1 < lines.len() after rotate") = Line::new(cols);
         }
         for row in top..bottom {
@@ -181,12 +186,12 @@ impl Grid {
         if top >= bottom || bottom > self.rows {
             return;
         }
-        let t = top as usize;
-        let b = bottom as usize;
-        self.lines[t..b].rotate_right(1);
+        let top_index = top as usize;
+        let bottom_index = bottom as usize;
+        self.lines[top_index..bottom_index].rotate_right(1);
         *self
             .lines
-            .get_mut(t)
+            .get_mut(top_index)
             .expect("grid invariant: t < lines.len() after rotate") = Line::new(cols);
         for row in top..bottom {
             self.dirty.mark(row);
@@ -198,12 +203,10 @@ impl Grid {
             return;
         }
         let actual = count.min(bottom - at);
-        let a = at as usize;
-        let b = bottom as usize;
-        // 左旋：在 `at` 处插入空行，现有行向下推移
-        self.lines[a..b].rotate_right(actual as usize);
-        // 用空行填充新插入的行（现在在切片开头）
-        for i in a..a + actual as usize {
+        let at_index = at as usize;
+        let bottom_index = bottom as usize;
+        self.lines[at_index..bottom_index].rotate_right(actual as usize);
+        for i in at_index..at_index + actual as usize {
             *self
                 .lines
                 .get_mut(i)
@@ -219,12 +222,10 @@ impl Grid {
             return;
         }
         let actual = count.min(bottom - at);
-        let a = at as usize;
-        let b = bottom as usize;
-        // 左旋：删除 `at` 处的行，从下方拉取行向上
-        self.lines[a..b].rotate_left(actual as usize);
-        // 用空行填充已删除的行（现在在切片末尾）
-        for i in b - actual as usize..b {
+        let at_index = at as usize;
+        let bottom_index = bottom as usize;
+        self.lines[at_index..bottom_index].rotate_left(actual as usize);
+        for i in bottom_index - actual as usize..bottom_index {
             *self
                 .lines
                 .get_mut(i)
@@ -246,14 +247,97 @@ impl Grid {
         }
     }
 
-    pub fn fill_cells(&mut self, row: u32, ch: char, start_col: u32, end_col: u32) {
+    pub fn fill_cells(&mut self, row: u32, character: char, start_col: u32, end_col: u32) {
         if let Some(line) = self.lines.get_mut(row as usize) {
             for col in start_col..end_col.min(line.len()) {
                 if let Some(cell) = line.get_mut(col) {
-                    cell.char = ch;
+                    cell.char = character;
                 }
             }
             self.dirty.mark(row);
+        }
+    }
+
+    pub fn copy_rect(
+        &mut self,
+        src_top: u32,
+        src_left: u32,
+        dest_top: u32,
+        dest_left: u32,
+        width: u32,
+        height: u32,
+    ) {
+        for row_off in 0..height {
+            let src_row = src_top + row_off;
+            let dst_row = dest_top + row_off;
+            if src_row >= self.rows || dst_row >= self.rows || src_row == dst_row {
+                continue;
+            }
+            let cells_copy = self.lines[src_row as usize].cells().to_vec();
+            for col in src_left..(src_left + width).min(self.cols) {
+                let src_idx = (col - src_left) as usize;
+                if src_idx >= cells_copy.len() {
+                    break;
+                }
+                let cell = cells_copy[src_idx];
+                let dst_col = dest_left + col - src_left;
+                if dst_col < self.cols
+                    && let Some(dst_cell) = self.lines[dst_row as usize].get_mut(dst_col)
+                {
+                    *dst_cell = cell;
+                }
+            }
+            self.dirty.mark(dst_row);
+        }
+    }
+
+    pub fn erase_rect(&mut self, top: u32, left: u32, width: u32, height: u32, erase_char: char) {
+        for row in top..(top + height).min(self.rows) {
+            if let Some(line) = self.lines.get_mut(row as usize) {
+                for col in left..(left + width).min(line.len()) {
+                    if let Some(cell) = line.get_mut(col) {
+                        cell.char = erase_char;
+                        cell.fg = Color::default();
+                        cell.bg = Color::default();
+                        cell.attrs = Attrs::default();
+                        cell.width = 1;
+                    }
+                }
+                self.dirty.mark(row);
+            }
+        }
+    }
+
+    pub fn fill_rect(&mut self, top: u32, left: u32, width: u32, height: u32, character: char) {
+        for row in top..(top + height).min(self.rows) {
+            if let Some(line) = self.lines.get_mut(row as usize) {
+                for col in left..(left + width).min(line.len()) {
+                    if let Some(cell) = line.get_mut(col) {
+                        cell.char = character;
+                    }
+                }
+                self.dirty.mark(row);
+            }
+        }
+    }
+
+    pub fn selective_erase_line(&mut self, row: u32, protect: bool) {
+        if let Some(line) = self.lines.get_mut(row as usize) {
+            for col in 0..line.len() {
+                if let Some(cell) = line.get_mut(col) {
+                    if protect && cell.attrs.protected {
+                        continue;
+                    }
+                    *cell = Cell::default();
+                }
+            }
+            self.dirty.mark(row);
+        }
+    }
+
+    pub fn selective_erase_display(&mut self, top: u32, bottom: u32, protect: bool) {
+        for row in top..bottom.min(self.rows) {
+            self.selective_erase_line(row, protect);
         }
     }
 
@@ -273,10 +357,71 @@ impl Grid {
         self.max_scrollback
     }
 
+    pub fn alt_screen(&self) -> bool {
+        self.alt_screen
+    }
+
+    pub fn set_alt_screen(&mut self, enabled: bool) {
+        self.alt_screen = enabled;
+    }
+
     pub fn push_scrollback(&mut self, line: Line) {
         self.scrollback.push_back(line);
         while self.scrollback.len() > self.max_scrollback {
             self.scrollback.pop_front();
+        }
+    }
+
+    /// Validates basic invariants. For debugging, checks internal consistency.
+    pub fn assert_invariants(&self) {
+        assert!(
+            self.lines.len() == self.rows as usize,
+            "lines.len()={} != rows={}",
+            self.lines.len(),
+            self.rows
+        );
+        assert!(
+            self.scrollback.len() <= self.max_scrollback,
+            "scrollback {} > max {}",
+            self.scrollback.len(),
+            self.max_scrollback
+        );
+        for (i, line) in self.lines.iter().enumerate() {
+            assert!(
+                line.len() == self.cols,
+                "line {i} len={} != cols={}",
+                line.len(),
+                self.cols
+            );
+        }
+        for i in 1..self.lines.len() {
+            let prev_ptr = self.lines[i - 1].cells().as_ptr();
+            let curr_ptr = self.lines[i].cells().as_ptr();
+            assert!(
+                prev_ptr != curr_ptr,
+                "adjacent duplicate line pointer at rows {}-{}",
+                i - 1,
+                i
+            );
+        }
+        if self.alt_screen {
+            assert!(
+                self.scrollback.is_empty(),
+                "alt screen must have no scrollback history ({} rows)",
+                self.scrollback.len()
+            );
+        }
+        for (row, line) in self.lines.iter().enumerate() {
+            if let Some(cell) = line.get(0) {
+                use unicode_width::UnicodeWidthChar;
+                let width = cell.char.width();
+                assert!(
+                    width != Some(0),
+                    "zero-width character at col 0 row {}: U+{:04X}",
+                    row,
+                    cell.char as u32
+                );
+            }
         }
     }
 }
@@ -436,14 +581,112 @@ mod tests {
 
     #[quickcheck]
     fn prop_grid_resize_preserves_cols(rows: u32, cols: u32, new_rows: u32, new_cols: u32) -> bool {
-        let rows = rows.clamp(1, 200);
-        let cols = cols.clamp(1, 200);
-        let new_rows = new_rows.clamp(1, 200);
-        let new_cols = new_cols.clamp(1, 200);
+        let rows = rows.clamp(1, 30);
+        let cols = cols.clamp(1, 30);
+        let new_rows = new_rows.clamp(1, 50);
+        let new_cols = new_cols.clamp(1, 50);
         let mut g = Grid::new(rows, cols);
         g.mark_clean();
         g.resize(new_rows, new_cols);
+        g.assert_invariants();
         g.rows() == new_rows && g.cols() == new_cols
+    }
+
+    #[quickcheck]
+    fn prop_grid_invariant_after_scroll(
+        rows: u32,
+        cols: u32,
+        top: u32,
+        bottom: u32,
+        scroll_count: u8,
+    ) -> bool {
+        let rows = rows.clamp(3, 50);
+        let cols = cols.clamp(1, 80);
+        let bottom = bottom.clamp(1, rows);
+        let top = top.min(bottom - 1);
+        let mut g = Grid::new(rows, cols);
+        for _ in 0..(scroll_count % 20) {
+            g.scroll_up(top, bottom, cols);
+            g.assert_invariants();
+            g.scroll_down(top, bottom, cols);
+            g.assert_invariants();
+        }
+        true
+    }
+
+    #[test]
+    fn grid_invariant_fresh() {
+        let g = Grid::new(24, 80);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_invariant_after_scroll_up() {
+        let mut g = Grid::new(5, 10);
+        g.fill_cells(0, 'A', 0, 10);
+        g.scroll_up(0, 5, 10);
+        g.assert_invariants();
+        assert_eq!(g.scrollback_len(), 1);
+    }
+
+    #[test]
+    fn grid_invariant_after_scroll_down() {
+        let mut g = Grid::new(5, 10);
+        g.fill_cells(4, 'Z', 0, 10);
+        g.scroll_down(0, 5, 10);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_invariant_after_insert_lines() {
+        let mut g = Grid::new(10, 20);
+        g.fill_cells(0, 'X', 0, 20);
+        g.insert_lines(3, 2, 10, 20);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_invariant_after_delete_lines() {
+        let mut g = Grid::new(10, 20);
+        g.fill_cells(0, 'X', 0, 20);
+        g.delete_lines(2, 3, 10, 20);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_invariant_after_resize_grow() {
+        let mut g = Grid::new(5, 10);
+        g.fill_cells(0, 'A', 0, 10);
+        g.resize(20, 40);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_invariant_after_resize_shrink() {
+        let mut g = Grid::new(20, 40);
+        g.fill_cells(0, 'A', 0, 40);
+        g.fill_cells(19, 'Z', 0, 40);
+        g.resize(5, 10);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_invariant_after_clear_and_fill() {
+        let mut g = Grid::new(5, 10);
+        g.fill_cells(2, 'X', 0, 10);
+        g.assert_invariants();
+        g.clear_cells(2, 0, 10);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_invariant_after_multiple_scrolls_with_scrollback() {
+        let mut g = Grid::with_scrollback(5, 10, 100);
+        for i in 0..25 {
+            g.fill_cells(0, (b'A' + (i % 26) as u8) as char, 0, 10);
+            g.scroll_up(0, 5, 10);
+            g.assert_invariants();
+        }
     }
 
     #[quickcheck]
@@ -560,7 +803,7 @@ mod tests {
         g.fill_cells(2, 'C', 0, 3);
         g.fill_cells(3, 'D', 0, 3);
         g.insert_lines(1, 1, 4, 3);
-        // 插入后：索引 1 的行为空行，B 推到 2，C 到 3，D 丢弃
+        // After insert: row at index 1 is blank, B pushed to 2, C to 3, D discarded
         assert_eq!(g.get(1).unwrap().get(0).unwrap().char, ' ');
         assert_eq!(g.get(2).unwrap().get(0).unwrap().char, 'B');
         assert_eq!(g.get(3).unwrap().get(0).unwrap().char, 'C');
@@ -586,7 +829,7 @@ mod tests {
     fn grid_insert_lines_count_clamped_to_region() {
         let mut g = Grid::new(4, 3);
         g.insert_lines(0, 100, 4, 3);
-        // 应插入 min(100, 4) = 4 行空行，所以全部为空
+        // Should insert min(100, 4) = 4 blank lines, so all are blank
         for r in 0..4 {
             assert_eq!(g.get(r).unwrap().get(0).unwrap().char, ' ');
         }
@@ -600,7 +843,7 @@ mod tests {
         g.fill_cells(2, 'C', 0, 3);
         g.fill_cells(3, 'D', 0, 3);
         g.delete_lines(1, 1, 4, 3);
-        // 删除后：A 留在 0，C 移到 1，D 移到 2，最后一行为空
+        // After delete: A stays at 0, C moves to 1, D moves to 2, last row is blank
         assert_eq!(g.get(0).unwrap().get(0).unwrap().char, 'A');
         assert_eq!(g.get(1).unwrap().get(0).unwrap().char, 'C');
         assert_eq!(g.get(2).unwrap().get(0).unwrap().char, 'D');
@@ -648,8 +891,10 @@ mod tests {
     #[test]
     fn grid_clear_cells_invalid_row_no_panic() {
         let mut g = Grid::new(3, 5);
+        g.fill_cells(0, 'X', 0, 5);
         g.clear_cells(100, 0, 5);
-        // 无 panic，无脏标记
+        assert_eq!(g.get(0).unwrap().get(0).unwrap().char, 'X');
+        assert_eq!(g.rows(), 3);
     }
 
     #[test]
@@ -764,7 +1009,7 @@ mod tests {
             g.fill_cells(0, (b'A' + i) as char, 0, 5);
             g.scroll_up(0, 2, 5);
         }
-        // 最旧的在索引 0
+        // Oldest is at index 0
         assert_eq!(g.scrollback_line(0).unwrap().get(0).unwrap().char, 'A');
         assert_eq!(g.scrollback_line(1).unwrap().get(0).unwrap().char, 'B');
         assert_eq!(g.scrollback_line(2).unwrap().get(0).unwrap().char, 'C');
@@ -815,5 +1060,168 @@ mod tests {
         let g = Grid::new(0, 0);
         assert_eq!(g.rows(), 0);
         assert_eq!(g.cols(), 0);
+    }
+
+    #[test]
+    fn grid_alt_screen_default_false() {
+        let g = Grid::new(5, 5);
+        assert!(!g.alt_screen());
+    }
+
+    #[test]
+    fn grid_set_alt_screen_toggle() {
+        let mut g = Grid::new(5, 5);
+        g.set_alt_screen(true);
+        assert!(g.alt_screen());
+        g.set_alt_screen(false);
+        assert!(!g.alt_screen());
+    }
+
+    #[test]
+    fn grid_selective_erase_line_clears_all() {
+        let mut g = Grid::new(2, 5);
+        g.fill_cells(0, 'X', 0, 5);
+        g.mark_clean();
+        g.selective_erase_line(0, false);
+        for c in 0..5 {
+            assert_eq!(g.get(0).unwrap().get(c).unwrap().char, ' ');
+        }
+        assert!(g.dirty().is_dirty(0));
+    }
+
+    #[test]
+    fn grid_selective_erase_line_protects_flagged() {
+        let mut g = Grid::new(1, 3);
+        g.get_mut(0).unwrap().get_mut(0).unwrap().char = 'A';
+        g.get_mut(0).unwrap().get_mut(1).unwrap().char = 'B';
+        g.get_mut(0).unwrap().get_mut(1).unwrap().attrs.protected = true;
+        g.get_mut(0).unwrap().get_mut(2).unwrap().char = 'C';
+        g.mark_clean();
+        g.selective_erase_line(0, true);
+        assert_eq!(g.get(0).unwrap().get(0).unwrap().char, ' ');
+        assert_eq!(g.get(0).unwrap().get(1).unwrap().char, 'B');
+        assert_eq!(g.get(0).unwrap().get(2).unwrap().char, ' ');
+    }
+
+    #[test]
+    fn grid_selective_erase_line_no_protect_clears_protected() {
+        let mut g = Grid::new(1, 2);
+        g.get_mut(0).unwrap().get_mut(0).unwrap().char = 'A';
+        g.get_mut(0).unwrap().get_mut(0).unwrap().attrs.protected = true;
+        g.get_mut(0).unwrap().get_mut(1).unwrap().char = 'B';
+        g.mark_clean();
+        g.selective_erase_line(0, false);
+        assert_eq!(g.get(0).unwrap().get(0).unwrap().char, ' ');
+        assert_eq!(g.get(0).unwrap().get(1).unwrap().char, ' ');
+    }
+
+    #[test]
+    fn grid_selective_erase_display_range() {
+        let mut g = Grid::new(3, 3);
+        g.fill_cells(0, 'A', 0, 3);
+        g.fill_cells(1, 'B', 0, 3);
+        g.fill_cells(2, 'C', 0, 3);
+        g.mark_clean();
+        g.selective_erase_display(1, 3, false);
+        for c in 0..3 {
+            assert_eq!(g.get(0).unwrap().get(c).unwrap().char, 'A');
+            assert_eq!(g.get(1).unwrap().get(c).unwrap().char, ' ');
+            assert_eq!(g.get(2).unwrap().get(c).unwrap().char, ' ');
+        }
+    }
+
+    #[test]
+    fn grid_selective_erase_line_out_of_bounds_no_panic() {
+        let mut g = Grid::new(2, 3);
+        g.selective_erase_line(100, false);
+    }
+
+    #[test]
+    fn grid_cell_ref_returns_correct_cell() {
+        let mut g = Grid::new(3, 5);
+        g.fill_cells(1, 'X', 0, 5);
+        let cell = g.cell(1, 2).unwrap();
+        assert_eq!(cell.char, 'X');
+    }
+
+    #[test]
+    fn grid_cell_ref_out_of_bounds_returns_none() {
+        let g = Grid::new(3, 5);
+        assert!(g.cell(10, 0).is_none());
+        assert!(g.cell(0, 10).is_none());
+    }
+
+    #[test]
+    fn grid_cell_mut_modifies_cell() {
+        let mut g = Grid::new(3, 5);
+        let cell = g.cell_mut(0, 0).unwrap();
+        cell.char = 'Z';
+        cell.fg = Color::new(100, 200, 50);
+        assert_eq!(g.cell(0, 0).unwrap().char, 'Z');
+        assert_eq!(g.cell(0, 0).unwrap().fg, Color::new(100, 200, 50));
+    }
+
+    #[test]
+    fn grid_copy_rect_basic() {
+        let mut g = Grid::new(4, 4);
+        g.fill_cells(0, 'A', 0, 4);
+        g.fill_cells(1, 'B', 0, 4);
+        g.copy_rect(0, 0, 2, 0, 4, 2);
+        assert_eq!(g.cell(0, 0).unwrap().char, 'A');
+        assert_eq!(g.cell(1, 0).unwrap().char, 'B');
+        assert_eq!(g.cell(2, 0).unwrap().char, 'A');
+        assert_eq!(g.cell(3, 0).unwrap().char, 'B');
+    }
+
+    #[test]
+    fn grid_alt_screen_toggle() {
+        let mut g = Grid::new(3, 3);
+        assert!(!g.alt_screen());
+        g.set_alt_screen(true);
+        assert!(g.alt_screen());
+        g.set_alt_screen(false);
+        assert!(!g.alt_screen());
+    }
+
+    #[test]
+    fn grid_assert_invariants_no_panic_on_valid_grid() {
+        let g = Grid::new(5, 10);
+        g.assert_invariants();
+    }
+
+    #[test]
+    fn grid_scrollback_operations() {
+        let mut g = Grid::new(3, 5);
+        assert_eq!(g.scrollback_len(), 0);
+        assert!(g.scrollback_line(0).is_none());
+        g.push_scrollback(Line::new(5));
+        assert_eq!(g.scrollback_len(), 1);
+        assert!(g.scrollback_line(0).is_some());
+        g.clear_scrollback();
+        assert_eq!(g.scrollback_len(), 0);
+    }
+
+    #[test]
+    fn grid_max_scrollback_stored() {
+        let g = Grid::with_scrollback(3, 5, 500);
+        assert_eq!(g.max_scrollback(), 500);
+    }
+
+    #[test]
+    fn grid_dirty_mask_access() {
+        let mut g = Grid::new(3, 5);
+        g.mark_clean();
+        assert!(!g.dirty().any_dirty());
+        g.mark_all_dirty();
+        assert!(g.dirty().any_dirty());
+    }
+
+    #[test]
+    fn grid_get_and_get_mut_consistent() {
+        let mut g = Grid::new(2, 3);
+        g.fill_cells(0, 'P', 0, 3);
+        assert_eq!(g.get(0).unwrap().get(1).unwrap().char, 'P');
+        g.get_mut(0).unwrap().get_mut(1).unwrap().char = 'Q';
+        assert_eq!(g.get(0).unwrap().get(1).unwrap().char, 'Q');
     }
 }

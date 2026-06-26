@@ -39,13 +39,13 @@ class ModifierBarScreenshotTest {
             MaterialTheme {
                 Box(
                     modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF1E1E2E))
-                            .testTag("screenshot_modifier_bar"),
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF1E1E2E))
+                        .testTag("screenshot_modifier_bar"),
                 ) {
                     ModifierBar(
-                        onKeySend = {},
+                        onKeyClick = {},
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }

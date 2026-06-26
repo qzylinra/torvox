@@ -45,18 +45,18 @@ class TerminalScreenScreenshotTest {
             MaterialTheme {
                 Box(
                     modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(BuiltInThemes.catppuccinMocha.background)
-                            .testTag("screenshot_terminal"),
+                    Modifier
+                        .fillMaxSize()
+                        .background(BuiltInThemes.catppuccinMocha.background)
+                        .testTag("screenshot_terminal"),
                 ) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         Box(
                             modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxWidth()
-                                    .background(BuiltInThemes.catppuccinMocha.background),
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .background(BuiltInThemes.catppuccinMocha.background),
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
@@ -93,7 +93,7 @@ class TerminalScreenScreenshotTest {
         composeTestRule.setContent {
             MaterialTheme {
                 ModifierBar(
-                    onKeySend = {},
+                    onKeyClick = {},
                     modifier = Modifier.testTag("screenshot_modifier_bar"),
                 )
             }

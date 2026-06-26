@@ -50,7 +50,7 @@ class ScreenshotGoldenTest {
     fun modifierBar_screenshot() {
         composeTestRule.setContent {
             MaterialTheme {
-                ModifierBar(onKeySend = {})
+                ModifierBar(onKeyClick = {})
             }
         }
     }
@@ -59,7 +59,7 @@ class ScreenshotGoldenTest {
     fun modifierBar_ctrlActive_screenshot() {
         composeTestRule.setContent {
             MaterialTheme {
-                ModifierBar(onKeySend = {})
+                ModifierBar(onKeyClick = {})
             }
         }
         composeTestRule.onNodeWithTag("Key_CTRL").performClick()
@@ -69,7 +69,7 @@ class ScreenshotGoldenTest {
     fun modifierBar_altActive_screenshot() {
         composeTestRule.setContent {
             MaterialTheme {
-                ModifierBar(onKeySend = {})
+                ModifierBar(onKeyClick = {})
             }
         }
         composeTestRule.onNodeWithTag("Key_ALT").performClick()
@@ -96,7 +96,7 @@ class ScreenshotGoldenTest {
                         )
                         ModifierBar(
                             modifier = Modifier.testTag("ModifierBar"),
-                            onKeySend = {},
+                            onKeyClick = {},
                         )
                     }
                 }

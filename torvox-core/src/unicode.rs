@@ -8,25 +8,27 @@ pub enum UnicodeWidth {
     Double,
 }
 
-pub fn width(c: char) -> UnicodeWidth {
-    let w = c.width().unwrap_or(0);
-    match w {
+pub fn width(character: char) -> UnicodeWidth {
+    let character_width = character.width().unwrap_or(0);
+    match character_width {
         0 => UnicodeWidth::Zero,
         1 => UnicodeWidth::Single,
         _ => UnicodeWidth::Double,
     }
 }
 
-pub fn width_val(c: char) -> u8 {
-    c.width().unwrap_or(0) as u8
+pub fn width_value(character: char) -> u8 {
+    character.width().unwrap_or(0) as u8
 }
 
-pub fn str_width(s: &str) -> u32 {
-    s.chars().map(|c| width_val(c) as u32).sum()
+pub fn string_width(text: &str) -> u32 {
+    text.chars()
+        .map(|character| width_value(character) as u32)
+        .sum()
 }
 
-pub fn is_wide(c: char) -> bool {
-    width_val(c) == 2
+pub fn is_wide(character: char) -> bool {
+    width_value(character) == 2
 }
 
 #[cfg(test)]
@@ -35,32 +37,32 @@ mod tests {
 
     #[test]
     fn ascii_width() {
-        assert_eq!(width_val('A'), 1);
-        assert_eq!(width_val('z'), 1);
-        assert_eq!(width_val(' '), 1);
+        assert_eq!(width_value('A'), 1);
+        assert_eq!(width_value('z'), 1);
+        assert_eq!(width_value(' '), 1);
     }
 
     #[test]
     fn control_width_zero() {
-        assert_eq!(width_val('\u{001F}'), 0);
-        assert_eq!(width_val('\u{007F}'), 0);
+        assert_eq!(width_value('\u{001F}'), 0);
+        assert_eq!(width_value('\u{007F}'), 0);
     }
 
     #[test]
     fn cjk_width() {
-        assert_eq!(width_val('\u{4E00}'), 2);
-        assert_eq!(width_val('中'), 2);
-        assert_eq!(width_val('文'), 2);
+        assert_eq!(width_value('\u{4E00}'), 2);
+        assert_eq!(width_value('中'), 2);
+        assert_eq!(width_value('文'), 2);
     }
 
     #[test]
     fn hangul_width() {
-        assert_eq!(width_val('\u{AC00}'), 2);
+        assert_eq!(width_value('\u{AC00}'), 2);
     }
 
     #[test]
     fn fullwidth_width() {
-        assert_eq!(width_val('\u{FF01}'), 2);
+        assert_eq!(width_value('\u{FF01}'), 2);
     }
 
     #[test]
@@ -69,13 +71,13 @@ mod tests {
     }
 
     #[test]
-    fn str_width_ascii() {
-        assert_eq!(str_width("hello"), 5);
+    fn string_width_ascii() {
+        assert_eq!(string_width("hello"), 5);
     }
 
     #[test]
-    fn str_width_mixed() {
-        assert_eq!(str_width("A中B"), 4);
+    fn string_width_mixed() {
+        assert_eq!(string_width("A中B"), 4);
     }
 
     #[test]
@@ -105,57 +107,51 @@ mod tests {
 
     #[test]
     fn width_japanese_kana() {
-        assert_eq!(width_val('あ'), 2);
-        assert_eq!(width_val('ア'), 2);
-        // half-width katakana ｱ (U+FF71) is actually width 1
-        assert_eq!(width_val('ｱ'), 1);
+        assert_eq!(width_value('あ'), 2);
+        assert_eq!(width_value('ア'), 2);
+        assert_eq!(width_value('ｱ'), 1);
     }
 
     #[test]
     fn width_emoji() {
-        // Simple emoji is typically wide
         assert!(is_wide('😀'));
     }
 
     #[test]
-    fn str_width_empty() {
-        assert_eq!(str_width(""), 0);
+    fn string_width_empty() {
+        assert_eq!(string_width(""), 0);
     }
 
     #[test]
-    fn str_width_single_ascii() {
-        assert_eq!(str_width("x"), 1);
+    fn string_width_single_ascii() {
+        assert_eq!(string_width("x"), 1);
     }
 
     #[test]
-    fn str_width_cjk() {
-        assert_eq!(str_width("中文"), 4);
+    fn string_width_cjk() {
+        assert_eq!(string_width("中文"), 4);
     }
 
     #[test]
-    fn str_width_combining() {
-        // e + combining acute = 1 cell (e is wide=1, combining is 0)
+    fn string_width_combining() {
         let s = "é";
-        // 分解很重要：U+00E9 'é' 是宽度为 1 的单个字符
-        assert_eq!(str_width(s), 1);
+        assert_eq!(string_width(s), 1);
     }
 
     #[test]
-    fn str_width_with_zero_width_chars() {
-        // ZWJ is zero-width
-        let s = "\u{200D}"; // ZWJ
-        assert_eq!(str_width(s), 0);
+    fn string_width_with_zero_width_chars() {
+        let s = "\u{200D}";
+        assert_eq!(string_width(s), 0);
     }
 
     #[test]
-    fn str_width_long_ascii() {
-        assert_eq!(str_width(&"a".repeat(100)), 100);
+    fn string_width_long_ascii() {
+        assert_eq!(string_width(&"a".repeat(100)), 100);
     }
 
     #[test]
-    fn str_width_mixed_long() {
-        // "AB中CD文EF" = 6*1 + 2*2 = 6 + 4 = 10
-        assert_eq!(str_width("AB中CD文EF"), 10);
+    fn string_width_mixed_long() {
+        assert_eq!(string_width("AB中CD文EF"), 10);
     }
 
     #[test]
@@ -167,8 +163,8 @@ mod tests {
 
     #[test]
     fn is_wide_false_for_ascii() {
-        for c in 'a'..='z' {
-            assert!(!is_wide(c), "ASCII {c} should not be wide");
+        for character in 'a'..='z' {
+            assert!(!is_wide(character), "ASCII {character} should not be wide");
         }
     }
 
@@ -179,41 +175,79 @@ mod tests {
     }
 
     #[test]
-    fn width_val_zero_for_space() {
-        // ' ' has width 1 actually
-        assert_eq!(width_val(' '), 1);
+    fn width_value_space() {
+        assert_eq!(width_value(' '), 1);
     }
 
     #[test]
-    fn width_val_zero_for_null() {
-        assert_eq!(width_val('\0'), 0);
+    fn width_value_null() {
+        assert_eq!(width_value('\0'), 0);
     }
 
     #[test]
-    fn width_val_tab_is_control() {
-        // tab is control = 0
-        assert_eq!(width_val('\t'), 0);
+    fn width_value_tab() {
+        assert_eq!(width_value('\t'), 0);
     }
 
     #[test]
-    fn width_val_newline_is_control() {
-        assert_eq!(width_val('\n'), 0);
+    fn width_value_newline() {
+        assert_eq!(width_value('\n'), 0);
     }
 
     #[test]
     fn width_fullwidth_latin() {
-        // Ａ (U+FF21) is fullwidth
-        assert_eq!(width_val('Ａ'), 2);
+        assert_eq!(width_value('Ａ'), 2);
     }
 
     #[test]
-    fn str_width_fullwidth() {
-        assert_eq!(str_width("Ａ"), 2);
+    fn string_width_fullwidth() {
+        assert_eq!(string_width("Ａ"), 2);
     }
 
     #[test]
-    fn str_width_emoji() {
-        // 😀 (U+1F600) is typically width 2
-        assert_eq!(str_width("😀"), 2);
+    fn string_width_emoji() {
+        assert_eq!(string_width("😀"), 2);
+    }
+
+    #[test]
+    fn width_emoji_skin_tone_wide() {
+        assert!(is_wide('👍'));
+        assert_eq!(width_value('👍'), 2);
+    }
+
+    #[test]
+    fn width_emoji_flag() {
+        assert_eq!(width_value('🇦'), 1);
+        assert_eq!(width_value('🇧'), 1);
+    }
+
+    #[test]
+    fn width_emoji_keycap() {
+        assert_eq!(width_value('1'), 1);
+    }
+
+    #[test]
+    fn width_soft_hyphen() {
+        assert_eq!(width_value('\u{00AD}'), 0);
+    }
+
+    #[test]
+    fn width_word_joiner() {
+        assert_eq!(width_value('\u{2060}'), 0);
+    }
+
+    #[test]
+    fn width_hangul_filler() {
+        assert_eq!(width_value('\u{115F}'), 2);
+    }
+
+    #[test]
+    fn width_variation_selector() {
+        assert_eq!(width_value('\u{FE0F}'), 0);
+    }
+
+    #[test]
+    fn width_combining_enclosing() {
+        assert_eq!(width_value('\u{20DD}'), 0);
     }
 }

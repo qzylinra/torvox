@@ -1,0 +1,53 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:UrlSelectionTest.kt$UrlSelectionTest$!continuationWord[0].isLowerCase() &amp;&amp; continuationWord[0] != '/' &amp;&amp; continuationWord[0] != '.' &amp;&amp; continuationWord[0] != '-' &amp;&amp; continuationWord[0] != '+' &amp;&amp; continuationWord[0] != '~' &amp;&amp; continuationWord[0] != '#' &amp;&amp; continuationWord[0] != '&amp;' &amp;&amp; continuationWord[0] != '%'</ID>
+    <ID>ComplexCondition:UrlSelectionTest.kt$UrlSelectionTest$!word.contains("://") &amp;&amp; !word.startsWith("www.") &amp;&amp; !word.contains(".com") &amp;&amp; !word.contains(".git") &amp;&amp; !word.contains(".org") &amp;&amp; !word.contains(".io")</ID>
+    <ID>ConstructorParameterNaming:TorvoxBridge.kt$TerminalConfig$val font_size_tenths: UInt = 140u</ID>
+    <ID>CyclomaticComplexMethod:TerminalInputEncoder.kt$TerminalInputEncoder$private fun controlByteForKeyCode(keyCode: Int): Byte?</ID>
+    <ID>CyclomaticComplexMethod:TerminalScreen.kt$@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class) @Composable fun TerminalScreen( modifier: Modifier = Modifier, viewModel: TerminalViewModel = hiltViewModel(), onSettings: () -&gt; Unit = {}, onFileManager: () -&gt; Unit = {}, )</ID>
+    <ID>CyclomaticComplexMethod:TerminalViewModel.kt$TerminalViewModel$private fun extractSelectedText(selection: SelectionState): String</ID>
+    <ID>CyclomaticComplexMethod:TorvoxRuntime.kt$TorvoxRuntime$private fun startRenderThread(entry: SessionEntry)</ID>
+    <ID>CyclomaticComplexMethod:TorvoxRuntime.kt$TorvoxRuntime$suspend fun start( surface: Surface?, width: Int, height: Int, blitCallback: (() -&gt; Unit)? = null, )</ID>
+    <ID>CyclomaticComplexMethod:UrlSelectionTest.kt$UrlSelectionTest$private fun expandAcrossUrlWrap( lines: List&lt;String&gt;, row: Int, wordStartCol: Int, wordEndCol: Int, ): UrlSpan?</ID>
+    <ID>EmptyCatchBlock:TorvoxRuntime.kt$TorvoxRuntime${ }</ID>
+    <ID>EmptyFunctionBlock:TerminalSurface.kt$TerminalSurface${ }</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$config_len: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$config_ptr: ByteArray?</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$data_len: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$data_ptr: ByteArray?</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$family_len: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$family_ptr: ByteArray?</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$path_len: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$path_ptr: ByteArray?</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$query_len: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$query_ptr: ByteArray?</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$size_tenths: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$theme_len: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$theme_ptr: ByteArray?</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$window_ptr_high: Int</ID>
+    <ID>FunctionParameterNaming:TorvoxBridge.kt$TorvoxNative$window_ptr_low: Int</ID>
+    <ID>LongMethod:SessionDrawer.kt$@Composable fun SessionDrawer( viewModel: TerminalViewModel, onSettings: () -&gt; Unit, onSearch: () -&gt; Unit, onFileManager: () -&gt; Unit, onClose: () -&gt; Unit, )</ID>
+    <ID>LongMethod:SettingsScreen.kt$@OptIn(ExperimentalMaterial3Api::class) @Composable fun SettingsScreen( viewModel: TerminalViewModel, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:TerminalScreen.kt$@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class) @Composable fun TerminalScreen( modifier: Modifier = Modifier, viewModel: TerminalViewModel = hiltViewModel(), onSettings: () -&gt; Unit = {}, onFileManager: () -&gt; Unit = {}, )</ID>
+    <ID>LongMethod:TextSearchBar.kt$@Composable fun TextSearchBar( query: String, onQueryChange: (String) -&gt; Unit, resultCount: Int, currentResultIndex: Int, onPrevious: () -&gt; Unit, onNext: () -&gt; Unit, onClose: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongMethod:TorvoxRuntime.kt$TorvoxRuntime$private fun startRenderThread(entry: SessionEntry)</ID>
+    <ID>LongMethod:TorvoxRuntime.kt$TorvoxRuntime$suspend fun start( surface: Surface?, width: Int, height: Int, blitCallback: (() -&gt; Unit)? = null, )</ID>
+    <ID>LongParameterList:SessionDrawer.kt$( title: String, isActive: Boolean, onClick: () -&gt; Unit, onClose: () -&gt; Unit, accent: Color, surface: Color, fg: Color, )</ID>
+    <ID>LongParameterList:SettingsScreen.kt$( fonts: List&lt;String&gt;, selectedFamily: String, onFamilySelected: (String) -&gt; Unit, onDismiss: () -&gt; Unit, textColor: Color, cardBg: Color, accentColor: Color, onPickFontFile: (() -&gt; Unit)? = null, )</ID>
+    <ID>LongParameterList:SettingsScreen.kt$( label: String, selectedTheme: String, themes: List&lt;TerminalTheme&gt;, onThemeSelected: (String) -&gt; Unit, textColor: Color, cardBg: Color, )</ID>
+    <ID>LongParameterList:SettingsScreen.kt$( modifier: Modifier = Modifier, value: Float, onValueChange: (Float) -&gt; Unit, textColor: Color, secondaryText: Color, accentColor: Color, )</ID>
+    <ID>LongParameterList:SettingsScreen.kt$( selectedFamily: String, onFamilySelected: (String) -&gt; Unit, textColor: Color, cardBg: Color, accentColor: Color, fonts: List&lt;String&gt; = emptyList(), onPickFontFile: (() -&gt; Unit)? = null, )</ID>
+    <ID>LongParameterList:TextSearchBar.kt$( query: String, onQueryChange: (String) -&gt; Unit, resultCount: Int, currentResultIndex: Int, onPrevious: () -&gt; Unit, onNext: () -&gt; Unit, onClose: () -&gt; Unit, modifier: Modifier = Modifier, )</ID>
+    <ID>LongParameterList:TorvoxRuntime.kt$TorvoxRuntime$( id: Long, surface: Surface, width: Int, height: Int, needsSpawn: Boolean = false, spawnRows: UInt = 24u, spawnCols: UInt = 80u, )</ID>
+    <ID>MatchingDeclarationName:TextSearchBar.kt$SearchResult</ID>
+    <ID>NestedBlockDepth:MainActivity.kt$MainActivity$@Deprecated("Use View.OnKeyListener pattern") override fun onKeyDown( keyCode: Int, event: KeyEvent?, ): Boolean</ID>
+    <ID>NestedBlockDepth:MainActivity.kt$MainActivity$@Deprecated("Use View.OnKeyListener pattern") override fun onKeyUp( keyCode: Int, event: KeyEvent?, ): Boolean</ID>
+    <ID>NestedBlockDepth:TerminalViewModel.kt$TerminalViewModel$private fun extractSelectedText(selection: SelectionState): String</ID>
+    <ID>NestedBlockDepth:UrlSelectionTest.kt$UrlSelectionTest$private fun expandUrlSelection( lines: List&lt;String&gt;, startRow: Int, startCol: Int, endRow: Int, endCol: Int, ): UrlSpan?</ID>
+    <ID>UnusedParameter:SettingsScreen.kt$cardBg: Color</ID>
+    <ID>UnusedParameter:UrlSelectionTest.kt$UrlSelectionTest$startCol: Int</ID>
+    <ID>UnusedPrivateProperty:MainActivity.kt$MainActivity$private val logHandler = Handler(Looper.getMainLooper())</ID>
+  </CurrentIssues>
+</SmellBaseline>

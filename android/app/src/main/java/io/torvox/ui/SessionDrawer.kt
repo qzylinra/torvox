@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,55 +45,60 @@ import androidx.compose.ui.unit.sp
 import io.torvox.R
 import io.torvox.TerminalViewModel
 
-private val drawerBg = Color(0xFF1A1A1A)
-private val drawerFg = Color(0xFFE0E0E0)
-private val drawerSecondary = Color(0xFF9E9E9E)
-private val drawerAccent = Color(0xFF22D3EE)
-private val drawerSurface = Color(0xFF252525)
-
 @Composable
 fun SessionDrawer(
     viewModel: TerminalViewModel,
     onSettings: () -> Unit,
+    onSearch: () -> Unit,
+    onFileManager: () -> Unit,
     onClose: () -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
+    val bg = MaterialTheme.colorScheme.surfaceVariant
+    val fg = MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = MaterialTheme.colorScheme.primary
+    val surface = MaterialTheme.colorScheme.surface
+    val divider = MaterialTheme.colorScheme.outlineVariant
 
     Column(
         modifier =
-            Modifier
-                .fillMaxHeight()
-                .width(280.dp)
-                .background(drawerBg)
-                .padding(top = 48.dp),
+        Modifier
+            .fillMaxHeight()
+            .width(280.dp)
+            .background(bg)
+            .testTag("SessionDrawer")
+            .imePadding()
+            .navigationBarsPadding(),
     ) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(
             modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
                 text = stringResource(R.string.sessions),
-                color = drawerSecondary,
+                color = fg.copy(alpha = 0.7f),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
             )
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = stringResource(R.string.cd_new_session),
-                tint = drawerAccent,
+                tint = accent,
                 modifier =
-                    Modifier
-                        .size(24.dp)
-                        .clip(CircleShape)
-                        .clickable {
-                            viewModel.createSession()
-                        }.padding(2.dp),
+                Modifier
+                    .size(24.dp)
+                    .testTag("AddSessionButton")
+                    .clip(CircleShape)
+                    .clickable {
+                        onClose()
+                        viewModel.createSession()
+                    }.padding(2.dp),
             )
         }
 
@@ -110,31 +119,64 @@ fun SessionDrawer(
                     onClose = {
                         viewModel.closeSession(session.id)
                     },
+                    accent = accent,
+                    surface = surface,
+                    fg = fg,
                 )
             }
         }
 
-        HorizontalDivider(color = drawerSurface, thickness = 1.dp)
+        HorizontalDivider(color = divider, thickness = 1.dp)
+
+        // Action buttons row
+        Row(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            ActionButton(
+                icon = Icons.Default.Search,
+                label = stringResource(R.string.text_search),
+                onClick = {
+                    onClose()
+                    onSearch()
+                },
+                fg = fg,
+            )
+            ActionButton(
+                icon = Icons.Default.Folder,
+                label = stringResource(R.string.file_manager),
+                onClick = {
+                    onClose()
+                    onFileManager()
+                },
+                fg = fg,
+            )
+        }
+
+        HorizontalDivider(color = divider, thickness = 1.dp)
 
         Row(
             modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSettings)
-                    .testTag("SettingsButton")
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onSettings)
+                .testTag("SettingsButton")
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = Icons.Default.Settings,
                 contentDescription = stringResource(R.string.cd_settings),
-                tint = drawerSecondary,
+                tint = fg.copy(alpha = 0.7f),
                 modifier = Modifier.size(20.dp),
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
-                text = "Settings",
-                color = drawerFg,
+                text = stringResource(R.string.settings_button),
+                color = fg,
                 fontSize = 15.sp,
             )
         }
@@ -149,27 +191,30 @@ private fun SessionItem(
     isActive: Boolean,
     onClick: () -> Unit,
     onClose: () -> Unit,
+    accent: Color,
+    surface: Color,
+    fg: Color,
 ) {
-    val bgColor = if (isActive) drawerSurface else Color.Transparent
-    val titleColor = if (isActive) drawerFg else drawerSecondary
+    val bgColor = if (isActive) surface else Color.Transparent
+    val titleColor = if (isActive) fg else fg.copy(alpha = 0.7f)
 
     Row(
         modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(bgColor)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier =
-                Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(if (isActive) drawerAccent else drawerSecondary),
+            Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(if (isActive) accent else fg.copy(alpha = 0.4f)),
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
@@ -184,14 +229,44 @@ private fun SessionItem(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = stringResource(R.string.cd_close_session),
-                tint = drawerSecondary,
+                tint = fg.copy(alpha = 0.6f),
                 modifier =
-                    Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .clickable(onClick = onClose)
-                        .padding(2.dp),
+                Modifier
+                    .size(18.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onClose)
+                    .padding(2.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    fg: Color,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier =
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = fg.copy(alpha = 0.8f),
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            color = fg.copy(alpha = 0.7f),
+            fontSize = 11.sp,
+        )
     }
 }

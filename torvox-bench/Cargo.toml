@@ -3,7 +3,6 @@ name = "torvox-bench"
 version.workspace = true
 edition.workspace = true
 description = "Criterion benchmarks for Torvox terminal operations"
-license.workspace = true
 
 [dependencies]
 torvox-core = { workspace = true }
@@ -11,7 +10,11 @@ torvox-terminal = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+guillotiere = "0.7"
 
 [[bench]]
 name = "terminal_bench"
 harness = false
+
+[lints]
+workspace = true

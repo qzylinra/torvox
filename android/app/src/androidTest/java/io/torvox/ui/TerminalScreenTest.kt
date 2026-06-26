@@ -3,7 +3,6 @@ package io.torvox.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import io.torvox.MainActivity
 import org.junit.Rule
@@ -14,22 +13,21 @@ class TerminalScreenTest {
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun topAppBar_renders_with_settings_button() {
+    fun terminal_screen_is_displayed() {
         composeTestRule.onNodeWithTag("TerminalScreen").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("TerminalTitle").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("SettingsButton").assertIsDisplayed()
     }
 
     @Test
-    fun settings_button_opens_settings_screen() {
+    fun drawer_settings_button_opens_settings_screen() {
+        composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
+        composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("SettingsButton").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("SettingsScreen").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("SettingsBackButton").assertIsDisplayed()
     }
 
     @Test
-    fun terminal_surface_fills_screen() {
+    fun terminal_content_fills_screen() {
         composeTestRule.onNodeWithTag("TerminalContent").assertIsDisplayed()
     }
 
@@ -39,7 +37,15 @@ class TerminalScreenTest {
     }
 
     @Test
-    fun terminal_title_shows_default_text() {
-        composeTestRule.onNodeWithText("Torvox").assertIsDisplayed()
+    fun terminal_content_has_modifier_bar_below() {
+        composeTestRule.onNodeWithTag("TerminalContent").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
+    }
+
+    @Test
+    fun settings_drawer_settings_button_exists() {
+        composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("SettingsButton").assertIsDisplayed()
     }
 }

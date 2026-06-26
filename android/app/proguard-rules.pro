@@ -1,16 +1,17 @@
-# JNA (boltffi runtime dependency)
+-dontoptimize
+-keep class io.torvox.** { *; }
+-keepclassmembers class * {
+    @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
+}
+-keepattributes *Annotation*
+-keepattributes Signature
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
+
+-dontwarn com.sun.jna.**
 -keep class com.sun.jna.** { *; }
--dontwarn java.awt.**
--dontwarn sun.awt.**
-# boltffi bridge types
--keep class io.torvox.bridge.** { *; }
-
-# Dagger Hilt
--keep class dagger.hilt.** { *; }
--keep class javax.inject.** { *; }
-
-# Lifecycle (ViewModel with Hilt)
--keep class androidx.lifecycle.** { *; }
-
-# Kotlin Metadata (required for Hilt to reflect upon injected ViewModels)
--keep class kotlin.Metadata { *; }
+-keep class * implements com.sun.jna.Library { *; }
+-keepclassmembers class * implements com.sun.jna.Library {
+    <methods>;
+}
+-keep class com.sun.jna.**$* { *; }

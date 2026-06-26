@@ -1,3 +1,5 @@
+// @rkyv snapshot serialization, IMPL_CORE_005, impl, [REQ_CORE_005]
+// @need-ids: REQ_CORE_005, REQ_CORE_006
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
@@ -163,14 +165,14 @@ mod tests {
     fn snapshot_apply_to_scrollback_appends_visible_and_scrollback() {
         let mut grid = Grid::new(2, 3);
         grid.get_mut(0).unwrap().get_mut(0).unwrap().char = 'A';
-        grid.scroll_up(0, 2, 3); // A 进入回滚区
+        grid.scroll_up(0, 2, 3); // A goes into scrollback
         grid.get_mut(0).unwrap().get_mut(0).unwrap().char = 'B';
-        grid.scroll_up(0, 2, 3); // B 进入回滚区
-        // 现在网格顶部有 C（来自上一行）但 C 不在那里。重新思考。
+        grid.scroll_up(0, 2, 3); // B goes into scrollback
+        // Now the grid top has C (from previous line) but C isn't there. Rethink.
         let snap = SessionSnapshot::from_grid(&grid);
         let mut restored = Grid::new(2, 3);
         snap.apply_to_scrollback(&mut restored, 1000);
-        // 2 行回滚 + 2 行可见 = 共恢复 4 行
+        // 2 scrollback lines + 2 visible lines = 4 lines restored
         assert_eq!(restored.scrollback_len(), 4);
     }
 
@@ -184,7 +186,7 @@ mod tests {
         let snap = SessionSnapshot::from_grid(&grid);
         let mut restored = Grid::with_scrollback(2, 3, 5);
         snap.apply_to_scrollback(&mut restored, 3);
-        // 回滚区最多 3 行
+        // Scrollback at most 3 lines
         assert!(restored.scrollback_len() <= 3);
     }
 
@@ -208,9 +210,9 @@ mod tests {
         let snap = SessionSnapshot::from_grid(&grid);
         let mut restored = Grid::with_scrollback(2, 3, 3);
         snap.apply_to_scrollback(&mut restored, 3);
-        // 应保留最近 3 行
-        // 快照中 3 行回滚 + 2 行可见 = 共 5 行
-        // 以 max=3 应用，保留最后 3 行
+        // Should keep the 3 most recent lines
+        // Snapshot has 3 scrollback lines + 2 visible lines = 5 total lines
+        // Applied with max=3, keeps the last 3 lines
         assert_eq!(restored.scrollback_len(), 3);
     }
 
@@ -231,20 +233,36 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_equality() {
-        let mut grid = Grid::new(3, 5);
-        grid.get_mut(0).unwrap().get_mut(0).unwrap().char = 'X';
-        let snap1 = SessionSnapshot::from_grid(&grid);
-        let snap2 = SessionSnapshot::from_grid(&grid);
-        assert_eq!(snap1, snap2);
+    fn snapshot_equality_requires_same_grid_state() {
+        let mut grid1 = Grid::new(3, 5);
+        grid1.get_mut(0).unwrap().get_mut(0).unwrap().char = 'X';
+        let snap1 = SessionSnapshot::from_grid(&grid1);
+
+        let mut grid2 = Grid::new(3, 5);
+        grid2.get_mut(0).unwrap().get_mut(0).unwrap().char = 'Y';
+        let snap2 = SessionSnapshot::from_grid(&grid2);
+
+        assert_ne!(
+            snap1, snap2,
+            "different grid content should produce different snapshots"
+        );
+
+        let snap3 = SessionSnapshot::from_grid(&grid1);
+        assert_eq!(
+            snap1, snap3,
+            "same grid state should produce equal snapshots"
+        );
     }
 
     #[test]
-    fn snapshot_clone() {
+    fn snapshot_clone_independence() {
         let mut grid = Grid::new(3, 5);
         grid.get_mut(0).unwrap().get_mut(0).unwrap().char = 'X';
-        let snap = SessionSnapshot::from_grid(&grid);
-        let snap2 = snap.clone();
-        assert_eq!(snap, snap2);
+        let original = SessionSnapshot::from_grid(&grid);
+        let cloned = original.clone();
+        assert_eq!(original, cloned);
+
+        // Verify clone is independent (can't modify original since it's Copy-safe via Clone)
+        assert_eq!(cloned.visible_lines.len(), original.visible_lines.len());
     }
 }

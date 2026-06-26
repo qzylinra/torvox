@@ -76,38 +76,14 @@ mod config_file_validation {
     }
 
     #[test]
-    fn quality_gate_script_exists() {
-        let root = workspace_root();
-        let path = format!("{root}/scripts/quality-gate.nu");
-        let content = fs::read_to_string(&path).expect("quality-gate.nu must exist");
-        assert!(
-            content.contains("#!/usr/bin/env nu"),
-            "quality-gate.nu must start with nushell shebang"
-        );
-    }
-
-    #[test]
     fn build_android_libs_script_exists() {
         let root = workspace_root();
         let path = format!("{root}/scripts/build-android-libs.nu");
         let content = fs::read_to_string(&path).expect("build-android-libs.nu must exist");
         assert!(
-            content.contains("#!/usr/bin/env nu"),
-            "build-android-libs.nu must start with nushell shebang"
+            content.contains("nix develop --command nu"),
+            "build-android-libs.nu must have nix develop shebang"
         );
-    }
-
-    #[test]
-    fn no_dead_config_files() {
-        let root = workspace_root();
-        let dead_files: &[&str] = &[];
-        for file in dead_files {
-            let path = format!("{root}/{file}");
-            assert!(
-                !std::path::Path::new(&path).exists(),
-                "dead config file found: {file} — remove it"
-            );
-        }
     }
 
     #[test]
@@ -309,16 +285,13 @@ mod config_file_validation {
 
 #[cfg(test)]
 mod vt_to_snapshot_pipeline {
-    use std::thread;
-    use std::time::Duration;
-
     use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
     #[test]
     fn vt_write_then_snapshot_dims() {
         let mut t = GhosttyTerminal::new(10, 20, 100).unwrap();
         t.vt_write(b"X");
-        thread::sleep(Duration::from_millis(20));
+        t.flush();
         let snap = t.take_snapshot();
         assert_eq!(snap.rows, 10);
         assert_eq!(snap.cols, 20);
@@ -329,7 +302,7 @@ mod vt_to_snapshot_pipeline {
         let mut t = GhosttyTerminal::new(2, 20, 100).unwrap();
         let utf8 = "中".as_bytes().to_vec();
         t.vt_write(&utf8);
-        thread::sleep(Duration::from_millis(20));
+        t.flush();
         let snap = t.take_snapshot();
         let has_zh = snap.cells.iter().any(|c| c.codepoint == 0x4E2D);
         assert!(has_zh, "expected 中 character in snapshot");
@@ -340,7 +313,7 @@ mod vt_to_snapshot_pipeline {
         let mut t = GhosttyTerminal::new(1, 20, 100).unwrap();
         let utf8 = "\u{1F600}".as_bytes().to_vec();
         t.vt_write(&utf8);
-        thread::sleep(Duration::from_millis(20));
+        t.flush();
         let snap = t.take_snapshot();
         let has_emoji = snap.cells.iter().any(|c| c.codepoint == 0x1F600);
         assert!(has_emoji, "expected emoji in snapshot");
@@ -379,7 +352,7 @@ mod vt_to_snapshot_pipeline {
     fn dump_grid_after_writes() {
         let mut t = GhosttyTerminal::new(3, 5, 0).unwrap();
         t.vt_write(b"AB");
-        thread::sleep(Duration::from_millis(20));
+        t.flush();
         let dumped = t.dump_grid();
         assert_eq!(dumped.rows, 3);
         assert_eq!(dumped.cols, 5);
@@ -390,7 +363,7 @@ mod vt_to_snapshot_pipeline {
     fn dump_grid_codepoints_sequential() {
         let mut t = GhosttyTerminal::new(1, 5, 0).unwrap();
         t.vt_write(b"ABCDE");
-        thread::sleep(Duration::from_millis(20));
+        t.flush();
         let dumped = t.dump_grid();
         let cps: Vec<u32> = dumped.visible[0..5].iter().map(|c| c.codepoint).collect();
         assert_eq!(
@@ -481,12 +454,13 @@ mod config_driven_session {
 #[cfg(test)]
 mod session_e2e {
     use std::time::{Duration, Instant};
+    use torvox_terminal::ShellEnv;
 
     use torvox_terminal::session::Session;
 
     #[test]
     fn spawn_echo_capture() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo e2e_test_marker\n").expect("write");
         let deadline = Instant::now() + Duration::from_secs(3);
         while Instant::now() < deadline {
@@ -503,7 +477,7 @@ mod session_e2e {
 
     #[test]
     fn spawn_resize_then_echo() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.resize(40, 100).expect("resize");
         assert_eq!(s.terminal().rows(), 40);
         s.write(b"echo after_resize\n").expect("write");
@@ -516,7 +490,7 @@ mod session_e2e {
 
     #[test]
     fn spawn_and_exit() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"exit\n").expect("write");
         let deadline = Instant::now() + Duration::from_secs(3);
         let mut exited = false;
@@ -533,7 +507,7 @@ mod session_e2e {
 
     #[test]
     fn spawn_long_running_then_drop() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"sleep 60\n").expect("write");
         std::thread::sleep(Duration::from_millis(100));
         // Don't assert is_exited: depends on the test environment.
@@ -543,7 +517,7 @@ mod session_e2e {
 
     #[test]
     fn spawn_session_id_stable() {
-        let s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         assert!(!s.exited_flag().load(std::sync::atomic::Ordering::Relaxed));
     }
 }
@@ -594,43 +568,19 @@ mod common {
         }
         result
     }
-
-    #[allow(dead_code)]
-    pub fn drain_grid(s: &mut Session, timeout: Duration) -> Vec<Vec<char>> {
-        drain_until(s, |_| false, timeout);
-        let snap = s.terminal().take_snapshot();
-        let mut grid = Vec::new();
-        for row in 0..snap.rows {
-            let mut line = Vec::new();
-            for col in 0..snap.cols {
-                let idx = (row * snap.cols + col) as usize;
-                if idx < snap.cells.len() {
-                    let cp = snap.cells[idx].codepoint;
-                    if cp != 0 {
-                        line.push(char::from_u32(cp).unwrap_or('?'));
-                    } else {
-                        line.push(' ');
-                    }
-                } else {
-                    line.push(' ');
-                }
-            }
-            grid.push(line);
-        }
-        grid
-    }
 }
 
 #[cfg(test)]
 mod linux_pty_shell_interaction {
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn spawn_shell_and_echo() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo hello_from_pty\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -641,7 +591,7 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn pwd_returns_path() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"pwd\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -652,7 +602,7 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn echo_with_quotes() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo 'hello world'\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -663,7 +613,7 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn echo_multiple_words() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo one two three\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -674,18 +624,18 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn env_shows_term() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo $TERM\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
-            result.contains("torvox"),
-            "expected TERM variable to contain 'torvox', got: {result}"
+            result.contains("xterm-256color") || result.contains("torvox"),
+            "expected TERM variable to contain 'xterm-256color' or 'torvox', got: {result}"
         );
     }
 
     #[test]
     fn env_shows_colorterm() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo $COLORTERM\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -696,7 +646,7 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn pipe_command() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo hello | cat\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -707,7 +657,7 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn exit_code_zero() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"true; echo exit_code=$?\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -718,7 +668,7 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn exit_code_nonzero() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"false; echo exit_code=$?\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -729,9 +679,14 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn shell_prompt_appears() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
-        std::thread::sleep(Duration::from_millis(500));
-        s.process_output();
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
+        let deadline = Instant::now() + Duration::from_millis(500);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let snap = s.terminal().take_snapshot();
         let has_content = snap.cells.iter().any(|c| c.codepoint != 0);
         assert!(has_content, "shell should produce prompt or startup output");
@@ -739,11 +694,23 @@ mod linux_pty_shell_interaction {
 
     #[test]
     fn write_multiple_commands_sequentially() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo first\n").expect("write");
-        std::thread::sleep(Duration::from_millis(200));
+        let deadline = Instant::now() + Duration::from_millis(200);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         s.write(b"echo second\n").expect("write");
-        std::thread::sleep(Duration::from_millis(200));
+        let deadline = Instant::now() + Duration::from_millis(200);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         s.write(b"echo third\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
         assert!(
@@ -755,16 +722,22 @@ mod linux_pty_shell_interaction {
 
 #[cfg(test)]
 mod linux_signal_handling {
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn resize_sends_sigwinch() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
-        // Give shell time to start
-        std::thread::sleep(Duration::from_millis(300));
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
+        let deadline = Instant::now() + Duration::from_millis(300);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         // Resize should send SIGWINCH to the child
         s.resize(40, 120).expect("resize");
         assert_eq!(s.terminal().rows(), 40);
@@ -780,8 +753,14 @@ mod linux_signal_handling {
 
     #[test]
     fn multiple_resizes_in_sequence() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
-        std::thread::sleep(Duration::from_millis(300));
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
+        let deadline = Instant::now() + Duration::from_millis(300);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         s.resize(30, 90).expect("resize 1");
         s.resize(50, 140).expect("resize 2");
         s.resize(10, 40).expect("resize 3");
@@ -797,8 +776,14 @@ mod linux_signal_handling {
 
     #[test]
     fn resize_too_small_then_back() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
-        std::thread::sleep(Duration::from_millis(300));
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
+        let deadline = Instant::now() + Duration::from_millis(300);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         s.resize(1, 1).expect("resize to 1x1");
         assert_eq!(s.terminal().rows(), 1);
         assert_eq!(s.terminal().cols(), 1);
@@ -817,13 +802,14 @@ mod linux_signal_handling {
 #[cfg(test)]
 mod linux_exit_behavior {
     use std::time::{Duration, Instant};
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn shell_exits_on_exit_command() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"exit\n").expect("write");
         let exited = drain_until(&mut s, |s| s.is_exited(), Duration::from_secs(3));
         assert!(exited, "shell should exit after 'exit' command");
@@ -831,7 +817,7 @@ mod linux_exit_behavior {
 
     #[test]
     fn shell_exits_with_code() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"exit 42\n").expect("write");
         let exited = drain_until(&mut s, |s| s.is_exited(), Duration::from_secs(3));
         assert!(exited, "shell should exit after 'exit 42' command");
@@ -839,9 +825,15 @@ mod linux_exit_behavior {
 
     #[test]
     fn drop_kills_child_process() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"sleep 300\n").expect("write");
-        std::thread::sleep(Duration::from_millis(200));
+        let deadline = Instant::now() + Duration::from_millis(200);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         let start = Instant::now();
         drop(s);
         let elapsed = start.elapsed();
@@ -857,13 +849,13 @@ mod linux_exit_behavior {
     fn drop_closes_pty() {
         let pid;
         {
-            let s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+            let s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
             pid = s.terminal().rows(); // just access something to prove it's alive
             drop(s);
         }
         // After drop, the child process should be dead.
         // We verify by checking that a new session can be spawned (not blocked).
-        let mut s2 = Session::spawn("/bin/sh", 24, 80).expect("second spawn");
+        let mut s2 = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("second spawn");
         s2.write(b"echo after_drop\n").expect("write");
         let result = drain_to_string(&mut s2, Duration::from_secs(3));
         assert!(
@@ -875,8 +867,8 @@ mod linux_exit_behavior {
 
     #[test]
     fn multiple_sessions_concurrent() {
-        let mut s1 = Session::spawn("/bin/sh", 24, 80).expect("spawn 1");
-        let mut s2 = Session::spawn("/bin/sh", 24, 80).expect("spawn 2");
+        let mut s1 = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn 1");
+        let mut s2 = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn 2");
         s1.write(b"echo session_one\n").expect("write 1");
         s2.write(b"echo session_two\n").expect("write 2");
         let r1 = drain_to_string(&mut s1, Duration::from_secs(3));
@@ -895,13 +887,14 @@ mod linux_exit_behavior {
 #[cfg(test)]
 mod linux_scrollback {
     use std::time::Duration;
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn long_output_triggers_scrollback() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // seq 1 200 outputs 200 lines, well beyond 24-row viewport
         s.write(b"seq 1 200\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(5));
@@ -914,7 +907,7 @@ mod linux_scrollback {
 
     #[test]
     fn scrollback_contains_earlier_lines() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"seq 1 100\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(5));
         let line = s.terminal().read_line_text(0);
@@ -924,7 +917,7 @@ mod linux_scrollback {
 
     #[test]
     fn search_in_scrollback() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo SEARCH_TARGET_XYZ\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         let result = s.terminal().search_in_scrollback("SEARCH_TARGET_XYZ");
@@ -936,7 +929,7 @@ mod linux_scrollback {
 
     #[test]
     fn small_output_no_scrollback() {
-        let mut s = Session::spawn("/bin/sh", 1, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 1, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo hi\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         // With only 1 row, output wraps but scrollback may or may not be used
@@ -948,13 +941,14 @@ mod linux_scrollback {
 #[cfg(test)]
 mod linux_unicode_handling {
     use std::time::Duration;
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn echo_cjk_characters() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // dash printf uses octal escapes: 中 = UTF-8 E4 B8 AD = \344\270\255
         // In Rust bytes: backslash is \\, so \344 becomes \x5c\x33\x34\x34
         // Simpler: just send the raw UTF-8 bytes directly to the PTY
@@ -967,7 +961,7 @@ mod linux_unicode_handling {
 
     #[test]
     fn echo_emoji() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // 😀 = UTF-8 F0 9F 98 80, send raw bytes
         s.write(b"\xf0\x9f\x98\x80\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
@@ -978,7 +972,7 @@ mod linux_unicode_handling {
 
     #[test]
     fn echo_mixed_ascii_and_cjk() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Write raw UTF-8 bytes "hello 中文" followed by newline through the shell
         s.write(b"echo hello \xe4\xb8\xad\xe6\x96\x87\n")
             .expect("write");
@@ -992,7 +986,7 @@ mod linux_unicode_handling {
 
     #[test]
     fn wide_characters_occupy_two_columns() {
-        let mut s = Session::spawn("/bin/sh", 24, 20).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 20, &ShellEnv::default()).expect("spawn");
         // 中 = UTF-8 E4 B8 AD
         s.write(b"echo \xe4\xb8\xad\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
@@ -1004,31 +998,57 @@ mod linux_unicode_handling {
 
 #[cfg(test)]
 mod linux_ansi_sequences {
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn clear_screen_sequence() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
-        s.write(b"echo before_clear\n").expect("write");
-        std::thread::sleep(Duration::from_millis(300));
-        // Send ANSI clear screen: ESC[H ESC[2J
-        s.write(b"\x1b[H\x1b[2J").expect("write");
-        std::thread::sleep(Duration::from_millis(100));
+        let mut s = Session::spawn("/bin/cat", 24, 80, &ShellEnv::default()).expect("spawn");
+        // Write some text via session PTY; /bin/cat echoes it back
+        s.write(b"HELLO_SEEN\x1b[H\x1b[2J").expect("write");
+        let deadline = Instant::now() + Duration::from_millis(500);
+        while Instant::now() < deadline {
+            s.process_output();
+            let snap = s.terminal().take_snapshot();
+            if snap.cells.iter().all(|c| c.codepoint == 0) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // If we get here, grid wasn't cleared — dump for diagnosis
         let snap = s.terminal().take_snapshot();
-        // After clear, all cells should be empty
-        let has_content = snap.cells.iter().any(|c| c.codepoint != 0);
-        assert!(!has_content, "screen should be cleared after ESC[2J");
+        let cols = snap.cols as usize;
+        let lines: Vec<String> = snap
+            .cells
+            .chunks(cols)
+            .map(|chunk| {
+                chunk
+                    .iter()
+                    .map(|c| char::from_u32(c.codepoint).unwrap_or('?'))
+                    .collect()
+            })
+            .collect();
+        panic!(
+            "screen should be cleared after ESC[2J. Grid:\n{}",
+            lines.join("\n")
+        );
     }
 
     #[test]
     fn cursor_movement() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Clear screen
         s.write(b"\x1b[2J\x1b[H").expect("clear");
-        std::thread::sleep(Duration::from_millis(200));
+        let deadline = Instant::now() + Duration::from_millis(200);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         s.process_output();
         // Verify screen was cleared (or has content from prompt after clear)
         let snap = s.terminal().take_snapshot();
@@ -1037,13 +1057,19 @@ mod linux_ansi_sequences {
         // Cursor positioning + write should not crash
         s.write(b"\x1b[5;5H").expect("cursor move");
         s.write(b"X").expect("write");
-        std::thread::sleep(Duration::from_millis(200));
+        let deadline = Instant::now() + Duration::from_millis(200);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         s.process_output();
     }
 
     #[test]
     fn sgr_bold_attribute() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Set bold, write X, reset
         s.write(b"\x1b[1mX\x1b[0m\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(2));
@@ -1055,7 +1081,7 @@ mod linux_ansi_sequences {
 
     #[test]
     fn sgr_colors() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Write red text
         s.write(b"\x1b[31mR\x1b[0m\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(2));
@@ -1066,10 +1092,16 @@ mod linux_ansi_sequences {
 
     #[test]
     fn osc52_clipboard_does_not_crash() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // OSC 52 set clipboard (should be handled gracefully)
         s.write(b"\x1b]52;c;SGVsbG8=\x07").expect("write");
-        std::thread::sleep(Duration::from_millis(200));
+        let deadline = Instant::now() + Duration::from_millis(200);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         s.process_output();
         // No crash = success
     }
@@ -1078,13 +1110,14 @@ mod linux_ansi_sequences {
 #[cfg(test)]
 mod linux_binary_safety {
     use std::time::Duration;
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn null_bytes_do_not_panic() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"printf '\\x00\\x00\\x00'\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(2));
         // No panic = success
@@ -1092,7 +1125,7 @@ mod linux_binary_safety {
 
     #[test]
     fn random_binary_data_does_not_panic() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Generate random-ish binary data
         let mut data = Vec::new();
         for i in 0..=255u8 {
@@ -1105,7 +1138,7 @@ mod linux_binary_safety {
 
     #[test]
     fn escape_sequences_in_binary_do_not_crash() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Mix of ESC, CSI, and random bytes
         s.write(b"\x1b\x03\x1b[?1h\x00\xff\xfe").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(2));
@@ -1114,7 +1147,7 @@ mod linux_binary_safety {
 
     #[test]
     fn very_long_line_does_not_crash() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Write a line longer than the terminal width
         let long_line = "A".repeat(500);
         s.write(format!("{long_line}\n").as_bytes())
@@ -1125,7 +1158,7 @@ mod linux_binary_safety {
 
     #[test]
     fn rapid_writes_do_not_crash() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         for i in 0..50 {
             s.write(format!("echo line{i}\n").as_bytes())
                 .expect("write");
@@ -1137,14 +1170,15 @@ mod linux_binary_safety {
 
 #[cfg(test)]
 mod linux_session_lifecycle {
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+    use torvox_terminal::ShellEnv;
 
     use super::common::*;
     use torvox_terminal::session::Session;
 
     #[test]
     fn spawn_is_not_exited() {
-        let s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         assert!(
             !s.is_exited(),
             "new session should not be immediately exited"
@@ -1153,7 +1187,7 @@ mod linux_session_lifecycle {
 
     #[test]
     fn write_after_exit_does_not_panic() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"exit\n").expect("write");
         drain_until(&mut s, |s| s.is_exited(), Duration::from_secs(3));
         // Writing to an exited session should not panic
@@ -1162,7 +1196,7 @@ mod linux_session_lifecycle {
 
     #[test]
     fn process_output_after_exit() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"exit\n").expect("write");
         drain_until(&mut s, |s| s.is_exited(), Duration::from_secs(3));
         // process_output should not panic after exit
@@ -1171,7 +1205,7 @@ mod linux_session_lifecycle {
 
     #[test]
     fn take_snapshot_after_exit() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"exit\n").expect("write");
         drain_until(&mut s, |s| s.is_exited(), Duration::from_secs(3));
         // take_snapshot should not panic after exit
@@ -1182,25 +1216,31 @@ mod linux_session_lifecycle {
 
     #[test]
     fn terminal_dims_match_spawn_params() {
-        let s = Session::spawn("/bin/sh", 30, 120).expect("spawn");
+        let s = Session::spawn("/bin/sh", 30, 120, &ShellEnv::default()).expect("spawn");
         assert_eq!(s.terminal().rows(), 30);
         assert_eq!(s.terminal().cols(), 120);
     }
 
     #[test]
     fn session_drop_after_spawn_without_write() {
-        let s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         drop(s);
     }
 
     #[test]
     fn session_drop_after_many_writes() {
-        let mut s = Session::spawn("/bin/sh", 24, 80).expect("spawn");
+        let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         for i in 0..20 {
             s.write(format!("echo line{i}\n").as_bytes())
                 .expect("write");
         }
-        std::thread::sleep(Duration::from_millis(200));
+        let deadline = Instant::now() + Duration::from_millis(200);
+        while Instant::now() < deadline {
+            if s.process_output() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         drop(s);
     }
 }

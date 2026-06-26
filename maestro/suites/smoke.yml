@@ -3,6 +3,5 @@ suite:
   tags:
     - smoke
 flows:
-  - launch-and-verify
-  - open-settings
-  - modifier-bar-interact
+  - ../flows/launch-and-verify.yml
+  - ../flows/rapid-modifier-taps.yml

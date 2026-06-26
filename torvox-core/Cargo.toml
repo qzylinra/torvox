@@ -3,7 +3,6 @@ name = "torvox-core"
 version.workspace = true
 edition.workspace = true
 description = "Core types for Torvox terminal emulator (no_std compatible)"
-license.workspace = true
 
 [dependencies]
 serde = { workspace = true }
@@ -25,4 +24,9 @@ rkyv = ["dep:rkyv"]
 [dev-dependencies]
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }
+proptest = { workspace = true }
+arbitrary = { workspace = true }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
+
+[lints]
+workspace = true

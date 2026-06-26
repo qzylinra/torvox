@@ -14,17 +14,50 @@
     <string name="change">更改</string>
     <string name="select_font_family">选择字体</string>
     <string name="pick_font_file">从文件选择…</string>
+    <string name="copy">复制</string>
+    <string name="paste">粘贴</string>
+    <string name="select_all">全选</string>
+    <string name="select_all_action">全选</string>
+    <string name="share">分享</string>
     <string name="cancel">取消</string>
 
-    <!-- Theme -->
-    <string name="theme">主题</string>
-    <string name="use_wallpaper_colors">使用壁纸颜色 (Material You)</string>
-    <string name="theme_mode">主题模式</string>
+    <!-- Advanced -->
+    <string name="advanced">高级</string>
+    <string name="use_nerd_font_glyphs">使用 Nerd Font 图标</string>
+    <string name="nerd_font_desc">使用备用字体显示 Nerd Font 图标字形</string>
+    <string name="semantic_selection">语义选择 (OSC 133)</string>
+    <string name="semantic_selection_desc">使用 Shell 提示符标记进行智能文本选择</string>
+    <string name="bootstrap_url_label">Bootstrap URL</string>
+    <string name="bootstrap_url_placeholder">https://github.com/termux/termux-packages/releases/...</string>
+    <string name="bootstrap_desc">包管理的引导程序包</string>
+    <string name="bootstrap_presets">预设</string>
+    <string name="bootstrap_preset_termux">Termux 默认</string>
+    <string name="bootstrap_preset_termux_desc">标准 Termux 引导程序，包含 bash、coreutils 和包管理器</string>
+    <string name="bootstrap_preset_custom">自定义 / 空</string>
+    <string name="bootstrap_preset_custom_desc">以空根文件系统启动</string>
+    <string name="bootstrap">引导程序</string>
+    <string name="session_restore">恢复会话</string>
+    <string name="session_restore_desc">在应用启动时重新打开之前的会话</string>
+    <string name="keyboard_mode">键盘模式</string>
+    <string name="keyboard_secure">安全模式</string>
+    <string name="keyboard_secure_desc">无建议、无自动纠正、无个性化学习</string>
+    <string name="keyboard_standard">标准模式</string>
+    <string name="keyboard_standard_desc">完整输入法，支持自动纠正和建议</string>
+    <string name="keyboard_raw">原始模式</string>
+    <string name="keyboard_raw_desc">无输入法 — 仅物理键盘和原始按键事件</string>
+
+    <!-- Software theme -->
+    <string name="software_theme">软件主题</string>
+
+    <!-- Terminal Theme -->
+    <string name="theme">终端主题</string>
     <string name="day">日间</string>
     <string name="night">夜间</string>
     <string name="follow_system">跟随系统</string>
     <string name="day_theme">日间主题</string>
     <string name="night_theme">夜间主题</string>
+    <string name="md_you">Material You</string>
+    <string name="fixed">固定</string>
 
     <!-- Terminal -->
     <string name="terminal">终端</string>
@@ -46,4 +79,20 @@
     <string name="cd_new_session">新建会话</string>
     <string name="cd_settings">设置</string>
     <string name="cd_close_session">关闭会话</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">终端会话</string>
+    <string name="notification_channel_desc">用于活跃终端会话的持久通知</string>
+    <string name="notification_active_single">终端会话活跃中</string>
+    <string name="notification_active_plural">%d 个终端会话活跃中</string>
+
+    <!-- Feedback -->
+    <string name="copied_chars">已复制 %d 个字符</string>
+    <string name="pasted_chars">已粘贴 %d 个字符</string>
+
+    <!-- Error -->
+    <string name="unsupported_abi">不支持的 ABI: %s</string>
+    <!-- Accessibility -->
+    <string name="sessions_accessible">%d 个会话</string>
+    <string name="title_changed">终端标题已更改为 %s</string>
 </resources>

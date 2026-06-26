@@ -3,7 +3,7 @@ name = "torvox-kani"
 version.workspace = true
 edition.workspace = true
 description = "Kani formal verification proofs for torvox-core"
-license.workspace = true
+
 
 # This is a meta-crate for Kani proofs.
 # Run with: cargo kani --manifest-path torvox-core/kani/Cargo.toml

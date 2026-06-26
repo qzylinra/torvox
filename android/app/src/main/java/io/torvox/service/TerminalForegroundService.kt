@@ -36,10 +36,10 @@ class TerminalForegroundService : Service() {
         val channel =
             NotificationChannel(
                 CHANNEL_ID,
-                "Terminal Session",
+                getString(R.string.notification_channel_name),
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Persistent notification for active terminal sessions"
+                description = getString(R.string.notification_channel_desc)
                 setShowBadge(false)
             }
         val nm = getSystemService(NotificationManager::class.java)
@@ -60,9 +60,9 @@ class TerminalForegroundService : Service() {
     private fun startForegroundWithSessionCount(count: Int) {
         val text =
             if (count <= 1) {
-                "Terminal session active"
+                getString(R.string.notification_active_single)
             } else {
-                "$count terminal sessions active"
+                getString(R.string.notification_active_plural, count)
             }
         val openIntent =
             Intent(this, MainActivity::class.java).apply {
@@ -78,7 +78,7 @@ class TerminalForegroundService : Service() {
         val notification =
             Notification
                 .Builder(this, CHANNEL_ID)
-                .setContentTitle("Torvox")
+                .setContentTitle(getString(R.string.app_name))
                 .setContentText(text)
                 .setSmallIcon(R.drawable.ic_notification)
                 .setOngoing(true)

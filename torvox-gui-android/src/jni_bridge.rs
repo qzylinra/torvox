@@ -1,9 +1,11 @@
-//! JNI 桥接，用于调用 boltffi/JNA 无法提供的 NDK 函数。
-//! 提供从 Surface 对象获取 ANativeWindow 指针的可靠方式。
+// @JNI bridge for NDK functions, IMPL_ANDR_003, impl, [REQ_ANDR_003]
+// @need-ids: REQ_ANDR_003
+//! JNI bridge for calling NDK functions that boltffi/JNA cannot provide.
+//! Provides a reliable way to obtain an ANativeWindow pointer from a Surface object.
 
 use core::ffi::c_void;
 
-// JNI 不透明类型
+// JNI opaque types
 type JNIEnvPtr = *mut c_void;
 type JClassPtr = *mut c_void;
 type JObjectPtr = *mut c_void;
@@ -12,14 +14,13 @@ type JObjectPtr = *mut c_void;
 #[link(name = "android")]
 unsafe extern "C" {
     fn ANativeWindow_fromSurface(env: JNIEnvPtr, surface: JObjectPtr) -> *mut c_void;
-    #[allow(dead_code)]
-    fn ANativeWindow_release(window: *mut c_void);
 }
 
-/// JNI 导出: io.torvox.bridge.NativeWindow.getNativeWindowPtr(Surface) -> Long
-/// 返回 ANativeWindow 指针作为 jlong (i64)。
-/// 这是 NDK 推荐的从 Surface 获取 ANativeWindow 的方式。
+/// JNI export: io.torvox.bridge.NativeWindow.getNativeWindowPtr(Surface) -> Long
+/// Returns ANativeWindow pointer as jlong (i64).
+/// This is the NDK-recommended way to obtain ANativeWindow from a Surface.
 #[unsafe(no_mangle)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "system" fn Java_io_torvox_bridge_NativeWindow_getNativeWindowPtr(
     env: JNIEnvPtr,
     _class: JClassPtr,

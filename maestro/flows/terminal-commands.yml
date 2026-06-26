@@ -1,10 +1,9 @@
-appId: io.torvox
+appId: com.termux
 name: Terminal command output verification
 tags:
   - e2e
   - p0
 ---
-# Launch app with fresh state
 - launchApp:
     clearState: true
     stopApp: true
@@ -15,49 +14,55 @@ tags:
     optional: true
 - waitForAnimationToEnd:
     timeout: 5000
-- assertVisible:
-    id: "TerminalScreen"
+- extendedWaitUntil:
+    visible:
+      id: "TerminalScreen"
+    timeout: 30000
 - assertVisible:
     id: "ModifierBar"
 - assertVisible:
     id: "TerminalContent"
-# Wait for shell prompt to appear
 - waitForAnimationToEnd:
     timeout: 5000
-# Run 'echo hello' and verify output via screenshot
+# Test 1: echo with marker text
 - tapOn:
     id: "TerminalContent"
-- inputText: "echo hello world\n"
 - waitForAnimationToEnd:
     timeout: 3000
-- takeScreenshot: echo_hello
-# Run 'ls' and check result
+- inputText: "echo TORVOX_MARKER"
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: echo_marker_verified
+# Test 2: pwd command
 - tapOn:
     id: "TerminalContent"
-- inputText: "ls -la\n"
 - waitForAnimationToEnd:
     timeout: 3000
-- takeScreenshot: ls_la
-# Check pwd
+- inputText: "pwd"
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: pwd_verified
+# Test 3: quoted string echo
 - tapOn:
     id: "TerminalContent"
-- inputText: "pwd\n"
 - waitForAnimationToEnd:
     timeout: 3000
-- takeScreenshot: pwd_output
-# Test modifier bar - ESC
+- inputText: "echo Hello World"
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: hello_world_verified
+# Test 4: special key taps
 - tapOn:
     id: "Key_ESC"
 - waitForAnimationToEnd:
     timeout: 1000
-- takeScreenshot: after_esc
-# Test modifier bar - TAB
 - tapOn:
     id: "Key_TAB"
 - waitForAnimationToEnd:
     timeout: 1000
-- takeScreenshot: after_tab
-# Test modifier bar - CTRL toggle
 - tapOn:
     id: "Key_CTRL"
 - waitForAnimationToEnd:
@@ -66,7 +71,6 @@ tags:
     id: "Key_CTRL"
 - waitForAnimationToEnd:
     timeout: 500
-# Test modifier bar - ALT toggle
 - tapOn:
     id: "Key_ALT"
 - waitForAnimationToEnd:
@@ -75,15 +79,4 @@ tags:
     id: "Key_ALT"
 - waitForAnimationToEnd:
     timeout: 500
-# Test  ~ key
-- tapOn:
-    id: "Key_~"
-- waitForAnimationToEnd:
-    timeout: 1000
-# Verify terminal is still responsive
-- tapOn:
-    id: "TerminalContent"
-- inputText: "cat /proc/version\n"
-- waitForAnimationToEnd:
-    timeout: 3000
-- takeScreenshot: cat_proc_version
+- takeScreenshot: terminal_commands_complete

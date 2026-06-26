@@ -1,3 +1,5 @@
+// @Terminal event types, IMPL_CORE_004, impl, [REQ_CORE_004]
+// @need-ids: REQ_CORE_004, REQ_CORE_005
 use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
@@ -38,20 +40,13 @@ mod tests {
     use crate::selection::{Selection, SelectionAnchor, SelectionMode};
 
     #[test]
-    fn event_output_ready_equality() {
-        assert_eq!(TerminalEvent::OutputReady, TerminalEvent::OutputReady);
-    }
-
-    #[test]
-    fn event_bell_equality() {
-        assert_eq!(TerminalEvent::Bell, TerminalEvent::Bell);
-    }
-
-    #[test]
-    fn event_title_changed_equality() {
-        let e1 = TerminalEvent::TitleChanged(String::from("hello"));
-        let e2 = TerminalEvent::TitleChanged(String::from("hello"));
-        assert_eq!(e1, e2);
+    fn event_title_changed_carries_string() {
+        let e = TerminalEvent::TitleChanged(String::from("My Terminal"));
+        if let TerminalEvent::TitleChanged(title) = &e {
+            assert_eq!(title.as_str(), "My Terminal");
+        } else {
+            panic!("Expected TitleChanged variant");
+        }
     }
 
     #[test]
@@ -62,60 +57,51 @@ mod tests {
     }
 
     #[test]
-    fn event_clipboard_request_equality() {
-        let e1 = TerminalEvent::ClipboardRequest(String::from("text"));
-        let e2 = TerminalEvent::ClipboardRequest(String::from("text"));
-        assert_eq!(e1, e2);
-    }
-
-    #[test]
-    fn event_hyperlink_hover_some() {
-        let e1 = TerminalEvent::HyperlinkHover(Some(String::from("https://x")));
-        let e2 = TerminalEvent::HyperlinkHover(Some(String::from("https://x")));
-        assert_eq!(e1, e2);
-    }
-
-    #[test]
-    fn event_hyperlink_hover_none() {
-        assert_eq!(
-            TerminalEvent::HyperlinkHover(None),
-            TerminalEvent::HyperlinkHover(None)
-        );
+    fn event_clipboard_request_carries_operation() {
+        let e = TerminalEvent::ClipboardRequest(String::from("paste"));
+        if let TerminalEvent::ClipboardRequest(op) = &e {
+            assert_eq!(op.as_str(), "paste");
+        } else {
+            panic!("Expected ClipboardRequest variant");
+        }
     }
 
     #[test]
     fn event_hyperlink_hover_some_vs_none() {
-        let some = TerminalEvent::HyperlinkHover(Some(String::from("a")));
+        let some = TerminalEvent::HyperlinkHover(Some(String::from("https://x")));
         let none = TerminalEvent::HyperlinkHover(None);
         assert_ne!(some, none);
     }
 
     #[test]
-    fn event_process_exited_zero() {
-        assert_eq!(
-            TerminalEvent::ProcessExited(0),
-            TerminalEvent::ProcessExited(0)
-        );
+    fn event_hyperlink_hover_none_is_distinguishable() {
+        let e = TerminalEvent::HyperlinkHover(None);
+        if let TerminalEvent::HyperlinkHover(url) = &e {
+            assert!(url.is_none());
+        } else {
+            panic!("Expected HyperlinkHover variant");
+        }
     }
 
     #[test]
-    fn event_process_exited_nonzero() {
-        assert_eq!(
-            TerminalEvent::ProcessExited(127),
-            TerminalEvent::ProcessExited(127)
-        );
+    fn event_process_exit_code_distinguishes_success_from_failure() {
+        let success = TerminalEvent::ProcessExited(0);
+        let failure = TerminalEvent::ProcessExited(1);
+        assert_ne!(success, failure, "exit code 0 and 1 should differ");
     }
 
     #[test]
-    fn event_process_exited_different_codes() {
-        assert_ne!(
-            TerminalEvent::ProcessExited(0),
-            TerminalEvent::ProcessExited(1)
-        );
+    fn event_process_exited_carries_code() {
+        let e = TerminalEvent::ProcessExited(42);
+        if let TerminalEvent::ProcessExited(code) = e {
+            assert_eq!(code, 42);
+        } else {
+            panic!("Expected ProcessExited variant");
+        }
     }
 
     #[test]
-    fn event_cursor_changed() {
+    fn event_cursor_changed_carries_state() {
         let cursor = CursorState::new(5, 10);
         let e = TerminalEvent::CursorChanged(cursor);
         if let TerminalEvent::CursorChanged(c) = e {
@@ -128,45 +114,30 @@ mod tests {
     }
 
     #[test]
-    fn event_selection_changed_some() {
+    fn event_selection_changed_none_distinguishes_from_some() {
+        let none = TerminalEvent::SelectionChanged(None);
         let sel = Selection::new(
             SelectionAnchor { row: 1, col: 2 },
             SelectionAnchor { row: 3, col: 4 },
             SelectionMode::Char,
         );
-        let e = TerminalEvent::SelectionChanged(Some(sel));
-        if let TerminalEvent::SelectionChanged(Some(s)) = e {
-            assert_eq!(s.start.row, 1);
-            assert_eq!(s.mode, SelectionMode::Char);
-        } else {
-            panic!("Wrong variant");
-        }
+        let some = TerminalEvent::SelectionChanged(Some(sel));
+        assert_ne!(none, some, "None and Some selection should differ");
     }
 
     #[test]
-    fn event_selection_changed_none() {
-        let e = TerminalEvent::SelectionChanged(None);
-        if let TerminalEvent::SelectionChanged(None) = e {
-            // pass
-        } else {
-            panic!("Wrong variant");
-        }
-    }
-
-    #[test]
-    fn event_dirty_region() {
+    fn event_dirty_region_carries_bounds() {
         let region = DirtyRegion {
-            start_row: 0,
-            end_row: 24,
+            start_row: 10,
+            end_row: 20,
         };
         let e = TerminalEvent::DirtyRegion(region.clone());
         if let TerminalEvent::DirtyRegion(r) = &e {
-            assert_eq!(r.start_row, 0);
-            assert_eq!(r.end_row, 24);
+            assert_eq!(r.start_row, 10);
+            assert_eq!(r.end_row, 20);
         } else {
             panic!("Wrong variant");
         }
-        assert_eq!(e, TerminalEvent::DirtyRegion(region));
     }
 
     #[test]
@@ -210,25 +181,15 @@ mod tests {
     }
 
     #[test]
-    fn dirty_region_equality() {
-        let a = DirtyRegion {
-            start_row: 1,
-            end_row: 5,
-        };
-        let b = DirtyRegion {
-            start_row: 1,
-            end_row: 5,
-        };
-        assert_eq!(a, b);
-    }
-
-    #[test]
-    fn dirty_region_clone() {
-        let a = DirtyRegion {
+    fn dirty_region_bounds_are_correct() {
+        let region = DirtyRegion {
             start_row: 3,
             end_row: 7,
         };
-        let b = a.clone();
-        assert_eq!(a, b);
+        assert_eq!(
+            region.end_row - region.start_row,
+            4,
+            "region should span 4 rows"
+        );
     }
 }

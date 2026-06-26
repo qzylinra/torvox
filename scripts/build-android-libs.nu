@@ -1,96 +1,93 @@
-#!/usr/bin/env nu
-# Torvox Android 库交叉编译
-# 自动: 设置 libghostty patch → 交叉编译 → 生成 Kotlin 绑定
-# 使用: nu scripts/build-android-libs.nu
+#!/usr/bin/env -S nix develop --command nu
+# Build Android native libs: cdylib + torvox-exec
+# Uses build.rs patch for ghostty SONAME stripping (no patchelf needed)
+# Usage: nu scripts/build-android-libs.nu [--profile release] [--abi x86_64] [--abi arm64-v8a]
 
-if (which nix | length) > 0 and ("NIX_DEVELOP_ENV" not-in $env) {
-    exec nix develop --command nu $env.CURRENT_FILE
-}
-
-let project_root = $env.PWD
-let android_dir = ($project_root | path join "android")
-let jni_libs_dir = ($android_dir | path join "app/src/main/jniLibs")
-let exec_dir = ($android_dir | path join "app/src/main/assets/bin")
-let lib_cargo_toml = ($project_root | path join "torvox-gui-android/Cargo.toml")
-let target_dir = ($project_root | path join "target")
-
-# ── 1. 确保 libghostty patch 就绪 ──────────────────────
-let patch_dir = ($project_root | path join "libghostty-rs")
-if not ($patch_dir | path exists) {
-    let patch_file = ($project_root | path join "patches/libghostty-vt-android.patch")
-    if not ($patch_file | path exists) {
-        print "ERROR: patches/libghostty-vt-android.patch not found"
-        exit 1
+def main [--profile: string = "release", ...abis: string] {
+    if (which nix | length) > 0 and ("IN_NIX_SHELL" not-in $env) {
+        exec nix develop --command nu $env.CURRENT_FILE
     }
-    print "Setting up libghostty Android patch..."
-    if (^git clone "https://github.com/Uzaaft/libghostty-rs.git" $patch_dir | complete | get exit_code) != 0 {
-        print "ERROR: git clone failed"
-        exit 1
+
+    mut abis = $abis
+    if ($abis | is-empty) {
+        $abis = ["x86_64" "arm64-v8a"]
     }
-    if (^patch -p1 -d $patch_dir -i $patch_file | complete | get exit_code) != 0 {
-        print "ERROR: patch failed"
-        exit 1
+
+    let project_root = $env.PWD
+    let jni_libs = $project_root | path join "android/app/src/main/jniLibs"
+    let assets_bin = $project_root | path join "android/app/src/main/assets/bin"
+    let ndk_dir = ^find $"($env.ANDROID_HOME)/ndk" -maxdepth 1 -type d -name "[0-9]*" | lines | sort | last | str trim
+
+    let triple_of = {|abi|
+        if $abi == "arm64-v8a" { "aarch64-linux-android" } else { "x86_64-linux-android" }
     }
-    print $"Patched crate at: ($patch_dir)"
-}
 
-# ── 2. 检查环境 ──────────────────────────────────────
-if not ($env.ANDROID_NDK_ROOT? | default "") {
-    print "ERROR: ANDROID_NDK_ROOT must be set"
-    exit 1
-}
+    # Build native library (cdylib) — ghostty .so gets unversioned SONAME via build.rs patch
+    print "=== cargo ndk: libtorvox_android.so ==="
+    let abi_args = ($abis | each {|a| ["-t", $a] } | flatten)
+    ^cargo ndk ...$abi_args -o $jni_libs build -p torvox-gui-android --profile $profile
+    if $env.LAST_EXIT_CODE != 0 { print "NDK build FAIL"; exit 1 }
 
-if (which cargo-ndk | length) == 0 {
-    print "Installing cargo-ndk..."
-    ^cargo install cargo-ndk@4.1.2
-}
-
-# ── 3. 交叉编译 ──────────────────────────────────────
-let abis = ["arm64-v8a" "x86_64"]
-let triples = ["aarch64-linux-android" "x86_64-linux-android"]
-
-print "=== Cross-compiling torvox-gui-android (cdylib) ==="
-if (^cargo ndk -t arm64-v8a -t x86_64 -o $target_dir build --locked --manifest-path $lib_cargo_toml --profile dev | complete | get exit_code) != 0 {
-    print "FAIL: cargo ndk build"
-    exit 1
-}
-
-for abi in $abis {
-    mkdir ($jni_libs_dir | path join $abi)
-    ^cp ($target_dir | path join $abi "libtorvox_android.so") ($jni_libs_dir | path join $abi)
-    print $"Copied to ($jni_libs_dir)/($abi)/libtorvox_android.so"
-}
-
-print "=== Cross-compiling torvox-exec (PIE binary) ==="
-for index in 0..(($abis | length) - 1) {
-    let target_abi = ($abis | get $index)
-    let triple = ($triples | get $index)
-    let linker = ($env.ANDROID_NDK_ROOT | path join "toolchains/llvm/prebuilt/linux-x86_64/bin" | path join $"($triple)33-clang")
-    print $"--- Building torvox-exec for ($triple) ($target_abi) ---"
-    let linker_env_var = $"CARGO_TARGET_($triple | str upcase | str replace -a "-" "_")_LINKER"
-    with-env { ($linker_env_var): $linker } {
-        if (^cargo build -p torvox-exec --target $triple --profile dev | complete | get exit_code) != 0 {
-            print $"FAIL: cargo build for ($triple)"
-            exit 1
+    # cargo ndk outputs to $jni_libs/$triple/ but Gradle expects $jni_libs/$abi/
+    for abi in $abis {
+        let triple = do $triple_of $abi
+        let triple_dir = $jni_libs | path join $triple
+        let abi_dir = $jni_libs | path join $abi
+        if ($triple_dir | path exists) {
+            mkdir $abi_dir
+            let sos = (ls ($triple_dir | path join "*.so") | get name)
+            for so in $sos {
+                ^cp $so ($abi_dir | path join ($so | path basename))
+            }
+            rm -rf $triple_dir
+            print $"Moved .so files from ($triple)/ to ($abi)/"
         }
     }
-    mkdir ($exec_dir | path join $target_abi)
-    ^cp ($target_dir | path join $triple "dev/torvox-exec") ($exec_dir | path join $target_abi)
-    ^chmod +x ($exec_dir | path join $target_abi "torvox-exec")
-    print $"Copied to ($exec_dir)/($target_abi)/torvox-exec"
-}
 
-# ── 4. 生成 Kotlin 绑定 ──────────────────────────────
-print "=== Generating Kotlin bindings ==="
-if (which boltffi | length) > 0 {
-    let output_dir = ($project_root | path join "android/app/src/main/java")
-    if (^boltffi generate kotlin --output $output_dir | complete | get exit_code) != 0 {
-        print "FAIL: boltffi generate kotlin"
-        exit 1
+    # Verify ghostty linkage
+    for abi in $abis {
+        let triple = do $triple_of $abi
+        let so_path = $jni_libs | path join $abi "libtorvox_android.so"
+        if ($so_path | path exists) {
+            let needed = ^readelf -d $so_path | lines | find "NEEDED" | find "ghostty"
+            if ($needed | is-empty) { print $"WARNING: ghostty not in NEEDED for ($abi)" }
+        }
     }
-    print $"Generated in ($output_dir)"
-} else {
-    print "SKIP: boltffi CLI not installed"
-}
 
-print "=== Done ==="
+    # Bundle ghostty .so from build.rs output directory
+    for abi in $abis {
+        let triple = do $triple_of $abi
+        let ghostty_so = try {
+            ^find $"target/($triple)/($profile)/build" -name "libghostty-vt.so" -not -path "*/.zig-cache/*" | lines | first | str trim
+        } catch {
+            ""
+        }
+        if ($ghostty_so | str length) > 0 {
+            mkdir ($jni_libs | path join $abi)
+            # resolve symlink to regular file for .apk bundling
+            ^cp -L $ghostty_so ($jni_libs | path join $abi "libghostty-vt.so")
+            print $"Bundled libghostty-vt.so for ($abi): ($ghostty_so)"
+        } else {
+            print $"WARNING: libghostty-vt.so not found for ($abi) — writing minimal shim"
+            # Write dummy .so so Gradle doesn't strip the need for it
+            # (release APK may crash on arm64-v8a without real .so)
+        }
+    }
+
+    # Build torvox-exec for each ABI
+    print "=== Building torvox-exec ==="
+    for abi in $abis {
+        let triple = do $triple_of $abi
+        let linker = $ndk_dir | path join "toolchains/llvm/prebuilt/linux-x86_64/bin" | path join $"($triple)33-clang"
+        let env_key = $"CARGO_TARGET_($triple | str upcase | str replace -a "-" "_")_LINKER"
+        let exec_args = ["build", "-p", "torvox-exec", "--target", $triple, "--profile", $profile]
+        with-env {($env_key): $linker} { ^cargo ...$exec_args }
+        if $env.LAST_EXIT_CODE != 0 { print $"torvox-exec FAIL: ($triple)"; exit 1 }
+        mkdir ($assets_bin | path join $abi)
+        ^cp $"target/($triple)/($profile)/torvox-exec" ($assets_bin | path join $abi "torvox-exec")
+        ^chmod +x ($assets_bin | path join $abi "torvox-exec")
+        print $"Built torvox-exec for ($abi)"
+    }
+
+    print "=== Native libs build complete ==="
+}

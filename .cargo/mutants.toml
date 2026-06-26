@@ -1,6 +1,13 @@
-# Torvox cargo-mutants configuration
-# Reference: https://mutants.rs/
-examine_globs = ["torvox-core/src/*.rs", "torvox-terminal/src/*.rs"]
+timeout = 120
+test_tool = "nextest"
+
+examine_globs = [
+  "torvox-core/src/**/*.rs",
+  "torvox-terminal/src/**/*.rs",
+  "torvox-renderer/src/**/*.rs",
+  "torvox-mcp/src/**/*.rs",
+]
+
 exclude_globs = [
   "**/target/**",
   "**/tests/**",
@@ -10,5 +17,7 @@ exclude_globs = [
   "**/test_data/**",
   "**/build.rs",
   "torvox-core/src/grid.rs",
+  "torvox-core/src/selection.rs",
+  "torvox-terminal/src/pty.rs",
+  "torvox-renderer/src/shader/**",
 ]
-test_tool = "nextest"

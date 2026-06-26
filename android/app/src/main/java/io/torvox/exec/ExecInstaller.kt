@@ -1,18 +1,18 @@
 package io.torvox.exec
 
 import android.content.Context
+import io.torvox.R
 import java.io.File
 
 object ExecInstaller {
-    private const val BIN_DIR = "bin"
     private const val EXEC_NAME = "torvox-exec"
 
     fun install(context: Context): File {
-        val binDir = File(context.filesDir, BIN_DIR)
+        val binDir = context.getDir("bin", Context.MODE_PRIVATE)
         binDir.mkdirs()
 
         val execFile = File(binDir, EXEC_NAME)
-        val abi = detectAbi()
+        val abi = detectAbi(context)
 
         val assetPath = "bin/$abi/$EXEC_NAME"
         if (!execFile.exists() || !execFile.canExecute()) {
@@ -27,19 +27,22 @@ object ExecInstaller {
         return execFile
     }
 
-    fun binDir(context: Context): File = File(context.filesDir, BIN_DIR)
+    fun binDir(context: Context): File = context.getDir("bin", Context.MODE_PRIVATE)
 
-    private fun detectAbi(): String =
-        when (
-            android.os.Build.SUPPORTED_ABIS
-                .first()
-        ) {
-            "arm64-v8a" -> "arm64-v8a"
+    private fun detectAbi(context: Context): String = when (
+        android.os.Build.SUPPORTED_ABIS
+            .first()
+    ) {
+        "arm64-v8a" -> "arm64-v8a"
 
-            "x86_64" -> "x86_64"
+        "x86_64" -> "x86_64"
 
-            else -> throw IllegalStateException(
-                "Unsupported ABI: ${android.os.Build.SUPPORTED_ABIS.first()}",
-            )
-        }
+        else -> throw IllegalStateException(
+            context.getString(
+                R.string.unsupported_abi,
+                android.os.Build.SUPPORTED_ABIS
+                    .first(),
+            ),
+        )
+    }
 }

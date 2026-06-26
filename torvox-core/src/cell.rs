@@ -1,3 +1,5 @@
+// @Cell data model, IMPL_CORE_001, impl, [REQ_CORE_001]
+// @need-ids: REQ_CORE_001, REQ_CORE_002
 use serde::{Deserialize, Serialize};
 
 #[cfg_attr(
@@ -64,6 +66,10 @@ pub struct Attrs {
     pub blink: bool,
     pub hidden: bool,
     pub overline: bool,
+    pub protected: bool,
+    pub double_width: bool,
+    pub double_height_top: bool,
+    pub double_height_bottom: bool,
 }
 
 const BITS_PER_PARTITION: u32 = 64;
@@ -86,14 +92,14 @@ impl DirtyMask {
     }
 
     pub fn is_dirty(&self, row: u32) -> bool {
-        let (part, bit) = self.partition_index(row);
+        let (part, bit) = Self::partition_index(row);
         self.partitions
             .get(part)
             .is_some_and(|p| *p & (1 << bit) != 0)
     }
 
     pub fn mark(&mut self, row: u32) {
-        let (part, bit) = self.partition_index(row);
+        let (part, bit) = Self::partition_index(row);
         if let Some(p) = self.partitions.get_mut(part) {
             *p |= 1 << bit;
         }
@@ -126,7 +132,7 @@ impl DirtyMask {
         self.partitions.resize(num_partitions.max(1), 0);
     }
 
-    fn partition_index(&self, row: u32) -> (usize, u32) {
+    fn partition_index(row: u32) -> (usize, u32) {
         let part = (row / BITS_PER_PARTITION) as usize;
         let bit = row % BITS_PER_PARTITION;
         (part, bit)
@@ -134,20 +140,43 @@ impl DirtyMask {
 }
 
 impl Color {
-    pub fn new(r: u8, g: u8, b: u8) -> Self {
-        Self { r, g, b, a: 255 }
+    pub fn new(red: u8, green: u8, blue: u8) -> Self {
+        Self {
+            r: red,
+            g: green,
+            b: blue,
+            a: 255,
+        }
     }
 
     pub fn from_ansi(index: u8) -> Self {
         let [r, g, b] = crate::ansi::ansi_to_rgb(index);
         Self { r, g, b, a: 255 }
     }
+
+    pub fn saturating_add(&self, other: &Color) -> Color {
+        Color {
+            r: self.r.saturating_add(other.r),
+            g: self.g.saturating_add(other.g),
+            b: self.b.saturating_add(other.b),
+            a: self.a.saturating_add(other.a),
+        }
+    }
+
+    pub fn saturating_mul(&self, scalar: u8) -> Color {
+        Color {
+            r: self.r.saturating_mul(scalar),
+            g: self.g.saturating_mul(scalar),
+            b: self.b.saturating_mul(scalar),
+            a: self.a.saturating_mul(scalar),
+        }
+    }
 }
 
 impl Cell {
-    pub fn with_char(c: char) -> Self {
+    pub fn with_char(character: char) -> Self {
         Self {
-            char: c,
+            char: character,
             ..Default::default()
         }
     }
@@ -428,7 +457,6 @@ mod tests {
 
     #[test]
     fn color_equality() {
-        assert_eq!(Color::new(1, 2, 3), Color::new(1, 2, 3));
         assert_ne!(Color::new(1, 2, 3), Color::new(1, 2, 4));
         assert_ne!(Color::new(1, 2, 3), Color::new(2, 2, 3));
     }
@@ -501,6 +529,10 @@ mod tests {
             blink: false,
             hidden: true,
             overline: false,
+            protected: true,
+            double_width: false,
+            double_height_top: false,
+            double_height_bottom: false,
         };
         let json = serde_json::to_string(&a).expect("ser");
         let back: Attrs = serde_json::from_str(&json).expect("de");
@@ -570,6 +602,10 @@ mod tests {
             blink: true,
             hidden: true,
             overline: true,
+            protected: true,
+            double_width: true,
+            double_height_top: true,
+            double_height_bottom: true,
         };
         let json = serde_json::to_string(&a).unwrap();
         let back: Attrs = serde_json::from_str(&json).unwrap();
@@ -597,5 +633,122 @@ mod tests {
         assert!(!m.is_dirty(0));
         assert!(!m.is_dirty(5));
         assert!(m.is_dirty(7));
+    }
+
+    #[test]
+    fn color_saturating_add_wraps_at_255() {
+        let a = Color {
+            r: 200,
+            g: 200,
+            b: 200,
+            a: 255,
+        };
+        let b = Color {
+            r: 100,
+            g: 100,
+            b: 100,
+            a: 255,
+        };
+        let c = a.saturating_add(&b);
+        assert_eq!(c.r, 255);
+        assert_eq!(c.g, 255);
+        assert_eq!(c.b, 255);
+        assert_eq!(c.a, 255);
+    }
+
+    #[test]
+    fn color_saturating_add_small_values() {
+        let a = Color {
+            r: 10,
+            g: 20,
+            b: 30,
+            a: 255,
+        };
+        let b = Color {
+            r: 5,
+            g: 10,
+            b: 15,
+            a: 0,
+        };
+        let c = a.saturating_add(&b);
+        assert_eq!(c.r, 15);
+        assert_eq!(c.g, 30);
+        assert_eq!(c.b, 45);
+        assert_eq!(c.a, 255);
+    }
+
+    #[test]
+    fn color_saturating_add_zero() {
+        let a = Color {
+            r: 100,
+            g: 50,
+            b: 25,
+            a: 128,
+        };
+        let zero = Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        };
+        let c = a.saturating_add(&zero);
+        assert_eq!(c, a);
+    }
+
+    #[test]
+    fn color_saturating_mul_saturates() {
+        let c = Color {
+            r: 100,
+            g: 50,
+            b: 25,
+            a: 255,
+        };
+        let d = c.saturating_mul(3);
+        assert_eq!(d.r, 255);
+        assert_eq!(d.g, 150);
+        assert_eq!(d.b, 75);
+        assert_eq!(d.a, 255);
+    }
+
+    #[test]
+    fn color_saturating_mul_by_one() {
+        let c = Color {
+            r: 100,
+            g: 50,
+            b: 25,
+            a: 200,
+        };
+        let d = c.saturating_mul(1);
+        assert_eq!(d, c);
+    }
+
+    #[test]
+    fn color_saturating_mul_by_zero() {
+        let c = Color {
+            r: 100,
+            g: 50,
+            b: 25,
+            a: 200,
+        };
+        let d = c.saturating_mul(0);
+        assert_eq!(d.r, 0);
+        assert_eq!(d.g, 0);
+        assert_eq!(d.b, 0);
+        assert_eq!(d.a, 0);
+    }
+
+    #[test]
+    fn color_saturating_mul_all_channels_saturate() {
+        let c = Color {
+            r: 200,
+            g: 200,
+            b: 200,
+            a: 200,
+        };
+        let d = c.saturating_mul(2);
+        assert_eq!(d.r, 255);
+        assert_eq!(d.g, 255);
+        assert_eq!(d.b, 255);
+        assert_eq!(d.a, 255);
     }
 }

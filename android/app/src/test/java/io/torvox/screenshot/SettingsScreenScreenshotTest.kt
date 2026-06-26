@@ -52,10 +52,10 @@ class SettingsScreenScreenshotTest {
             MaterialTheme {
                 Box(
                     modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF1E1E2E))
-                            .testTag("screenshot_settings"),
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF1E1E2E))
+                        .testTag("screenshot_settings"),
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
@@ -89,20 +89,20 @@ class SettingsScreenScreenshotTest {
                                 Column(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier =
-                                        Modifier
-                                            .width(64.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(theme.background)
-                                            .padding(4.dp),
+                                    Modifier
+                                        .width(64.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(theme.background)
+                                        .padding(4.dp),
                                 ) {
                                     Row {
                                         theme.ansi.take(4).forEach { color ->
                                             Box(
                                                 modifier =
-                                                    Modifier
-                                                        .size(6.dp)
-                                                        .clip(RoundedCornerShape(2.dp))
-                                                        .background(color),
+                                                Modifier
+                                                    .size(6.dp)
+                                                    .clip(RoundedCornerShape(2.dp))
+                                                    .background(color),
                                             )
                                         }
                                     }

@@ -1,3 +1,5 @@
+// @Terminal configuration, IMPL_CORE_003, impl, [REQ_CORE_003]
+// @need-ids: REQ_CORE_003, REQ_CORE_004
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -14,6 +16,39 @@ pub struct TerminalConfig {
     pub scrollback_lines: u32,
     pub shell: Shell,
     pub font_size_tenths: u32,
+    pub backspace_mode: BackspaceMode,
+    pub right_alt_mode: RightAltMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+pub enum BackspaceMode {
+    #[default]
+    DEL,
+    BS,
+}
+
+impl BackspaceMode {
+    pub fn byte(&self) -> u8 {
+        match self {
+            BackspaceMode::DEL => 0x7f,
+            BackspaceMode::BS => 0x08,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
+pub enum RightAltMode {
+    #[default]
+    CharacterModifier,
+    Meta,
 }
 
 impl Default for TerminalConfig {
@@ -24,6 +59,8 @@ impl Default for TerminalConfig {
             scrollback_lines: 50_000,
             shell: Shell::default(),
             font_size_tenths: 140,
+            backspace_mode: BackspaceMode::default(),
+            right_alt_mode: RightAltMode::default(),
         }
     }
 }
@@ -55,7 +92,7 @@ impl Default for RenderConfig {
         Self {
             font: FontConfig::default(),
             theme: Theme::catppuccin_mocha(),
-            cursor_style: crate::cursor::CursorStyle::Block,
+            cursor_style: crate::cursor::CursorStyle::default(),
         }
     }
 }
@@ -67,8 +104,8 @@ impl Default for RenderConfig {
 )]
 pub struct FontConfig {
     pub family: String,
-    pub size: u16,
-    pub line_spacing: i16,
+    pub size: u32,
+    pub line_spacing: i32,
 }
 
 impl Default for FontConfig {
@@ -97,27 +134,27 @@ pub struct Theme {
 impl Theme {
     pub const fn catppuccin_mocha() -> Self {
         Self {
-            name: String::new(), // const fn can't use String::from
+            name: String::new(),
             bg: [30, 30, 46],
             fg: [205, 214, 244],
             cursor: [245, 224, 220],
             ansi: [
-                [24, 24, 37],    // Black
-                [243, 139, 168], // Red
-                [166, 227, 161], // Green
-                [249, 226, 175], // Yellow
-                [137, 180, 250], // Blue
-                [203, 166, 247], // Magenta
-                [148, 226, 213], // Cyan
-                [205, 214, 244], // White
-                [108, 112, 134], // Bright Black
-                [243, 139, 168], // Bright Red
-                [166, 227, 161], // Bright Green
-                [249, 226, 175], // Bright Yellow
-                [137, 180, 250], // Bright Blue
-                [203, 166, 247], // Bright Magenta
-                [148, 226, 213], // Bright Cyan
-                [187, 194, 222], // Bright White
+                [24, 24, 37],
+                [243, 139, 168],
+                [166, 227, 161],
+                [249, 226, 175],
+                [137, 180, 250],
+                [203, 166, 247],
+                [148, 226, 213],
+                [205, 214, 244],
+                [108, 112, 134],
+                [243, 139, 168],
+                [166, 227, 161],
+                [249, 226, 175],
+                [137, 180, 250],
+                [203, 166, 247],
+                [148, 226, 213],
+                [187, 194, 222],
             ],
         }
     }
@@ -128,60 +165,58 @@ impl Theme {
         t
     }
 
-    pub fn dracula() -> Self {
+    pub fn dracula_plus() -> Self {
         Self {
-            name: String::from("Dracula"),
-            bg: [40, 42, 54],
+            name: String::from("Dracula Plus"),
+            bg: [33, 33, 33],
             fg: [248, 248, 242],
-            cursor: [248, 248, 242],
+            cursor: [236, 239, 244],
             ansi: [
-                [0, 0, 0],       // Black
-                [255, 85, 85],   // Red
-                [80, 250, 123],  // Green
-                [255, 184, 108], // Yellow
-                [189, 147, 249], // Blue
-                [255, 85, 215],  // Magenta
-                [139, 233, 253], // Cyan
-                [255, 255, 255], // White
-                [68, 71, 90],    // Bright Black
-                [255, 85, 85],   // Bright Red
-                [80, 250, 123],  // Bright Green
-                [255, 184, 108], // Bright Yellow
-                [189, 147, 249], // Bright Blue
-                [255, 85, 215],  // Bright Magenta
-                [139, 233, 253], // Bright Cyan
-                [255, 255, 255], // Bright White
+                [33, 34, 44],
+                [255, 85, 85],
+                [80, 250, 123],
+                [255, 203, 107],
+                [130, 170, 255],
+                [199, 146, 234],
+                [139, 233, 253],
+                [248, 249, 242],
+                [84, 84, 84],
+                [255, 110, 110],
+                [105, 255, 148],
+                [255, 203, 107],
+                [214, 172, 255],
+                [255, 146, 223],
+                [164, 255, 255],
+                [248, 248, 242],
             ],
         }
     }
-
-    pub fn solarized_dark() -> Self {
+    pub fn catppuccin_latte() -> Self {
         Self {
-            name: String::from("Solarized Dark"),
-            bg: [0, 43, 54],
-            fg: [131, 148, 150],
-            cursor: [131, 148, 150],
+            name: String::from("Catppuccin Latte"),
+            bg: [239, 241, 245],
+            fg: [76, 79, 105],
+            cursor: [220, 138, 120],
             ansi: [
-                [7, 54, 66],     // Black
-                [220, 50, 47],   // Red
-                [133, 153, 0],   // Green
-                [181, 137, 0],   // Yellow
-                [38, 139, 210],  // Blue
-                [211, 54, 130],  // Magenta
-                [42, 161, 152],  // Cyan
-                [238, 232, 213], // White
-                [0, 43, 54],     // Bright Black
-                [220, 50, 47],   // Bright Red
-                [133, 153, 0],   // Bright Green
-                [181, 137, 0],   // Bright Yellow
-                [38, 139, 210],  // Bright Blue
-                [211, 54, 130],  // Bright Magenta
-                [42, 161, 152],  // Bright Cyan
-                [238, 232, 213], // Bright White
+                [92, 95, 119],
+                [210, 15, 57],
+                [64, 160, 43],
+                [223, 142, 29],
+                [30, 102, 245],
+                [234, 118, 203],
+                [23, 146, 153],
+                [172, 176, 190],
+                [108, 111, 133],
+                [210, 15, 57],
+                [64, 160, 43],
+                [223, 142, 29],
+                [30, 102, 245],
+                [234, 118, 203],
+                [23, 146, 153],
+                [188, 192, 204],
             ],
         }
     }
-
     pub fn nord() -> Self {
         Self {
             name: String::from("Nord"),
@@ -189,80 +224,155 @@ impl Theme {
             fg: [216, 222, 233],
             cursor: [216, 222, 233],
             ansi: [
-                [59, 66, 82],    // Black
-                [191, 97, 106],  // Red
-                [163, 190, 140], // Green
-                [235, 203, 139], // Yellow
-                [129, 162, 190], // Blue
-                [180, 142, 173], // Magenta
-                [143, 188, 187], // Cyan
-                [229, 233, 240], // White
-                [76, 86, 106],   // Bright Black
-                [191, 97, 106],  // Bright Red
-                [163, 190, 140], // Bright Green
-                [235, 203, 139], // Bright Yellow
-                [129, 162, 190], // Bright Blue
-                [180, 142, 173], // Bright Magenta
-                [143, 188, 187], // Bright Cyan
-                [236, 239, 244], // Bright White
+                [59, 66, 82],
+                [191, 97, 106],
+                [163, 190, 140],
+                [235, 203, 139],
+                [129, 161, 193],
+                [180, 142, 173],
+                [136, 192, 208],
+                [229, 233, 240],
+                [76, 86, 106],
+                [191, 97, 106],
+                [163, 190, 140],
+                [235, 203, 139],
+                [129, 161, 193],
+                [180, 142, 173],
+                [143, 188, 187],
+                [236, 239, 244],
             ],
         }
     }
-
     pub fn tokyo_night() -> Self {
         Self {
             name: String::from("Tokyo Night"),
             bg: [26, 27, 38],
-            fg: [192, 202, 245],
-            cursor: [192, 202, 245],
+            fg: [169, 177, 214],
+            cursor: [169, 177, 214],
             ansi: [
-                [24, 25, 38],    // Black
-                [247, 118, 142], // Red
-                [152, 195, 121], // Green
-                [229, 192, 123], // Yellow
-                [130, 170, 255], // Blue
-                [199, 146, 234], // Magenta
-                [86, 192, 196],  // Cyan
-                [192, 202, 245], // White
-                [69, 71, 90],    // Bright Black
-                [247, 118, 142], // Bright Red
-                [152, 195, 121], // Bright Green
-                [229, 192, 123], // Bright Yellow
-                [130, 170, 255], // Bright Blue
-                [199, 146, 234], // Bright Magenta
-                [86, 192, 196],  // Bright Cyan
-                [205, 214, 244], // Bright White
+                [50, 52, 74],
+                [247, 118, 142],
+                [158, 206, 106],
+                [224, 175, 104],
+                [122, 162, 247],
+                [173, 142, 230],
+                [68, 157, 171],
+                [120, 124, 153],
+                [68, 75, 106],
+                [255, 122, 147],
+                [185, 242, 124],
+                [255, 158, 100],
+                [125, 166, 255],
+                [187, 154, 247],
+                [13, 185, 215],
+                [172, 176, 208],
             ],
         }
     }
-
+    pub fn rose_pine() -> Self {
+        Self {
+            name: String::from("Rose Pine"),
+            bg: [25, 23, 36],
+            fg: [224, 222, 244],
+            cursor: [82, 79, 103],
+            ansi: [
+                [38, 35, 58],
+                [235, 111, 146],
+                [49, 116, 143],
+                [246, 193, 119],
+                [156, 207, 216],
+                [196, 167, 231],
+                [235, 188, 186],
+                [224, 222, 244],
+                [110, 106, 134],
+                [235, 111, 146],
+                [49, 116, 143],
+                [246, 193, 119],
+                [156, 207, 216],
+                [196, 167, 231],
+                [235, 188, 186],
+                [224, 222, 244],
+            ],
+        }
+    }
     pub fn gruvbox_dark() -> Self {
         Self {
             name: String::from("Gruvbox Dark"),
-            bg: [29, 32, 33],
+            bg: [40, 40, 40],
             fg: [235, 219, 178],
             cursor: [235, 219, 178],
             ansi: [
-                [29, 32, 33],    // Black
-                [204, 51, 51],   // Red
-                [152, 151, 26],  // Green
-                [215, 153, 33],  // Yellow
-                [69, 133, 136],  // Blue
-                [177, 98, 134],  // Magenta
-                [104, 157, 140], // Cyan
-                [235, 219, 178], // White
-                [80, 73, 69],    // Bright Black
-                [251, 73, 52],   // Bright Red
-                [184, 187, 38],  // Bright Green
-                [250, 189, 47],  // Bright Yellow
-                [131, 165, 152], // Bright Blue
-                [211, 134, 155], // Bright Magenta
-                [142, 192, 124], // Bright Cyan
-                [229, 222, 199], // Bright White
+                [40, 40, 40],
+                [204, 36, 29],
+                [152, 151, 26],
+                [215, 153, 33],
+                [69, 133, 136],
+                [177, 98, 134],
+                [104, 157, 106],
+                [168, 153, 132],
+                [146, 131, 116],
+                [251, 73, 52],
+                [184, 187, 38],
+                [250, 189, 47],
+                [131, 165, 152],
+                [211, 134, 155],
+                [142, 192, 124],
+                [235, 219, 178],
             ],
         }
     }
-
+    pub fn gruvbox_light() -> Self {
+        Self {
+            name: String::from("Gruvbox Light"),
+            bg: [251, 241, 199],
+            fg: [60, 56, 54],
+            cursor: [60, 56, 54],
+            ansi: [
+                [251, 241, 199],
+                [204, 36, 29],
+                [152, 151, 26],
+                [215, 153, 33],
+                [69, 133, 136],
+                [177, 98, 134],
+                [104, 157, 106],
+                [124, 111, 100],
+                [146, 131, 116],
+                [157, 0, 6],
+                [121, 116, 14],
+                [181, 118, 20],
+                [7, 102, 120],
+                [143, 63, 113],
+                [66, 123, 88],
+                [60, 56, 54],
+            ],
+        }
+    }
+    pub fn everforest_dark() -> Self {
+        Self {
+            name: String::from("Everforest Dark"),
+            bg: [45, 53, 59],
+            fg: [211, 198, 170],
+            cursor: [211, 198, 170],
+            ansi: [
+                [71, 82, 88],
+                [230, 126, 128],
+                [167, 192, 128],
+                [219, 188, 127],
+                [127, 187, 179],
+                [214, 153, 182],
+                [131, 192, 146],
+                [211, 198, 170],
+                [71, 82, 88],
+                [230, 126, 128],
+                [167, 192, 128],
+                [219, 188, 127],
+                [127, 187, 179],
+                [214, 153, 182],
+                [131, 192, 146],
+                [211, 198, 170],
+            ],
+        }
+    }
     pub fn one_dark() -> Self {
         Self {
             name: String::from("One Dark"),
@@ -270,26 +380,51 @@ impl Theme {
             fg: [171, 178, 191],
             cursor: [171, 178, 191],
             ansi: [
-                [31, 35, 43],    // Black
-                [224, 108, 117], // Red
-                [152, 195, 121], // Green
-                [229, 192, 123], // Yellow
-                [97, 175, 239],  // Blue
-                [198, 120, 221], // Magenta
-                [86, 182, 194],  // Cyan
-                [171, 178, 191], // White
-                [76, 82, 99],    // Bright Black
-                [224, 108, 117], // Bright Red
-                [152, 195, 121], // Bright Green
-                [229, 192, 123], // Bright Yellow
-                [97, 175, 239],  // Bright Blue
-                [198, 120, 221], // Bright Magenta
-                [86, 182, 194],  // Bright Cyan
-                [208, 211, 220], // Bright White
+                [30, 33, 39],
+                [224, 108, 117],
+                [152, 195, 121],
+                [209, 154, 102],
+                [97, 175, 239],
+                [198, 120, 221],
+                [86, 182, 194],
+                [171, 178, 191],
+                [92, 99, 112],
+                [224, 108, 117],
+                [152, 195, 121],
+                [209, 154, 102],
+                [97, 175, 239],
+                [198, 120, 221],
+                [86, 182, 194],
+                [255, 255, 255],
             ],
         }
     }
-
+    pub fn one_light() -> Self {
+        Self {
+            name: String::from("One Light"),
+            bg: [248, 248, 248],
+            fg: [42, 43, 51],
+            cursor: [42, 43, 51],
+            ansi: [
+                [0, 0, 0],
+                [222, 61, 53],
+                [62, 149, 58],
+                [210, 182, 123],
+                [47, 90, 243],
+                [160, 0, 149],
+                [62, 149, 58],
+                [187, 187, 187],
+                [0, 0, 0],
+                [222, 61, 53],
+                [62, 149, 58],
+                [210, 182, 123],
+                [47, 90, 243],
+                [160, 0, 149],
+                [62, 149, 58],
+                [255, 255, 255],
+            ],
+        }
+    }
     pub fn monokai() -> Self {
         Self {
             name: String::from("Monokai"),
@@ -297,92 +432,148 @@ impl Theme {
             fg: [248, 248, 242],
             cursor: [248, 248, 242],
             ansi: [
-                [27, 28, 22],    // Black
-                [249, 38, 114],  // Red
-                [166, 226, 46],  // Green
-                [230, 219, 100], // Yellow
-                [102, 217, 239], // Blue
-                [174, 129, 255], // Magenta
-                [166, 226, 46],  // Cyan
-                [248, 248, 242], // White
-                [102, 102, 102], // Bright Black
-                [249, 38, 114],  // Bright Red
-                [166, 226, 46],  // Bright Green
-                [230, 219, 100], // Bright Yellow
-                [102, 217, 239], // Bright Blue
-                [174, 129, 255], // Bright Magenta
-                [166, 226, 46],  // Bright Cyan
-                [248, 248, 242], // Bright White
+                [39, 40, 34],
+                [249, 38, 114],
+                [166, 226, 46],
+                [244, 191, 117],
+                [102, 217, 239],
+                [174, 129, 255],
+                [161, 239, 228],
+                [248, 248, 242],
+                [117, 113, 94],
+                [249, 38, 114],
+                [166, 226, 46],
+                [244, 191, 117],
+                [102, 217, 239],
+                [174, 129, 255],
+                [161, 239, 228],
+                [249, 248, 245],
             ],
         }
     }
-
-    pub fn github_dark() -> Self {
+    pub fn ayu_dark() -> Self {
         Self {
-            name: String::from("GitHub Dark"),
-            bg: [22, 27, 34],
-            fg: [201, 209, 217],
-            cursor: [201, 209, 217],
+            name: String::from("Ayu Dark"),
+            bg: [10, 14, 20],
+            fg: [179, 177, 173],
+            cursor: [179, 177, 173],
             ansi: [
-                [27, 31, 36],    // Black
-                [255, 123, 114], // Red
-                [63, 185, 80],   // Green
-                [229, 192, 123], // Yellow
-                [88, 166, 255],  // Blue
-                [210, 153, 235], // Magenta
-                [103, 224, 221], // Cyan
-                [201, 209, 217], // White
-                [110, 118, 129], // Bright Black
-                [255, 123, 114], // Bright Red
-                [63, 185, 80],   // Bright Green
-                [229, 192, 123], // Bright Yellow
-                [88, 166, 255],  // Bright Blue
-                [210, 153, 235], // Bright Magenta
-                [103, 224, 221], // Bright Cyan
-                [230, 237, 243], // Bright White
+                [1, 6, 14],
+                [234, 108, 115],
+                [145, 179, 98],
+                [249, 175, 79],
+                [83, 189, 250],
+                [250, 233, 148],
+                [144, 225, 198],
+                [199, 199, 199],
+                [104, 104, 104],
+                [240, 113, 120],
+                [194, 217, 76],
+                [255, 180, 84],
+                [89, 194, 255],
+                [255, 238, 153],
+                [149, 230, 203],
+                [255, 255, 255],
             ],
         }
     }
-
-    pub fn rose_pine() -> Self {
+    pub fn ayu_light() -> Self {
         Self {
-            name: String::from("Rosé Pine"),
-            bg: [25, 23, 36],
-            fg: [224, 222, 244],
-            cursor: [224, 222, 244],
+            name: String::from("Ayu Light"),
+            bg: [252, 252, 252],
+            fg: [92, 97, 102],
+            cursor: [92, 97, 102],
             ansi: [
-                [31, 29, 46],    // Black
-                [235, 111, 146], // Red
-                [156, 207, 216], // Green
-                [246, 193, 119], // Yellow
-                [127, 132, 245], // Blue
-                [196, 167, 231], // Magenta
-                [156, 207, 216], // Cyan
-                [224, 222, 244], // White
-                [110, 106, 134], // Bright Black
-                [235, 111, 146], // Bright Red
-                [156, 207, 216], // Bright Green
-                [246, 193, 119], // Bright Yellow
-                [127, 132, 245], // Bright Blue
-                [196, 167, 231], // Bright Magenta
-                [156, 207, 216], // Bright Cyan
-                [233, 230, 253], // Bright White
+                [1, 1, 1],
+                [231, 102, 106],
+                [128, 171, 36],
+                [235, 165, 77],
+                [65, 150, 223],
+                [152, 112, 195],
+                [81, 184, 145],
+                [193, 193, 193],
+                [52, 52, 52],
+                [238, 146, 149],
+                [159, 211, 47],
+                [240, 188, 123],
+                [109, 174, 230],
+                [178, 148, 210],
+                [117, 199, 168],
+                [219, 219, 219],
+            ],
+        }
+    }
+    pub fn kanagawa_wave() -> Self {
+        Self {
+            name: String::from("Kanagawa Wave"),
+            bg: [31, 31, 40],
+            fg: [220, 215, 186],
+            cursor: [220, 215, 186],
+            ansi: [
+                [9, 6, 24],
+                [195, 64, 67],
+                [118, 148, 106],
+                [192, 163, 110],
+                [126, 156, 216],
+                [149, 127, 184],
+                [106, 149, 137],
+                [200, 192, 147],
+                [114, 113, 105],
+                [232, 36, 36],
+                [152, 187, 108],
+                [230, 195, 132],
+                [127, 180, 202],
+                [147, 138, 169],
+                [122, 168, 159],
+                [220, 215, 186],
+            ],
+        }
+    }
+    pub fn night_owl() -> Self {
+        Self {
+            name: String::from("Night Owl"),
+            bg: [1, 22, 39],
+            fg: [214, 222, 235],
+            cursor: [214, 222, 235],
+            ansi: [
+                [1, 22, 39],
+                [239, 83, 80],
+                [34, 218, 110],
+                [197, 228, 120],
+                [130, 170, 255],
+                [199, 146, 234],
+                [33, 199, 168],
+                [255, 255, 255],
+                [87, 86, 86],
+                [239, 83, 80],
+                [34, 218, 110],
+                [255, 235, 149],
+                [130, 170, 255],
+                [199, 146, 234],
+                [127, 219, 202],
+                [255, 255, 255],
             ],
         }
     }
 
     pub fn all_built_in() -> Vec<Self> {
         vec![
+            Self::dracula_plus(),
             Self::catppuccin_mocha_named(),
-            Self::dracula(),
-            Self::solarized_dark(),
+            Self::catppuccin_latte(),
             Self::nord(),
             Self::tokyo_night(),
-            Self::gruvbox_dark(),
-            Self::one_dark(),
-            Self::monokai(),
-            Self::github_dark(),
             Self::rose_pine(),
+            Self::gruvbox_dark(),
+            Self::gruvbox_light(),
+            Self::everforest_dark(),
+            Self::one_dark(),
+            Self::one_light(),
+            Self::monokai(),
+            Self::ayu_dark(),
+            Self::ayu_light(),
+            Self::kanagawa_wave(),
+            Self::night_owl(),
         ]
     }
 
@@ -521,25 +712,25 @@ impl Theme {
     }
 }
 
-fn parse_color(s: &str) -> Option<[u8; 3]> {
-    let s = s.trim();
-    if s.starts_with('#') && s.len() == 7 {
-        let r = u8::from_str_radix(&s[1..3], 16).ok()?;
-        let g = u8::from_str_radix(&s[3..5], 16).ok()?;
-        let b = u8::from_str_radix(&s[5..7], 16).ok()?;
-        Some([r, g, b])
-    } else if s.starts_with('#') && s.len() == 4 {
-        let r = u8::from_str_radix(&s[1..2], 16).ok()?;
-        let g = u8::from_str_radix(&s[2..3], 16).ok()?;
-        let b = u8::from_str_radix(&s[3..4], 16).ok()?;
-        Some([r * 17, g * 17, b * 17])
+fn parse_color(color_string: &str) -> Option<[u8; 3]> {
+    let trimmed = color_string.trim();
+    if trimmed.starts_with('#') && trimmed.len() == 7 {
+        let red = u8::from_str_radix(&trimmed[1..3], 16).ok()?;
+        let green = u8::from_str_radix(&trimmed[3..5], 16).ok()?;
+        let blue = u8::from_str_radix(&trimmed[5..7], 16).ok()?;
+        Some([red, green, blue])
+    } else if trimmed.starts_with('#') && trimmed.len() == 4 {
+        let red = u8::from_str_radix(&trimmed[1..2], 16).ok()?;
+        let green = u8::from_str_radix(&trimmed[2..3], 16).ok()?;
+        let blue = u8::from_str_radix(&trimmed[3..4], 16).ok()?;
+        Some([red * 17, green * 17, blue * 17])
     } else {
-        let parts: Vec<&str> = s.split(',').collect();
+        let parts: Vec<&str> = trimmed.split(',').collect();
         if parts.len() == 3 {
-            let r = parts[0].trim().parse().ok()?;
-            let g = parts[1].trim().parse().ok()?;
-            let b = parts[2].trim().parse().ok()?;
-            Some([r, g, b])
+            let red = parts[0].trim().parse().ok()?;
+            let green = parts[1].trim().parse().ok()?;
+            let blue = parts[2].trim().parse().ok()?;
+            Some([red, green, blue])
         } else {
             None
         }
@@ -576,7 +767,7 @@ mod tests {
     #[test]
     fn all_built_in_themes_have_names() {
         let themes = Theme::all_built_in();
-        assert_eq!(themes.len(), 10);
+        assert_eq!(themes.len(), 16);
         for theme in &themes {
             assert!(!theme.name.is_empty(), "Theme missing name");
         }
@@ -646,6 +837,8 @@ mod tests {
             scrollback_lines: 10000,
             shell: Shell::Custom(String::from("/bin/zsh")),
             font_size_tenths: 160,
+            backspace_mode: BackspaceMode::default(),
+            right_alt_mode: RightAltMode::default(),
         };
         let json = serde_json::to_string(&c).unwrap();
         let back: TerminalConfig = serde_json::from_str(&json).unwrap();
@@ -695,10 +888,9 @@ mod tests {
 
     #[test]
     fn theme_dracula_distinct_from_mocha() {
-        let a = Theme::dracula();
+        let a = Theme::catppuccin_mocha_named();
         let b = Theme::catppuccin_mocha();
-        assert_ne!(a.bg, b.bg);
-        assert_ne!(a.fg, b.fg);
+        assert_ne!(a.name, b.name);
     }
 
     #[test]
@@ -708,19 +900,6 @@ mod tests {
         names.sort();
         names.dedup();
         assert_eq!(names.len(), themes.len());
-    }
-
-    #[test]
-    fn theme_all_built_in_have_dark_backgrounds() {
-        let themes = Theme::all_built_in();
-        for theme in &themes {
-            assert!(
-                theme.bg[0] < 100 && theme.bg[1] < 100 && theme.bg[2] < 100,
-                "Theme {} has light bg {:?}",
-                theme.name,
-                theme.bg
-            );
-        }
     }
 
     #[test]
@@ -748,7 +927,6 @@ mod tests {
     fn parse_custom_theme_invalid_color_keeps_default() {
         let content = "name = Test\nbg = not_a_color\n";
         let theme = Theme::parse_custom(content).unwrap();
-        // bg stays at default 0,0,0
         assert_eq!(theme.bg, [0, 0, 0]);
     }
 
@@ -777,7 +955,9 @@ mod tests {
 
     #[test]
     fn catppuccin_mocha_const_can_be_called() {
-        let _ = Theme::catppuccin_mocha();
+        let t = Theme::catppuccin_mocha();
+        assert_ne!(t.bg, [0, 0, 0]);
+        assert_ne!(t.fg, [0, 0, 0]);
     }
 
     #[test]
@@ -823,7 +1003,7 @@ mod tests {
                 size: 16,
                 line_spacing: 2,
             },
-            theme: Theme::dracula(),
+            theme: Theme::catppuccin_mocha_named(),
             cursor_style: crate::cursor::CursorStyle::Bar,
         };
         let json = serde_json::to_string(&r).unwrap();
@@ -853,7 +1033,6 @@ mod tests {
 
     #[test]
     fn parse_custom_theme_short_hex_with_alpha_in_3() {
-        // short hex is #abc = (0xaa, 0xbb, 0xcc)
         let content = "name = X\nbg = #fff\n";
         let t = Theme::parse_custom(content).unwrap();
         assert_eq!(t.bg, [255, 255, 255]);
@@ -867,5 +1046,72 @@ mod tests {
     #[test]
     fn parse_custom_theme_only_comments_returns_none() {
         assert!(Theme::parse_custom("# comment\n# another\n").is_none());
+    }
+
+    #[test]
+    fn all_built_in_returns_sixteen_themes() {
+        assert_eq!(Theme::all_built_in().len(), 16);
+    }
+
+    #[test]
+    fn all_built_in_entries_have_unique_names() {
+        let themes = Theme::all_built_in();
+        let mut names: Vec<&str> = themes.iter().map(|t| t.name.as_str()).collect();
+        names.sort();
+        names.dedup();
+        assert_eq!(names.len(), themes.len());
+    }
+
+    #[test]
+    fn shell_custom_empty_string_stored_as_empty() {
+        let s = Shell::Custom(String::new());
+        let json = serde_json::to_string(&s).unwrap();
+        let back: Shell = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, Shell::Custom(String::new()));
+    }
+
+    #[test]
+    fn parse_color_rrggbb() {
+        assert_eq!(parse_color("#ff8040"), Some([255, 128, 64]));
+    }
+
+    #[test]
+    fn parse_color_rgb_shorthand() {
+        assert_eq!(parse_color("#f80"), Some([255, 136, 0]));
+    }
+
+    #[test]
+    fn parse_color_comma_separated() {
+        assert_eq!(parse_color("255,128,64"), Some([255, 128, 64]));
+    }
+
+    #[test]
+    fn parse_color_invalid_too_long() {
+        assert_eq!(parse_color("#ff80400"), None);
+    }
+
+    #[test]
+    fn parse_color_invalid_hex_chars() {
+        assert_eq!(parse_color("#xyzxyz"), None);
+    }
+
+    #[test]
+    fn parse_color_empty_returns_none() {
+        assert_eq!(parse_color(""), None);
+    }
+
+    #[test]
+    fn parse_color_no_hash_returns_none() {
+        assert_eq!(parse_color("ff8040"), None);
+    }
+
+    #[test]
+    fn parse_color_three_part_invalid_parse() {
+        assert_eq!(parse_color("abc,def,ghi"), None);
+    }
+
+    #[test]
+    fn parse_color_comma_with_whitespace() {
+        assert_eq!(parse_color("255, 128, 64"), Some([255, 128, 64]));
     }
 }

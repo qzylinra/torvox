@@ -4,6 +4,14 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
     id("io.github.takahirom.roborazzi")
+    id("io.gitlab.arturbosch.detekt")
+}
+
+detekt {
+    config.setFrom(files("../detekt.yml"))
+    baseline = file("detekt-baseline.xml")
+    buildUponDefaultConfig = true
+    allRules = false
 }
 
 android {
@@ -26,11 +34,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "io.torvox"
+        applicationId = "com.termux"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2000
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -40,6 +48,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            isDebuggable = true
+        }
         release {
             isMinifyEnabled = true
             val releaseSigning = signingConfigs.getByName("release")
@@ -65,7 +77,7 @@ android {
         unitTests.isIncludeAndroidResources = true
     }
 
-    sourceSets["main"].jniLibs.setSrcDirs(listOf(file("src/main/jniLibs")))
+    sourceSets["main"].jniLibs.srcDirs("src/main/jniLibs")
 }
 
 dependencies {

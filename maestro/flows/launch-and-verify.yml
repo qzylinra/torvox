@@ -1,4 +1,4 @@
-appId: io.torvox
+appId: com.termux
 name: Launch and verify terminal renders
 tags:
   - smoke
@@ -7,15 +7,10 @@ tags:
 - launchApp:
     clearState: true
     stopApp: true
-- waitForAnimationToEnd:
-    timeout: 20000
-- tapOn:
-    text: "Wait"
-    optional: true
-- waitForAnimationToEnd:
-    timeout: 5000
-- assertVisible:
-    id: "TerminalScreen"
+- extendedWaitUntil:
+    visible:
+      id: "TerminalScreen"
+    timeout: 30000
 - assertVisible:
     id: "ModifierBar"
 - assertVisible:

@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "torvox"
 include(":app")
+include(":benchmark")

@@ -3,8 +3,10 @@ target/
 
 # Android
 android/.gradle/
+android/.kotlin/
 android/build/
 android/app/build/
+android/benchmark/build/
 android/local.properties
 *.iml
 .idea/
@@ -17,6 +19,10 @@ android/app/src/main/assets/bin/
 
 # IDE
 .vscode/
+
+# Nix build artifacts
+result
+result-*
 *.swp
 *.swo
 *~
@@ -26,37 +32,58 @@ android/app/src/main/assets/bin/
 Thumbs.db
 
 # Generated
+docs/_build/
 *.log
 boltffi.toml
+fuzz/corpus/
 
-# Nix
-result/
+# Compiled binaries (tools/)
+tools/libvterm-ref
+tools/*.o
 
 # Fuzz artifacts
-torvox-fuzz/artifacts/
-torvox-fuzz/corpus/
+fuzz/artifacts/
 
 # Profiling
 flamegraph.svg
 perf.data
 massif.out.*
 
-# Test results
-test-results/
-
-# Maestro test screenshots
-[0-9]*_*.png
-screenshot_*.png
-/tmp/torvox-test-screenshots/
-
 # Mutation testing artifacts
 mutants.out/
 mutants.out.old/
 
-# boltffi generated (由构建时生成)
+.serena/
+libghostty-vt/
+libghostty-vt-sys/
+
+# Ghostty source clone (used at build time via GHOSTTY_SOURCE_DIR)
+.ghostty/
+
+# boltffi
 android/app/src/main/java/io/torvox/bridge/kotlin/
 
-# opencode (配置已版本控制, 忽略临时文件)
+# SDK manager artifact (literal $sdk_root directory)
+\$sdk_root/
+
+# opencode
 .opencode/sessions/
 .opencode/cache/
-libghostty-rs/
+.opencode/magic-context/
+.opencode/opencode.jsonc
+ultragoal/
+research/
+target-ci/
+cline-memory-bank/
+Conduit/
+LetsFLUTssh/
+ghostty-android-terminal/
+termux-app/
+Haven/
+termlib/
+/tmp/
+
+# Allow reference review docs (but not the cloned repos themselves)
+!docs/reference-review/
+!docs/reference-review/**
+png:*.png

@@ -1,4 +1,4 @@
-appId: io.torvox
+appId: com.termux
 name: Full user journey
 tags:
   - e2e
@@ -14,42 +14,49 @@ tags:
     optional: true
 - waitForAnimationToEnd:
     timeout: 5000
-- assertVisible:
-    id: "TerminalScreen"
+- extendedWaitUntil:
+    visible:
+      id: "TerminalScreen"
+    timeout: 30000
 - assertVisible:
     id: "ModifierBar"
-# Open drawer via session button
+# Tap drawer button to open session drawer
 - tapOn:
-    id: "Key_☰"
-- waitForAnimationToEnd
+    id: "Key_DRAWER"
+- waitForAnimationToEnd:
+    timeout: 3000
 # Navigate to settings
 - tapOn:
     id: "SettingsButton"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - assertVisible:
     id: "SettingsScreen"
-# Verify settings layout
 - assertVisible:
     text: "Appearance"
 - scrollUntilVisible:
     element:
-      text: "Theme"
+      text: "Terminal Theme"
     direction: DOWN
 - assertVisible:
-    text: "Theme"
+    text: "Terminal Theme"
 - scrollUntilVisible:
     element:
       text: "Terminal"
     direction: DOWN
 - assertVisible:
     text: "Terminal"
-# Back to terminal
+# Scroll up to make back button visible
+- scrollUntilVisible:
+    element:
+      id: "SettingsBackButton"
+    direction: UP
 - tapOn:
     id: "SettingsBackButton"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 3000
 - assertVisible:
     id: "ModifierBar"
-# Interact with modifier keys
 - tapOn:
     id: "Key_ESC"
 - tapOn:

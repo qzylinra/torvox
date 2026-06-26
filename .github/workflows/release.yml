@@ -3,43 +3,90 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 permissions:
   contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@main
-      - uses: cachix/install-nix-action@main
+      - uses: actions/checkout@main
         with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-      - uses: ./.github/actions/setup-rust-deps
-      - run: nix develop --command cargo fmt --check
-      - run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
-      - uses: android-actions/setup-android@main
+          repository: ${{ github.actor }}/kudzu
+          path: result-kudzu
+      - uses: ./result-kudzu/.github/actions/install-nix
+      - uses: cachix/cachix-action@master
+        continue-on-error: true
+        with:
+          name: ${{ secrets.CACHIX_NAME }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - run: |
-          nix develop --command bash -c '
-            cargo ndk -t arm64-v8a -t x86_64 --manifest-path torvox-gui-android/Cargo.toml -o android/app/src/main/jniLibs -P 33 build --release
-            NDK_DIR=$(find "$ANDROID_HOME/ndk" -maxdepth 1 -type d -name "[0-9]*" | sort -V | tail -1)
-            export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
-            export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android33-clang
-            cargo build -p torvox-exec --target aarch64-linux-android --release
-            cargo build -p torvox-exec --target x86_64-linux-android --release
-            mkdir -p android/app/src/main/assets/bin/arm64-v8a
-            mkdir -p android/app/src/main/assets/bin/x86_64
-            cp target/aarch64-linux-android/release/torvox-exec android/app/src/main/assets/bin/arm64-v8a/
-            cp target/x86_64-linux-android/release/torvox-exec android/app/src/main/assets/bin/x86_64/
-          '
-      - working-directory: android
-        run: nix develop --command ./gradlew assembleRelease
+          rm -f ~/.config/nix/nix.conf
+          scripts/build-android-libs.nu --profile release
+        env:
+          NIXPKGS_ALLOW_UNFREE: "1"
+          NIXPKGS_ALLOW_INSECURE: "1"
+          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
+      - run: scripts/build-apk.nu --release
+        env:
+          NIXPKGS_ALLOW_UNFREE: "1"
+          NIXPKGS_ALLOW_INSECURE: "1"
+          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
       - uses: actions/upload-artifact@main
         with:
-          name: torvox-release
+          name: torvox-release-apk
           path: android/app/build/outputs/apk/release/*.apk
+      - run: scripts/build-apk.nu --debug
+        env:
+          NIXPKGS_ALLOW_UNFREE: "1"
+          NIXPKGS_ALLOW_INSECURE: "1"
+          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
+      - uses: actions/upload-artifact@main
+        with:
+          name: torvox-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+      - run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          NIXPKGS_ALLOW_UNFREE: "1"
+          NIXPKGS_ALLOW_INSECURE: "1"
+          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_7_pro
+          ram-size: 2048M
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          disable-animations: true
+          pre-emulator-launch-script: |
+            adb kill-server || true
+            fuser -k 5037/tcp 5554/tcp 5555/tcp 2>/dev/null || true
+            sleep 2
+            adb start-server
+            sleep 2
+            adb get-state 2>/dev/null || true
+          script: |
+            set -e
+            nix develop --command nu ${{ github.workspace }}/scripts/test-emulator.nu
+      - uses: actions/upload-artifact@main
+        if: always()
+        with:
+          name: emulator-results
+          path: |
+            /tmp/torvox-emu-results/
+            ~/.maestro/reports/
       - uses: softprops/action-gh-release@master
         if: startsWith(github.ref, 'refs/tags/v')
         with:
-          generate_release_notes: true
-          files: |
-            android/app/build/outputs/apk/release/*.apk
+          generate_release_notes: false
+          files: android/app/build/outputs/apk/release/*.apk
