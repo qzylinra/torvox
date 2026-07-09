@@ -11,13 +11,13 @@ fuzz_target!(|data: &[u8]| {
 
     let cell = Cell {
         char: char::from_u32(0x20 + (byte as u32 % 0x5F)).unwrap_or(' '),
-        fg: Color {
+        foreground: Color {
             r: byte,
             g: data.get(1).copied().unwrap_or(0),
             b: data.get(2).copied().unwrap_or(0),
             a: data.get(3).copied().unwrap_or(255),
         },
-        bg: Color {
+        background: Color {
             r: data.get(4).copied().unwrap_or(0),
             g: data.get(5).copied().unwrap_or(0),
             b: data.get(6).copied().unwrap_or(0),
@@ -44,6 +44,6 @@ fuzz_target!(|data: &[u8]| {
 
     let _ = serde_json::to_string(&cell);
     let _ = serde_json::to_string(&cell.attrs);
-    let _ = serde_json::to_string(&cell.fg);
-    let _ = serde_json::to_string(&cell.bg);
+    let _ = serde_json::to_string(&cell.foreground);
+    let _ = serde_json::to_string(&cell.background);
 });

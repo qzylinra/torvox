@@ -12,6 +12,7 @@ import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
+import android.util.Log
 import java.io.Closeable
 
 /**
@@ -65,24 +66,25 @@ class UsbSerialManager(
     private val usbReceiver =
         object : BroadcastReceiver() {
             override fun onReceive(
-                ctx: Context,
+                context: Context,
                 intent: Intent,
             ) {
                 when (intent.action) {
                     ACTION_USB_PERMISSION -> {
-                        val device =
-                            intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+                        val device: UsbDevice? =
+                            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
                                 ?: return
                         val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                        if (granted && device != null) {
-                            connectToDevice(device)
+                        if (granted) {
+                            device?.let { connectToDevice(it) }
+                                ?: Log.w(TAG, "USB device is null despite permission grant")
                         } else {
                             listener?.onError("USB permission denied")
                         }
                     }
 
                     UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                        val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
+                        val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
                         if (device != null && device.deviceId == currentDevice?.device?.deviceId) {
                             disconnect()
                         }
@@ -107,7 +109,8 @@ class UsbSerialManager(
     fun unregister() {
         try {
             context.unregisterReceiver(usbReceiver)
-        } catch (_: IllegalArgumentException) {
+        } catch (exception: IllegalArgumentException) {
+            Log.w(TAG, "USB receiver not registered", exception)
         }
     }
 
@@ -144,33 +147,33 @@ class UsbSerialManager(
     }
 
     private fun connectToDevice(device: UsbDevice) {
-        val iface =
+        val usbInterface =
             findSerialInterface(device) ?: run {
                 listener?.onError("No serial interface found on ${device.deviceName}")
                 return
             }
 
-        val conn =
+        val deviceConnection =
             usbManager.openDevice(device) ?: run {
                 listener?.onError("Failed to open USB device ${device.deviceName}")
                 return
             }
 
-        if (!conn.claimInterface(iface, true)) {
-            conn.close()
+        if (!deviceConnection.claimInterface(usbInterface, true)) {
+            deviceConnection.close()
             listener?.onError("Failed to claim USB interface")
             return
         }
 
         val (readEp, writeEp) =
-            findEndpoints(iface) ?: run {
-                conn.releaseInterface(iface)
-                conn.close()
+            findEndpoints(usbInterface) ?: run {
+                deviceConnection.releaseInterface(usbInterface)
+                deviceConnection.close()
                 listener?.onError("No suitable endpoints found")
                 return
             }
 
-        connection = conn
+        connection = deviceConnection
         readEndpoint = readEp
         writeEndpoint = writeEp
 
@@ -200,21 +203,22 @@ class UsbSerialManager(
     }
 
     private fun releaseConnection() {
-        val conn = connection ?: return
-        val iface = currentDevice?.device?.let { findSerialInterface(it) }
-        if (iface != null) {
+        val deviceConnection = connection ?: return
+        val usbInterface = currentDevice?.device?.let { findSerialInterface(it) }
+        if (usbInterface != null) {
             try {
-                conn.releaseInterface(iface)
-            } catch (_: Exception) {
+                deviceConnection.releaseInterface(usbInterface)
+            } catch (exception: Exception) {
+                Log.w(TAG, "Failed to release USB interface", exception)
             }
         }
-        conn.close()
+        deviceConnection.close()
     }
 
     fun write(data: ByteArray): Int {
-        val conn = connection ?: return -1
-        val ep = writeEndpoint ?: return -1
-        return conn.bulkTransfer(ep, data, data.size, WRITE_TIMEOUT_MS)
+        val deviceConnection = connection ?: return -1
+        val endpoint = writeEndpoint ?: return -1
+        return deviceConnection.bulkTransfer(endpoint, data, data.size, WRITE_TIMEOUT_MS)
     }
 
     fun writeLine(text: String) {
@@ -228,14 +232,14 @@ class UsbSerialManager(
             Thread({
                 val buffer = ByteArray(READ_BUFFER_SIZE)
                 while (isReading) {
-                    val conn = connection ?: break
-                    val ep = readEndpoint ?: break
-                    val len = conn.bulkTransfer(ep, buffer, buffer.size, READ_TIMEOUT_MS)
+                    val deviceConnection = connection ?: break
+                    val endpoint = readEndpoint ?: break
+                    val len = deviceConnection.bulkTransfer(endpoint, buffer, buffer.size, READ_TIMEOUT_MS)
                     if (len > 0) {
                         val data = buffer.copyOf(len)
                         listener?.onDataReceived(data)
                     } else if (len < 0) {
-                        Thread.sleep(10)
+                        Thread.sleep(RETRY_SLEEP_MS)
                     }
                 }
             }, "usb-serial-reader").apply {
@@ -252,27 +256,27 @@ class UsbSerialManager(
 
     private fun findSerialInterface(device: UsbDevice): UsbInterface? {
         for (i in 0 until device.interfaceCount) {
-            val iface = device.getInterface(i)
-            if (iface.interfaceClass == UsbConstants.USB_CLASS_CDC_DATA ||
-                iface.interfaceClass == UsbConstants.USB_CLASS_COMM ||
-                iface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC
+            val usbInterface = device.getInterface(i)
+            if (usbInterface.interfaceClass == UsbConstants.USB_CLASS_CDC_DATA ||
+                usbInterface.interfaceClass == UsbConstants.USB_CLASS_COMM ||
+                usbInterface.interfaceClass == UsbConstants.USB_CLASS_VENDOR_SPEC
             ) {
-                return iface
+                return usbInterface
             }
         }
         return null
     }
 
-    private fun findEndpoints(iface: UsbInterface): Pair<UsbEndpoint, UsbEndpoint>? {
+    private fun findEndpoints(usbInterface: UsbInterface): Pair<UsbEndpoint, UsbEndpoint>? {
         var readEp: UsbEndpoint? = null
         var writeEp: UsbEndpoint? = null
-        for (i in 0 until iface.endpointCount) {
-            val ep = iface.getEndpoint(i)
-            if (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK) {
-                if (ep.direction == UsbConstants.USB_DIR_IN) {
-                    readEp = ep
+        for (i in 0 until usbInterface.endpointCount) {
+            val endpoint = usbInterface.getEndpoint(i)
+            if (endpoint.type == UsbConstants.USB_ENDPOINT_XFER_BULK) {
+                if (endpoint.direction == UsbConstants.USB_DIR_IN) {
+                    readEp = endpoint
                 } else {
-                    writeEp = ep
+                    writeEp = endpoint
                 }
             }
         }
@@ -289,10 +293,12 @@ class UsbSerialManager(
     }
 
     companion object {
+        private const val TAG = "UsbSerialManager"
         private const val ACTION_USB_PERMISSION = "io.torvox.USB_PERMISSION"
         private const val READ_BUFFER_SIZE = 4096
         private const val READ_TIMEOUT_MS = 1000
         private const val WRITE_TIMEOUT_MS = 1000
+        private const val RETRY_SLEEP_MS = 10L
 
         private val FTDI_VENDOR_IDS = setOf(0x0403)
         private val CH340_VENDOR_IDS = setOf(0x1A86)

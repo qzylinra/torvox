@@ -9,10 +9,7 @@ fn t() -> GhosttyTerminal {
     GhosttyTerminal::new(5, 40, 1000).expect("terminal create")
 }
 
-fn snap_write(
-    t: &mut GhosttyTerminal,
-    data: &[u8],
-) -> torvox_terminal::ghostty_terminal::GridSnapshot {
+fn snap_write(t: &mut GhosttyTerminal, data: &[u8]) -> torvox_terminal::ghostty_terminal::GridSnapshot {
     t.vt_write(data);
     t.flush();
     t.take_snapshot()
@@ -186,12 +183,7 @@ fn sgr11_19_alt_fonts_no_crash() {
     for param in 11u8..=19 {
         let seq = format!("\x1b[{}mX", param);
         let snap = snap_write(&mut t, seq.as_bytes());
-        assert_eq!(
-            cell_at(&snap, 0).codepoint,
-            'X' as u32,
-            "SGR {} writes char",
-            param
-        );
+        assert_eq!(cell_at(&snap, 0).codepoint, 'X' as u32, "SGR {} writes char", param);
     }
 }
 
@@ -279,7 +271,7 @@ fn sgr30_37_foreground_8_colors() {
     for i in 0..8 {
         let c = cell_at(&snap, i);
         assert!(
-            c.fg[3] != 0.0,
+            c.foreground[3] != 0.0,
             "SGR 3{}: fg color should have non-zero alpha",
             i
         );
@@ -291,7 +283,7 @@ fn sgr39_default_foreground() {
     let mut t = t();
     let snap = snap_write(&mut t, b"\x1b[31mR\x1b[39mD");
     let c1 = cell_at(&snap, 1);
-    assert!(c1.fg[3] >= 0.0, "SGR 39: valid fg color after reset");
+    assert!(c1.foreground[3] >= 0.0, "SGR 39: valid fg color after reset");
 }
 
 #[test]
@@ -301,7 +293,7 @@ fn sgr40_47_background_8_colors() {
     for i in 0..8 {
         let c = cell_at(&snap, i);
         assert!(
-            c.bg[3] != 0.0,
+            c.background[3] != 0.0,
             "SGR 4{}: bg color should have non-zero alpha",
             i
         );
@@ -425,7 +417,7 @@ fn sgr38_5_256_color_fg() {
         let seq = format!("\x1b[38;5;{}mX", idx);
         let snap = snap_write(&mut t, seq.as_bytes());
         let c = cell_at(&snap, 0);
-        assert!(c.fg[3] >= 0.0, "SGR 38;5;{}: valid fg", idx);
+        assert!(c.foreground[3] >= 0.0, "SGR 38;5;{}: valid fg", idx);
     }
 }
 
@@ -436,7 +428,7 @@ fn sgr48_5_256_color_bg() {
         let seq = format!("\x1b[48;5;{}mX", idx);
         let snap = snap_write(&mut t, seq.as_bytes());
         let c = cell_at(&snap, 0);
-        assert!(c.bg[3] >= 0.0, "SGR 48;5;{}: valid bg", idx);
+        assert!(c.background[3] >= 0.0, "SGR 48;5;{}: valid bg", idx);
     }
 }
 
@@ -446,7 +438,7 @@ fn sgr38_2_truecolor_fg() {
     let snap = snap_write(&mut t, b"\x1b[38;2;100;150;200mX");
     let c = cell_at(&snap, 0);
     assert!(
-        c.fg[0] > 0.0 || c.fg[1] > 0.0 || c.fg[2] > 0.0,
+        c.foreground[0] > 0.0 || c.foreground[1] > 0.0 || c.foreground[2] > 0.0,
         "SGR 38;2;100;150;200: non-zero fg"
     );
 }
@@ -457,7 +449,7 @@ fn sgr48_2_truecolor_bg() {
     let snap = snap_write(&mut t, b"\x1b[48;2;200;100;50mX");
     let c = cell_at(&snap, 0);
     assert!(
-        c.bg[0] > 0.0 || c.bg[1] > 0.0 || c.bg[2] > 0.0,
+        c.background[0] > 0.0 || c.background[1] > 0.0 || c.background[2] > 0.0,
         "SGR 48;2;200;100;50: non-zero bg"
     );
 }
@@ -477,8 +469,8 @@ fn sgr_combined_fg_bg_truecolor() {
     let mut t = t();
     let snap = snap_write(&mut t, b"\x1b[38;2;100;150;200;48;2;200;100;50mX");
     let c = cell_at(&snap, 0);
-    assert!(c.fg[0] > 0.0);
-    assert!(c.bg[0] > 0.0);
+    assert!(c.foreground[0] > 0.0);
+    assert!(c.background[0] > 0.0);
 }
 
 #[test]
@@ -513,13 +505,7 @@ fn sgr_random_combinations_100() {
         let p2 = (i * 11 + 5) % 109;
         let seq = format!("\x1b[{};{}mX", p1, p2);
         let snap = snap_write(&mut t, seq.as_bytes());
-        assert_eq!(
-            cell_at(&snap, 0).codepoint,
-            'X' as u32,
-            "SGR {} {} writes char",
-            p1,
-            p2
-        );
+        assert_eq!(cell_at(&snap, 0).codepoint, 'X' as u32, "SGR {} {} writes char", p1, p2);
     }
 }
 

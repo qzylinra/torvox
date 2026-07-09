@@ -1,12 +1,12 @@
 /// OSC sequence interceptor that strips handled OSC sequences from terminal
 /// output before it reaches the VT emulator. Inspired by Haven's OscHandler.
 ///
-/// Handled OSC types:
-///   52 — clipboard set (base64 decode)
-///    7 — current working directory
-///    8 — hyperlinks (open/close)
-///    9 — notifications (iTerm2-style)
-///  777 — notifications (rxvt-unicode-style)
+/// Handled OSC types (stripped from output and emitted as [`OscEvent`]s):
+///    7 — current working directory (`OscEvent::Cwd`)
+///    8 — hyperlinks (open/close) (`OscEvent::Hyperlink`)
+///    9 — notifications (iTerm2-style) (`OscEvent::Notification`)
+///   52 — clipboard set (base64 decode) (`OscEvent::Clipboard`)
+///  777 — notifications (rxvt-unicode-style) (`OscEvent::Notification`)
 ///
 /// Unrecognised OSC numbers (0, 1, 4, 10, etc.) pass through unchanged so
 /// the terminal emulator can handle them (e.g. OSC 0 sets the title).
@@ -18,7 +18,19 @@ const MAX_PAYLOAD_BYTES: usize = 1_048_576;
 const MAX_SEQUENCE_OVERHEAD: usize = 64;
 
 /// OSC numbers we handle (strip from output).
-const HANDLED_OSC: &[u32] = &[8, 9, 52, 777];
+const HANDLED_OSC: &[u32] = &[
+    OSC_CWD,
+    OSC_HYPERLINK,
+    OSC_NOTIFICATION_ITERM2,
+    OSC_CLIPBOARD,
+    OSC_NOTIFICATION_RXVT,
+];
+
+const OSC_CLIPBOARD: u32 = 52;
+const OSC_CWD: u32 = 7;
+const OSC_HYPERLINK: u32 = 8;
+const OSC_NOTIFICATION_ITERM2: u32 = 9;
+const OSC_NOTIFICATION_RXVT: u32 = 777;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum OscState {
@@ -48,7 +60,7 @@ pub struct CwdEvent {
 /// Decoded OSC 8 hyperlink event.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HyperlinkEvent {
-    pub uri: Option<String>,
+    pub url: Option<String>,
 }
 
 /// Decoded OSC 9/777 notification event.
@@ -71,7 +83,8 @@ pub enum OscEvent {
 /// handled OSC sequences. Produces a filtered byte stream and decoded events.
 ///
 /// Uses reusable internal buffers to avoid per-call allocations. Callers
-/// borrow the filtered output via [`OscHandler::output`] after [`process`].
+/// borrow the filtered output via [`OscHandler::output`] after [`OscHandler::process`].
+#[derive(Debug)]
 pub struct OscHandler {
     state: OscState,
     osc_number: u32,
@@ -95,8 +108,8 @@ impl OscHandler {
 
     /// Process a chunk of terminal output. Handled OSC sequences are consumed;
     /// everything else is written to the internal output buffer. After calling
-    /// this method, read the filtered bytes from [`output`] and decoded events
-    /// from [`events`].
+    /// this method, read the filtered bytes from [`OscHandler::output`] and decoded events
+    /// from [`OscHandler::events`].
     pub fn process(&mut self, input: &[u8]) {
         let needed = input.len() + MAX_SEQUENCE_OVERHEAD;
         if self.output_buf.len() < needed {
@@ -259,11 +272,11 @@ impl OscHandler {
         self.seq_buf.clear();
 
         match self.osc_number {
-            52 => self.dispatch_osc52(&payload),
-            7 => self.dispatch_osc7(&payload),
-            8 => self.dispatch_osc8(&payload),
-            9 => self.dispatch_osc9(&payload),
-            777 => self.dispatch_osc777(&payload),
+            OSC_CLIPBOARD => self.dispatch_osc52(&payload),
+            OSC_CWD => self.dispatch_osc7(&payload),
+            OSC_HYPERLINK => self.dispatch_osc8(&payload),
+            OSC_NOTIFICATION_ITERM2 => self.dispatch_osc9(&payload),
+            OSC_NOTIFICATION_RXVT => self.dispatch_osc777(&payload),
             _ => None,
         }
     }
@@ -294,23 +307,24 @@ impl OscHandler {
 
     fn dispatch_osc8(&self, payload: &str) -> Option<OscEvent> {
         let semi = payload.find(';')?;
-        let uri = &payload[semi + 1..];
-        let uri_opt = if uri.is_empty() {
-            None
-        } else {
-            Some(uri.to_string())
-        };
-        Some(OscEvent::Hyperlink(HyperlinkEvent { uri: uri_opt }))
+        let url = &payload[semi + 1..];
+        let url_opt = if url.is_empty() { None } else { Some(url.to_string()) };
+        Some(OscEvent::Hyperlink(HyperlinkEvent { url: url_opt }))
     }
 
     fn dispatch_osc9(&self, payload: &str) -> Option<OscEvent> {
         if payload.is_empty() {
             return None;
         }
-        Some(OscEvent::Notification(NotificationEvent {
-            title: String::new(),
-            body: payload.to_string(),
-        }))
+        // OSC 9 format: \x1b]9;body\x07 or \x1b]9;title;body\x07
+        let (title, body) = if let Some(semi) = payload.find(';') {
+            let t = &payload[..semi];
+            let b = &payload[semi + 1..];
+            (t.to_string(), b.to_string())
+        } else {
+            (String::new(), payload.to_string())
+        };
+        Some(OscEvent::Notification(NotificationEvent { title, body }))
     }
 
     fn dispatch_osc777(&self, payload: &str) -> Option<OscEvent> {
@@ -356,11 +370,15 @@ mod tests {
     }
 
     #[test]
-    fn passthrough_osc7_cwd() {
+    fn strip_osc7_cwd() {
         let mut handler = OscHandler::new();
         handler.process(b"\x1b]7;file:///home/user\x07");
-        assert_eq!(handler.output(), b"\x1b]7;file:///home/user\x07");
-        assert!(handler.events().is_empty());
+        assert!(handler.output().is_empty());
+        assert_eq!(handler.events().len(), 1);
+        match &handler.events()[0] {
+            OscEvent::Cwd(cwd) => assert_eq!(cwd.path, "file:///home/user"),
+            _ => panic!("expected cwd event"),
+        }
     }
 
     #[test]
@@ -370,7 +388,7 @@ mod tests {
         assert!(handler.output().is_empty());
         assert_eq!(handler.events().len(), 1);
         match &handler.events()[0] {
-            OscEvent::Hyperlink(h) => assert_eq!(h.uri.as_deref(), Some("https://example.com")),
+            OscEvent::Hyperlink(h) => assert_eq!(h.url.as_deref(), Some("https://example.com")),
             _ => panic!("expected hyperlink event"),
         }
     }
@@ -382,7 +400,7 @@ mod tests {
         assert!(handler.output().is_empty());
         assert_eq!(handler.events().len(), 1);
         match &handler.events()[0] {
-            OscEvent::Hyperlink(h) => assert_eq!(h.uri, None),
+            OscEvent::Hyperlink(h) => assert_eq!(h.url, None),
             _ => panic!("expected hyperlink close event"),
         }
     }
@@ -478,6 +496,70 @@ mod tests {
         match &handler.events()[0] {
             OscEvent::Clipboard(ce) => assert_eq!(ce.text, "test"),
             _ => panic!("expected clipboard event"),
+        }
+    }
+
+    #[test]
+    fn bel_in_handled_osc_not_in_output() {
+        let mut handler = OscHandler::new();
+        handler.process(b"\x1b]52;c;dGVzdA==\x07");
+        let output = handler.output();
+        assert!(
+            !output.contains(&0x07),
+            "BEL used as OSC terminator must not appear in output"
+        );
+    }
+
+    #[test]
+    fn standalone_bel_in_output() {
+        let mut handler = OscHandler::new();
+        handler.process(b"hello\x07world");
+        let output = handler.output();
+        assert!(
+            output.contains(&0x07),
+            "standalone BEL must be passed through in output"
+        );
+    }
+
+    #[test]
+    fn bel_in_unrecognized_osc_passes_through() {
+        let mut handler = OscHandler::new();
+        handler.process(b"\x1b]4;1;rgb:00/00/00\x07");
+        let output = handler.output();
+        assert!(
+            output.contains(&0x07),
+            "BEL in unrecognized OSC must pass through to VT engine"
+        );
+    }
+
+    // ── R1: OSC 7 (cwd) is a handled OSC ───────────────────────────
+
+    /// OSC 7 must be registered in `HANDLED_OSC` so the handler strips
+    /// it and emits `OscEvent::Cwd` (R1 fix). If `OSC_CWD` were
+    /// missing from the handled set, OSC 7 would be forwarded to Ghostty
+    /// and `OscEvent::Cwd` would never be produced.
+    #[test]
+    fn handled_osc_includes_cwd() {
+        assert_eq!(OSC_CWD, 7, "OSC_CWD constant must be 7");
+        assert!(
+            HANDLED_OSC.contains(&OSC_CWD),
+            "OSC 7 (cwd) must be in HANDLED_OSC so it is intercepted"
+        );
+    }
+
+    /// `OscHandler::process` for an OSC 7 sequence must emit
+    /// `OscEvent::Cwd` carrying the path payload (R1 fix).
+    #[test]
+    fn osc7_process_emits_cwd_event_with_path() {
+        let mut handler = OscHandler::new();
+        handler.process(b"\x1b]7;file:///home/user/project\x07");
+        assert!(handler.output().is_empty(), "OSC 7 body must be stripped from output");
+        assert_eq!(handler.events().len(), 1, "exactly one event expected");
+        match &handler.events()[0] {
+            OscEvent::Cwd(cwd) => {
+                assert_eq!(cwd.path, "file:///home/user/project");
+            }
+            other => panic!("expected OscEvent::Cwd, got {other:?}"),
         }
     }
 }

@@ -20,12 +20,12 @@ object LogcatFileWriter {
                 val baseDir =
                     context.getExternalFilesDir(null)
                         ?: context.getDir("logs_root", Context.MODE_PRIVATE)
-                val dir = File(baseDir, "logs").also { it.mkdirs() }
-                if (!dir.isDirectory) {
-                    Log.e("LogcatFileWriter", "Failed to create log dir at ${dir.absolutePath}")
+                val logsDirectory = File(baseDir, "logs").also { it.mkdirs() }
+                if (!logsDirectory.isDirectory) {
+                    Log.e("LogcatFileWriter", "Failed to create logs directory at ${logsDirectory.absolutePath}")
                     return
                 }
-                val file = File(dir, "debug.log")
+                val file = File(logsDirectory, "debug.log")
                 logFile = file
                 fileWriter = FileWriter(file, true)
                 Log.d("LogcatFileWriter", "Log file: ${file.absolutePath}")
@@ -46,7 +46,8 @@ object LogcatFileWriter {
                     write("$timestamp $tag: $message\n")
                     flush()
                 }
-            } catch (_: Exception) {
+            } catch (exception: Exception) {
+                Log.e("LogcatFileWriter", "Failed to write log entry", exception)
             }
         }
     }
@@ -55,7 +56,8 @@ object LogcatFileWriter {
         synchronized(lock) {
             try {
                 fileWriter?.flush()
-            } catch (_: Exception) {
+            } catch (exception: Exception) {
+                Log.e("LogcatFileWriter", "Failed to flush log file", exception)
             }
         }
     }
@@ -65,7 +67,8 @@ object LogcatFileWriter {
             try {
                 fileWriter?.close()
                 fileWriter = null
-            } catch (_: Exception) {
+            } catch (exception: Exception) {
+                Log.e("LogcatFileWriter", "Failed to close log file", exception)
             }
         }
     }
@@ -74,7 +77,8 @@ object LogcatFileWriter {
         synchronized(lock) {
             try {
                 fileWriter?.close()
-            } catch (_: Exception) {
+            } catch (exception: Exception) {
+                Log.e("LogcatFileWriter", "Failed to close log file during reset", exception)
             }
             fileWriter = null
             logFile = null

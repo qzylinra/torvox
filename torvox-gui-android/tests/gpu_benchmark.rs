@@ -7,7 +7,6 @@ use std::task;
 use std::task::{Context, Waker};
 use std::time::{Duration, Instant};
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
-use torvox_terminal::keyboard::{InputEngine, KeyAction, KeyEvent};
 
 fn noop_device() -> (wgpu::Instance, wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -121,8 +120,7 @@ fn bench_noop_render_frame() {
     const N: u32 = 5;
     let s = Instant::now();
     for _ in 0..N {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -160,8 +158,9 @@ fn bench_noop_render_frame() {
 fn bench_compute_dispatch() {
     let (_, _, device, queue) = noop_device();
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None, source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
-            "@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) { var x = id.x; }"
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+            "@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) { var x = id.x; }",
         )),
     });
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -180,8 +179,7 @@ fn bench_compute_dispatch() {
     const N: u32 = 10;
     let s = Instant::now();
     for _ in 0..N {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         cpass.set_pipeline(&pipeline);
         cpass.dispatch_workgroups(64, 1, 1);
@@ -270,24 +268,6 @@ fn bench_snapshot_throughput() {
         "  total {:9.1} ms | avg {:6.3} ms | {:6.0} snapshots/s",
         e.as_secs_f64() * 1000.0,
         (e / N).as_secs_f64() * 1000.0,
-        N as f64 / e.as_secs_f64()
-    );
-}
-
-#[test]
-fn bench_keyboard_encoding() {
-    let engine = InputEngine::new();
-    const N: u32 = 100;
-    let s = Instant::now();
-    for _ in 0..N {
-        let _ = engine.process_key(KeyEvent::Char('a'), KeyAction::Press);
-    }
-    let e = s.elapsed();
-    println!("BENCH: KEYBOARD ENCODE x{N}");
-    println!(
-        "  total {:9.1} ms | avg {:7.3} µs | {:6.0} keys/s",
-        e.as_secs_f64() * 1000.0,
-        (e / N).as_secs_f64() * 1_000_000.0,
         N as f64 / e.as_secs_f64()
     );
 }

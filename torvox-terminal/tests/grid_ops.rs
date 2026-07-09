@@ -16,11 +16,7 @@ fn get_text(g: &Grid, rows: u32, cols: u32) -> Vec<String> {
             (0..cols)
                 .map(|c| {
                     let cell_ref = g.cell(r, c);
-                    if let Some(cell) = cell_ref {
-                        cell.char
-                    } else {
-                        ' '
-                    }
+                    if let Some(cell) = cell_ref { cell.char } else { ' ' }
                 })
                 .collect()
         })
@@ -45,10 +41,7 @@ fn scroll_down_inserts_blank_row_at_top() {
     g.scroll_down(0, rows, cols);
     let text = get_text(&g, rows, cols);
     for c in text[0].chars() {
-        assert!(
-            c == '\0' || c == ' ',
-            "first row after scroll_down should be blank"
-        );
+        assert!(c == '\0' || c == ' ', "first row after scroll_down should be blank");
     }
 }
 
@@ -61,10 +54,7 @@ fn scroll_up_inserts_blank_row_at_bottom() {
     g.scroll_up(0, rows, cols);
     let text = get_text(&g, rows, cols);
     for c in text[(rows - 1) as usize].chars() {
-        assert!(
-            c == '\0' || c == ' ',
-            "last row after scroll_up should be blank"
-        );
+        assert!(c == '\0' || c == ' ', "last row after scroll_up should be blank");
     }
 }
 
@@ -147,16 +137,8 @@ fn fill_rect_writes_character_to_area() {
     fill_grid(&mut g, rows, cols);
     g.fill_rect(1, 1, 2, 2, 'X');
     let text = get_text(&g, rows, cols);
-    assert_eq!(
-        text[1].as_bytes()[1] as char,
-        'X',
-        "fill_rect should set cell to 'X'"
-    );
-    assert_eq!(
-        text[2].as_bytes()[2] as char,
-        'X',
-        "fill_rect should set cell to 'X'"
-    );
+    assert_eq!(text[1].as_bytes()[1] as char, 'X', "fill_rect should set cell to 'X'");
+    assert_eq!(text[2].as_bytes()[2] as char, 'X', "fill_rect should set cell to 'X'");
 }
 
 #[test]
@@ -187,14 +169,8 @@ fn copy_rect_moves_content() {
     let before = get_text(&g, rows, cols);
     g.copy_rect(0, 0, 3, 0, cols, 2);
     let after = get_text(&g, rows, cols);
-    assert_eq!(
-        after[3], before[0],
-        "copy_rect should copy row 0 content to row 3"
-    );
-    assert_eq!(
-        after[4], before[1],
-        "copy_rect should copy row 1 content to row 4"
-    );
+    assert_eq!(after[3], before[0], "copy_rect should copy row 0 content to row 3");
+    assert_eq!(after[4], before[1], "copy_rect should copy row 1 content to row 4");
 }
 
 #[test]
@@ -270,10 +246,6 @@ fn delete_lines_at_bottom_clears_last() {
     g.delete_lines(rows - 2, 1, rows - 1, cols);
     let text = get_text(&g, rows, cols);
     for ch in text[(rows - 2) as usize].chars() {
-        assert_eq!(
-            ch, ' ',
-            "delete_lines bottom should be space characters, got '{}'",
-            ch
-        );
+        assert_eq!(ch, ' ', "delete_lines bottom should be space characters, got '{}'", ch);
     }
 }

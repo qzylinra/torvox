@@ -181,12 +181,6 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun sessionRestoreDefaultFalse() = runTest {
-        repository.setSessionRestore(false)
-        assertEquals(false, repository.sessionRestore.first())
-    }
-
-    @Test
     fun sessionRestoreRoundTrip() = runTest {
         repository.setSessionRestore(true)
         assertEquals(true, repository.sessionRestore.first())

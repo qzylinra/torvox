@@ -1,10 +1,9 @@
+// @REQ_CORE_007
+//! Cursor style and state definitions.
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum CursorStyle {
     #[default]
     Block,
@@ -13,10 +12,7 @@ pub enum CursorStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct CursorState {
     pub row: u32,
     pub col: u32,
@@ -35,6 +31,37 @@ impl Default for CursorState {
     }
 }
 
+/// Terminal cursor position and style.
+///
+/// ```
+/// use torvox_core::cursor::{CursorState, CursorStyle};
+///
+/// let mut c = CursorState::new(10, 20);
+/// assert_eq!(c.row, 10);
+/// assert_eq!(c.col, 20);
+/// assert_eq!(c.style, CursorStyle::Block);
+/// assert!(c.visible);
+///
+/// c.move_up(3);
+/// assert_eq!(c.row, 7);
+///
+/// c.move_down(5, 24);
+/// assert_eq!(c.row, 12);
+///
+/// c.move_left(4);
+/// assert_eq!(c.col, 16);
+///
+/// c.move_right(10, 80);
+/// assert_eq!(c.col, 26);
+///
+/// c.carriage_return();
+/// assert_eq!(c.col, 0);
+///
+/// c.move_to(50, 100);
+/// c.clamp(24, 80);
+/// assert_eq!(c.row, 23);
+/// assert_eq!(c.col, 79);
+/// ```
 impl CursorState {
     pub fn new(row: u32, col: u32) -> Self {
         Self {
@@ -54,7 +81,7 @@ impl CursorState {
     }
 
     pub fn move_down(&mut self, n: u32, max_rows: u32) {
-        self.row = (self.row + n).min(max_rows.saturating_sub(1));
+        self.row = self.row.saturating_add(n).min(max_rows.saturating_sub(1));
     }
 
     pub fn move_left(&mut self, n: u32) {
@@ -62,7 +89,7 @@ impl CursorState {
     }
 
     pub fn move_right(&mut self, n: u32, max_cols: u32) {
-        self.col = (self.col + n).min(max_cols.saturating_sub(1));
+        self.col = self.col.saturating_add(n).min(max_cols.saturating_sub(1));
     }
 
     pub fn carriage_return(&mut self) {
@@ -78,6 +105,7 @@ impl CursorState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::format;
 
     #[test]
     fn cursor_new_matches_default_except_position() {
@@ -280,5 +308,34 @@ mod tests {
         original.move_to(99, 99);
         assert_eq!(cloned.row, 1, "Copy should snapshot position");
         assert_eq!(cloned.col, 2);
+    }
+
+    #[test]
+    fn move_down_saturating_no_panic() {
+        let mut pos = CursorState::new(u32::MAX - 5, 0);
+        pos.move_down(u32::MAX, 24);
+        assert_eq!(pos.row, 23, "saturating_add prevents overflow panic");
+    }
+
+    #[test]
+    fn move_right_saturating_no_panic() {
+        let mut pos = CursorState::new(0, u32::MAX - 5);
+        pos.move_right(u32::MAX, 80);
+        assert_eq!(pos.col, 79, "saturating_add prevents overflow panic");
+    }
+
+    #[test]
+    fn cursor_style_default_is_block() {
+        let style = CursorStyle::default();
+        assert_eq!(style, CursorStyle::Block);
+    }
+
+    #[test]
+    fn cursor_style_debug_not_empty() {
+        let styles = [CursorStyle::Block, CursorStyle::Underline, CursorStyle::Bar];
+        for style in &styles {
+            let debug = format!("{:?}", style);
+            assert!(!debug.is_empty(), "CursorStyle {:?} should have non-empty debug", style);
+        }
     }
 }

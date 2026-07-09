@@ -1,16 +1,3 @@
-diff --git a/src/terminal/PageList.zig b/src/terminal/PageList.zig
-index 8e5cd1934..c8423e936 100644
---- a/src/terminal/PageList.zig
-+++ b/src/terminal/PageList.zig
-@@ -1059,7 +1059,7 @@ fn resizeCols(
-         break :cursor .{
-             .tracked_pin = c.pin orelse try self.trackPin(p),
-             .untrack = c.pin == null,
--            .remaining_rows = self.rows - c.y - 1,
-+            .remaining_rows = if (c.y < self.rows) self.rows - c.y - 1 else 0,
-             .wrapped_rows = wrapped,
-         };
-     } else null;
 diff --git a/src/terminal/Screen.zig b/src/terminal/Screen.zig
 index 8ee700252..b7313356c 100644
 --- a/src/terminal/Screen.zig

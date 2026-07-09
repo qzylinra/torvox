@@ -1,5 +1,4 @@
-// @PTY pair management, IMPL_TERM_001, impl, [REQ_TERM_001]
-// @need-ids: REQ_TERM_001, REQ_TERM_002
+// @REQ_TERM_003
 use std::io;
 use std::os::unix::io::{AsRawFd, OwnedFd, RawFd};
 use std::time::Duration;
@@ -7,6 +6,15 @@ use std::time::Duration;
 use thiserror::Error;
 
 use crate::shell_env::ShellEnv;
+
+const DEFAULT_TERM: &str = "xterm-256color";
+const DEFAULT_COLORTERM: &str = "truecolor";
+const DEFAULT_TERM_PROGRAM: &str = "torvox";
+const DEFAULT_LANG: &str = "en_US.UTF-8";
+/// Android does not have a writable /tmp, so we use /data/local/tmp
+/// which is guaranteed to be writable by the app process on all API levels.
+const ANDROID_TMPDIR: &str = "/data/local/tmp";
+const GRACEFUL_SHUTDOWN_TIMEOUT_MS: u64 = 100;
 
 #[derive(Debug, Error)]
 pub enum PtyError {
@@ -35,6 +43,13 @@ pub trait Pty: Send {
     fn resize(&self, rows: u16, cols: u16) -> Result<(), PtyError>;
     fn child_pid(&self) -> nix::unistd::Pid;
     fn master_fd(&self) -> RawFd;
+    /// Returns an independently-owned duplicate of the master fd for use by a
+    /// dedicated reader thread. The duplicate shares the underlying open file
+    /// description with `master_fd()` (so O_NONBLOCK state is shared), which is
+    /// fine because the reader uses `poll` + a blocking-style read. The dup is
+    /// performed here (where `unsafe` is permitted) so callers can read through
+    /// a safe `std::fs::File` without any `unsafe` blocks.
+    fn try_clone_reader_fd(&self) -> io::Result<OwnedFd>;
     fn wait(&self) -> nix::Result<nix::sys::wait::WaitStatus>;
     fn set_nonblocking(&self) -> Result<(), PtyError>;
     fn set_pixel_size(&mut self, width: u16, height: u16);
@@ -68,21 +83,32 @@ impl PtyPair {
             ws_ypixel: 0,
         };
 
-        let result = nix::pty::openpty(Some(&winsize), None)?;
+        let result = nix::pty::openpty(Some(&winsize), None).map_err(|e| PtyError::Open(std::io::Error::other(e)))?;
         let master_fd = result.master;
         let slave_fd = result.slave;
 
         // Build all child process data before fork to avoid allocations in child.
         // (Multi-threaded process fork may corrupt malloc heap.)
-        let shell_cstr = std::ffi::CString::new(shell).expect("shell path contains null byte");
+        let shell_cstr = std::ffi::CString::new(shell).map_err(|e| {
+            let msg = format!("shell path contains null byte: {e}");
+            log::error!("{msg}");
+            PtyError::Fork(nix::errno::Errno::EINVAL)
+        })?;
         let env_cstrings: Vec<std::ffi::CString> = build_env(env, shell, rows, cols)
             .into_iter()
             .map(|(k, v)| {
-                std::ffi::CString::new(format!("{k}={v}")).expect("env var contains null")
+                std::ffi::CString::new(format!("{k}={v}")).map_err(|e| {
+                    let msg = format!("env var contains null byte: {e}");
+                    log::error!("{msg}");
+                    PtyError::Fork(nix::errno::Errno::EINVAL)
+                })
             })
-            .collect();
-        let working_directory_cstr = std::ffi::CString::new(env.working_directory.as_str())
-            .expect("working directory contains null byte");
+            .collect::<Result<Vec<_>, _>>()?;
+        let working_directory_cstr = std::ffi::CString::new(env.working_directory.as_str()).map_err(|e| {
+            let msg = format!("working directory contains null byte: {e}");
+            log::error!("{msg}");
+            PtyError::Fork(nix::errno::Errno::EINVAL)
+        })?;
 
         // Pre-allocate argument and environment arrays before fork.
         // After fork, the child must NOT call any allocation functions.
@@ -95,9 +121,17 @@ impl PtyPair {
             .chain(std::iter::once(std::ptr::null()))
             .collect();
 
+        // SAFETY: `fork()` is unsafe because it creates a new process. The child
+        // process calls `execve()`, which replaces the process image
+        // (no heap data is used after the fork — all data is pre-allocated and
+        // signal handlers are reset before execve). No signal handlers run between
+        // fork and exec (all operations are async-signal-safe syscalls). The parent
+        // process checks the `ForkResult` return value and handles errors via `?`.
         match unsafe { nix::unistd::fork()? } {
             nix::unistd::ForkResult::Parent { child } => {
-                nix::unistd::close(slave_fd).ok();
+                if let Err(e) = nix::unistd::close(slave_fd) {
+                    log::warn!("failed to close PTY slave fd in parent after fork: {e}");
+                }
                 Ok(Self {
                     master: master_fd,
                     child_pid: child,
@@ -106,37 +140,56 @@ impl PtyPair {
                 })
             }
             nix::unistd::ForkResult::Child => {
-                nix::unistd::close(master_fd).ok();
+                if let Err(e) = nix::unistd::close(master_fd) {
+                    log::warn!("failed to close PTY master fd in child after fork: {e}");
+                }
                 // Manually set controlling terminal using only syscalls.
                 // Avoid login_tty because it may call malloc() internally,
                 // which is unsafe after fork in a multithreaded process.
-                if nix::unistd::setsid().is_err() {
-                    std::process::exit(1);
+                // Create a new session/process group so the shell is detached
+                // from the parent's controlling terminal (termux.c:54-96). Only
+                // call setsid() if we are not already a session leader, since
+                // calling it again would fail with EPERM.
+                let is_session_leader = unsafe { libc::getsid(0) } == nix::unistd::getpid().as_raw();
+                if !is_session_leader && nix::unistd::setsid().is_err() {
+                    std::process::exit(2);
                 }
                 let slave_raw = slave_fd.as_raw_fd();
                 // SAFETY: All these libc calls are lightweight syscall wrappers that do not allocate.
-                // The child process is single-threaded.
-                let ret = unsafe { libc::ioctl(slave_raw, libc::TIOCSCTTY, 0) };
-                if ret < 0 {
-                    std::process::exit(1);
+                // The child process is single-threaded. No signal handlers run between fork and exec
+                // (all operations are async-signal-safe syscalls).
+                let result = unsafe { libc::ioctl(slave_raw, libc::TIOCSCTTY, 0) };
+                if result < 0 {
+                    std::process::exit(3);
                 }
+                // SAFETY: dup2 across well-known FDs (0, 1, 2) is safe and async-signal-safe
+                // post-fork. The slave FD is valid because setsid()+ioctl(TIOCSCTTY) above
+                // assigned it as the controlling terminal (manual alternative to login_tty).
                 unsafe {
                     libc::dup2(slave_raw, 0);
                     libc::dup2(slave_raw, 1);
                     libc::dup2(slave_raw, 2);
                 }
                 if slave_raw > 2 {
+                    // SAFETY: slave_raw is only closed if it is not one of the standard FDs
+                    // (0, 1, 2), ensuring we don't accidentally close a critical FD.
                     unsafe {
                         libc::close(slave_raw);
                     }
                 }
                 // Configure raw mode on stdin (fd 0, PTY slave device).
-                // Failure is non-fatal (shell runs in canonical mode).
-                configure_raw_mode(libc::STDIN_FILENO).ok();
-                // Change to working directory (failure is non-fatal).
-                unsafe { libc::chdir(working_directory_ptr) };
-                // Reset signal handlers to defaults, preventing leakage of multithreaded
-                // custom handlers from parent to child process.
+                // Failure is non-fatal (shell runs in canonical mode without raw mode).
+                if let Err(e) = configure_raw_mode(libc::STDIN_FILENO) {
+                    log::warn!("failed to set raw mode on PTY stdin: {e}");
+                }
+                // SAFETY: chdir is safe with a valid, null-terminated path string.
+                // working_directory_ptr was allocated via CString::new() which guarantees
+                // null termination. Failure is non-fatal (defaults to /).
+                if unsafe { libc::chdir(working_directory_ptr) } != 0 {
+                    log::warn!("chdir to working directory failed, using /");
+                }
+                // SAFETY: signal() is safe in the single-threaded child process post-fork.
+                // Resetting to SIG_DFL prevents leakage of parent's custom signal handlers.
                 unsafe {
                     libc::signal(libc::SIGCHLD, libc::SIG_DFL);
                     libc::signal(libc::SIGHUP, libc::SIG_DFL);
@@ -146,14 +199,25 @@ impl PtyPair {
                     libc::signal(libc::SIGPIPE, libc::SIG_DFL);
                     libc::signal(libc::SIGALRM, libc::SIG_DFL);
                 }
-                // Use libc::execve directly with pre-allocated arrays.
-                // nix::unistd::execve allocates a Vec internally via collect(),
-                // which is unsafe after fork in a multithreaded process.
+                // Close any stray fds inherited from the parent (termux.c:54-96).
+                // Standard streams 0/1/2 (the PTY slave) are preserved; the PTY
+                // master was already closed above. Non-fatal — failures are
+                // ignored and spawn continues.
+                close_stray_fds();
+                // SAFETY: execve is safe with pre-allocated null-terminated arrays.
+                // shell_ptr, args_ptrs, and env_ptrs were created via CString::new()
+                // and CString::as_ptr() before fork(), guaranteeing valid pointers.
+                // nix::unistd::execve allocates internally via collect(), which is unsafe
+                // after fork in a multithreaded process — hence the direct libc call.
                 unsafe {
                     libc::execve(shell_ptr, args_ptrs.as_ptr(), env_ptrs.as_ptr());
                 }
+                // execve only returns on failure. Use _exit (not exit) to avoid running
+                // atexit handlers from the parent process.
+                // SAFETY: _exit(4) is safe; it terminates the child immediately without
+                // running cleanup handlers. Only called when execve fails.
                 unsafe {
-                    libc::_exit(1);
+                    libc::_exit(4);
                 }
             }
         }
@@ -179,12 +243,8 @@ impl PtyPair {
         // the winsize to the slave side — no memory safety risk. The return
         // value is checked for errors.
         unsafe {
-            let ret = libc::ioctl(
-                self.master.as_raw_fd(),
-                libc::TIOCSWINSZ,
-                &winsize as *const _,
-            );
-            if ret < 0 {
+            let result = libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, std::ptr::from_ref(&winsize));
+            if result < 0 {
                 return Err(PtyError::Resize(nix::errno::Errno::last()));
             }
         }
@@ -197,23 +257,14 @@ impl PtyPair {
     }
 
     pub fn set_nonblocking(&self) -> Result<(), PtyError> {
-        let flags = nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_GETFL)
-            .map_err(PtyError::Fcntl)?;
-        let new_flags =
-            nix::fcntl::OFlag::from_bits_truncate(flags) | nix::fcntl::OFlag::O_NONBLOCK;
-        nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_SETFL(new_flags))
-            .map_err(PtyError::Fcntl)?;
+        let flags = nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_GETFL).map_err(PtyError::Fcntl)?;
+        let new_flags = nix::fcntl::OFlag::from_bits_truncate(flags) | nix::fcntl::OFlag::O_NONBLOCK;
+        nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_SETFL(new_flags)).map_err(PtyError::Fcntl)?;
         Ok(())
     }
 
     pub fn master_fd(&self) -> std::os::unix::io::RawFd {
         self.master.as_raw_fd()
-    }
-
-    pub fn into_raw_fd(self) -> std::os::unix::io::RawFd {
-        let fd = self.master.as_raw_fd();
-        std::mem::forget(self);
-        fd
     }
 }
 
@@ -238,6 +289,10 @@ impl Pty for PtyPair {
         PtyPair::master_fd(self)
     }
 
+    fn try_clone_reader_fd(&self) -> io::Result<OwnedFd> {
+        self.master.try_clone()
+    }
+
     fn wait(&self) -> nix::Result<nix::sys::wait::WaitStatus> {
         PtyPair::wait(self)
     }
@@ -257,15 +312,13 @@ impl Pty for PtyPair {
 
 impl std::io::Read for PtyPair {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        nix::unistd::read(&self.master, buf)
-            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))
+        nix::unistd::read(&self.master, buf).map_err(|e| std::io::Error::from_raw_os_error(e as i32))
     }
 }
 
 impl std::io::Write for PtyPair {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        nix::unistd::write(&self.master, buf)
-            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))
+        nix::unistd::write(&self.master, buf).map_err(|e| std::io::Error::from_raw_os_error(e as i32))
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -275,11 +328,19 @@ impl std::io::Write for PtyPair {
 
 impl Drop for PtyPair {
     fn drop(&mut self) {
-        nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGHUP).ok();
-        nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGCONT).ok();
-        std::thread::sleep(Duration::from_millis(100));
-        nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGKILL).ok();
-        nix::sys::wait::waitpid(self.child_pid, None).ok();
+        if let Err(e) = nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGHUP) {
+            log::warn!("failed to send SIGHUP to child {} during drop: {e}", self.child_pid);
+        }
+        if let Err(e) = nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGCONT) {
+            log::warn!("failed to send SIGCONT to child {} during drop: {e}", self.child_pid);
+        }
+        std::thread::sleep(Duration::from_millis(GRACEFUL_SHUTDOWN_TIMEOUT_MS));
+        if let Err(e) = nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGKILL) {
+            log::warn!("failed to send SIGKILL to child {} during drop: {e}", self.child_pid);
+        }
+        if let Err(e) = nix::sys::wait::waitpid(self.child_pid, None) {
+            log::warn!("waitpid for child {} failed during drop: {e}", self.child_pid);
+        }
     }
 }
 
@@ -287,11 +348,20 @@ fn configure_raw_mode(fd: std::os::unix::io::RawFd) -> Result<(), PtyError> {
     let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
     // SAFETY: tcgetattr is safe with a valid fd. fd is STDIN_FILENO (0)
     // after login_tty dup'd the PTY slave, so it's always valid.
-    let ret = unsafe { libc::tcgetattr(fd, termios.as_mut_ptr()) };
-    if ret != 0 {
+    let result = unsafe { libc::tcgetattr(fd, termios.as_mut_ptr()) };
+    if result != 0 {
         return Err(PtyError::Termios(nix::errno::Errno::last()));
     }
+    // SAFETY: assume_init() is safe because we checked tcgetattr returned 0 above,
+    // which guarantees termios has been initialized by the kernel.
     let mut termios = unsafe { termios.assume_init() };
+    // Following termux-app's known-correct practice (termux-app termux.c:54-96):
+    //   * Disable software flow control (IXON/IXOFF). When IXON is set, the
+    //     kernel interprets Ctrl+S / Ctrl+Q and freezes/resumes output, which
+    //     makes the terminal appear hung. Clearing both keeps Ctrl+S/Ctrl+Q
+    //     usable by the application running in the PTY.
+    //   * IXON is already disabled by the raw-mode mask above; we also clear
+    //     IXOFF.
     termios.c_iflag &= !(libc::IGNBRK
         | libc::BRKINT
         | libc::PARMRK
@@ -299,37 +369,80 @@ fn configure_raw_mode(fd: std::os::unix::io::RawFd) -> Result<(), PtyError> {
         | libc::INLCR
         | libc::IGNCR
         | libc::ICRNL
-        | libc::IXON);
+        | libc::IXON
+        | libc::IXOFF);
+    // IUTF8: tell the kernel the input is UTF-8 so it correctly handles
+    // erase/word-erase and character width on Android (mirrors termux.c, which
+    // enables IUTF8 on the slave so the line discipline respects multibyte
+    // input). Non-fatal but important for correct editing of UTF-8 text.
+    termios.c_iflag |= libc::IUTF8;
     termios.c_oflag &= !(libc::OPOST);
     termios.c_lflag &= !(libc::ECHO | libc::ECHONL | libc::ICANON | libc::ISIG | libc::IEXTEN);
     termios.c_cflag &= !(libc::CSIZE | libc::PARENB);
     termios.c_cflag |= libc::CS8;
     termios.c_cc[libc::VMIN] = 1;
     termios.c_cc[libc::VTIME] = 0;
+    log::debug!(
+        "configuring PTY termios: IUTF8 set={}, IXON disabled={}, IXOFF disabled={}",
+        (termios.c_iflag & libc::IUTF8) != 0,
+        (termios.c_iflag & libc::IXON) == 0,
+        (termios.c_iflag & libc::IXOFF) == 0,
+    );
     // SAFETY: tcsetattr is safe with a valid fd and valid termios struct.
-    let ret = unsafe { libc::tcsetattr(fd, libc::TCSANOW, &termios) };
-    if ret != 0 {
+    let result = unsafe { libc::tcsetattr(fd, libc::TCSANOW, &termios) };
+    if result != 0 {
         return Err(PtyError::Termios(nix::errno::Errno::last()));
     }
     Ok(())
 }
 
+/// Conservative upper bound (in fd numbers) used when scanning for stray
+/// file descriptors to close in the child, if `sysconf(_SC_OPEN_MAX)` is
+/// unavailable. Kept small enough to bound syscall volume on any platform.
+const STRAY_FD_SCAN_LIMIT: libc::c_int = 4096;
+
+/// Close every open file descriptor in the child except the standard streams
+/// (0,1,2), which are the PTY slave after `dup2`. This mirrors termux-app's
+/// termux.c:54-96 cleanup so the spawned shell does not inherit unrelated open
+/// fds from the parent (which could keep resources alive or leak capabilities).
+///
+/// Non-fatal: a failed `close()` (e.g. already closed / invalid) is ignored.
+fn close_stray_fds() {
+    // SAFETY: sysconf is a simple syscall wrapper. On failure we fall back to
+    // STRAY_FD_SCAN_LIMIT. close() is async-signal-safe; closing an invalid fd
+    // returns EBADF, which we ignore. We never touch fds 0/1/2.
+    let open_max = unsafe { libc::sysconf(libc::_SC_OPEN_MAX) };
+    let upper = if open_max > 0 {
+        open_max as libc::c_int
+    } else {
+        STRAY_FD_SCAN_LIMIT
+    };
+    log::debug!("closing stray fds in child (upper bound {upper})");
+    for fd in 3..=upper {
+        // SAFETY: close() on an invalid fd returns EBADF, which is harmless.
+        // Standard fds (0,1,2) are excluded by starting at 3.
+        unsafe {
+            libc::close(fd);
+        }
+    }
+}
+
 fn base_env(prefix: Option<&str>) -> Vec<(String, String)> {
     let mut result = vec![
-        ("TERM".to_string(), "xterm-256color".to_string()),
-        ("COLORTERM".to_string(), "truecolor".to_string()),
-        ("TERM_PROGRAM".to_string(), "torvox".to_string()),
+        ("TERM".to_string(), DEFAULT_TERM.to_string()),
+        ("COLORTERM".to_string(), DEFAULT_COLORTERM.to_string()),
+        ("TERM_PROGRAM".to_string(), DEFAULT_TERM_PROGRAM.to_string()),
         (
             "TERM_PROGRAM_VERSION".to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
         ),
-        ("LANG".to_string(), "en_US.UTF-8".to_string()),
+        ("LANG".to_string(), DEFAULT_LANG.to_string()),
     ];
     if let Some(p) = prefix {
         result.push(("PREFIX".to_string(), p.to_string()));
         result.push(("TMPDIR".to_string(), format!("{p}/tmp")));
     } else {
-        result.push(("TMPDIR".to_string(), "/data/local/tmp".to_string()));
+        result.push(("TMPDIR".to_string(), ANDROID_TMPDIR.to_string()));
     }
     result
 }
@@ -344,6 +457,11 @@ pub fn build_env(env: &ShellEnv, shell_path: &str, rows: u16, cols: u16) -> Vec<
     result.push(("PWD".to_string(), env.working_directory.clone()));
     result.push(("LINES".to_string(), rows.to_string()));
     result.push(("COLUMNS".to_string(), cols.to_string()));
+    // Remove keys that extras will override, then append extras.
+    // This deduplicates by keeping the last value (OS convention for execve).
+    for (key, _) in &env.extra {
+        result.retain(|(k, _)| k != key);
+    }
     result.extend(env.extra.iter().cloned());
     result
 }
@@ -366,10 +484,7 @@ mod tests {
     #[test]
     fn base_env_includes_xterm_256color() {
         let env = base_env(None);
-        assert!(
-            env.iter()
-                .any(|(k, v)| k == "TERM" && v == "xterm-256color")
-        );
+        assert!(env.iter().any(|(k, v)| k == "TERM" && v == "xterm-256color"));
     }
 
     #[test]
@@ -381,10 +496,7 @@ mod tests {
     #[test]
     fn base_env_includes_tmpdir_without_prefix() {
         let env = base_env(None);
-        assert!(
-            env.iter()
-                .any(|(k, v)| k == "TMPDIR" && v == "/data/local/tmp")
-        );
+        assert!(env.iter().any(|(k, v)| k == "TMPDIR" && v == "/data/local/tmp"));
     }
 
     #[test]
@@ -404,33 +516,21 @@ mod tests {
     fn build_env_includes_term() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "TERM" && v == "xterm-256color")
-        );
+        assert!(result.iter().any(|(k, v)| k == "TERM" && v == "xterm-256color"));
     }
 
     #[test]
     fn build_env_includes_colorterm() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "COLORTERM" && v == "truecolor")
-        );
+        assert!(result.iter().any(|(k, v)| k == "COLORTERM" && v == "truecolor"));
     }
 
     #[test]
     fn build_env_includes_term_program() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "TERM_PROGRAM" && v == "torvox")
-        );
+        assert!(result.iter().any(|(k, v)| k == "TERM_PROGRAM" && v == "torvox"));
     }
 
     #[test]
@@ -444,11 +544,7 @@ mod tests {
     fn build_env_includes_home_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "HOME" && v == "/tmp/test_home")
-        );
+        assert!(result.iter().any(|(k, v)| k == "HOME" && v == "/tmp/test_home"));
     }
 
     #[test]
@@ -469,22 +565,14 @@ mod tests {
     fn build_env_includes_path_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "PATH" && v == "/usr/bin:/bin")
-        );
+        assert!(result.iter().any(|(k, v)| k == "PATH" && v == "/usr/bin:/bin"));
     }
 
     #[test]
     fn build_env_includes_pwd_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "PWD" && v == "/tmp/test_home")
-        );
+        assert!(result.iter().any(|(k, v)| k == "PWD" && v == "/tmp/test_home"));
     }
 
     #[test]
@@ -496,35 +584,28 @@ mod tests {
     }
 
     #[test]
-    fn build_env_no_duplicate_explicit_keys() {
+    fn build_env_deduplicates_explicit_keys() {
         let mut env = test_env();
         env.extra.push(("TERM".to_string(), "dumb".to_string()));
         let result = build_env(&env, "/bin/sh", 24, 80);
         let term_entries: Vec<_> = result.iter().filter(|(k, _)| k == "TERM").collect();
-        assert_eq!(term_entries.len(), 2);
-        assert_eq!(term_entries[0].1, "xterm-256color");
-        assert_eq!(term_entries[1].1, "dumb");
+        assert_eq!(term_entries.len(), 1, "duplicate TERM should be deduplicated");
+        assert_eq!(term_entries[0].1, "dumb", "last value should win");
     }
 
     #[test]
     fn build_env_extra_entries_present() {
         let mut env = test_env();
-        env.extra
-            .push(("ANDROID_ROOT".to_string(), "/system".to_string()));
+        env.extra.push(("ANDROID_ROOT".to_string(), "/system".to_string()));
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "ANDROID_ROOT" && v == "/system")
-        );
+        assert!(result.iter().any(|(k, v)| k == "ANDROID_ROOT" && v == "/system"));
     }
 
     #[test]
     fn spawn_and_read_shell() {
         use crate::pty::Pty;
 
-        let mut pty =
-            PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+        let mut pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
         pty.set_nonblocking().expect("set_nonblocking failed");
 
         Pty::write_all(&mut pty, b"echo hello_torvox\n").expect("write failed");
@@ -540,10 +621,7 @@ mod tests {
                 }
                 Err(_) => break,
             }
-            if output
-                .windows("hello_torvox".len())
-                .any(|w| w == b"hello_torvox")
-            {
+            if output.windows("hello_torvox".len()).any(|w| w == b"hello_torvox") {
                 return;
             }
         }
@@ -567,8 +645,7 @@ mod tests {
     #[test]
     fn drop_kills_child() {
         let child = {
-            let pty =
-                PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+            let pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
             pty.child_pid()
         };
         std::thread::sleep(Duration::from_millis(200));
@@ -579,9 +656,18 @@ mod tests {
     #[test]
     fn pty_error_display_works() {
         let display = format!("{}", PtyError::Open(nix::errno::Errno::EINVAL.into()));
+        assert!(!display.is_empty(), "PtyError Display should produce non-empty string");
+    }
+
+    #[test]
+    fn pty_error_from_errno_maps_to_fork() {
+        // The blanket `From<nix::errno::Errno>` conversion is the error path
+        // used by `fork()`; it must keep mapping to `PtyError::Fork` even after
+        // `openpty` was changed to use an explicit `map_err(PtyError::Open)`.
+        let err = PtyError::from(nix::errno::Errno::EINVAL);
         assert!(
-            !display.is_empty(),
-            "PtyError Display should produce non-empty string"
+            matches!(err, PtyError::Fork(_)),
+            "From<Errno> must map to Fork for the fork() error path"
         );
     }
 
@@ -627,18 +713,52 @@ mod tests {
         );
     }
 
+    // ── I6: PTY termios flags ───────────────────────────────────────
+    // After the child is configured for raw mode, the line discipline must:
+    //   * enable IUTF8 so the kernel treats input as UTF-8 (correct
+    //     erase/word-erase and character width for multibyte input), and
+    //   * clear IXON/IXOFF (software flow control) so Ctrl+S/Ctrl+Q
+    //     are delivered to the application rather than freezing output.
+    // `configure_raw_mode` is the helper that applies these flags to a
+    // given fd; we exercise it on a real PTY master fd and read the
+    // resulting termios back to confirm the flags are set/cleared.
+
+    #[test]
+    fn configure_raw_mode_sets_iutf8_and_clears_ixon_ixoff() {
+        let pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+        let fd = pty.master_fd();
+
+        // Apply the same raw-mode configuration the child uses on the slave.
+        configure_raw_mode(fd).expect("configure_raw_mode failed");
+
+        // SAFETY: `tcgetattr` is a simple syscall wrapper; `fd` is a
+        // valid, owned PTY master descriptor, so reading its termios is safe.
+        let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+        let mut termios = unsafe {
+            if libc::tcgetattr(fd, termios.as_mut_ptr()) != 0 {
+                panic!("tcgetattr failed: {}", std::io::Error::last_os_error());
+            }
+            termios.assume_init()
+        };
+
+        let iutf8_set = (termios.c_iflag & libc::IUTF8) != 0;
+        let ixon_cleared = (termios.c_iflag & libc::IXON) == 0;
+        let ixoff_cleared = (termios.c_iflag & libc::IXOFF) == 0;
+
+        assert!(iutf8_set, "IUTF8 must be set on the PTY line discipline");
+        assert!(ixon_cleared, "IXON (software flow control) must be cleared");
+        assert!(ixoff_cleared, "IXOFF (software flow control) must be cleared");
+    }
+
     #[test]
     fn double_write_then_read_does_not_panic() {
         use crate::pty::Pty;
 
-        let mut pty = match PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()) {
-            Ok(p) => p,
-            Err(_) => return,
-        };
+        let mut pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn must succeed in test env");
         pty.set_nonblocking().expect("set_nonblocking failed");
 
-        let _ = Pty::write_all(&mut pty, b"echo a\n");
-        let _ = Pty::write_all(&mut pty, b"echo b\n");
+        Pty::write_all(&mut pty, b"echo a\n").expect("first write must succeed");
+        Pty::write_all(&mut pty, b"echo b\n").expect("second write must succeed");
 
         let mut buf = [0u8; 4096];
         let mut output = Vec::new();
@@ -654,5 +774,11 @@ mod tests {
                 break;
             }
         }
+        assert!(!output.is_empty(), "must read at least some output after two writes");
+        let text = String::from_utf8_lossy(&output);
+        assert!(
+            text.contains('a') || text.contains('b'),
+            "output must contain echoed text"
+        );
     }
 }

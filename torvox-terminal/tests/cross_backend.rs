@@ -126,11 +126,7 @@ fn torvox_only_scroll_reverse() {
     t.vt_write(b"\x1bM");
     t.flush();
     let text0 = get_line_padded(&t, 0, 10);
-    assert_eq!(
-        text0.trim_end(),
-        "1",
-        "row 0 should contain '1' after non-top RI"
-    );
+    assert_eq!(text0.trim_end(), "1", "row 0 should contain '1' after non-top RI");
 }
 
 #[test]

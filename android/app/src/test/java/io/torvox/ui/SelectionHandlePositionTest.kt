@@ -192,4 +192,53 @@ class SelectionHandlePositionTest {
             assertTrue("Y must be positive for row $row", handleY > 0)
         }
     }
+
+    // -- scrollOffset tests (G5/G6 fixes) --
+
+    @Test
+    fun startHandleY_subtractsScrollOffset() {
+        val scrollOffset = 3
+        val startRow = 5
+        val handleY = (((startRow - scrollOffset) + 1) * cellH).toInt()
+        val expectedY = ((5 - 3 + 1) * cellH).toInt()
+        assertEquals(expectedY, handleY)
+    }
+
+    @Test
+    fun endHandleY_subtractsScrollOffset() {
+        val scrollOffset = 3
+        val endRow = 7
+        val handleY = (((endRow - scrollOffset) + 1) * cellH).toInt()
+        val expectedY = ((7 - 3 + 1) * cellH).toInt()
+        assertEquals(expectedY, handleY)
+    }
+
+    @Test
+    fun contextMenuY_usesVisibleRow() {
+        val scrollOffset = 5
+        val selectionStartRow = 10
+        val locY = 100
+        val visibleStartRow = selectionStartRow - scrollOffset
+        val selectionTopPx = (locY + visibleStartRow * cellH).toInt()
+        val expectedTopPx = (100 + (10 - 5) * cellH).toInt()
+        assertEquals(expectedTopPx, selectionTopPx)
+    }
+
+    @Test
+    fun handleY_withZeroScrollOffset_matchesOriginalFormula() {
+        val scrollOffset = 0
+        val row = 4
+        val newFormula = (((row - scrollOffset) + 1) * cellH).toInt()
+        val oldFormula = ((row + 1) * cellH).toInt()
+        assertEquals("With scrollOffset=0, both formulas match", oldFormula, newFormula)
+    }
+
+    @Test
+    fun repositionHandleY_subtractsScrollOffset() {
+        val scrollOffset = 10
+        val row = 15
+        val handleY = (((row - scrollOffset) + 1) * cellH).toInt()
+        val expectedY = ((15 - 10 + 1) * cellH).toInt()
+        assertEquals(expectedY, handleY)
+    }
 }

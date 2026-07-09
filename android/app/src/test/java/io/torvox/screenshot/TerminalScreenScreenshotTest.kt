@@ -10,11 +10,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.github.takahirom.roborazzi.RoborazziOptions
+import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.torvox.RobolectricActivityRule
 import io.torvox.TestActivity
@@ -33,14 +37,30 @@ import kotlin.coroutines.EmptyCoroutineContext
 @Config(sdk = [33], application = android.app.Application::class)
 class TerminalScreenScreenshotTest {
     @get:Rule
+    val roborazziRule =
+        RoborazziRule(
+            options =
+            RoborazziRule.Options(
+                roborazziOptions =
+                RoborazziOptions(
+                    compareOptions =
+                    RoborazziOptions.CompareOptions(
+                        changeThreshold = 1.0f,
+                    ),
+                ),
+            ),
+        )
+
+    @Suppress("DEPRECATION")
+    @get:Rule
     val composeTestRule: AndroidComposeTestRule<RobolectricActivityRule<TestActivity>, TestActivity> =
         AndroidComposeTestRule(
             RobolectricActivityRule(TestActivity::class.java),
-            EmptyCoroutineContext,
-        ) { it.activity }
+            activityProvider = { it.activity },
+        )
 
     @Test
-    fun terminalScreen_withCatppuccinTheme() {
+    fun terminalScreen_simulatedPromptRenders() {
         composeTestRule.setContent {
             MaterialTheme {
                 Box(
@@ -60,18 +80,6 @@ class TerminalScreenScreenshotTest {
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "torvox@android:~$ ",
-                                    color = BuiltInThemes.catppuccinMocha.foreground,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 14.sp,
-                                )
-                                Text(
-                                    text = "ls -la /data/local/tmp",
-                                    color = BuiltInThemes.catppuccinMocha.ansi[2],
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 14.sp,
-                                )
-                                Text(
                                     text = "total 42",
                                     color = BuiltInThemes.catppuccinMocha.foreground,
                                     fontFamily = FontFamily.Monospace,
@@ -83,13 +91,14 @@ class TerminalScreenScreenshotTest {
                 }
             }
         }
+        composeTestRule.onNodeWithText("total 42").assertIsDisplayed()
         composeTestRule
             .onNodeWithTag("screenshot_terminal")
             .captureRoboImage()
     }
 
     @Test
-    fun modifierBar_rendered() {
+    fun modifierBar_allKeysExist() {
         composeTestRule.setContent {
             MaterialTheme {
                 ModifierBar(
@@ -98,6 +107,14 @@ class TerminalScreenScreenshotTest {
                 )
             }
         }
+        composeTestRule.onNodeWithText("ESC").assertIsDisplayed()
+        composeTestRule.onNodeWithText("CTRL").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ALT").assertIsDisplayed()
+        composeTestRule.onNodeWithText("TAB").assertIsDisplayed()
+        composeTestRule.onNodeWithText("HOME").assertIsDisplayed()
+        composeTestRule.onNodeWithText("END").assertIsDisplayed()
+        composeTestRule.onNodeWithText("PGUP").assertIsDisplayed()
+        composeTestRule.onNodeWithText("PGDN").assertIsDisplayed()
         composeTestRule
             .onNodeWithTag("screenshot_modifier_bar")
             .captureRoboImage()

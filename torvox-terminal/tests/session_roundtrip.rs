@@ -24,7 +24,7 @@ fn r2_roundtrip_multi_write() {
 #[test]
 fn r3_roundtrip_newline() {
     let mut g = t();
-    g.vt_write(b"X\nY");
+    g.pty_write(b"X\nY");
     g.flush();
     let s = g.take_snapshot();
     assert_eq!(s.cells[80].codepoint, 'Y' as u32);
@@ -51,7 +51,7 @@ fn r6_roundtrip_sgr_color() {
     g.vt_write(b"\x1b[31mR");
     g.flush();
     let s = g.take_snapshot();
-    assert!(s.cells[0].fg[0] > 0.1);
+    assert!(s.cells[0].foreground[0] > 0.1);
 }
 #[test]
 fn r7_roundtrip_erase_line() {
@@ -64,7 +64,7 @@ fn r7_roundtrip_erase_line() {
 #[test]
 fn r8_roundtrip_scroll_up() {
     let mut g = GhosttyTerminal::new(3, 10, 100).expect("t");
-    g.vt_write(b"A\nB\nC\nD");
+    g.pty_write(b"A\nB\nC\nD");
     g.flush();
     let s = g.take_snapshot();
     // After A LF B LF C LF (scroll), D: row 0=B, row 1=C, row 2=D
@@ -262,11 +262,7 @@ fn r29_roundtrip_osc_title() {
     g.vt_write(b"\x1b]0;TestTitle\x07");
     g.flush();
     let snap = g.take_snapshot();
-    assert_eq!(
-        g.title(),
-        "TestTitle".to_string(),
-        "OSC 0 should set terminal title"
-    );
+    assert_eq!(g.title(), "TestTitle".to_string(), "OSC 0 should set terminal title");
     assert_eq!(
         snap.cells[0].codepoint, 0,
         "OSC 0 does not write to cells, cell should be empty"

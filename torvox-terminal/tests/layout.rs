@@ -83,18 +83,14 @@ fn carriage_return_at_end() {
 #[test]
 fn newline_at_bottom_scrolls() {
     let mut t = term(3, 10);
-    t.vt_write(b"1\n2\n3");
+    t.pty_write(b"1\n2\n3");
     t.flush();
     assert_eq!(get_line_padded(&t, 0, 10).trim_end(), "1");
     assert_eq!(get_line_padded(&t, 1, 10).trim_end(), "2");
     assert_eq!(get_line_padded(&t, 2, 10).trim_end(), "3");
-    t.vt_write(b"\n4");
+    t.pty_write(b"\n4");
     t.flush();
-    assert_eq!(
-        get_line_padded(&t, 0, 10).trim_end(),
-        "2",
-        "line 0 should scroll"
-    );
+    assert_eq!(get_line_padded(&t, 0, 10).trim_end(), "2", "line 0 should scroll");
     assert_eq!(get_line_padded(&t, 1, 10).trim_end(), "3");
     assert_eq!(get_line_padded(&t, 2, 10).trim_end(), "4");
 }
@@ -106,17 +102,13 @@ fn tab_advances_cursor() {
     t.flush();
     let text = get_line_padded(&t, 0, 20);
     assert_eq!(text.chars().next().unwrap(), 'A');
-    assert_eq!(
-        text.chars().nth(8).unwrap(),
-        'B',
-        "Tab should advance to column 8"
-    );
+    assert_eq!(text.chars().nth(8).unwrap(), 'B', "Tab should advance to column 8");
 }
 
 #[test]
 fn cursor_up_moves_cursor() {
     let mut t = term(5, 20);
-    t.vt_write(b"line1\n\n\nline4");
+    t.pty_write(b"line1\n\n\nline4");
     t.flush();
     assert_eq!(get_line_padded(&t, 3, 20).trim_end(), "line4");
     t.vt_write(b"\x1b[4;1HX");
@@ -167,14 +159,8 @@ fn mixed_ascii_and_cjk() {
     t.flush();
     let text = get_line_padded(&t, 0, 30);
     assert!(text.contains("Hello"));
-    assert!(
-        text.contains('\u{4E16}'),
-        "Row 0 should contain CJK char \u{4E16}"
-    );
-    assert!(
-        text.contains('\u{754C}'),
-        "Row 0 should contain CJK char \u{754C}"
-    );
+    assert!(text.contains('\u{4E16}'), "Row 0 should contain CJK char \u{4E16}");
+    assert!(text.contains('\u{754C}'), "Row 0 should contain CJK char \u{754C}");
 }
 
 /// Cursor wraps at column 80 (standard terminal width default)
@@ -188,11 +174,7 @@ fn cursor_wrap_to_next_line() {
     t.flush();
     let text0 = get_line_padded(&t, 0, 10);
     let text1 = get_line_padded(&t, 1, 10);
-    assert_eq!(
-        text0.trim_end().len(),
-        10,
-        "row 0 should be full after 10 chars"
-    );
+    assert_eq!(text0.trim_end().len(), 10, "row 0 should be full after 10 chars");
     assert_eq!(
         text1.chars().next().unwrap_or('?'),
         'y',
@@ -205,7 +187,7 @@ fn cursor_wrap_to_next_line() {
 fn reverse_index_at_top() {
     // Test 1: RI when cursor at top row scrolls content down
     let mut t = term(3, 10);
-    t.vt_write(b"line1\nline2\nline3"); // cursor at (2,5)
+    t.pty_write(b"line1\nline2\nline3"); // cursor at (2,5)
     t.flush();
     // Move cursor to row 0, THEN issue RI
     // Using CUP (ESC [ row ; col H) to position cursor at top
@@ -216,25 +198,17 @@ fn reverse_index_at_top() {
     t.flush();
     let text0 = get_line_padded(&t, 0, 10);
     let text1 = get_line_padded(&t, 1, 10);
-    assert_eq!(
-        text0.trim_end(),
-        "",
-        "RI at top scrolls — row 0 should be blank"
-    );
-    assert_eq!(
-        text1.trim_end(),
-        "line1",
-        "row 1 should have previous top content"
-    );
+    assert_eq!(text0.trim_end(), "", "RI at top scrolls — row 0 should be blank");
+    assert_eq!(text1.trim_end(), "line1", "row 1 should have previous top content");
 }
 
 /// Scroll with wide chars in grid
 #[test]
 fn scroll_with_wide_chars() {
     let mut t = term(3, 10);
-    t.vt_write("\u{4E2D}\u{56FD}\u{4EBA}\n".as_bytes());
+    t.pty_write("\u{4E2D}\u{56FD}\u{4EBA}\n".as_bytes());
     for _ in 0..3 {
-        t.vt_write("123456789\n".as_bytes());
+        t.pty_write("123456789\n".as_bytes());
     }
     t.flush();
     let text0 = get_line_padded(&t, 0, 10);
@@ -252,5 +226,5 @@ fn combining_char_does_not_advance_cursor() {
     let text = get_line_padded(&t, 0, 20);
     assert_eq!(text.chars().next().unwrap(), 'a');
     // x should be at position 1 or 2 depending on combining char handling
-    assert!(text.chars().nth(1).unwrap_or('x') == 'x');
+    assert_eq!(text.chars().nth(1).unwrap_or('x'), 'x');
 }

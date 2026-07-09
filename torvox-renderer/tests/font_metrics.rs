@@ -23,16 +23,13 @@ mod font_metrics_correctness {
         let pipeline = create_pipeline(14.0);
         let (_, height) = pipeline.cell_metrics();
         assert!(height > 0.0, "cell_height should be positive, got {height}");
-        assert!(
-            height < 100.0,
-            "cell_height should be < 100px, got {height}"
-        );
+        assert!(height < 100.0, "cell_height should be < 100px, got {height}");
     }
 
     #[test]
     fn ascent_px_is_positive() {
         let pipeline = create_pipeline(14.0);
-        let ascent = pipeline.ascent_px();
+        let ascent = pipeline.ascent_pixels();
         assert!(ascent > 0.0, "ascent should be positive, got {ascent}");
         assert!(ascent < 100.0, "ascent should be < 100px, got {ascent}");
     }
@@ -40,7 +37,7 @@ mod font_metrics_correctness {
     #[test]
     fn descent_px_is_positive() {
         let pipeline = create_pipeline(14.0);
-        let descent = pipeline.descent_px();
+        let descent = pipeline.descent_pixels();
         assert!(descent > 0.0, "descent should be positive, got {descent}");
         assert!(descent < 100.0, "descent should be < 100px, got {descent}");
     }
@@ -49,7 +46,7 @@ mod font_metrics_correctness {
     fn ascii_glyphs_have_nonzero_width() {
         let mut pipeline = create_pipeline(14.0);
         for ch in 'A'..='Z' {
-            let info = pipeline.glyph_info(ch).expect("ASCII glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("ASCII glyph should exist");
             assert!(
                 info.width > 0,
                 "ASCII '{ch}' should have positive width, got {}",
@@ -62,7 +59,7 @@ mod font_metrics_correctness {
     fn ascii_glyphs_have_nonzero_height() {
         let mut pipeline = create_pipeline(14.0);
         for ch in 'A'..='Z' {
-            let info = pipeline.glyph_info(ch).expect("ASCII glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("ASCII glyph should exist");
             assert!(
                 info.height > 0,
                 "ASCII '{ch}' should have positive height, got {}",
@@ -75,7 +72,7 @@ mod font_metrics_correctness {
     fn ascii_glyphs_have_positive_advance() {
         let mut pipeline = create_pipeline(14.0);
         for ch in 'A'..='Z' {
-            let info = pipeline.glyph_info(ch).expect("ASCII glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("ASCII glyph should exist");
             assert!(
                 info.advance_width > 0.0,
                 "ASCII '{ch}' should have positive advance_width, got {}",
@@ -88,9 +85,7 @@ mod font_metrics_correctness {
     fn ascii_lowercase_glyphs_have_nonzero_dimensions() {
         let mut pipeline = create_pipeline(14.0);
         for ch in 'a'..='z' {
-            let info = pipeline
-                .glyph_info(ch)
-                .expect("lowercase glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("lowercase glyph should exist");
             assert!(
                 info.width > 0 && info.height > 0,
                 "lowercase '{ch}' should have positive dimensions, got {}x{}",
@@ -104,7 +99,7 @@ mod font_metrics_correctness {
     fn digits_have_nonzero_dimensions() {
         let mut pipeline = create_pipeline(14.0);
         for ch in '0'..='9' {
-            let info = pipeline.glyph_info(ch).expect("digit glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("digit glyph should exist");
             assert!(
                 info.width > 0 && info.height > 0,
                 "digit '{ch}' should have positive dimensions, got {}x{}",
@@ -124,7 +119,7 @@ mod font_fallback {
         let mut pipeline = create_pipeline(14.0);
         let cjk_chars = ['中', '好', '世', '界', '日', '本', '韓', '國'];
         for ch in cjk_chars {
-            let _info = pipeline.glyph_info(ch);
+            let _info = pipeline.glyph_information(ch);
         }
     }
 
@@ -133,7 +128,7 @@ mod font_fallback {
         let mut pipeline = create_pipeline(14.0);
         let cjk_chars = ['中', '好', '世', '界'];
         for ch in cjk_chars {
-            if let Some(info) = pipeline.glyph_info(ch) {
+            if let Some(info) = pipeline.glyph_information(ch) {
                 assert!(
                     info.width > 0 && info.height > 0,
                     "CJK '{ch}' should have positive dimensions, got {}x{}",
@@ -149,7 +144,7 @@ mod font_fallback {
         let mut pipeline = create_pipeline(14.0);
         let (cell_width, _) = pipeline.cell_metrics();
         for ch in ['中', '好', '世', '界'] {
-            if let Some(info) = pipeline.glyph_info(ch) {
+            if let Some(info) = pipeline.glyph_information(ch) {
                 assert!(
                     info.advance_width > 0.0 && info.advance_width <= cell_width * 3.0,
                     "CJK '{ch}' advance should be reasonable, got {} (cell_width={})",
@@ -171,7 +166,7 @@ mod font_fallback {
             '\u{1F680}', // rocket
         ];
         for ch in emoji_chars {
-            let _info = pipeline.glyph_info(ch);
+            let _info = pipeline.glyph_information(ch);
         }
     }
 
@@ -192,18 +187,16 @@ mod font_fallback {
             '┼', // box drawings light vertical and horizontal
         ];
         for ch in box_chars {
-            let _info = pipeline.glyph_info(ch);
+            let _info = pipeline.glyph_information(ch);
         }
     }
 
     #[test]
     fn special_characters_do_not_panic() {
         let mut pipeline = create_pipeline(14.0);
-        let special_chars = [
-            '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '=',
-        ];
+        let special_chars = ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '+', '='];
         for ch in special_chars {
-            let _info = pipeline.glyph_info(ch);
+            let _info = pipeline.glyph_information(ch);
         }
     }
 }
@@ -219,7 +212,7 @@ mod cell_metrics_consistency {
 
         // For monospace fonts, all ASCII characters should have the same advance
         for ch in ['A', 'B', 'C', 'X', 'Y', 'Z', 'm', 'W'] {
-            if let Some(info) = pipeline.glyph_info(ch) {
+            if let Some(info) = pipeline.glyph_information(ch) {
                 assert!(
                     (info.advance_width - cell_width).abs() < 2.0,
                     "monospace '{ch}' advance should match cell_width: advance={}, cell={}",
@@ -251,22 +244,10 @@ mod cell_metrics_consistency {
         let (mw, mh) = medium.cell_metrics();
         let (lw, lh) = large.cell_metrics();
 
-        assert!(
-            mw > sw,
-            "medium font should have wider cell than small: {mw} <= {sw}"
-        );
-        assert!(
-            lw > mw,
-            "large font should have wider cell than medium: {lw} <= {mw}"
-        );
-        assert!(
-            mh > sh,
-            "medium font should have taller cell than small: {mh} <= {sh}"
-        );
-        assert!(
-            lh > mh,
-            "large font should have taller cell than medium: {lh} <= {mh}"
-        );
+        assert!(mw > sw, "medium font should have wider cell than small: {mw} <= {sw}");
+        assert!(lw > mw, "large font should have wider cell than medium: {lw} <= {mw}");
+        assert!(mh > sh, "medium font should have taller cell than small: {mh} <= {sh}");
+        assert!(lh > mh, "large font should have taller cell than medium: {lh} <= {mh}");
     }
 
     #[test]
@@ -285,8 +266,8 @@ mod cell_metrics_consistency {
     #[test]
     fn ascent_plus_descent_approximates_cell_height() {
         let pipeline = create_pipeline(14.0);
-        let ascent = pipeline.ascent_px();
-        let descent = pipeline.descent_px();
+        let ascent = pipeline.ascent_pixels();
+        let descent = pipeline.descent_pixels();
         let (_, cell_height) = pipeline.cell_metrics();
 
         // ascent + descent should approximately equal cell_height (within 2px due to ceil)
@@ -308,7 +289,7 @@ mod atlas_packing {
         let mut packed_count = 0;
 
         for ch in 'A'..='Z' {
-            let info = pipeline.glyph_info(ch).expect("ASCII glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("ASCII glyph should exist");
             if info.width > 0 && info.height > 0 {
                 packed_count += 1;
             }
@@ -326,7 +307,7 @@ mod atlas_packing {
         let (atlas_width, atlas_height) = pipeline.atlas_dimensions();
 
         for ch in 'A'..='Z' {
-            if let Some(info) = pipeline.glyph_info(ch) {
+            if let Some(info) = pipeline.glyph_information(ch) {
                 assert!(
                     info.atlas_x >= 0,
                     "'{ch}' atlas_x should be non-negative, got {}",
@@ -358,7 +339,7 @@ mod atlas_packing {
     #[test]
     fn atlas_bitmap_has_content_after_packing() {
         let mut pipeline = create_pipeline(14.0);
-        let _ = pipeline.glyph_info('A');
+        let _ = pipeline.glyph_information('A');
         let bitmap = pipeline.atlas_bitmap();
         assert!(
             bitmap.iter().any(|&b| b != 0),
@@ -371,9 +352,9 @@ mod atlas_packing {
         let pipeline = create_pipeline(14.0);
         // ASCII rasterization should populate at least 95 glyphs (space through tilde)
         assert!(
-            pipeline.cache_len() >= 95,
+            pipeline.cache_length() >= 95,
             "ASCII pre-rasterization should populate at least 95 cached glyphs, got {}",
-            pipeline.cache_len()
+            pipeline.cache_length()
         );
     }
 
@@ -384,7 +365,7 @@ mod atlas_packing {
         let mut packed_count = 0;
 
         for ch in cjk_chars {
-            if let Some(info) = pipeline.glyph_info(ch)
+            if let Some(info) = pipeline.glyph_information(ch)
                 && info.width > 0
                 && info.height > 0
             {
@@ -404,7 +385,7 @@ mod atlas_packing {
         let mixed_chars = ['A', '中', 'B', '好', 'C', '世'];
 
         for ch in mixed_chars {
-            let _info = pipeline.glyph_info(ch);
+            let _info = pipeline.glyph_information(ch);
         }
 
         let bitmap = pipeline.atlas_bitmap();
@@ -502,17 +483,14 @@ mod font_family_switching {
     }
 
     #[test]
-    fn glyph_info_works_after_font_switch() {
+    fn glyph_information_works_after_font_switch() {
         let mut pipeline = create_pipeline(14.0);
         let fonts = pipeline.list_monospace_fonts();
 
         if let Some(font_name) = fonts.first() {
             pipeline.set_font_family(font_name);
-            let info = pipeline.glyph_info('A');
-            assert!(
-                info.is_some(),
-                "glyph_info('A') should work after font switch"
-            );
+            let info = pipeline.glyph_information('A');
+            assert!(info.is_some(), "glyph_information('A') should work after font switch");
         }
     }
 
@@ -523,18 +501,15 @@ mod font_family_switching {
 
         if fonts.len() > 1 {
             // Populate cache
-            let _ = pipeline.glyph_info('A');
-            let before = pipeline.cache_len();
+            let _ = pipeline.glyph_information('A');
+            let before = pipeline.cache_length();
             assert!(before > 0, "cache should be populated before switch");
 
             // Switch font
             if let Some(font_name) = fonts.get(1) {
                 pipeline.set_font_family(font_name);
-                let after = pipeline.cache_len();
-                assert_eq!(
-                    after, 0,
-                    "cache should be cleared after font switch to '{font_name}'"
-                );
+                let after = pipeline.cache_length();
+                assert_eq!(after, 0, "cache should be cleared after font switch to '{font_name}'");
             }
         }
     }
@@ -548,7 +523,7 @@ mod glyph_quality {
     fn ascii_glyphs_have_atlas_coordinates() {
         let mut pipeline = create_pipeline(14.0);
         for ch in ['A', 'M', 'W', '0', '9'] {
-            let info = pipeline.glyph_info(ch).expect("ASCII glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("ASCII glyph should exist");
             assert!(
                 info.atlas_x >= 0 && info.atlas_y >= 0,
                 "'{ch}' should have valid atlas coordinates: ({}, {})",
@@ -562,7 +537,7 @@ mod glyph_quality {
     fn ascii_glyphs_have_placement_info() {
         let mut pipeline = create_pipeline(14.0);
         for ch in ['A', 'B', 'C'] {
-            let info = pipeline.glyph_info(ch).expect("ASCII glyph should exist");
+            let info = pipeline.glyph_information(ch).expect("ASCII glyph should exist");
             assert!(
                 info.placement.width > 0,
                 "'{ch}' placement width should be positive, got {}",
@@ -580,9 +555,9 @@ mod glyph_quality {
     fn atlas_generation_increments() {
         let mut pipeline = create_pipeline(14.0);
         let gen1 = pipeline.atlas_generation();
-        let _ = pipeline.glyph_info('\u{03B1}');
+        let _ = pipeline.glyph_information('\u{03B1}');
         let gen2 = pipeline.atlas_generation();
-        let _ = pipeline.glyph_info('\u{03B2}');
+        let _ = pipeline.glyph_information('\u{03B2}');
         let gen3 = pipeline.atlas_generation();
 
         assert!(
@@ -592,10 +567,10 @@ mod glyph_quality {
     }
 
     #[test]
-    fn repeated_glyph_info_returns_same_result() {
+    fn repeated_glyph_information_returns_same_result() {
         let mut pipeline = create_pipeline(14.0);
-        let info1 = pipeline.glyph_info('A').expect("glyph should exist");
-        let info2 = pipeline.glyph_info('A').expect("glyph should exist");
+        let info1 = pipeline.glyph_information('A').expect("glyph should exist");
+        let info2 = pipeline.glyph_information('A').expect("glyph should exist");
 
         assert_eq!(info1.atlas_x, info2.atlas_x, "atlas_x should be stable");
         assert_eq!(info1.atlas_y, info2.atlas_y, "atlas_y should be stable");
@@ -613,10 +588,7 @@ mod font_size_scaling {
         let pipeline = create_pipeline(8.0);
         let (width, height) = pipeline.cell_metrics();
         assert!(width > 0.0 && width < 100.0, "small font width: {width}");
-        assert!(
-            height > 0.0 && height < 100.0,
-            "small font height: {height}"
-        );
+        assert!(height > 0.0 && height < 100.0, "small font height: {height}");
     }
 
     #[test]
@@ -624,10 +596,7 @@ mod font_size_scaling {
         let pipeline = create_pipeline(48.0);
         let (width, height) = pipeline.cell_metrics();
         assert!(width > 0.0 && width < 200.0, "large font width: {width}");
-        assert!(
-            height > 0.0 && height < 200.0,
-            "large font height: {height}"
-        );
+        assert!(height > 0.0 && height < 200.0, "large font height: {height}");
     }
 
     #[test]
@@ -650,6 +619,109 @@ mod font_size_scaling {
         assert!(
             height_ratio > 1.5 && height_ratio < 2.5,
             "height ratio should be ~2x for 2x font size, got {height_ratio}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod font_file_loading {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn find_monospace_font_path() -> Option<PathBuf> {
+        let mut db = fontdb::Database::new();
+        db.load_system_fonts();
+        let query = fontdb::Query {
+            families: &[fontdb::Family::Monospace],
+            ..Default::default()
+        };
+        db.query(&query)
+            .and_then(|id| db.face_source(id))
+            .and_then(|(source, _face_index)| match source {
+                fontdb::Source::File(path) | fontdb::Source::SharedFile(path, _) => Some(path.clone()),
+                _ => None,
+            })
+    }
+
+    #[test]
+    fn load_font_file_returns_family_name() {
+        let mut pipeline = create_pipeline(14.0);
+        let Some(path) = find_monospace_font_path() else {
+            return;
+        };
+
+        let family = pipeline.load_font_file(&path);
+        assert!(family.is_some(), "load_font_file should return a family name");
+        let name = family.unwrap();
+        assert!(!name.is_empty(), "family name should not be empty");
+    }
+
+    #[test]
+    fn load_font_file_then_set_font_family_succeeds() {
+        let mut pipeline = create_pipeline(14.0);
+        let Some(path) = find_monospace_font_path() else {
+            return;
+        };
+
+        let family = pipeline.load_font_file(&path).expect("should load font");
+        let switched = pipeline.set_font_family(&family);
+        assert!(switched, "set_font_family should succeed for loaded font '{}'", family);
+    }
+
+    #[test]
+    fn load_font_file_changes_rendered_glyphs() {
+        let mut pipeline = create_pipeline(14.0);
+        let Some(path) = find_monospace_font_path() else {
+            return;
+        };
+
+        let glyph_before = pipeline.glyph_information('A').expect("should have glyph before");
+        let advance_before = glyph_before.advance_width;
+
+        let family = pipeline.load_font_file(&path).expect("should load font");
+        pipeline.set_font_family(&family);
+
+        let glyph_after = pipeline.glyph_information('A').expect("should have glyph after");
+        let advance_after = glyph_after.advance_width;
+
+        // Different fonts have different metrics — at minimum, values should be positive
+        assert!(advance_after > 0.0, "advance_width after switch should be positive");
+        // The atlas should have been updated (generation incremented)
+        assert!(
+            pipeline.atlas_generation() > 0,
+            "atlas_generation should be > 0 after font switch"
+        );
+        // The glyph metrics should differ after font switch (different font = different metrics)
+        assert!(
+            (advance_before - advance_after).abs() > f32::EPSILON,
+            "advance_width should change after font switch: before={}, after={}",
+            advance_before,
+            advance_after
+        );
+    }
+
+    #[test]
+    fn load_nonexistent_font_returns_none() {
+        let mut pipeline = create_pipeline(14.0);
+        let path = PathBuf::from("/nonexistent/font.ttf");
+        let result = pipeline.load_font_file(&path);
+        assert!(result.is_none(), "loading nonexistent font should return None");
+    }
+
+    #[test]
+    fn list_fonts_includes_loaded_font() {
+        let mut pipeline = create_pipeline(14.0);
+        let Some(path) = find_monospace_font_path() else {
+            return;
+        };
+
+        let fonts_before = pipeline.list_monospace_fonts();
+        let _ = pipeline.load_font_file(&path);
+        let fonts_after = pipeline.list_monospace_fonts();
+
+        assert!(
+            fonts_after.len() >= fonts_before.len(),
+            "font list should not shrink after loading"
         );
     }
 }

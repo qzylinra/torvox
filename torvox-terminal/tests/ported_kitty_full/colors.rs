@@ -19,7 +19,7 @@ fn kitty_color_30_37_fg() {
         t.flush();
         let snap = t.take_snapshot();
         assert!(
-            color_channel_range(&snap.cell_at(0, 0).fg),
+            color_channel_range(&snap.cell_at(0, 0).foreground),
             "Kitty color {}: fg in range",
             c
         );
@@ -35,7 +35,7 @@ fn kitty_color_40_47_bg() {
         t.flush();
         let snap = t.take_snapshot();
         assert!(
-            color_channel_range(&snap.cell_at(0, 0).bg),
+            color_channel_range(&snap.cell_at(0, 0).background),
             "Kitty color {}: bg in range",
             c
         );
@@ -73,7 +73,7 @@ fn kitty_color_256_fg_all() {
         t.flush();
         let snap = t.take_snapshot();
         assert!(
-            color_channel_range(&snap.cell_at(0, 0).fg),
+            color_channel_range(&snap.cell_at(0, 0).foreground),
             "Kitty 256 fg {}: fg in range",
             idx
         );
@@ -89,7 +89,7 @@ fn kitty_color_256_bg_all() {
         t.flush();
         let snap = t.take_snapshot();
         assert!(
-            color_channel_range(&snap.cell_at(0, 0).bg),
+            color_channel_range(&snap.cell_at(0, 0).background),
             "Kitty 256 bg {}: bg in range",
             idx
         );
@@ -106,13 +106,13 @@ fn kitty_color_256_fg_bg_pair() {
             t.flush();
             let snap = t.take_snapshot();
             assert!(
-                color_channel_range(&snap.cell_at(0, 0).fg),
+                color_channel_range(&snap.cell_at(0, 0).foreground),
                 "Kitty 256 fg {}/bg {}: fg in range",
                 fg,
                 bg
             );
             assert!(
-                color_channel_range(&snap.cell_at(0, 0).bg),
+                color_channel_range(&snap.cell_at(0, 0).background),
                 "Kitty 256 fg {}/bg {}: bg in range",
                 fg,
                 bg
@@ -184,7 +184,7 @@ fn kitty_color_default_fg() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(
-        color_channel_range(&snap.cell_at(0, 0).fg),
+        color_channel_range(&snap.cell_at(0, 0).foreground),
         "Kitty default fg: in range"
     );
 }
@@ -196,7 +196,7 @@ fn kitty_color_default_bg() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(
-        color_channel_range(&snap.cell_at(0, 0).bg),
+        color_channel_range(&snap.cell_at(0, 0).background),
         "Kitty default bg: in range"
     );
 }

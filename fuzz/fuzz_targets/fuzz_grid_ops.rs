@@ -35,9 +35,7 @@ fuzz_target!(|data: &[u8]| {
         match op {
             0 => {
                 if let (Some(r), Some(c)) = (read_u16(&mut pos, data), read_u16(&mut pos, data)) {
-                    if let (Some(nr), Some(nc)) =
-                        (read_u16(&mut pos, data), read_u16(&mut pos, data))
-                    {
+                    if let (Some(nr), Some(nc)) = (read_u16(&mut pos, data), read_u16(&mut pos, data)) {
                         let nr = (nr % 512) + 1;
                         let nc = (nc % 512) + 1;
                         g.resize(nr as u32, nc as u32);
@@ -96,5 +94,5 @@ fuzz_target!(|data: &[u8]| {
 
     let _ = g.rows();
     let _ = g.cols();
-    let _ = g.scrollback_len();
+    let _ = g.scrollback_length();
 });

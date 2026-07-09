@@ -95,4 +95,50 @@
     <!-- Accessibility -->
     <string name="sessions_accessible">%d 个会话</string>
     <string name="title_changed">终端标题已更改为 %s</string>
+
+    <!-- Bootstrap -->
+    <string name="bootstrap_install">安装引导程序</string>
+    <string name="bootstrap_installing">安装中…</string>
+
+    <!-- Session restore -->
+    <string name="session_restore_off_desc">应用启动时不会恢复会话</string>
+
+    <!-- Toggle -->
+    <string name="on">开启</string>
+    <string name="off">关闭</string>
+
+    <!-- USB Serial -->
+    <string name="usb_serial">USB 串口</string>
+    <string name="usb_serial_desc">连接 USB 串口适配器 (CDC-ACM, FTDI, CH340)</string>
+
+    <!-- MCP Server -->
+    <string name="mcp_server">MCP 服务器</string>
+    <string name="mcp_server_desc">通过模型上下文协议暴露终端</string>
+
+    <!-- Text Search -->
+    <string name="text_search">文本搜索</string>
+    <string name="text_search_desc">搜索终端输出</string>
+    <string name="search_placeholder">搜索终端…</string>
+    <string name="search_next">下一个</string>
+    <string name="search_previous">上一个</string>
+    <string name="search_close">关闭搜索</string>
+    <string name="search_no_results">无结果</string>
+    <string name="search_result_of">%d / %d</string>
+
+    <!-- File Manager -->
+    <string name="file_manager">文件管理器</string>
+    <string name="cd_file_manager">打开文件管理器</string>
+
+    <!-- Volume Key Mapping -->
+    <string name="volume_key_map">音量键映射</string>
+    <string name="volume_key_map_desc">将音量上键映射为 Ctrl，音量下键映射为 Fn</string>
+
+    <!-- Cursor -->
+    <string name="cursor_blink">光标闪烁</string>
+    <string name="cursor_blink_desc">切换光标闪烁动画</string>
+    <string name="cursor_speed">闪烁速度</string>
+    <string name="cursor_style_label">光标样式</string>
+
+    <!-- CJK Warning -->
+    <string name="cjk_fallback_missing_warning">未检测到中日韩备用字体。东亚字符可能无法正确渲染。</string>
 </resources>

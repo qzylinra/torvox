@@ -32,6 +32,8 @@
     <string name="bootstrap_preset_custom">사용자 지정 / 빈</string>
     <string name="bootstrap_preset_custom_desc">빈 루트 파일 시스템으로 시작</string>
     <string name="bootstrap">부트스트랩</string>
+    <string name="bootstrap_install">부트스트랩 설치</string>
+    <string name="bootstrap_installing">설치 중\u2026</string>
     <string name="session_restore">세션 복원</string>
     <string name="session_restore_desc">앱 시작 시 이전 세션을 다시 열기</string>
     <string name="keyboard_mode">키보드 모드</string>
@@ -97,4 +99,14 @@
     <string name="volume_key_map">볼륨 키 매핑</string>
     <string name="volume_key_map_desc">볼륨 업을 Ctrl, 볼륨 다운을 Fn으로 매핑</string>
     <string name="install">설치</string>
+
+    <!-- Cursor Settings -->
+    <string name="session_restore_off_desc">앱 시작 시 세션이 복원되지 않습니다</string>
+    <string name="on">켜짐</string>
+    <string name="off">꺼짐</string>
+    <string name="cjk_fallback_missing_warning">CJK 대체 글꼴이 감지되지 않았습니다. 동아시아 문자가 올바르게 표시되지 않을 수 있습니다.</string>
+    <string name="cursor_blink">커서 깜빡임</string>
+    <string name="cursor_blink_desc">커서 깜빡임 애니메이션 켜기/끄기</string>
+    <string name="cursor_speed">깜빡임 속도</string>
+    <string name="cursor_style_label">커서 스타일</string>
 </resources>

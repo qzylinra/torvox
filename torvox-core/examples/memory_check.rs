@@ -53,10 +53,7 @@ fn main() {
         println!("  IDLE: EXCEEDS 10MB budget");
     }
     if total_max < 100 * 1_048_576 {
-        println!(
-            "  MAX:  {:.1} MB < 100MB max — PASS",
-            total_max as f64 / 1_048_576.0
-        );
+        println!("  MAX:  {:.1} MB < 100MB max — PASS", total_max as f64 / 1_048_576.0);
     } else {
         println!("  MAX:  EXCEEDS 100MB max");
     }

@@ -3,18 +3,24 @@ package io.torvox.ui
 import android.annotation.SuppressLint
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Rect
 import android.graphics.SurfaceTexture
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.util.Log
+import android.view.ActionMode
 import android.view.GestureDetector
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.Menu
+import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.PointerIcon
 import android.view.ScaleGestureDetector
 import android.view.Surface
 import android.view.TextureView
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -24,1096 +30,1678 @@ import android.widget.PopupWindow
 import io.torvox.R
 import io.torvox.SelectionMode
 import io.torvox.TerminalViewModel
+import io.torvox.runtime.LogUtil
+import io.torvox.ui.KeyboardMode
+import io.torvox.ui.toEditorInfo
 
-class TerminalSurface
-@JvmOverloads
-constructor(
-    context: Context,
-    attrs: AttributeSet? = null,
-    defStyleAttr: Int = 0,
-) : TextureView(context, attrs, defStyleAttr),
-    TextureView.SurfaceTextureListener {
-    companion object {
-        private const val TAG = "TerminalSurface"
-        private const val ORIENTATION_LEFT = 0
-        private const val ORIENTATION_RIGHT = 2
+private val modifierBarHeightPx: Int by lazy {
+    android.content.res.Resources.getSystem().displayMetrics.density.let { density ->
+        (80f * density + 0.5f).toInt()
     }
+}
 
-    private var viewModel: TerminalViewModel? = null
-    private var rows: Int = 24
-    private var cols: Int = 80
-    private var surfaceWidthPixels: Int = 0
-    private var surfaceHeightPixels: Int = 0
-    private var isScrolling: Boolean = false
-    private var scrollOffset: Int = 0
-    private var maxScrollOffset: Int = 0
+@Deprecated("Use Rust expandAndSetSelection via bridge instead", ReplaceWith(""))
+internal data class UrlSpan(
+    val startRow: Int,
+    val startCol: Int,
+    val endRow: Int,
+    val endCol: Int,
+)
 
-    private var magnifier: Magnifier? = null
+@Deprecated("Use Rust expandAndSetSelection via bridge instead", ReplaceWith(""))
+internal fun isUrlLikeWord(word: String): Boolean =
+    word.contains("://") || word.startsWith("www.") ||
+        word.contains(".com") || word.contains(".org") ||
+        word.contains(".io")
 
-    var onScrollChanged: ((offset: Int) -> Unit)? = null
-    var onScrollingStateChanged: ((isScrolling: Boolean) -> Unit)? = null
-    var onSwipeLeft: (() -> Unit)? = null
-    var onSwipeRight: (() -> Unit)? = null
-    var onCopyRequested: ((text: String) -> Unit)? = null
-    var onPasteRequested: (() -> Unit)? = null
-    var onZoomChanged: ((increase: Boolean) -> Unit)? = null
+@Deprecated("Use Rust expandAndSetSelection via bridge instead", ReplaceWith(""))
+internal fun isValidContinuationStart(c: Char): Boolean =
+    c.isLowerCase() || c == '/' || c == '.' || c == '-' ||
+        c == '+' || c == '~' || c == '#' || c == '&' || c == '%'
 
-    var drawerOpen: Boolean = false
-        set(value) {
-            field = value
-            Log.d(TAG, "drawerOpen=$value")
-            if (value) {
-                hideSelectionHandles()
-                hidePastePopup()
-            }
-        }
-
-    private val drawerWidthPixels: Float by lazy { 280f * resources.displayMetrics.density }
-
-    private var startHandlePopup: PopupWindow? = null
-    private var endHandlePopup: PopupWindow? = null
-    private var toolbarPopup: PopupWindow? = null
-    private var cursorHandlePopup: PopupWindow? = null
-    private var actionMode: android.view.ActionMode? = null
-    private var pasteActionMode: android.view.ActionMode? = null
-    private var selectionRect = android.graphics.Rect()
-    private var selectionFgColor: Int = 0xFFFFFFFF.toInt()
-    private var selectionBgColor: Int = 0xFF000000.toInt()
-    private var pendingUrl: String? = null
-
-    @Suppress("CyclomaticComplexMethod", "ComplexCondition")
-    fun showSelectionHandles(
-        startRow: Int,
-        startCol: Int,
-        endRow: Int,
-        endCol: Int,
-        themeFgColor: Int = 0xFF2196F3.toInt(),
-    ) {
-        hideSelectionHandles()
-        if (startRow < 0 || startCol < 0 || endRow < 0 || endCol < 0) return
-
-        val loc = IntArray(2)
-        getLocationInWindow(loc)
-
-        val leftDrawable =
-            androidx.core.content.ContextCompat
-                .getDrawable(context, R.drawable.text_select_handle_left_material)!!
-                .mutate()
-        val rightDrawable =
-            androidx.core.content.ContextCompat
-                .getDrawable(context, R.drawable.text_select_handle_right_material)!!
-                .mutate()
-        leftDrawable.setTint(themeFgColor)
-        rightDrawable.setTint(themeFgColor)
-        val handleW = leftDrawable.intrinsicWidth
-        val handleH = leftDrawable.intrinsicHeight
-
-        val startCursorX = (startCol * cellWidth).toInt()
-        val startCursorY =
-            ((startRow + 1) * cellHeight)
-                .toInt()
-                .coerceAtMost(surfaceHeightPixels - handleH)
-
-        val startOrientation =
-            when {
-                startCursorX - handleW < 0 -> ORIENTATION_RIGHT
-                startCursorX + handleW > surfaceWidthPixels -> ORIENTATION_LEFT
-                else -> ORIENTATION_LEFT
-            }
-        val (startDrawable, startHotspotX) =
-            if (startOrientation == ORIENTATION_LEFT) {
-                leftDrawable to (handleW * 3) / 4
-            } else {
-                rightDrawable to handleW / 4
-            }
-        val startView = createHandleViewWithDrawable(startDrawable, HandleDrag.START)
-        val startPopupX =
-            (loc[0] + startCursorX - startHotspotX)
-                .coerceIn(loc[0], (loc[0] + surfaceWidthPixels - handleW).coerceAtLeast(loc[0]))
-        startHandlePopup =
-            createHandlePopup(startView).apply {
-                showAtLocation(this@TerminalSurface, 0, startPopupX, loc[1] + startCursorY)
-            }
-
-        val endCursorX = ((endCol + 1) * cellWidth).toInt()
-        val endCursorY =
-            ((endRow + 1) * cellHeight)
-                .toInt()
-                .coerceAtMost(surfaceHeightPixels - handleH)
-
-        val endOrientation =
-            when {
-                endCursorX + handleW > surfaceWidthPixels -> ORIENTATION_LEFT
-                endCursorX - handleW < 0 -> ORIENTATION_RIGHT
-                else -> ORIENTATION_RIGHT
-            }
-        val (endDrawableChoice, endHotspotX) =
-            if (endOrientation == ORIENTATION_LEFT) {
-                leftDrawable to (handleW * 3) / 4
-            } else {
-                rightDrawable to handleW / 4
-            }
-        val endView = createHandleViewWithDrawable(endDrawableChoice, HandleDrag.END)
-        val endPopupX =
-            (loc[0] + endCursorX - endHotspotX)
-                .coerceIn(loc[0], (loc[0] + surfaceWidthPixels - handleW).coerceAtLeast(loc[0]))
-        endHandlePopup =
-            createHandlePopup(endView).apply {
-                showAtLocation(this@TerminalSurface, 0, endPopupX, loc[1] + endCursorY)
-            }
+@Deprecated("Use Rust expandAndSetSelection via bridge instead", ReplaceWith(""))
+internal fun expandAcrossUrlWrap(
+    lines: List<String>,
+    row: Int,
+    wordStartCol: Int,
+    wordEndCol: Int,
+): UrlSpan? {
+    if (row < 0 || row >= lines.size) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: row $row out of bounds (size=${lines.size})")
+        return null
     }
-
-    @Suppress("LongParameterList")
-    fun showSelectionToolbar(
-        loRow: Int,
-        hiRow: Int,
-        loCol: Int,
-        hiCol: Int,
-        onCopy: () -> Unit,
-        onSelectAll: () -> Unit,
-        onOpenUrl: ((String) -> Unit)? = null,
-        selectedText: String = "",
-        themeFgColor: Int = 0xFFFFFFFF.toInt(),
-        themeBgColor: Int = 0xFF000000.toInt(),
-        onMoveAnchor: ((moveEnd: Boolean, direction: Int) -> Unit)? = null,
-    ) {
-        hideSelectionToolbar()
-        selectionFgColor = themeFgColor
-        selectionBgColor = themeBgColor
-
-        val startPxX = (loCol * cellWidth).toInt()
-        val startPxY = (loRow * cellHeight).toInt()
-        val endPxX = ((hiCol + 1) * cellWidth).toInt()
-        val endPxY = ((hiRow + 1) * cellHeight).toInt()
-
-        val loc = IntArray(2)
-        getLocationInWindow(loc)
-        selectionRect =
-            android.graphics.Rect(
-                loc[0] + startPxX,
-                loc[1] + startPxY,
-                loc[0] + endPxX,
-                loc[1] + endPxY,
-            )
-
-        val callback =
-            object : android.view.ActionMode.Callback2() {
-                override fun onCreateActionMode(
-                    mode: android.view.ActionMode,
-                    menu: android.view.Menu,
-                ): Boolean {
-                    menu.add(0, 1, 0, "Copy")
-                    menu.add(0, 2, 1, "Select All")
-                    menu.add(0, 5, 2, "◀ Anchor")
-                    menu.add(0, 6, 3, "Anchor ▶")
-                    if (onOpenUrl != null && selectedText.isNotEmpty()) {
-                        val urls = UrlDetector.findUrls(selectedText)
-                        if (urls.isNotEmpty()) {
-                            menu.add(0, 4, 4, "Open URL")
-                            pendingUrl = urls.first()
-                        }
-                    }
-                    return true
-                }
-
-                override fun onPrepareActionMode(
-                    mode: android.view.ActionMode,
-                    menu: android.view.Menu,
-                ): Boolean = false
-
-                override fun onActionItemClicked(
-                    mode: android.view.ActionMode,
-                    item: android.view.MenuItem,
-                ): Boolean {
-                    when (item.itemId) {
-                        1 -> {
-                            onCopy()
-                            mode.finish()
-                        }
-
-                        2 -> {
-                            onSelectAll()
-                        }
-
-                        4 -> {
-                            pendingUrl?.let { onOpenUrl?.invoke(it) }
-                            mode.finish()
-                        }
-
-                        5 -> {
-                            onMoveAnchor?.invoke(false, -1)
-                            mode.finish()
-                            showSelectionToolbar(
-                                loRow,
-                                hiRow,
-                                loCol,
-                                hiCol,
-                                onCopy,
-                                onSelectAll,
-                                onOpenUrl,
-                                selectedText,
-                                themeFgColor,
-                                themeBgColor,
-                                onMoveAnchor,
-                            )
-                        }
-
-                        6 -> {
-                            onMoveAnchor?.invoke(true, 1)
-                            mode.finish()
-                            showSelectionToolbar(
-                                loRow,
-                                hiRow,
-                                loCol,
-                                hiCol,
-                                onCopy,
-                                onSelectAll,
-                                onOpenUrl,
-                                selectedText,
-                                themeFgColor,
-                                themeBgColor,
-                                onMoveAnchor,
-                            )
-                        }
-                    }
-                    return true
-                }
-
-                override fun onDestroyActionMode(mode: android.view.ActionMode) {
-                    actionMode = null
-                }
-
-                override fun onGetContentRect(
-                    mode: android.view.ActionMode,
-                    view: View,
-                    outRect: android.graphics.Rect,
-                ) {
-                    outRect.set(selectionRect)
-                    val toolbarHeight = (48 * resources.displayMetrics.density).toInt()
-                    outRect.top = (selectionRect.top - toolbarHeight).coerceAtLeast(0)
-                    outRect.bottom = selectionRect.top
-                }
-            }
-
-        actionMode = startActionMode(callback, android.view.ActionMode.TYPE_FLOATING)
-    }
-
-    fun hideSelectionToolbar() {
-        actionMode?.finish()
-        actionMode = null
-        toolbarPopup?.dismiss()
-        toolbarPopup = null
-        pendingUrl = null
-    }
-
-    fun showPastePopup(
-        row: Int,
-        col: Int,
-    ) {
-        hidePastePopup()
-
-        val startPxX = (col * cellWidth).toInt()
-        val startPxY = (row * cellHeight).toInt()
-        val endPxX = ((col + 1) * cellWidth).toInt()
-        val endPxY = ((row + 1) * cellHeight).toInt()
-
-        val loc = IntArray(2)
-        getLocationInWindow(loc)
-        selectionRect =
-            android.graphics.Rect(
-                loc[0] + startPxX,
-                loc[1] + startPxY,
-                loc[0] + endPxX,
-                loc[1] + endPxY,
-            )
-
-        val callback =
-            object : android.view.ActionMode.Callback2() {
-                override fun onCreateActionMode(
-                    mode: android.view.ActionMode,
-                    menu: android.view.Menu,
-                ): Boolean {
-                    menu.add(0, 3, 0, "Paste")
-                    return true
-                }
-
-                override fun onPrepareActionMode(
-                    mode: android.view.ActionMode,
-                    menu: android.view.Menu,
-                ): Boolean = false
-
-                override fun onActionItemClicked(
-                    mode: android.view.ActionMode,
-                    item: android.view.MenuItem,
-                ): Boolean {
-                    if (item.itemId == 3) {
-                        mode.finish()
-                        pasteFromClipboardDirect()
-                    }
-                    return true
-                }
-
-                override fun onDestroyActionMode(mode: android.view.ActionMode) {
-                    pasteActionMode = null
-                }
-
-                override fun onGetContentRect(
-                    mode: android.view.ActionMode,
-                    view: View,
-                    outRect: android.graphics.Rect,
-                ) {
-                    outRect.set(selectionRect)
-                }
-            }
-
-        pasteActionMode = startActionMode(callback, android.view.ActionMode.TYPE_FLOATING)
-    }
-
-    fun hidePastePopup() {
-        pasteActionMode?.finish()
-        pasteActionMode = null
-        hideCursorHandle()
-    }
-
-    fun showCursorHandle(
-        row: Int,
-        col: Int,
-        themeFgColor: Int = 0xFF2196F3.toInt(),
-    ) {
-        hideCursorHandle()
-        val loc = IntArray(2)
-        getLocationInWindow(loc)
-
-        val cursorX = (col * cellWidth).toInt()
-        val cursorY =
-            ((row + 1) * cellHeight)
-                .toInt()
-                .coerceAtMost(surfaceHeightPixels - 48)
-
-        val cursorDrawable =
-            androidx.core.content.ContextCompat
-                .getDrawable(context, R.drawable.text_select_handle_left_material)!!
-                .mutate()
-        cursorDrawable.setTint(themeFgColor)
-        val handleW = cursorDrawable.intrinsicWidth
-        val handleH = cursorDrawable.intrinsicHeight
-
-        val cursorView = createHandleViewWithDrawable(cursorDrawable, HandleDrag.NONE)
-        val popupX =
-            (loc[0] + cursorX - handleW / 2)
-                .coerceIn(loc[0], (loc[0] + surfaceWidthPixels - handleW).coerceAtLeast(loc[0]))
-
-        cursorHandlePopup =
-            createHandlePopup(cursorView).apply {
-                showAtLocation(this@TerminalSurface, 0, popupX, loc[1] + cursorY)
-            }
-    }
-
-    fun hideCursorHandle() {
-        cursorHandlePopup?.dismiss()
-        cursorHandlePopup = null
-    }
-
-    private fun createHandleViewWithDrawable(
-        drawable: android.graphics.drawable.Drawable,
-        which: HandleDrag,
-    ): View = object : View(context) {
-        override fun onMeasure(
-            widthMeasureSpec: Int,
-            heightMeasureSpec: Int,
-        ) {
-            setMeasuredDimension(drawable.intrinsicWidth, drawable.intrinsicHeight)
-        }
-
-        override fun onDraw(canvas: android.graphics.Canvas) {
-            val drawableWidth = drawable.intrinsicWidth
-            val drawableHeight = drawable.intrinsicHeight
-            drawable.setBounds(0, 0, drawableWidth, drawableHeight)
-            drawable.draw(canvas)
-        }
-
-        @SuppressLint("ClickableViewAccessibility")
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            if (which == HandleDrag.NONE) return super.onTouchEvent(event)
-            val loc = IntArray(2)
-            getLocationOnScreen(loc)
-            val localX = event.rawX - loc[0]
-            val localY = event.rawY - loc[1]
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    handleDragState = which
-                    val col = (localX / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
-                    val row = (localY / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
-                    if (which == HandleDrag.START) {
-                        viewModel?.updateSelectionStart(row, col)
-                    } else {
-                        viewModel?.updateSelection(row, col)
-                    }
-                    return true
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    val col = (localX / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
-                    val row = (localY / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
-                    if (which == HandleDrag.START) {
-                        viewModel?.updateSelectionStart(row, col)
-                    } else {
-                        viewModel?.updateSelection(row, col)
-                    }
-                    return true
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    viewModel?.endSelection()
-                    handleDragState = HandleDrag.NONE
-                    return true
-                }
-            }
-            return super.onTouchEvent(event)
-        }
-    }
-
-    private fun createHandlePopup(contentView: View): PopupWindow {
-        val popup = PopupWindow(context, null, android.R.attr.textSelectHandleWindowStyle)
-        popup.setSplitTouchEnabled(true)
-        popup.setClippingEnabled(false)
-        popup.setWidth(android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
-        popup.setHeight(android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
-        popup.setBackgroundDrawable(null)
-        popup.setAnimationStyle(0)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            popup.setWindowLayoutType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL)
-            popup.setEnterTransition(null)
-            popup.setExitTransition(null)
-        }
-        popup.setContentView(contentView)
-        return popup
-    }
-
-    fun hideSelectionHandles() {
-        startHandlePopup?.dismiss()
-        startHandlePopup = null
-        endHandlePopup?.dismiss()
-        endHandlePopup = null
-        hideSelectionToolbar()
-        hideCursorHandle()
-    }
-
-    val cellWidth: Float get() = if (cols > 0 && surfaceWidthPixels > 0) surfaceWidthPixels.toFloat() / cols else 8f
-    val cellHeight: Float get() = if (rows > 0 && surfaceHeightPixels > 0) surfaceHeightPixels.toFloat() / rows else 16f
-
-    @JvmField
-    var isAfterLongPress = false
-
-    var lastTapTime = 0L
-
-    @JvmField
-    var scaleFactor = 1.0f
-
-    private enum class HandleDrag { NONE, START, END }
-
-    private var handleDragState = HandleDrag.NONE
-
-    val isSelectingText: Boolean
-        get() =
-            viewModel
-                ?.state
-                ?.value
-                ?.selection
-                ?.active == true
-
-    private val gestureListener =
-        object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean = true
-
-            override fun onShowPress(e: MotionEvent) {
-                isAfterLongPress = false
-            }
-
-            override fun onScroll(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                distanceX: Float,
-                distanceY: Float,
-            ): Boolean {
-                if (isSelectingText) return false
-                if (!isScrolling) {
-                    isScrolling = true
-                    onScrollingStateChanged?.invoke(true)
-                }
-                val scrollAmount = (distanceY / cellHeight).toInt().coerceAtLeast(1)
-                val newOffset = (scrollOffset + scrollAmount).coerceIn(0, maxScrollOffset)
-                if (newOffset != scrollOffset) {
-                    scrollOffset = newOffset
-                    onScrollChanged?.invoke(scrollOffset)
-                }
-                return true
-            }
-
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float,
-            ): Boolean {
-                if (isSelectingText) return false
-                val absX = kotlin.math.abs(velocityX)
-                val absY = kotlin.math.abs(velocityY)
-
-                if (absX > absY && absX > 500f) {
-                    if (velocityX > 0) {
-                        onSwipeRight?.invoke()
-                    } else {
-                        onSwipeLeft?.invoke()
-                    }
-                    return true
-                }
-
-                val flingAmount = (velocityY / 100f).toInt().coerceIn(-50, 50)
-                val newOffset = (scrollOffset + flingAmount).coerceIn(0, maxScrollOffset)
-                if (newOffset != scrollOffset) {
-                    scrollOffset = newOffset
-                    onScrollChanged?.invoke(scrollOffset)
-                }
-                postDelayed({
-                    isScrolling = false
-                    onScrollingStateChanged?.invoke(false)
-                }, 300)
-                return true
-            }
-
-            override fun onSingleTapUp(event: MotionEvent): Boolean {
-                if (isAfterLongPress) {
-                    isAfterLongPress = false
-                    return true
-                }
-                if (isScrolling) {
-                    isScrolling = false
-                    scrollOffset = 0
-                    onScrollChanged?.invoke(0)
-                    onScrollingStateChanged?.invoke(false)
-                    return true
-                }
-                if (isSelectingText) {
-                    hidePastePopup()
-                    viewModel?.clearSelection()
-                    return true
-                }
-                hidePastePopup()
-                viewModel?.clearSelection()
-                keyboardRequested = true
-                requestFocus()
-                post {
-                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                    imm.showSoftInput(this@TerminalSurface, InputMethodManager.SHOW_IMPLICIT)
-                }
-                return true
-            }
-
-            override fun onDoubleTap(event: MotionEvent): Boolean {
-                if (isSelectingText) {
-                    viewModel?.clearSelection()
-                    return true
-                }
-                val now = System.currentTimeMillis()
-                if (now - lastTapTime < 400) {
-                    val col = (event.x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
-                    val row = (event.y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
-                    viewModel?.setSelectionMode(SelectionMode.Line)
-                    viewModel?.startSelection(row, 0)
-                    val bridge = viewModel?.runtime?.bridge()
-                    val scrollbackLength = bridge?.scrollbackLength()?.toInt() ?: 0
-                    val line = bridge?.scrollbackLine((scrollbackLength + row).toUInt()) ?: ""
-                    viewModel?.updateSelection(row, line.length.coerceAtLeast(0))
-                    viewModel?.endSelection()
-                } else {
-                    startSelectionAt(event, expandToWord = true)
-                }
-                lastTapTime = now
-                return true
-            }
-
-            override fun onLongPress(event: MotionEvent) {
-                if (scaleFactor < 0.9f || scaleFactor > 1.1f) return
-                isAfterLongPress = true
-                Log.d(TAG, "onLongPress: x=${event.x} y=${event.y} cellW=$cellWidth cellH=$cellHeight cols=$cols rows=$rows")
-                val col = (event.x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
-                val row = (event.y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
-                val bridge = viewModel?.runtime?.bridge()
-                val scrollbackLength = bridge?.scrollbackLength()?.toInt() ?: 0
-                val line = bridge?.scrollbackLine((scrollbackLength + row).toUInt()) ?: ""
-                Log.d(TAG, "onLongPress: col=$col row=$row lineLen=${line.length}")
-                handleLongPress(event.x, event.y)
-            }
-        }
-
-    private val gestureDetector = GestureDetector(context, gestureListener)
-
-    private val scaleDetector =
-        ScaleGestureDetector(
-            context,
-            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
-                    if (isSelectingText) return false
-                    return true
-                }
-
-                override fun onScale(detector: ScaleGestureDetector): Boolean {
-                    if (isSelectingText) return false
-                    scaleFactor *= detector.scaleFactor
-                    if (scaleFactor < 0.9f || scaleFactor > 1.1f) {
-                        val increase = scaleFactor > 1.0f
-                        onZoomChanged?.invoke(increase)
-                        scaleFactor = 1.0f
-                    }
-                    return true
-                }
-            },
+    val currentLine = lines[row]
+    if (wordStartCol < 0 || wordEndCol > currentLine.length) {
+        LogUtil.w(
+            "TerminalSurface",
+            "expandAcrossUrlWrap: col range [$wordStartCol, $wordEndCol) out of bounds (len=${currentLine.length})",
         )
-
-    fun handleLongPress(
-        x: Float,
-        y: Float,
-    ) {
-        if (scaleFactor < 0.9f || scaleFactor > 1.1f) return
-        isAfterLongPress = true
-
-        @Suppress("DEPRECATION")
-        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-
-        hideSelectionHandles()
-        hidePastePopup()
-
-        val col = (x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
-        val row = (y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
-        val bridge = viewModel?.runtime?.bridge()
-        val scrollbackLength = bridge?.scrollbackLength()?.toInt() ?: 0
-        val line = bridge?.scrollbackLine((scrollbackLength + row).toUInt()) ?: ""
-        val isOnEmptyArea = col >= line.length || line.isEmpty()
-        if (isOnEmptyArea) {
-            viewModel?.clearSelection()
-            hideSelectionHandles()
-            hidePastePopup()
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val themeAccent = 0xFF2196F3.toInt()
-            showCursorHandle(row, col, themeAccent)
-            if (clipboard.hasPrimaryClip()) {
-                showPastePopup(row, col)
-            }
-        } else {
-            hidePastePopup()
-            val (startCol, endCol) = expandSmartSelection(row, col, line)
-            viewModel?.startSelection(row, startCol)
-            viewModel?.updateSelection(row, endCol)
-            viewModel?.endSelection()
-            showSelectionHandles(row, startCol, row, endCol)
-        }
+        return null
     }
-
-    private var cachedSurface: android.view.Surface? = null
-
-    private var lastTouchX = 0f
-    private var lastTouchY = 0f
-
-    override fun performLongClick(): Boolean {
-        val longPressX = if (lastTouchX > 0f) lastTouchX else width / 2f
-        val longPressY = if (lastTouchY > 0f) lastTouchY else height * 0.85f
-        Log.d(TAG, "performLongClick: x=$longPressX y=$longPressY lastTouch=($lastTouchX,$lastTouchY) size=(${width}x$height)")
-        if (lastTouchX <= 0f && lastTouchY <= 0f) {
-            viewModel?.selectAll()
-            return true
-        }
-        handleLongPress(longPressX, longPressY)
-        return true
-    }
-
-    init {
-        surfaceTextureListener = this
-        isFocusable = true
-        isFocusableInTouchMode = true
-        isLongClickable = true
-        scaleDetector.isQuickScaleEnabled = false
-        contentDescription = context.getString(R.string.terminal)
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
-    }
-
-    private var keyboardRequested = false
-
-    override fun onCheckIsTextEditor(): Boolean = keyboardRequested
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        viewModel?.runtime?.focusChange(hasFocus)
-    }
-
-    fun initialize(viewModel: TerminalViewModel) {
-        this.viewModel = viewModel
-    }
-
-    fun setDimensions(
-        rows: Int,
-        cols: Int,
-    ) {
-        this.rows = rows
-        this.cols = cols
-    }
-
-    fun setMaxScrollback(maxLines: Int) {
-        this.maxScrollOffset = maxLines
-    }
-
-    fun setScrollOffset(offset: Int) {
-        this.scrollOffset = offset.coerceIn(0, maxScrollOffset)
-        onScrollChanged?.invoke(this.scrollOffset)
-    }
-
-    fun getScrollOffset(): Int = scrollOffset
-
-    fun isCurrentlyScrolling(): Boolean = isScrolling
-
-    fun consumePendingInput(): ByteArray? = viewModel?.consumePendingInput()
-
-    private var coalescer = InputCoalescer()
-
-    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        val mode = viewModel?.state?.value?.keyboardMode ?: "secure"
-        when (mode) {
-            "raw" -> {
-                outAttrs.inputType = android.text.InputType.TYPE_NULL
-                outAttrs.imeOptions =
-                    EditorInfo.IME_FLAG_NO_ENTER_ACTION or EditorInfo.IME_ACTION_NONE
-            }
-
-            "standard" -> {
-                outAttrs.inputType =
-                    android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
-                outAttrs.imeOptions =
-                    EditorInfo.IME_FLAG_NO_ENTER_ACTION or EditorInfo.IME_ACTION_NONE
-            }
-
-            else -> {
-                outAttrs.inputType =
-                    android.text.InputType.TYPE_CLASS_TEXT or
-                    android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-                outAttrs.imeOptions =
-                    EditorInfo.IME_FLAG_NO_ENTER_ACTION or
-                    EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING or
-                    EditorInfo.IME_FLAG_NO_EXTRACT_UI
-            }
-        }
-        return object : BaseInputConnection(this, false) {
-            override fun commitText(
-                text: CharSequence?,
-                newCursorPosition: Int,
-            ): Boolean {
-                val committedText = text?.toString() ?: return false
-                if (!coalescer.shouldCommit(committedText)) {
-                    return true
-                }
-                val terminalViewModel = viewModel
-                val state = terminalViewModel?.state?.value
-                val ctrlActive =
-                    state?.ctrlState?.let {
-                        it == ModifierState.Locked || it == ModifierState.Once
-                    } == true
-                val altActive =
-                    state?.altState?.let {
-                        it == ModifierState.Locked || it == ModifierState.Once
-                    } == true
-                terminalViewModel?.writeToPty(
-                    TerminalInputEncoder.encodeCommittedText(
-                        text = committedText,
-                        ctrlActive = ctrlActive,
-                        altActive = altActive,
-                        bracketedPaste = false,
-                    ),
-                )
-                terminalViewModel?.consumeOneShotModifiers()
-                return true
-            }
-
-            override fun sendKeyEvent(event: KeyEvent): Boolean = if (event.action == KeyEvent.ACTION_DOWN) {
-                handleKeyEvent(event)
-            } else {
-                true
-            }
-
-            override fun deleteSurroundingText(
-                beforeLength: Int,
-                afterLength: Int,
-            ): Boolean {
-                viewModel?.writeToPty(byteArrayOf(0x7F))
-                return true
-            }
-        }
-    }
-
-    fun pasteFromClipboardDirect() {
-        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        if (!clipboard.hasPrimaryClip()) return
-        val clip = clipboard.primaryClip?.getItemAt(0)?.text ?: return
-        val data = clip.toString().replace("\n", "\r").toByteArray()
-        viewModel?.writeToPty(data)
-    }
-
-    fun expandSmartSelection(
-        row: Int,
-        col: Int,
-        line: String,
-    ): Pair<Int, Int> {
-        if (col >= line.length) return Pair(col, col)
-
-        val urlBounds = expandUrlSelection(line, col)
-        if (urlBounds != null) return urlBounds
-
-        return expandWordSelection(row, col)
-    }
-
-    private fun expandUrlSelection(
-        line: String,
-        col: Int,
-    ): Pair<Int, Int>? {
-        val urlPattern =
-            Regex(
-                "(https?://[^\\s<>\"'`\\\\|\\[\\]{}]+|www\\.[^\\s<>\"'`\\\\|\\[\\]{}]+)",
-            )
-        for (match in urlPattern.findAll(line)) {
-            if (col in match.range) {
-                return Pair(match.range.first, match.range.last)
-            }
-        }
+    if (wordStartCol >= wordEndCol) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: wordStartCol=$wordStartCol >= wordEndCol=$wordEndCol")
         return null
     }
 
-    @Suppress("CyclomaticComplexMethod", "NestedBlockDepth")
-    fun expandWordSelection(
-        row: Int,
-        col: Int,
-    ): Pair<Int, Int> {
-        val bridge = viewModel?.runtime?.bridge() ?: return Pair(col, col)
-        val scrollbackLength = bridge.scrollbackLength().toInt()
-        val line = bridge.scrollbackLine((scrollbackLength + row).toUInt()) ?: return Pair(col, col)
-        if (col >= line.length) return Pair(col, col)
-        val ch = line[col]
-        if (ch == ' ' || ch == '\t') {
-            var lookLeft = col - 1
-            while (lookLeft >= 0 && (line[lookLeft] == ' ' || line[lookLeft] == '\t')) lookLeft--
-            var lookRight = col + 1
-            while (lookRight < line.length && (line[lookRight] == ' ' || line[lookRight] == '\t')) lookRight++
-            val target =
-                when {
-                    lookLeft >= 0 && lookRight < line.length -> {
-                        minOf(col - lookLeft, lookRight - col).let {
-                            if (col - lookLeft <= lookRight - col) lookLeft else lookRight
-                        }
-                    }
-
-                    lookLeft >= 0 -> {
-                        lookLeft
-                    }
-
-                    lookRight < line.length -> {
-                        lookRight
-                    }
-
-                    else -> {
-                        return Pair(col, col)
-                    }
-                }
-            return expandWordSelection(row, target)
-        }
-
-        var startCol = col
-        while (startCol > 0) {
-            val character = line[startCol - 1]
-            if (character == ' ' || character == '\t') break
-            startCol--
-        }
-        var endCol = col
-        while (endCol < line.length - 1) {
-            val character = line[endCol + 1]
-            if (character == ' ' || character == '\t') break
-            endCol++
-        }
-        return Pair(startCol, endCol)
+    val word = currentLine.substring(wordStartCol, wordEndCol)
+    if (!isUrlLikeWord(word)) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: word not URL-like: $word")
+        return null
     }
 
-    private fun startSelectionAt(
-        event: MotionEvent,
-        expandToWord: Boolean = false,
-    ) {
-        val col = (event.x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
-        val row = (event.y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
-        Log.d(TAG, "startSelectionAt: col=$col row=$row expand=$expandToWord vm=${viewModel != null}")
+    val nextRow = row + 1
+    if (nextRow >= lines.size) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: nextRow=$nextRow out of bounds (size=${lines.size})")
+        return null
+    }
 
-        if (expandToWord) {
-            val (startCol, endCol) = expandWordSelection(row, col)
-            Log.d(TAG, "startSelectionAt: wordStart=$startCol wordEnd=$endCol")
-            viewModel?.startSelection(row, startCol)
-            viewModel?.updateSelection(row, endCol)
-            viewModel?.endSelection()
-        } else {
-            viewModel?.startSelection(row, col)
-        }
+    val nextLine = lines[nextRow]
+    val trimmed = nextLine.trimStart()
+    if (trimmed.isEmpty()) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: next line is empty/whitespace")
+        return null
+    }
 
-        try {
-            magnifier = magnifier ?: Magnifier.Builder(this@TerminalSurface).build()
-            magnifier?.show(event.rawX, event.rawY)
-        } catch (_: Exception) {
+    val indent = nextLine.length - nextLine.trimStart().length
+    val words = trimmed.split("\\s+".toRegex())
+
+    if (words.size != 1) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: expected 1 word, got ${words.size}")
+        return null
+    }
+
+    val continuationWord = words[0]
+    if (continuationWord.length >= 20) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: continuation word too long: ${continuationWord.length}")
+        return null
+    }
+
+    if (!isValidContinuationStart(continuationWord[0])) {
+        LogUtil.w("TerminalSurface", "expandAcrossUrlWrap: invalid continuation start char: '${continuationWord[0]}'")
+        return null
+    }
+
+    return UrlSpan(
+        startRow = row,
+        startCol = wordStartCol,
+        endRow = nextRow,
+        endCol = indent + continuationWord.length,
+    )
+}
+
+@Deprecated("Use Rust expandAndSetSelection via bridge instead", ReplaceWith(""))
+internal fun expandUrlSelection(
+    lines: List<String>,
+    startRow: Int,
+    startCol: Int,
+    endRow: Int,
+    endCol: Int,
+): UrlSpan? {
+    val forward = expandAcrossUrlWrap(lines, endRow, startCol, endCol)
+    if (forward != null) return forward
+
+    if (startRow > 0) {
+        val prevLine = lines[startRow - 1]
+        val prevTrimmed = prevLine.trimEnd()
+        if (prevTrimmed.isNotEmpty()) {
+            val lastSpace = prevTrimmed.lastIndexOf(' ')
+            val lastWordStart = if (lastSpace < 0) 0 else lastSpace + 1
+            val lastWordEnd = prevTrimmed.length
+            if (lastWordEnd >= lastWordStart) {
+                val backward = expandAcrossUrlWrap(lines, startRow - 1, lastWordStart, lastWordEnd)
+                if (backward != null) return backward
+            }
         }
     }
 
-    override fun onKeyDown(
-        keyCode: Int,
-        event: KeyEvent,
-    ): Boolean {
-        val terminalViewModel = viewModel
-        val state = terminalViewModel?.state?.value
-        val ctrlActive =
-            event.isCtrlPressed || state?.ctrlState?.let {
-                it == ModifierState.Locked || it == ModifierState.Once
-            } == true
-        val altActive =
-            event.isAltPressed || state?.altState?.let {
-                it == ModifierState.Locked || it == ModifierState.Once
-            } == true
-        val encodedInput =
-            TerminalInputEncoder.encodeKeyEvent(
-                keyCode = keyCode,
-                unicodeChar = event.unicodeChar,
-                ctrlActive = ctrlActive,
-                altActive = altActive,
-            )
-        if (encodedInput != null) {
-            terminalViewModel?.writeToPty(encodedInput)
-            terminalViewModel?.consumeOneShotModifiers()
-            return true
-        }
-        return super.onKeyDown(keyCode, event)
-    }
+    return null
+}
 
-    override fun onKeyUp(
-        keyCode: Int,
-        event: KeyEvent,
-    ): Boolean = true
+internal fun isWordChar(c: Char): Boolean = c.isLetterOrDigit() || c == '_' || c == '-' || c == '.' || c == '/'
 
-    private fun handleKeyEvent(event: KeyEvent): Boolean = onKeyDown(event.keyCode, event)
-
-    @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth")
-    override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            lastTouchX = event.x
-            lastTouchY = event.y
-        }
-        if (drawerOpen && event.x < drawerWidthPixels) {
-            Log.d(TAG, "onTouchEvent: passing through drawer touch at x=${event.x}")
-            return false
-        }
-
-        val fromMouse = event.isFromSource(InputDevice.SOURCE_MOUSE)
-
-        if (fromMouse) {
+internal fun expandWordOnLine(
+    line: String,
+    col: Int,
+): Pair<Int, Int> {
+    if (col < 0) return Pair(0, 0)
+    if (col >= line.length) return Pair(col, col)
+    var pivot = col
+    val ch = line[col]
+    if (!isWordChar(ch)) {
+        var left = col - 1
+        while (left >= 0 && !isWordChar(line[left])) left--
+        var right = col + 1
+        while (right < line.length && !isWordChar(line[right])) right++
+        pivot =
             when {
-                event.isButtonPressed(MotionEvent.BUTTON_SECONDARY) -> {
-                    if (event.action == MotionEvent.ACTION_DOWN) {
-                        viewModel?.clearSelection()
-                        startSelectionAt(event, expandToWord = true)
-                    }
-                    return true
+                left >= 0 && right < line.length -> {
+                    if (col - left <= right - col) left else right
                 }
 
-                event.isButtonPressed(MotionEvent.BUTTON_TERTIARY) -> {
-                    if (event.action == MotionEvent.ACTION_DOWN) {
-                        pasteFromClipboardDirect()
-                    }
-                    return true
+                left >= 0 -> {
+                    left
                 }
+
+                right < line.length -> {
+                    right
+                }
+
+                else -> {
+                    return Pair(col, col)
+                }
+            }
+    }
+    var startCol = pivot
+    while (startCol > 0 && isWordChar(line[startCol - 1])) startCol--
+    var endCol = pivot + 1
+    while (endCol < line.length && isWordChar(line[endCol])) endCol++
+    return Pair(startCol, endCol)
+}
+
+class TerminalSurface
+    @JvmOverloads
+    constructor(
+        context: Context,
+        attrs: AttributeSet? = null,
+        defStyleAttr: Int = 0,
+    ) : TextureView(context, attrs, defStyleAttr),
+        TextureView.SurfaceTextureListener {
+        companion object {
+            private const val TAG = "TerminalSurface"
+            private const val ORIENTATION_LEFT = 0
+            private const val ORIENTATION_RIGHT = 2
+            private const val SWIPE_THRESHOLD_PIXELS = 500f
+            private const val DEFAULT_ROWS = 24
+            private const val DEFAULT_COLS = 80
+            private const val DOUBLE_TAP_WINDOW_MS = 400L
+            private const val ZOOM_THRESHOLD_LOW = 0.9f
+            private const val ZOOM_THRESHOLD_HIGH = 1.1f
+            private const val CURSOR_HANDLE_HEIGHT_DP = 48
+            private const val DRAWER_WIDTH_DP = 280
+            private const val FLING_VELOCITY_DIVISOR = 100f
+            private const val SUPPRESS_GRACE_PERIOD_NS = 200_000_000L
+            private const val FLING_MAX_LINES = 50
+            private const val SCROLL_END_DELAY_MS = 300L
+            private const val TOUCH_RADIUS_MULTIPLIER = 1.5f
+            private const val FALLBACK_CELL_WIDTH = 8f
+            private const val FALLBACK_CELL_HEIGHT = 16f
+            private const val BACKSPACE_BYTE = 0x08.toByte()
+            private const val DELETE_BYTE = 0x7F.toByte()
+            private const val MENU_COPY = 1
+            private const val MENU_PASTE = 2
+            private const val MENU_SELECT_ALL = 3
+            private const val EDGE_SCROLL_INTERVAL_MS = 50L
+        }
+
+        private fun getAccentColor(): Int {
+            val viewModel = viewModel ?: return 0xFF2196F3.toInt()
+            val runtime = viewModel.runtime ?: return 0xFF2196F3.toInt()
+            return runtime.accentColor
+        }
+
+        private var viewModel: TerminalViewModel? = null
+        private var rows: Int = DEFAULT_ROWS
+        private var cols: Int = DEFAULT_COLS
+        private var surfaceWidthPixels: Int = 0
+        private var surfaceHeightPixels: Int = 0
+        private var isScrolling: Boolean = false
+        private var scrollOffset: Int = 0
+
+        var touchEnabled: Boolean = true
+            set(value) {
+                field = value
+                isFocusable = value
+                isFocusableInTouchMode = value
+                if (!value) {
+                    clearFocus()
+                }
+            }
+
+        fun setSearchHighlights(data: ByteArray) {
+            val bridge = viewModel?.runtime?.bridge() ?: return
+            bridge.setSearchHighlights(data)
+            bridge.render()
+        }
+
+        fun clearSearchHighlights() {
+            val bridge = viewModel?.runtime?.bridge() ?: return
+            bridge.clearSearchHighlights()
+            bridge.render()
+        }
+
+        override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) {
+        }
+
+        private var magnifier: Magnifier? = null
+        private var lastConfiguredWidth = 0
+        private var lastConfiguredHeight = 0
+
+        var onScrollChanged: ((offset: Int) -> Unit)? = null
+        var onScrollingStateChanged: ((isScrolling: Boolean) -> Unit)? = null
+        var onSwipeLeft: (() -> Unit)? = null
+        var onSwipeRight: (() -> Unit)? = null
+        var onCopyRequested: ((text: String) -> Unit)? = null
+        var onPasteRequested: (() -> Unit)? = null
+        var onZoomChanged: ((increase: Boolean) -> Unit)? = null
+
+        var drawerOpen: Boolean = false
+            set(value) {
+                field = value
+                Log.d(TAG, "drawerOpen=$value")
+                if (value) {
+                    hideSelectionHandles()
+                    hideContextMenu()
+                }
+            }
+
+        private val drawerWidthPixels: Float by lazy { DRAWER_WIDTH_DP.toFloat() * resources.displayMetrics.density }
+
+        private var startHandlePopup: PopupWindow? = null
+        private var endHandlePopup: PopupWindow? = null
+        private var cursorHandlePopup: PopupWindow? = null
+        private var actionMode: ActionMode? = null
+        private val startHandleRect = Rect()
+        private val endHandleRect = Rect()
+
+        @Suppress("CyclomaticComplexMethod", "ComplexCondition") // Acceptable — dispatches ~15 distinct gesture/intent types
+        fun showSelectionHandles(
+            startRow: Int,
+            startCol: Int,
+            endRow: Int,
+            endCol: Int,
+            themeFgColor: Int,
+        ) {
+            hideSelectionHandles()
+            if (startRow < 0 || startCol < 0 || endRow < 0 || endCol < 0) return
+
+            val loc = IntArray(2)
+            getLocationInWindow(loc)
+
+            val leftDrawable =
+                androidx.core.content.ContextCompat
+                    .getDrawable(context, R.drawable.text_select_handle_left_material)
+                    ?: return
+            leftDrawable.mutate()
+            val rightDrawable =
+                androidx.core.content.ContextCompat
+                    .getDrawable(context, R.drawable.text_select_handle_right_material)
+                    ?: return
+            rightDrawable.mutate()
+            leftDrawable.setTint(themeFgColor)
+            rightDrawable.setTint(themeFgColor)
+            val handleW = leftDrawable.intrinsicWidth
+            Log.d(TAG, "showSelHandles: start=($startRow,$startCol) end=($endRow,$endCol) handleW=$handleW")
+            selectionHandleWidth = handleW
+            val handleH = leftDrawable.intrinsicHeight
+
+            // START handle: positioned at bottom-right of start cell (Ghostty-Android pattern)
+            val visibleStartRow = (startRow - scrollOffset).coerceIn(0, rows - 1)
+            val startAnchorX = Math.round(startCol * cellWidth)
+            val startAnchorY = Math.round((visibleStartRow + 1) * cellHeight)
+            val startX = (startAnchorX - (handleW * 3) / 4).coerceIn(0, (width - handleW).coerceAtLeast(0))
+            val startY = startAnchorY.coerceIn(0, (height - handleH).coerceAtLeast(0))
+            val startView = createHandleViewWithDrawable(leftDrawable, HandleDrag.START)
+            startHandlePopup =
+                createHandlePopup(startView).apply {
+                    showAtLocation(this@TerminalSurface, 0, loc[0] + startX, loc[1] + startY)
+                }
+            startHandleRect.set(startX, startY, startX + handleW, startY + handleH)
+            startHandleRect.inset(-handleW / 4, -handleH / 4)
+            Log.d(TAG, "showSelHandles: START popup at (${loc[0] + startX}, ${loc[1] + startY})")
+
+            // END handle: positioned at bottom-right of end cell
+            val visibleEndRow = (endRow - scrollOffset).coerceIn(0, rows - 1)
+            val endAnchorX = Math.round((endCol + 1) * cellWidth)
+            val endAnchorY = Math.round((visibleEndRow + 1) * cellHeight)
+            val endX = (endAnchorX - handleW / 4).coerceIn(0, (width - handleW).coerceAtLeast(0))
+            val endY = endAnchorY.coerceIn(0, (height - handleH).coerceAtLeast(0))
+            val endView = createHandleViewWithDrawable(rightDrawable, HandleDrag.END)
+            endHandlePopup =
+                createHandlePopup(endView).apply {
+                    showAtLocation(this@TerminalSurface, 0, loc[0] + endX, loc[1] + endY)
+                }
+            endHandleRect.set(endX, endY, endX + handleW, endY + handleH)
+            endHandleRect.inset(-handleW / 4, -handleH / 4)
+            Log.d(TAG, "showSelHandles: END popup at (${loc[0] + endX}, ${loc[1] + endY})")
+        }
+
+        private fun repositionHandle(
+            which: HandleDrag,
+            row: Int,
+            col: Int,
+        ) {
+            val handleW = selectionHandleWidth
+            if (handleW == 0) return
+            val handleH = startHandlePopup?.contentView?.measuredHeight ?: return
+            val loc = IntArray(2)
+            getLocationInWindow(loc)
+            val visibleRow = (row - scrollOffset).coerceIn(0, rows - 1)
+            val anchorX =
+                if (which == HandleDrag.START) {
+                    Math.round(col * cellWidth)
+                } else {
+                    Math.round((col + 1) * cellWidth)
+                }
+            val anchorY = Math.round((visibleRow + 1) * cellHeight)
+            val adjustedX =
+                (anchorX - (if (which == HandleDrag.START) (handleW * 3) / 4 else handleW / 4))
+                    .coerceIn(0, (width - handleW).coerceAtLeast(0))
+            val clampedY = anchorY.coerceIn(0, (height - handleH).coerceAtLeast(0))
+            val popupX = loc[0] + adjustedX
+            val popupY = loc[1] + clampedY
+            val popup = if (which == HandleDrag.START) startHandlePopup else endHandlePopup
+            popup?.update(popupX, popupY, -1, -1)
+
+            val rect = if (which == HandleDrag.START) startHandleRect else endHandleRect
+            rect.set(
+                adjustedX,
+                clampedY,
+                adjustedX + handleW,
+                clampedY + handleH,
+            )
+            rect.inset(-handleW / 4, -handleH / 4)
+        }
+
+        fun hideSelectionToolbar() {
+            actionMode?.hide(ActionMode.DEFAULT_HIDE_DURATION.toLong())
+        }
+
+        internal fun showContextMenu(
+            row: Int,
+            col: Int,
+            hasSelection: Boolean,
+            hasClipboard: Boolean,
+            selectionStartRow: Int = row,
+            selectionEndRow: Int = row,
+            selectionStartCol: Int = col,
+            selectionEndCol: Int = col,
+        ) {
+            hideContextMenu()
+            val callback: ActionMode.Callback2 =
+                object : ActionMode.Callback2() {
+                    override fun onCreateActionMode(
+                        mode: ActionMode,
+                        menu: Menu,
+                    ): Boolean {
+                        if (hasSelection) {
+                            menu.add(Menu.NONE, MENU_COPY, 0, android.R.string.copy)
+                            menu.add(Menu.NONE, MENU_SELECT_ALL, 1, "Select All")
+                        }
+                        if (hasClipboard) {
+                            menu.add(Menu.NONE, MENU_PASTE, 2, android.R.string.paste)
+                        }
+                        return true
+                    }
+
+                    override fun onPrepareActionMode(
+                        mode: ActionMode,
+                        menu: Menu,
+                    ): Boolean {
+                        styleActionMode(mode)
+                        return false
+                    }
+
+                    override fun onActionItemClicked(
+                        mode: ActionMode,
+                        item: MenuItem,
+                    ): Boolean {
+                        when (item.itemId) {
+                            MENU_COPY -> {
+                                viewModel?.copySelectionToClipboard()
+                                onCopyRequested?.invoke(getSelectedText())
+                                viewModel?.clearSelection()
+                                mode.finish()
+                                return true
+                            }
+
+                            MENU_SELECT_ALL -> {
+                                viewModel?.selectAll(scrollOffset)
+                                mode.finish()
+                                return true
+                            }
+
+                            MENU_PASTE -> {
+                                onPasteRequested?.invoke()
+                                mode.finish()
+                                return true
+                            }
+                        }
+                        return false
+                    }
+
+                    override fun onDestroyActionMode(mode: ActionMode) {
+                        actionMode = null
+                        viewModel?.let { viewModel ->
+                            if (viewModel.state.value.selection.active) {
+                                viewModel.clearSelection()
+                            }
+                        }
+                        hideSelectionHandles()
+                    }
+
+                    override fun onGetContentRect(
+                        mode: ActionMode,
+                        view: View,
+                        outRect: Rect,
+                    ) {
+                        val sel = viewModel?.state?.value?.selection
+                        if (sel?.start == null || sel?.end == null) {
+                            outRect.set(0, 0, width, height)
+                            return
+                        }
+
+                        val rawLoRow = minOf(sel.start.row, sel.end.row) - scrollOffset
+                        val rawHiRow = maxOf(sel.start.row, sel.end.row) - scrollOffset
+
+                        val loRow: Int
+                        val hiRow: Int
+
+                        if (rawHiRow < 0 || rawLoRow >= rows) {
+                            loRow = rows / 2
+                            hiRow = rows / 2
+                        } else {
+                            loRow = rawLoRow.coerceIn(0, rows - 1)
+                            hiRow = rawHiRow.coerceIn(loRow, rows - 1)
+                        }
+
+                        val loCol = if (sel.start.row <= sel.end.row) sel.start.col else sel.end.col
+                        val hiCol = if (sel.start.row <= sel.end.row) sel.end.col else sel.start.col
+                        val handleH = endHandlePopup?.contentView?.measuredHeight ?: 0
+                        val imeInsetBottom =
+                            rootWindowInsets?.let {
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                                    it
+                                        .getInsets(
+                                            android.view.WindowInsets.Type
+                                                .ime(),
+                                        ).bottom
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    val visibleFrame = Rect()
+                                    @Suppress("DEPRECATION")
+                                    getWindowVisibleDisplayFrame(visibleFrame)
+                                    height - visibleFrame.bottom
+                                }
+                            } ?: 0
+                        val availableHeight = height - imeInsetBottom.coerceAtLeast(0)
+                        val top = Math.round(loRow * cellHeight)
+                        val bottom = Math.round((hiRow + 1) * cellHeight + handleH)
+                        val left = Math.round(loCol * cellWidth)
+                        val right = Math.round((hiCol + 1) * cellWidth)
+                        outRect.set(
+                            left.coerceIn(0, width),
+                            top.coerceIn(0, availableHeight),
+                            right.coerceIn(0, width),
+                            bottom.coerceIn(0, availableHeight),
+                        )
+                    }
+                }
+            actionMode = startActionMode(callback, ActionMode.TYPE_FLOATING)
+        }
+
+        fun hideContextMenu() {
+            actionMode?.finish()
+            actionMode = null
+        }
+
+        private fun styleActionMode(mode: ActionMode) {
+            try {
+                val accentColor = getAccentColor()
+                for (i in 0 until mode.menu.size()) {
+                    val item = mode.menu.getItem(i)
+                    item.actionView?.let { view ->
+                        (view as? android.widget.TextView)?.setTextColor(accentColor)
+                    }
+                }
+            } catch (exception: Exception) {
+                Log.w(TAG, "styleActionMode failed (non-critical)", exception)
             }
         }
 
-        scaleDetector.onTouchEvent(event)
-        gestureDetector.onTouchEvent(event)
+        fun showCursorHandle(
+            row: Int,
+            col: Int,
+            themeFgColor: Int,
+        ) {
+            hideCursorHandle()
+            val loc = IntArray(2)
+            getLocationInWindow(loc)
 
-        when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> {
-                if (isSelectingText) {
-                    val sel = viewModel?.state?.value?.selection
-                    if (sel != null && sel.start != null && sel.end != null) {
-                        val touchRow = (event.y / cellHeight).toInt()
-                        val startCol = minOf(sel.start.col, sel.end.col)
-                        val endCol = maxOf(sel.start.col, sel.end.col)
-                        val loRow = minOf(sel.start.row, sel.end.row)
-                        val hiRow = maxOf(sel.start.row, sel.end.row)
-                        val startPx = startCol * cellWidth
-                        val endPx = (endCol + 1) * cellWidth
-                        val inRowRange = touchRow in (loRow - 1)..(hiRow + 1)
-                        val touchRadius = cellWidth * 1.5f
-                        if (inRowRange && kotlin.math.abs(event.x - startPx) < touchRadius) {
-                            handleDragState = HandleDrag.START
-                            viewModel?.updateSelectionStart(touchRow.coerceIn(loRow, hiRow), startCol)
+            val cursorDrawable =
+                androidx.core.content.ContextCompat
+                    .getDrawable(context, R.drawable.text_select_handle_left_material)
+                    ?: return
+            cursorDrawable.mutate()
+            cursorDrawable.setTint(themeFgColor)
+            val handleW = cursorDrawable.intrinsicWidth
+            val handleH = cursorDrawable.intrinsicHeight
+
+            val visibleRow = (row - scrollOffset).coerceIn(0, rows - 1)
+            val cursorX = Math.round(col * cellWidth)
+            val cursorY =
+                Math
+                    .round((visibleRow + 1) * cellHeight)
+                    .coerceIn(0, (surfaceHeightPixels - handleH).coerceAtLeast(0))
+
+            val cursorView = createHandleViewWithDrawable(cursorDrawable, HandleDrag.NONE)
+            val popupX =
+                (loc[0] + cursorX - handleW / 2)
+                    .coerceIn(loc[0], (loc[0] + surfaceWidthPixels - handleW).coerceAtLeast(loc[0]))
+
+            cursorHandlePopup =
+                createHandlePopup(cursorView).apply {
+                    showAtLocation(this@TerminalSurface, 0, popupX, loc[1] + cursorY)
+                }
+        }
+
+        fun hideCursorHandle() {
+            cursorHandlePopup?.dismiss()
+            cursorHandlePopup = null
+        }
+
+        private fun createHandleViewWithDrawable(
+            drawable: android.graphics.drawable.Drawable,
+            which: HandleDrag,
+        ): View =
+            object : View(context) {
+                override fun onMeasure(
+                    widthMeasureSpec: Int,
+                    heightMeasureSpec: Int,
+                ) {
+                    setMeasuredDimension(drawable.intrinsicWidth, drawable.intrinsicHeight)
+                }
+
+                override fun onDraw(canvas: android.graphics.Canvas) {
+                    val drawableWidth = drawable.intrinsicWidth
+                    val drawableHeight = drawable.intrinsicHeight
+                    drawable.setBounds(0, 0, drawableWidth, drawableHeight)
+                    drawable.draw(canvas)
+                }
+
+                @SuppressLint("ClickableViewAccessibility")
+                override fun onTouchEvent(event: MotionEvent): Boolean {
+                    if (which == HandleDrag.NONE) return super.onTouchEvent(event)
+                    val surfaceLoc = IntArray(2)
+                    this@TerminalSurface.getLocationOnScreen(surfaceLoc)
+                    val localX = event.rawX - surfaceLoc[0]
+                    val localY = event.rawY - surfaceLoc[1]
+                    when (event.actionMasked) {
+                        MotionEvent.ACTION_DOWN -> {
+                            handleDragState = which
+                            val col = (localX / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+                            val row = (localY / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
+                            if (which == HandleDrag.START) {
+                                viewModel?.updateSelectionStart(row, col)
+                            } else {
+                                viewModel?.updateSelection(row, col)
+                            }
                             return true
-                        } else if (inRowRange && kotlin.math.abs(event.x - endPx) < touchRadius) {
-                            handleDragState = HandleDrag.END
-                            viewModel?.updateSelection(touchRow.coerceIn(loRow, hiRow), endCol)
+                        }
+
+                        MotionEvent.ACTION_MOVE -> {
+                            val col = (localX / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+                            val row = (localY / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
+                            if (which == HandleDrag.START) {
+                                viewModel?.updateSelectionStart(row, col)
+                            } else {
+                                viewModel?.updateSelection(row, col)
+                            }
+                            repositionHandle(which, row, col)
                             return true
-                        } else {
-                            viewModel?.clearSelection()
+                        }
+
+                        MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                            viewModel?.endSelection(scrollOffset)
+                            handleDragState = HandleDrag.NONE
+                            val selection = viewModel?.state?.value?.selection
+                            if (selection?.start != null && selection?.end != null) {
+                                val clipboard = getClipboardManager()
+                                hideSelectionHandles()
+                                showSelectionHandles(
+                                    selection.start.row,
+                                    selection.start.col,
+                                    selection.end.row,
+                                    selection.end.col,
+                                    getAccentColor(),
+                                )
+                                showContextMenu(
+                                    selection.end.row,
+                                    selection.end.col,
+                                    hasSelection = true,
+                                    hasClipboard = clipboard?.hasPrimaryClip() ?: false,
+                                    selectionStartRow = selection.start.row,
+                                    selectionEndRow = selection.end.row,
+                                    selectionStartCol = selection.start.col,
+                                    selectionEndCol = selection.end.col,
+                                )
+                            }
+                            return true
                         }
                     }
+                    return super.onTouchEvent(event)
                 }
             }
 
-            MotionEvent.ACTION_MOVE -> {
-                if (isSelectingText && handleDragState != HandleDrag.NONE) {
+        private fun createHandlePopup(contentView: View): PopupWindow {
+            val popup = PopupWindow(context, null, android.R.attr.textSelectHandleWindowStyle)
+            popup.setSplitTouchEnabled(true)
+            popup.setClippingEnabled(false)
+            popup.setWidth(android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            popup.setHeight(android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            popup.setBackgroundDrawable(null)
+            popup.setAnimationStyle(0)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                popup.setWindowLayoutType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_SUB_PANEL)
+                popup.setEnterTransition(null)
+                popup.setExitTransition(null)
+                popup.setTouchModal(false)
+            }
+            popup.setContentView(contentView)
+            return popup
+        }
+
+        fun hideSelectionHandles() {
+            startHandlePopup?.dismiss()
+            startHandlePopup = null
+            endHandlePopup?.dismiss()
+            endHandlePopup = null
+            hideSelectionToolbar()
+            hideContextMenu()
+            hideCursorHandle()
+        }
+
+        private var cachedCellWidth: Float = FALLBACK_CELL_WIDTH
+        private var cachedCellHeight: Float = FALLBACK_CELL_HEIGHT
+
+        val cellWidth: Float
+            get() {
+                val vmCw = viewModel?.runtime?.cellWidth ?: 0f
+                if (vmCw > 0f) {
+                    cachedCellWidth = vmCw
+                    return vmCw
+                }
+                return cachedCellWidth
+            }
+
+        val cellHeight: Float
+            get() {
+                val vmCh = viewModel?.runtime?.cellHeight ?: 0f
+                if (vmCh > 0f) {
+                    cachedCellHeight = vmCh
+                    return vmCh
+                }
+                return cachedCellHeight
+            }
+
+        @Volatile
+        internal var isPaused = false
+
+        @Volatile
+        private var suppressUntilNanos = 0L
+
+        private var pendingUnpauseRunnable: Runnable? = null
+
+        @JvmField
+        var isAfterLongPress = false
+
+        var lastTapTime = 0L
+
+        @JvmField
+        var scaleFactor = 1.0f
+
+        private enum class HandleDrag { NONE, START, END }
+
+        private var handleDragState = HandleDrag.NONE
+        private var selectionHandleWidth = 0
+
+        private fun getClipboardManager(): ClipboardManager? {
+            val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            if (clipboardManager == null) {
+                Log.w(TAG, "Clipboard service not available")
+            }
+            return clipboardManager
+        }
+
+        private val edgeScrollHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var edgeScrollRunning = false
+        private var pendingEdgeScroll: Int = 0 // +1 = up, -1 = down, 0 = none
+        private lateinit var edgeScrollRunnable: Runnable
+
+        val isSelectingText: Boolean
+            get() =
+                viewModel
+                    ?.state
+                    ?.value
+                    ?.selection
+                    ?.active == true
+
+        private val gestureListener =
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onDown(e: MotionEvent): Boolean = true
+
+                override fun onShowPress(e: MotionEvent) {
+                    isAfterLongPress = false
+                }
+
+                override fun onScroll(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    distanceX: Float,
+                    distanceY: Float,
+                ): Boolean {
+                    if (isSelectingText) return false
+                    if (!isScrolling) {
+                        isScrolling = true
+                        onScrollingStateChanged?.invoke(true)
+                    }
+                    val scrollbackLen = currentScrollbackLength()
+                    // Treat one full cell-height of finger travel as one row of
+                    // scroll, but scale so a full-viewport swipe scrolls the
+                    // whole viewport. This keeps scrolling proportional and
+                    // responsive instead of moving a single row per gesture.
+                    val scale = (height.toFloat() / cellHeight.coerceAtLeast(1f)).coerceAtLeast(1f)
+                    val rawAmount = (distanceY / cellHeight * scale / 4f).toInt()
+                    val scrollAmount =
+                        if (rawAmount > 0) {
+                            maxOf(1, rawAmount)
+                        } else if (rawAmount < 0) {
+                            minOf(-1, rawAmount)
+                        } else {
+                            0
+                        }
+                    val newOffset = (scrollOffset + scrollAmount).coerceIn(0, scrollbackLen)
+                    if (newOffset != scrollOffset) {
+                        scrollOffset = newOffset
+                        onScrollChanged?.invoke(scrollOffset)
+                    }
+                    return true
+                }
+
+                override fun onFling(
+                    e1: MotionEvent?,
+                    e2: MotionEvent,
+                    velocityX: Float,
+                    velocityY: Float,
+                ): Boolean {
+                    if (isSelectingText) return false
+                    val scrollbackLen = currentScrollbackLength()
+                    val absX = kotlin.math.abs(velocityX)
+                    val absY = kotlin.math.abs(velocityY)
+
+                    if (absX > absY && absX > SWIPE_THRESHOLD_PIXELS) {
+                        if (velocityX > 0) {
+                            onSwipeRight?.invoke()
+                        } else {
+                            onSwipeLeft?.invoke()
+                        }
+                        return true
+                    }
+
+                    val flingAmount = (velocityY / FLING_VELOCITY_DIVISOR).toInt().coerceIn(-FLING_MAX_LINES, FLING_MAX_LINES)
+                    val newOffset = (scrollOffset + flingAmount).coerceIn(0, scrollbackLen)
+                    if (newOffset != scrollOffset) {
+                        scrollOffset = newOffset
+                        onScrollChanged?.invoke(scrollOffset)
+                    }
+                    postDelayed({
+                        isScrolling = false
+                        onScrollingStateChanged?.invoke(false)
+                    }, SCROLL_END_DELAY_MS)
+                    return true
+                }
+
+                override fun onSingleTapUp(event: MotionEvent): Boolean {
+                    if (isAfterLongPress) {
+                        isAfterLongPress = false
+                        return true
+                    }
+                    if (isScrolling) {
+                        isScrolling = false
+                        scrollOffset = 0
+                        onScrollChanged?.invoke(0)
+                        onScrollingStateChanged?.invoke(false)
+                        return true
+                    }
+                    if (isSelectingText) {
+                        hideSelectionHandles()
+                        viewModel?.clearSelection()
+                        post {
+                            @Suppress("DEPRECATION")
+                            val controller =
+                                androidx.core.view.ViewCompat
+                                    .getWindowInsetsController(this@TerminalSurface)
+                            controller?.hide(
+                                androidx.core.view.WindowInsetsCompat.Type
+                                    .ime(),
+                            )
+                        }
+                        return true
+                    }
+                    hideContextMenu()
+                    viewModel?.clearSelection()
+                    suppressUntilNanos = 0L
+                    keyboardRequested = true
+                    requestFocus()
+                    post {
+                        @Suppress("DEPRECATION")
+                        val controller =
+                            androidx.core.view.ViewCompat
+                                .getWindowInsetsController(this@TerminalSurface)
+                        controller?.show(
+                            androidx.core.view.WindowInsetsCompat.Type
+                                .ime(),
+                        )
+                    }
+                    return true
+                }
+
+                override fun onDoubleTap(event: MotionEvent): Boolean {
+                    if (isSelectingText) {
+                        viewModel?.clearSelection()
+                        return true
+                    }
+                    val now = System.currentTimeMillis()
+                    if (now - lastTapTime < DOUBLE_TAP_WINDOW_MS) {
+                        val col = (event.x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+                        val row = (event.y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
+                        viewModel?.setSelectionMode(SelectionMode.Line)
+                        viewModel?.startSelection(row, 0)
+                        val bridge = viewModel?.runtime?.bridge()
+                        val scrollbackLength = bridge?.scrollbackLength()?.toInt() ?: 0
+                        val line = bridge?.scrollbackLine((scrollbackLength - scrollOffset + row).toUInt()) ?: ""
+                        viewModel?.updateSelection(row, line.length.coerceAtLeast(0))
+                        viewModel?.endSelection(scrollOffset)
+                        showSelectionHandles(row, 0, row, line.length.coerceAtLeast(0), getAccentColor())
+                    } else {
+                        startSelectionAt(event, expandToWord = true)
+                        val currentSelection = viewModel?.state?.value?.selection
+                        if (currentSelection?.active == true && currentSelection.start != null && currentSelection.end != null) {
+                            showSelectionHandles(
+                                currentSelection.start.row,
+                                currentSelection.start.col,
+                                currentSelection.end.row,
+                                currentSelection.end.col,
+                                getAccentColor(),
+                            )
+                        }
+                    }
+                    lastTapTime = now
+                    return true
+                }
+
+                override fun onLongPress(event: MotionEvent) {
+                    if (scaleFactor < ZOOM_THRESHOLD_LOW || scaleFactor > ZOOM_THRESHOLD_HIGH) return
+                    isAfterLongPress = true
+                    Log.d(TAG, "onLongPress: x=${event.x} y=${event.y} cellW=$cellWidth cellH=$cellHeight cols=$cols rows=$rows")
                     val col = (event.x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
                     val row = (event.y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
-                    if (handleDragState == HandleDrag.START) {
-                        viewModel?.updateSelectionStart(row, col)
-                    } else if (handleDragState == HandleDrag.END) {
-                        viewModel?.updateSelection(row, col)
+                    val bridge = viewModel?.runtime?.bridge()
+                    val scrollbackLength = bridge?.scrollbackLength()?.toInt() ?: 0
+                    val line = bridge?.scrollbackLine((scrollbackLength - scrollOffset + row).toUInt()) ?: ""
+                    Log.d(TAG, "onLongPress: col=$col row=$row lineLen=${line.length}")
+                    handleLongPress(event.x, event.y)
+                }
+            }
+
+        private val gestureDetector = GestureDetector(context, gestureListener)
+
+        private val scaleDetector =
+            ScaleGestureDetector(
+                context,
+                object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                    override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                        if (isSelectingText) return false
+                        return true
+                    }
+
+                    override fun onScale(detector: ScaleGestureDetector): Boolean {
+                        if (isSelectingText) return false
+                        scaleFactor *= detector.scaleFactor
+                        if (scaleFactor < ZOOM_THRESHOLD_LOW || scaleFactor > ZOOM_THRESHOLD_HIGH) {
+                            val increase = scaleFactor > 1.0f
+                            onZoomChanged?.invoke(increase)
+                            scaleFactor = 1.0f
+                        }
+                        return true
+                    }
+                },
+            )
+
+        fun handleLongPress(
+            x: Float,
+            y: Float,
+        ) {
+            if (scaleFactor < ZOOM_THRESHOLD_LOW || scaleFactor > ZOOM_THRESHOLD_HIGH) return
+            isAfterLongPress = true
+
+            @Suppress("DEPRECATION")
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+
+            hideSelectionHandles()
+
+            val col = (x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+            val row = (y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
+            val bridge = viewModel?.runtime?.bridge()
+            val scrollbackLength = bridge?.scrollbackLength()?.toInt() ?: 0
+            val line = bridge?.scrollbackLine((scrollbackLength - scrollOffset + row).toUInt()) ?: ""
+            val isOnEmptyArea = col >= line.length || line.isEmpty()
+            val isOnWhitespace = !isOnEmptyArea && col < line.length && line[col].isWhitespace()
+
+            if (isOnEmptyArea || isOnWhitespace) {
+                val endCol = (col + 1).coerceAtMost(cols - 1)
+                viewModel?.startSelection(row, col)
+                viewModel?.updateSelection(row, endCol)
+                viewModel?.endSelection(scrollOffset)
+                showSelectionHandles(row, col, row, endCol, getAccentColor())
+
+                val clipboard = getClipboardManager()
+                if (clipboard?.hasPrimaryClip() == true) {
+                    showContextMenu(row, col, hasSelection = false, hasClipboard = true)
+                }
+            } else {
+                val bounds =
+                    viewModel?.runtime?.expandAndSetSelection(
+                        row = (scrollbackLength - scrollOffset + row).toUInt(),
+                        col = col.toUInt(),
+                        mode = 1,
+                    )
+                val hasClipboard = getClipboardManager()?.hasPrimaryClip() ?: false
+
+                val startRow: Int
+                val startCol: Int
+                val endRow: Int
+                val endCol: Int
+
+                if (bounds != null) {
+                    val (start, end) = bounds
+                    startRow = start.first.toInt()
+                    startCol = start.second.toInt()
+                    endRow = end.first.toInt()
+                    endCol = end.second.toInt()
+                    viewModel?.setSelectionMode(SelectionMode.Word)
+                } else {
+                    startRow = row
+                    startCol = col
+                    endRow = row
+                    endCol = col
+                }
+
+                viewModel?.startSelection(startRow, startCol)
+                viewModel?.updateSelection(endRow, endCol)
+                viewModel?.endSelection(scrollOffset)
+                showSelectionHandles(startRow, startCol, endRow, endCol, getAccentColor())
+                showContextMenu(
+                    row,
+                    col,
+                    hasSelection = true,
+                    hasClipboard = hasClipboard,
+                    selectionStartRow = startRow,
+                    selectionEndRow = endRow,
+                    selectionStartCol = startCol,
+                    selectionEndCol = endCol,
+                )
+            }
+        }
+
+        private var cachedSurface: android.view.Surface? = null
+
+        private var lastTouchX = 0f
+        private var lastTouchY = 0f
+        private var currentTouchX = 0f
+        private var currentTouchY = 0f
+        private var lastDragCol = 0
+        private var lastDragRow = 0
+
+        init {
+            surfaceTextureListener = this
+            isFocusable = true
+            isFocusableInTouchMode = true
+            scaleDetector.isQuickScaleEnabled = false
+            contentDescription = context.getString(R.string.terminal)
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+            edgeScrollRunnable =
+                Runnable {
+                    if (!edgeScrollRunning) return@Runnable
+                    when (pendingEdgeScroll) {
+                        1 -> {
+                            val scrollbackLen = currentScrollbackLength()
+                            val newOffset = (scrollOffset + 1).coerceAtMost(scrollbackLen)
+                            if (newOffset != scrollOffset) {
+                                scrollOffset = newOffset
+                                onScrollChanged?.invoke(scrollOffset)
+                                val gridRow = scrollOffset
+                                val curCol = (currentTouchX / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+                                if (handleDragState == HandleDrag.START) {
+                                    viewModel?.updateSelectionStart(gridRow, curCol)
+                                } else if (handleDragState == HandleDrag.END) {
+                                    viewModel?.updateSelection(gridRow, curCol)
+                                }
+                            }
+                        }
+
+                        -1 -> {
+                            val newOffset = (scrollOffset - 1).coerceAtLeast(0)
+                            if (newOffset != scrollOffset) {
+                                scrollOffset = newOffset
+                                onScrollChanged?.invoke(scrollOffset)
+                                val gridRow = scrollOffset + rows - 1
+                                val curCol = (currentTouchX / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+                                if (handleDragState == HandleDrag.START) {
+                                    viewModel?.updateSelectionStart(gridRow, curCol)
+                                } else if (handleDragState == HandleDrag.END) {
+                                    viewModel?.updateSelection(gridRow, curCol)
+                                }
+                            }
+                        }
+                    }
+                    val sel = viewModel?.state?.value?.selection
+                    if (sel?.start != null && sel?.end != null) {
+                        repositionHandle(HandleDrag.START, sel.start.row, sel.start.col)
+                        repositionHandle(HandleDrag.END, sel.end.row, sel.end.col)
+                    }
+                    if (edgeScrollRunning) {
+                        edgeScrollHandler.postDelayed(edgeScrollRunnable, EDGE_SCROLL_INTERVAL_MS)
+                    }
+                }
+        }
+
+        private var keyboardRequested = false
+
+        fun finishComposing() {
+            currentInputConnection?.let { ic ->
+                ic.finishComposingText()
+            }
+            coalescer.clearComposing()
+        }
+
+        fun restoreKeyboardFocus() {
+            keyboardRequested = true
+            requestFocus()
+            post {
+                @Suppress("DEPRECATION")
+                val controller =
+                    androidx.core.view.ViewCompat
+                        .getWindowInsetsController(this)
+                controller?.show(
+                    androidx.core.view.WindowInsetsCompat.Type
+                        .ime(),
+                )
+            }
+        }
+
+        override fun onCheckIsTextEditor(): Boolean = keyboardRequested
+
+        override fun onResolvePointerIcon(
+            event: MotionEvent,
+            pointerIndex: Int,
+        ): PointerIcon = PointerIcon.getSystemIcon(context, PointerIcon.TYPE_TEXT)
+
+        override fun onWindowFocusChanged(hasFocus: Boolean) {
+            super.onWindowFocusChanged(hasFocus)
+            viewModel?.runtime?.focusChange(hasFocus)
+            coalescer.reset()
+            if (!hasFocus) {
+                isPaused = true
+                currentInputConnection?.let { ic ->
+                    ic.finishComposingText()
+                }
+                suppressUntilNanos = System.nanoTime() + SUPPRESS_GRACE_PERIOD_NS
+            }
+            if (hasFocus) {
+                suppressUntilNanos = System.nanoTime() + SUPPRESS_GRACE_PERIOD_NS
+                currentInputConnection?.finishComposingText()
+            }
+        }
+
+        fun initialize(viewModel: TerminalViewModel) {
+            this.viewModel = viewModel
+        }
+
+        fun postDelayedUnpause(delayMillis: Long) {
+            pendingUnpauseRunnable?.let { removeCallbacks(it) }
+            pendingUnpauseRunnable =
+                Runnable {
+                    pendingUnpauseRunnable = null
+                    if (hasWindowFocus()) {
+                        isPaused = false
+                    }
+                }.also { postDelayed(it, delayMillis) }
+        }
+
+        fun setDimensions(
+            rows: Int,
+            cols: Int,
+        ) {
+            this.rows = rows
+            this.cols = cols
+        }
+
+        private fun currentScrollbackLength(): Int {
+            val viewModel = viewModel ?: return 0
+            val bridge = viewModel.runtime.bridge() ?: return 0
+            return try {
+                bridge.scrollbackLength().toInt()
+            } catch (error: Exception) {
+                LogUtil.e(TAG, "scrollbackLength query failed", error)
+                0
+            }
+        }
+
+        fun setScrollOffset(offset: Int) {
+            this.scrollOffset = offset.coerceIn(0, currentScrollbackLength())
+            onScrollChanged?.invoke(this.scrollOffset)
+        }
+
+        fun scrollToRow(row: Int) {
+            val scrollbackLen = currentScrollbackLength()
+            val targetOffset = (scrollbackLen - row).coerceIn(0, scrollbackLen)
+            if (targetOffset != scrollOffset) {
+                scrollOffset = targetOffset
+                onScrollChanged?.invoke(scrollOffset)
+            }
+        }
+
+        fun getScrollOffset(): Int = scrollOffset
+
+        fun getMaxScrollOffset(): Int = currentScrollbackLength()
+
+        fun getRows(): Int = rows
+
+        fun getCols(): Int = cols
+
+        fun isCurrentlyScrolling(): Boolean = isScrolling
+
+        private fun recomputeRowsColsImmediate(
+            width: Int,
+            height: Int,
+        ) {
+            val viewModel = viewModel
+            if (viewModel != null) {
+                val cellWidth = viewModel.runtime.cellWidth
+                val cellHeight = viewModel.runtime.cellHeight
+                if (cellWidth > 0f && cellHeight > 0f) {
+                    cols = (width.toFloat() / cellWidth).toInt().coerceAtLeast(1)
+                    rows = (height.toFloat() / cellHeight).toInt().coerceAtLeast(1)
+                    return
+                }
+            }
+            if (lastConfiguredWidth > 0 && lastConfiguredHeight > 0 && rows > 0 && cols > 0) {
+                val cellWidthPx = lastConfiguredWidth.toFloat() / cols
+                val cellHeightPx = lastConfiguredHeight.toFloat() / rows
+                cols = (width.toFloat() / cellWidthPx).toInt().coerceAtLeast(1)
+                rows = (height.toFloat() / cellHeightPx).toInt().coerceAtLeast(1)
+            }
+        }
+
+        fun consumePendingInput(): ByteArray? = viewModel?.consumePendingInput()
+
+        private val coalescer = InputCoalescer({ data -> viewModel?.writeToPty(data) })
+        private var currentInputConnection: InputConnection? = null
+
+        override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
+            val mode = viewModel?.state?.value?.keyboardMode ?: KeyboardMode.Secure
+            mode.toEditorInfo(outAttrs)
+            val connection =
+                object : BaseInputConnection(this, true) {
+                    // Tracks in-progress IME composition so deltas reconcile instead
+                    // of being dropped. Modeled on Haven's WaylandDesktopView
+                    // setComposingText / commitText (core/wayland/.../WaylandDesktopView.kt:296-329).
+                    private var composingBuffer: String = ""
+
+                    private fun encodeAndSend(
+                        text: String,
+                        ctrlActive: Boolean,
+                        altActive: Boolean,
+                    ) {
+                        coalescer.send(
+                            TerminalInputEncoder.encodeCommittedText(
+                                text = text,
+                                ctrlActive = ctrlActive,
+                                altActive = altActive,
+                                bracketedPaste = false,
+                            ),
+                        )
+                    }
+
+                    override fun setComposingText(
+                        text: CharSequence?,
+                        newCursorPosition: Int,
+                    ): Boolean {
+                        if (isPaused || System.nanoTime() < suppressUntilNanos) {
+                            composingBuffer = ""
+                            coalescer.clearComposing()
+                            return true
+                        }
+                        val newComposing = text?.toString() ?: ""
+                        when {
+                            newComposing == composingBuffer -> {
+                                // No change — nothing to reconcile.
+                            }
+
+                            newComposing.startsWith(composingBuffer) -> {
+                                // Composition grew: send only the appended characters.
+                                encodeAndSend(
+                                    newComposing.substring(composingBuffer.length),
+                                    ctrlActive = false,
+                                    altActive = false,
+                                )
+                            }
+
+                            composingBuffer.startsWith(newComposing) -> {
+                                // Composition contracted: backspace the removed characters.
+                                viewModel?.writeToPty(
+                                    ByteArray(composingBuffer.length - newComposing.length) { BACKSPACE_BYTE },
+                                )
+                            }
+
+                            else -> {
+                                // Diverged: replace the whole composing run.
+                                viewModel?.writeToPty(ByteArray(composingBuffer.length) { BACKSPACE_BYTE })
+                                encodeAndSend(newComposing, ctrlActive = false, altActive = false)
+                            }
+                        }
+                        composingBuffer = newComposing
+                        coalescer.updateComposingText(newComposing)
+                        Log.d(TAG, "setComposingText: '$newComposing' (len=${newComposing.length})")
+                        return true
+                    }
+
+                    override fun finishComposingText(): Boolean {
+                        composingBuffer = ""
+                        coalescer.clearComposing()
+                        Log.d(TAG, "finishComposingText")
+                        return true
+                    }
+
+                    override fun commitText(
+                        text: CharSequence?,
+                        newCursorPosition: Int,
+                    ): Boolean {
+                        if (isPaused || System.nanoTime() < suppressUntilNanos) {
+                            composingBuffer = ""
+                            coalescer.clearComposing()
+                            return true
+                        }
+                        val committedText = text?.toString() ?: return false
+                        val terminalViewModel = viewModel
+                        val state = terminalViewModel?.state?.value
+                        val ctrlActive =
+                            state?.ctrlState == ModifierState.Locked || state?.ctrlState == ModifierState.Once
+                        val altActive =
+                            state?.altState == ModifierState.Locked || state?.altState == ModifierState.Once
+
+                        if (composingBuffer.isNotEmpty()) {
+                            if (committedText == composingBuffer) {
+                                // Already forwarded via composing deltas; do not resend.
+                                Log.d(TAG, "commitText: '$committedText' already composed, skipping resend")
+                            } else {
+                                terminalViewModel?.writeToPty(
+                                    ByteArray(composingBuffer.length) { BACKSPACE_BYTE },
+                                )
+                                encodeAndSend(committedText, ctrlActive, altActive)
+                            }
+                            composingBuffer = ""
+                        } else {
+                            encodeAndSend(committedText, ctrlActive, altActive)
+                        }
+                        coalescer.clearComposing()
+                        terminalViewModel?.consumeOneShotModifiers()
+                        return true
+                    }
+
+                    override fun sendKeyEvent(event: KeyEvent): Boolean {
+                        if (isPaused || System.nanoTime() < suppressUntilNanos) {
+                            return true
+                        }
+                        return if (event.action == KeyEvent.ACTION_DOWN) {
+                            handleKeyEvent(event)
+                        } else {
+                            true
+                        }
+                    }
+
+                    override fun deleteSurroundingText(
+                        beforeLength: Int,
+                        afterLength: Int,
+                    ): Boolean {
+                        if (isPaused || System.nanoTime() < suppressUntilNanos) {
+                            return true
+                        }
+                        if (beforeLength > 0) {
+                            val bs = ByteArray(beforeLength) { BACKSPACE_BYTE }
+                            viewModel?.writeToPty(bs)
+                        }
+                        if (afterLength > 0) {
+                            val del = ByteArray(afterLength) { DELETE_BYTE }
+                            viewModel?.writeToPty(del)
+                        }
+                        return true
+                    }
+                }
+            currentInputConnection = connection
+            return connection
+        }
+
+        fun pasteFromClipboardDirect() {
+            val clipboard = getClipboardManager() ?: return
+            if (!clipboard.hasPrimaryClip()) return
+            val clipboardText = clipboard.primaryClip?.getItemAt(0)?.text ?: return
+            val data = clipboardText.toString().replace("\n", "\r").toByteArray()
+            viewModel?.writeToPty(data)
+        }
+
+        fun getSelectedText(): String {
+            val selection = viewModel?.state?.value?.selection ?: return ""
+            if (!selection.active || selection.start == null || selection.end == null) return ""
+            val bridge = viewModel?.runtime?.bridge() ?: return ""
+            val scrollbackLength = bridge.scrollbackLength().toInt()
+            val loRow = minOf(selection.start.row, selection.end.row)
+            val hiRow = maxOf(selection.start.row, selection.end.row)
+            val loCol = if (selection.start.row <= selection.end.row) selection.start.col else selection.end.col
+            val hiCol = if (selection.start.row <= selection.end.row) selection.end.col else selection.start.col
+            val builder = StringBuilder()
+            for (row in loRow..hiRow) {
+                val line = bridge.scrollbackLine((scrollbackLength - scrollOffset + row).toUInt()) ?: continue
+                val startCol = if (row == loRow) loCol else 0
+                val endCol = if (row == hiRow) hiCol.coerceAtMost(line.length) else line.length
+                if (startCol < endCol) {
+                    builder.appendLine(line.substring(startCol, endCol))
+                }
+            }
+            return builder.toString().trimEnd('\n')
+        }
+
+        fun expandWordSelection(
+            row: Int,
+            col: Int,
+        ): Pair<Int, Int> {
+            val bridge = viewModel?.runtime?.bridge() ?: return Pair(col, col)
+            val scrollbackLength = bridge.scrollbackLength().toInt()
+            val line = bridge.scrollbackLine((scrollbackLength - scrollOffset + row).toUInt()) ?: return Pair(col, col)
+            return expandWordOnLine(line, col)
+        }
+
+        private fun startSelectionAt(
+            event: MotionEvent,
+            expandToWord: Boolean = false,
+        ) {
+            val col = (event.x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+            val row = (event.y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
+            Log.d(TAG, "startSelectionAt: col=$col row=$row expand=$expandToWord vm=${viewModel != null}")
+
+            if (expandToWord) {
+                val (startCol, endCol) = expandWordSelection(row, col)
+                Log.d(TAG, "startSelectionAt: wordStart=$startCol wordEnd=$endCol")
+                viewModel?.startSelection(row, startCol)
+                viewModel?.updateSelection(row, endCol)
+                viewModel?.endSelection(scrollOffset)
+            } else {
+                viewModel?.startSelection(row, col)
+            }
+
+            try {
+                magnifier = magnifier ?: Magnifier.Builder(this@TerminalSurface).build()
+                magnifier?.show(event.rawX, event.rawY)
+            } catch (exception: Exception) {
+                Log.w(TAG, "magnifier show failed (non-critical)", exception)
+            }
+        }
+
+        private fun modifierBitmask(event: KeyEvent): Byte {
+            val state = viewModel?.state?.value
+            var mask = 0
+            if (event.isShiftPressed) mask = mask or 1
+            if (event.isAltPressed || state?.altState == ModifierState.Locked || state?.altState == ModifierState.Once) {
+                mask = mask or 2
+            }
+            if (event.isCtrlPressed || state?.ctrlState == ModifierState.Locked || state?.ctrlState == ModifierState.Once) {
+                mask = mask or 4
+            }
+            if (event.isMetaPressed) mask = mask or 8
+            return mask.toByte()
+        }
+
+        override fun onKeyDown(
+            keyCode: Int,
+            event: KeyEvent,
+        ): Boolean {
+            val terminalViewModel = viewModel
+            val bridge = terminalViewModel?.runtime?.bridge()
+            if (bridge != null) {
+                val modifiers = modifierBitmask(event)
+                val action: Byte = 0 // KeyEvent.ACTION_DOWN = 0
+                val unicodeChar = event.unicodeChar
+                val unshiftedChar = event.getUnicodeChar(event.metaState and KeyEvent.META_SHIFT_MASK.inv())
+                val success = bridge.processKeyEvent(keyCode, modifiers, action, unicodeChar, unshiftedChar)
+                if (success) {
+                    terminalViewModel.consumeOneShotModifiers()
+                    return true
+                }
+            }
+            return super.onKeyDown(keyCode, event)
+        }
+
+        override fun onKeyUp(
+            keyCode: Int,
+            event: KeyEvent,
+        ): Boolean {
+            val terminalViewModel = viewModel
+            val bridge = terminalViewModel?.runtime?.bridge()
+            if (bridge != null) {
+                val modifiers = modifierBitmask(event)
+                val action: Byte = 1 // KeyEvent.ACTION_UP = 1
+                val unicodeChar = event.unicodeChar
+                val unshiftedChar = event.getUnicodeChar(event.metaState and KeyEvent.META_SHIFT_MASK.inv())
+                bridge.processKeyEvent(keyCode, modifiers, action, unicodeChar, unshiftedChar)
+            }
+            return true
+        }
+
+        private fun handleKeyEvent(event: KeyEvent): Boolean = onKeyDown(event.keyCode, event)
+
+        @Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth") // Acceptable — dispatches ~15 distinct gesture/intent types
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (!touchEnabled) {
+                scaleDetector.onTouchEvent(event)
+                gestureDetector.onTouchEvent(event)
+                return false
+            }
+            if (event.action == MotionEvent.ACTION_DOWN) {
+                lastTouchX = event.x
+                lastTouchY = event.y
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
+            if (drawerOpen && event.x < drawerWidthPixels) {
+                Log.d(TAG, "onTouchEvent: passing through drawer touch at x=${event.x}")
+                return false
+            }
+
+            val modifierBarTop = height - modifierBarHeightPx
+            if (event.y >= modifierBarTop) {
+                return false
+            }
+
+            val fromMouse = event.isFromSource(InputDevice.SOURCE_MOUSE)
+
+            if (fromMouse) {
+                when {
+                    event.isButtonPressed(MotionEvent.BUTTON_SECONDARY) -> {
+                        if (event.action == MotionEvent.ACTION_DOWN) {
+                            viewModel?.clearSelection()
+                            startSelectionAt(event, expandToWord = true)
+                        }
+                        return true
+                    }
+
+                    event.isButtonPressed(MotionEvent.BUTTON_TERTIARY) -> {
+                        if (event.action == MotionEvent.ACTION_DOWN) {
+                            pasteFromClipboardDirect()
+                        }
+                        return true
                     }
                 }
             }
 
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                if (isSelectingText && handleDragState != HandleDrag.NONE) {
-                    viewModel?.endSelection()
+            scaleDetector.onTouchEvent(event)
+            gestureDetector.onTouchEvent(event)
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    if (isSelectingText) {
+                        val touchX = event.x
+                        val touchY = event.y
+                        if (!startHandleRect.isEmpty() && startHandleRect.contains(touchX.toInt(), touchY.toInt())) {
+                            handleDragState = HandleDrag.START
+                            val currentSelection = viewModel?.state?.value?.selection
+                            if (currentSelection?.start != null) {
+                                viewModel?.updateSelectionStart(currentSelection.start.row, currentSelection.start.col)
+                                return true
+                            }
+                        } else if (!endHandleRect.isEmpty() && endHandleRect.contains(touchX.toInt(), touchY.toInt())) {
+                            handleDragState = HandleDrag.END
+                            val currentSelection = viewModel?.state?.value?.selection
+                            if (currentSelection?.end != null) {
+                                viewModel?.updateSelection(currentSelection.end.row, currentSelection.end.col)
+                                return true
+                            }
+                        } else {
+                            viewModel?.clearSelection()
+                            hideSelectionHandles()
+                            hideContextMenu()
+                        }
+                    }
                 }
-                handleDragState = HandleDrag.NONE
-                try {
-                    magnifier?.dismiss()
-                } catch (_: Exception) {
+
+                MotionEvent.ACTION_MOVE -> {
+                    if (isSelectingText && handleDragState != HandleDrag.NONE) {
+                        val col = (event.x / cellWidth).toInt().coerceIn(0, (cols - 1).coerceAtLeast(0))
+                        val row = (event.y / cellHeight).toInt().coerceIn(0, (rows - 1).coerceAtLeast(0))
+                        lastDragCol = col
+                        lastDragRow = row
+                        currentTouchX = event.x
+                        currentTouchY = event.y
+
+                        hideSelectionToolbar()
+
+                        if (event.y < cellHeight / 2) {
+                            if (!edgeScrollRunning) {
+                                edgeScrollRunning = true
+                                pendingEdgeScroll = 1
+                                edgeScrollHandler.postDelayed(edgeScrollRunnable, EDGE_SCROLL_INTERVAL_MS)
+                            }
+                        } else if (event.y >= surfaceHeightPixels - cellHeight / 2) {
+                            if (!edgeScrollRunning) {
+                                edgeScrollRunning = true
+                                pendingEdgeScroll = -1
+                                edgeScrollHandler.postDelayed(edgeScrollRunnable, EDGE_SCROLL_INTERVAL_MS)
+                            }
+                        } else {
+                            edgeScrollRunning = false
+                            pendingEdgeScroll = 0
+                            edgeScrollHandler.removeCallbacks(edgeScrollRunnable)
+                            val gridRow = row + scrollOffset
+                            if (handleDragState == HandleDrag.START) {
+                                viewModel?.updateSelectionStart(gridRow, col)
+                            } else {
+                                viewModel?.updateSelection(gridRow, col)
+                            }
+                            repositionHandle(handleDragState, gridRow, col)
+                        }
+                    }
                 }
-                magnifier = null
-                scaleFactor = 1.0f
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    edgeScrollRunning = false
+                    pendingEdgeScroll = 0
+                    edgeScrollHandler.removeCallbacks(edgeScrollRunnable)
+                    if (isSelectingText && handleDragState != HandleDrag.NONE) {
+                        viewModel?.endSelection(scrollOffset)
+                        val selection = viewModel?.state?.value?.selection
+                        if (selection?.start != null && selection?.end != null) {
+                            val clipboard = getClipboardManager()
+                            hideSelectionHandles()
+                            showSelectionHandles(
+                                selection.start.row,
+                                selection.start.col,
+                                selection.end.row,
+                                selection.end.col,
+                                getAccentColor(),
+                            )
+                            if (actionMode == null) {
+                                showContextMenu(
+                                    selection.end.row,
+                                    selection.end.col,
+                                    hasSelection = true,
+                                    hasClipboard = clipboard?.hasPrimaryClip() ?: false,
+                                    selectionStartRow = selection.start.row,
+                                    selectionEndRow = selection.end.row,
+                                    selectionStartCol = selection.start.col,
+                                    selectionEndCol = selection.end.col,
+                                )
+                            } else {
+                                actionMode?.invalidate()
+                            }
+                        }
+                    }
+                    handleDragState = HandleDrag.NONE
+                    try {
+                        magnifier?.dismiss()
+                    } catch (exception: Exception) {
+                        Log.w(TAG, "magnifier dismiss failed (non-critical)", exception)
+                    }
+                    magnifier = null
+                    scaleFactor = 1.0f
+                }
             }
-        }
-        return true
-    }
-
-    // ── SurfaceTextureListener ─────────────────────────────────────────
-
-    override fun onSizeChanged(
-        width: Int,
-        height: Int,
-        previousWidth: Int,
-        previousHeight: Int,
-    ) {
-        super.onSizeChanged(width, height, previousWidth, previousHeight)
-        Log.d(TAG, "onSizeChanged: $width x $height (was ${previousWidth}x$previousHeight)")
-        if (width <= 0 || height <= 0) return
-        if (width == previousWidth && height == previousHeight && previousWidth != 0) return
-
-        if (surfaceTexture != null) {
-            surfaceTexture!!.setDefaultBufferSize(width, height)
+            return true
         }
 
-        surfaceWidthPixels = width
-        surfaceHeightPixels = height
-        viewModel?.let { terminalViewModel ->
+        // ── SurfaceTextureListener ─────────────────────────────────────────
+
+        @Suppress("CyclomaticComplexMethod") // Acceptable — dispatches ~15 distinct gesture/intent types
+        override fun onSizeChanged(
+            width: Int,
+            height: Int,
+            previousWidth: Int,
+            previousHeight: Int,
+        ) {
+            super.onSizeChanged(width, height, previousWidth, previousHeight)
+            Log.d(TAG, "onSizeChanged: $width x $height (was ${previousWidth}x$previousHeight)")
+            if (width <= 0 || height <= 0) return
+            if (width == previousWidth && height == previousHeight && previousWidth != 0) return
+
+            val st = surfaceTexture ?: return
+            st.setDefaultBufferSize(width, height)
+
+            surfaceWidthPixels = width
+            surfaceHeightPixels = height
+            recomputeRowsColsImmediate(width, height)
+            // Resize the GPU swapchain synchronously and immediately so the rendered
+            // frame always matches the new view size. The TextureView scales its
+            // SurfaceTexture to the view bounds; if the wgpu/swapchain buffer stayed
+            // at the old size for even a few frames (e.g. while the IME animates),
+            // the stale buffer would be non-uniformly scaled -> the text would
+            // visibly stretch/compress. Immediate resize keeps buffer == view at all
+            // times, eliminating the artifact.
+            applySurfaceResize(width, height)
+        }
+
+        /**
+         * Reconfigure the native (wgpu) surface + grid to [width]x[height] right now.
+         * Idempotent: a no-op when the size already matches the last configured size.
+         * Must run on the main thread (holds the bridge surface lock while the render
+         * thread may briefly contend, but never deadlocks).
+         */
+        private fun applySurfaceResize(
+            width: Int,
+            height: Int,
+        ) {
+            if (width <= 0 || height <= 0) return
+            if (width == lastConfiguredWidth && height == lastConfiguredHeight && lastConfiguredWidth != 0) return
+            val terminalViewModel = viewModel ?: return
             terminalViewModel.surfaceWidth = width
             terminalViewModel.surfaceHeight = height
+            terminalViewModel.runtime.bridge()?.setSurfaceSize(width, height)
             val surface =
                 cachedSurface ?: (
                     surfaceTexture?.let {
@@ -1122,82 +1710,94 @@ constructor(
                             terminalViewModel.currentSurface = it
                         }
                     }
-                    )
-            if (surface != null) {
-                terminalViewModel.currentSurface = surface
-                val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
-                if (windowPointer != 0L) {
-                    terminalViewModel.runtime.updateNativeWindow(windowPointer, width, height)
+                )
+            if (surface == null) {
+                Log.w(TAG, "applySurfaceResize: no cachedSurface yet, deferring")
+                return
+            }
+            terminalViewModel.currentSurface = surface
+            val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
+            if (windowPointer == 0L) {
+                Log.w(TAG, "applySurfaceResize: windowPointer=0, skipping")
+                return
+            }
+            terminalViewModel.runtime.updateNativeWindow(windowPointer, width, height)
+            val runtimeState = terminalViewModel.runtime.state.value
+            if (runtimeState.rows > 0 && runtimeState.cols > 0) {
+                rows = runtimeState.rows
+                cols = runtimeState.cols
+            }
+            lastConfiguredWidth = width
+            lastConfiguredHeight = height
+        }
+
+        override fun onSurfaceTextureAvailable(
+            surfaceTexture: SurfaceTexture,
+            width: Int,
+            height: Int,
+        ) {
+            Log.d(TAG, "onSurfaceTextureAvailable: $width x $height")
+            cachedSurface?.release()
+            val textureSurface = Surface(surfaceTexture).also { cachedSurface = it }
+            surfaceWidthPixels = width
+            surfaceHeightPixels = height
+            viewModel?.let { terminalViewModel ->
+                terminalViewModel.surfaceWidth = width
+                terminalViewModel.surfaceHeight = height
+                terminalViewModel.currentSurface = textureSurface
+                val isRunning = terminalViewModel.runtime.state.value.isRunning
+                if (!isRunning) {
+                    terminalViewModel.startRuntime(textureSurface, width, height)
                 } else {
-                    Log.w(TAG, "onSizeChanged: windowPointer=0, skipping resize")
-                }
-            } else {
-                Log.w(TAG, "onSizeChanged: no cachedSurface, skipping resize")
-            }
-        }
-    }
-
-    override fun onSurfaceTextureAvailable(
-        surfaceTexture: SurfaceTexture,
-        width: Int,
-        height: Int,
-    ) {
-        Log.d(TAG, "onSurfaceTextureAvailable: $width x $height")
-        val textureSurface = Surface(surfaceTexture).also { cachedSurface = it }
-        surfaceWidthPixels = width
-        surfaceHeightPixels = height
-        viewModel?.let { terminalViewModel ->
-            terminalViewModel.surfaceWidth = width
-            terminalViewModel.surfaceHeight = height
-            terminalViewModel.currentSurface = textureSurface
-            val isRunning = terminalViewModel.runtime.state.value.isRunning
-            if (!isRunning) {
-                terminalViewModel.startRuntime(textureSurface, width, height)
-            } else {
-                val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(textureSurface)
-                terminalViewModel.runtime.updateNativeWindow(windowPointer, width, height)
-            }
-        }
-    }
-
-    override fun onSurfaceTextureSizeChanged(
-        surfaceTexture: SurfaceTexture,
-        width: Int,
-        height: Int,
-    ) {
-        Log.d(TAG, "onSurfaceTextureSizeChanged: $width x $height")
-        surfaceWidthPixels = width
-        surfaceHeightPixels = height
-        viewModel?.let { terminalViewModel ->
-            terminalViewModel.surfaceWidth = width
-            terminalViewModel.surfaceHeight = height
-            try {
-                val surface =
-                    cachedSurface ?: Surface(surfaceTexture).also {
-                        cachedSurface = it
-                        terminalViewModel.currentSurface = it
+                    val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(textureSurface)
+                    if (windowPointer != 0L) {
+                        terminalViewModel.runtime.updateNativeWindow(windowPointer, width, height)
+                        terminalViewModel.runtime.recomputeGrid(width, height)
+                        terminalViewModel.runtime.resumeRendering()
+                        val runtimeState = terminalViewModel.runtime.state.value
+                        if (runtimeState.rows > 0 && runtimeState.cols > 0) {
+                            rows = runtimeState.rows
+                            cols = runtimeState.cols
+                        }
                     }
-                terminalViewModel.currentSurface = surface
-                val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
-                if (windowPointer != 0L) {
-                    terminalViewModel.runtime.updateNativeWindow(windowPointer, width, height)
                 }
-            } catch (exception: Exception) {
-                Log.e(TAG, "onSurfaceTextureSizeChanged failed", exception)
+                lastConfiguredWidth = width
+                lastConfiguredHeight = height
             }
         }
-    }
 
-    override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
-        Log.d(TAG, "onSurfaceTextureDestroyed")
-        cachedSurface = null
-        viewModel?.let { terminalViewModel ->
-            terminalViewModel.currentSurface = null
-            terminalViewModel.runtime.pauseRendering()
+        override fun onSurfaceTextureSizeChanged(
+            surfaceTexture: SurfaceTexture,
+            width: Int,
+            height: Int,
+        ) {
+            Log.d(TAG, "onSurfaceTextureSizeChanged: $width x $height")
+            surfaceWidthPixels = width
+            surfaceHeightPixels = height
+
+            val aspectChanged =
+                lastConfiguredWidth > 0 && lastConfiguredHeight > 0 &&
+                    width.toFloat() / height.toFloat() != lastConfiguredWidth.toFloat() / lastConfiguredHeight.toFloat()
+
+            if (aspectChanged) {
+                recomputeRowsColsImmediate(width, height)
+            }
+
+            // Reconfigure the swapchain immediately to match the new texture
+            // buffer size (see applySurfaceResize for why immediate, not debounced).
+            applySurfaceResize(width, height)
         }
-        return true
-    }
 
-    override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) {
+        override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+            Log.d(TAG, "onSurfaceTextureDestroyed")
+            if (isAttachedToWindow) {
+                hideContextMenu()
+            }
+            cachedSurface?.release()
+            cachedSurface = null
+            lastConfiguredWidth = 0
+            lastConfiguredHeight = 0
+            viewModel?.currentSurface = null
+            return true
+        }
     }
-}

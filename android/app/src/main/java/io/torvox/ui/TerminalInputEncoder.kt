@@ -5,6 +5,8 @@ import android.view.KeyEvent
 object TerminalInputEncoder {
     private const val BRACKETED_PASTE_START = "\u001b[200~"
     private const val BRACKETED_PASTE_END = "\u001b[201~"
+    private const val LOWERCASE_CONTROL_OFFSET = 96
+    private const val UPPERCASE_CONTROL_OFFSET = 64
 
     fun encodeCommittedText(
         text: String,
@@ -94,8 +96,8 @@ object TerminalInputEncoder {
     }
 
     private fun controlByteForCharacter(character: Char): Byte? = when (character) {
-        in 'a'..'z' -> (character.code - 96).toByte()
-        in 'A'..'Z' -> (character.code - 64).toByte()
+        in 'a'..'z' -> (character.code - LOWERCASE_CONTROL_OFFSET).toByte()
+        in 'A'..'Z' -> (character.code - UPPERCASE_CONTROL_OFFSET).toByte()
         else -> null
     }
 

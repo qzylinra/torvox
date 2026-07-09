@@ -50,4 +50,36 @@ class UrlDetectorTest {
         assertEquals(1, urls.size)
         assertEquals("http://example.com/path", urls[0])
     }
+
+    @Test
+    fun findUrls_preservesPlusInUrl() {
+        val text = "Search https://example.com/search?q=a+b"
+        val urls = UrlDetector.findUrls(text)
+        assertEquals(1, urls.size)
+        assertEquals("https://example.com/search?q=a+b", urls[0])
+    }
+
+    @Test
+    fun findUrls_decodesPercentEncodedChars() {
+        val text = "See https://example.com/%E4%B8%AD%E6%96%87"
+        val urls = UrlDetector.findUrls(text)
+        assertEquals(1, urls.size)
+        assertEquals("https://example.com/中文", urls[0])
+    }
+
+    @Test
+    fun findUrls_preservesPlusAndDecodesPercent() {
+        val text = "Visit https://en.wikipedia.org/wiki/C%2B%2B"
+        val urls = UrlDetector.findUrls(text)
+        assertEquals(1, urls.size)
+        assertEquals("https://en.wikipedia.org/wiki/C++", urls[0])
+    }
+
+    @Test
+    fun findUrls_noPercentNoDecode() {
+        val text = "Go to https://example.com/simple"
+        val urls = UrlDetector.findUrls(text)
+        assertEquals(1, urls.size)
+        assertEquals("https://example.com/simple", urls[0])
+    }
 }

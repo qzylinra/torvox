@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "io.torvox.benchmark"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 33
@@ -19,7 +19,7 @@ android {
 }
 
 dependencies {
-    implementation(project(":app"))
+    compileOnly(project(":app"))
     testImplementation("androidx.benchmark:benchmark-macro-junit4:1.5.0-alpha06")
     testImplementation("androidx.test.ext:junit:1.3.0")
     testImplementation("androidx.test.espresso:espresso-core:3.7.0")

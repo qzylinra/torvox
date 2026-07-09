@@ -1,3 +1,6 @@
+# Backup files
+*.bak
+
 # Rust
 target/
 
@@ -6,7 +9,11 @@ android/.gradle/
 android/.kotlin/
 android/build/
 android/app/build/
+!android/app/build/outputs/roborazzi/*.png
+!android/app/aosp-testkey.p12
+android/app/src/test/resources/roborazzi/*.png
 android/benchmark/build/
+android/baselineprofile/build/
 android/local.properties
 *.iml
 .idea/
@@ -57,7 +64,7 @@ mutants.out.old/
 libghostty-vt/
 libghostty-vt-sys/
 
-# Ghostty source clone (used at build time via GHOSTTY_SOURCE_DIR)
+# Ghostty source clone (scripts/bootstrap-libghostty.nu)
 .ghostty/
 
 # boltffi
@@ -71,7 +78,6 @@ android/app/src/main/java/io/torvox/bridge/kotlin/
 .opencode/cache/
 .opencode/magic-context/
 .opencode/opencode.jsonc
-ultragoal/
 research/
 target-ci/
 cline-memory-bank/
@@ -84,6 +90,9 @@ termlib/
 /tmp/
 
 # Allow reference review docs (but not the cloned repos themselves)
-!docs/reference-review/
-!docs/reference-review/**
-png:*.png
+vendor/ghostty/
+# Generated test screenshots
+screenshots/
+!docs/screenshots/
+# Block root-level PNGs (Maestro output etc.)
+/*.png

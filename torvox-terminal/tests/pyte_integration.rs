@@ -6,10 +6,7 @@ use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 fn pyte_available() -> &'static bool {
     static AVAILABLE: OnceLock<bool> = OnceLock::new();
     AVAILABLE.get_or_init(|| {
-        let output = Command::new("python3")
-            .arg("-c")
-            .arg("import pyte")
-            .output();
+        let output = Command::new("python3").arg("-c").arg("import pyte").output();
         match output {
             Ok(o) => o.status.success(),
             Err(_) => false,
@@ -29,7 +26,7 @@ impl T {
         Self(GhosttyTerminal::new(rows, cols, 1000).expect("terminal"))
     }
     fn write(&mut self, data: &[u8]) {
-        self.0.vt_write(data);
+        self.0.pty_write(data);
         self.0.flush();
     }
     fn lines(&self) -> Vec<String> {
@@ -57,11 +54,7 @@ fn pyte_text(seq_hex: &str) -> String {
         return "{}".to_string();
     }
     let pyte_path = ref_dir("tools/pyte-verify.py");
-    assert!(
-        pyte_path.exists(),
-        "pyte-verify.py not found at {:?}",
-        pyte_path
-    );
+    assert!(pyte_path.exists(), "pyte-verify.py not found at {:?}", pyte_path);
     let output = Command::new("python3")
         .arg(&pyte_path)
         .arg(seq_hex)
@@ -76,8 +69,7 @@ fn pyte_text(seq_hex: &str) -> String {
 
 fn load_test_seqs(path: &str) -> Vec<String> {
     let full_path = ref_dir(path);
-    let content = std::fs::read_to_string(&full_path)
-        .unwrap_or_else(|_| panic!("read ref file {:?}", full_path));
+    let content = std::fs::read_to_string(&full_path).unwrap_or_else(|_| panic!("read ref file {:?}", full_path));
     let mut seqs = Vec::new();
     let mut search_start = 0usize;
     loop {
@@ -402,10 +394,7 @@ fn i6_cross_verify_total() {
             }
         }
     }
-    assert!(
-        ok_count >= 60,
-        "cross-verify: >=60 test passes, got {ok_count}"
-    );
+    assert!(ok_count >= 60, "cross-verify: >=60 test passes, got {ok_count}");
 }
 
 #[test]
@@ -461,11 +450,7 @@ fn i7_regression_el2() {
     let mut t = T::new(1, 10);
     t.write(b"ABCDEFGHIJ\x1b[2K");
     for c in 0..10 {
-        assert_eq!(
-            t.0.take_snapshot().cells[c as usize].codepoint,
-            0,
-            "EL2 col {c}"
-        );
+        assert_eq!(t.0.take_snapshot().cells[c as usize].codepoint, 0, "EL2 col {c}");
     }
 }
 
@@ -476,10 +461,7 @@ fn i7_regression_ed1() {
     t.write(b"\x1b[3;1H\x1b[1J");
     let lines = t.lines();
     assert!(lines[0].trim().is_empty(), "ED1 row0 empty");
-    assert!(
-        lines[2].contains("C") || lines[2].trim().is_empty(),
-        "ED1 row2"
-    );
+    assert!(lines[2].contains("C") || lines[2].trim().is_empty(), "ED1 row2");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -502,11 +484,7 @@ fn i8_hpa_various_values() {
     for target in [1u32, 10, 20, 40, 40] {
         let mut t = T::new(5, 40);
         t.write(format!("\x1b[{}G", target).as_bytes());
-        assert_eq!(
-            t.0.take_snapshot().cursor_col,
-            (target - 1).min(39),
-            "HPA {target}"
-        );
+        assert_eq!(t.0.take_snapshot().cursor_col, (target - 1).min(39), "HPA {target}");
     }
 }
 
@@ -578,7 +556,7 @@ fn i9_sd_scroll_1() {
     t.write(b"AAAAABBBBBCCCCC");
     t.write(b"\x1b[T");
     let snap = t.0.take_snapshot();
-    assert!(snap.cells[0].codepoint == 0, "SD 1: top blank");
+    assert_eq!(snap.cells[0].codepoint, 0, "SD 1: top blank");
 }
 
 #[test]
@@ -587,11 +565,8 @@ fn i9_sd_scroll_2() {
     t.write(b"AAAAABBBBBCCCCC");
     t.write(b"\x1b[2T");
     let snap = t.0.take_snapshot();
-    assert!(snap.cells[0].codepoint == 0, "SD 2: top blank");
-    assert!(
-        snap.cells[10].codepoint == 'A' as u32,
-        "SD 2: A shifted to row 2"
-    );
+    assert_eq!(snap.cells[0].codepoint, 0, "SD 2: top blank");
+    assert_eq!(snap.cells[10].codepoint, 'A' as u32, "SD 2: A shifted to row 2");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -612,11 +587,7 @@ fn i10_tbc_0_clear_current_tab() {
     t.write(b"\x1b[5G\x1bH"); // tab at col 5
     t.write(b"\x1b[0g"); // TBC 0 at current cursor (col 5)
     // Verify no crash; cursor still at col 5
-    assert!(
-        t.0.cursor_x() >= 3,
-        "TBC 0: cursor survived, got {}",
-        t.0.cursor_x()
-    );
+    assert!(t.0.cursor_x() >= 3, "TBC 0: cursor survived, got {}", t.0.cursor_x());
 }
 
 #[test]
@@ -630,10 +601,7 @@ fn i10_tbc_3_clear_all() {
     t.write(b"\x1b[3g"); // clear all again
     t.write(b"\x1b[H\x09"); // HT with no tabs
     let without_tab = t.0.cursor_x();
-    assert!(
-        with_tab == 4 || without_tab >= with_tab,
-        "TBC 3: tabs cleared"
-    );
+    assert!(with_tab == 4 || without_tab >= with_tab, "TBC 3: tabs cleared");
 }
 
 #[test]
@@ -798,12 +766,9 @@ fn i13_cursor_move_sgr_write_erase() {
     t.write(b"\x1b[1;31mRED"); // bold red "RED"
     let snap = t.0.take_snapshot();
     let idx = 2 * 40 + 9; // row 2 (0-idx), col 9 (0-idx)
-    assert_eq!(
-        snap.cells[idx].codepoint, 'R' as u32,
-        "Combined: R at (3,10)"
-    );
+    assert_eq!(snap.cells[idx].codepoint, 'R' as u32, "Combined: R at (3,10)");
     assert!(snap.cells[idx].bold, "Combined: bold");
-    assert!(snap.cells[idx].fg[0] > 0.1, "Combined: red fg");
+    assert!(snap.cells[idx].foreground[0] > 0.1, "Combined: red fg");
     t.write(b"\x1b[2K"); // erase line
     let snap2 = t.0.take_snapshot();
     assert_eq!(snap2.cells[idx].codepoint, 0, "Combined: erased");
@@ -830,10 +795,7 @@ fn i13_cup_write_el_cup_write() {
     t.write(b"\x1b[2;1HAAAAA"); // row 2 "AAAAA"
     t.write(b"\x1b[2;1H\x1b[0K"); // erase to end
     let lines = t.lines();
-    assert!(
-        lines[1].trim().is_empty(),
-        "Combined: row 2 erased after write"
-    );
+    assert!(lines[1].trim().is_empty(), "Combined: row 2 erased after write");
 }
 
 #[test]
@@ -875,10 +837,7 @@ fn i13_tab_write_and_erase() {
     t.write(b"\x1b[2K"); // erase whole line
     let snap2 = t.0.take_snapshot();
     if wrote_at < 30 {
-        assert_eq!(
-            snap2.cells[wrote_at as usize].codepoint, 0,
-            "tab+A+EL: erased"
-        );
+        assert_eq!(snap2.cells[wrote_at as usize].codepoint, 0, "tab+A+EL: erased");
     }
 }
 
@@ -900,10 +859,7 @@ fn i13_scroll_then_cup_then_write() {
     t.write(b"\x1b[2T"); // scroll down 2
     t.write(b"\x1b[2;1HX"); // CUP to row 2, write X
     let snap = t.0.take_snapshot();
-    assert_eq!(
-        snap.cells[5].codepoint, 'X' as u32,
-        "scroll+CUP: X at row 2 col 0"
-    );
+    assert_eq!(snap.cells[5].codepoint, 'X' as u32, "scroll+CUP: X at row 2 col 0");
 }
 
 #[test]

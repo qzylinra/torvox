@@ -237,7 +237,7 @@ fn alacritty_ref_color_256_fg_all() {
         t.vt_write(format!("\x1b[38;5;{}mX\x1b[0m", idx).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
-        let fg = &snap.cell_at(0, 0).fg;
+        let fg = &snap.cell_at(0, 0).foreground;
         assert!(
             fg[0] >= 0.0
                 && fg[0] <= 1.0
@@ -257,7 +257,7 @@ fn alacritty_ref_color_256_bg_all() {
         t.vt_write(format!("\x1b[48;5;{}mX\x1b[0m", idx).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
-        let bg = &snap.cell_at(0, 0).bg;
+        let bg = &snap.cell_at(0, 0).background;
         assert!(
             bg[0] >= 0.0
                 && bg[0] <= 1.0
@@ -313,7 +313,7 @@ fn alacritty_ref_color_reset_default() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(
-        snap.cell_at(0, 1).fg[0] > 0.0,
+        snap.cell_at(0, 1).foreground[0] > 0.0,
         "Alacritty default fg: reset works"
     );
     check_invariants(&t);
@@ -325,7 +325,7 @@ fn alacritty_ref_color_reset_default_bg() {
     t.vt_write(b"\x1b[41mX\x1b[49mY");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cell_at(0, 1).bg[0] <= 1.0, "Alacritty bg reset: works");
+    assert!(snap.cell_at(0, 1).background[0] <= 1.0, "Alacritty bg reset: works");
     check_invariants(&t);
 }
 

@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "io.torvox.baselineprofile"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 33
@@ -19,11 +19,12 @@ android {
 }
 
 dependencies {
-    implementation(project(":app"))
-    implementation("androidx.benchmark:benchmark-macro-junit4:1.5.0-alpha06")
-    implementation("androidx.test.ext:junit:1.3.0")
-    implementation("androidx.test.espresso:espresso-core:3.7.0")
-    implementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    compileOnly(project(":app"))
+    androidTestImplementation("androidx.benchmark:benchmark-macro-junit4:1.5.0-alpha06")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
 }
 
 baselineProfile {

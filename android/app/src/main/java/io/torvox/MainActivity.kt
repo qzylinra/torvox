@@ -9,13 +9,12 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -33,12 +32,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
 import io.torvox.runtime.TorvoxRuntime
-import io.torvox.ui.FileManagerScreen
 import io.torvox.ui.SettingsScreen
 import io.torvox.ui.TerminalScreen
+import kotlinx.coroutines.launch
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
@@ -49,34 +49,59 @@ import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    companion object {
+        private const val TAG = "MainActivity"
+        private const val LOGCAT_RETRY_DELAY_MS = 5_000
+    }
+
     @Inject
     lateinit var torvoxRuntime: TorvoxRuntime
 
-    private val logHandler = Handler(Looper.getMainLooper())
     private var logFile: File? = null
     private var logWriter: BufferedWriter? = null
     private val logcatThread =
         Thread({
-            try {
-                val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time", "*:D"))
-                val reader = process.inputStream.bufferedReader()
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    val currentLine = line ?: continue
-                    @Suppress("ComplexCondition")
-                    if (currentLine.contains(
-                            "Torvox",
-                        ) || currentLine.contains("TerminalSurface") || currentLine.contains("TorvoxRuntime") ||
-                        currentLine.contains("AndroidRuntime")
-                    ) {
-                        val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
-                        synchronized(logLock) {
-                            logWriter?.write("$timestamp $currentLine\n")
-                            logWriter?.flush()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                Log.w(
+                    "Torvox",
+                    "Logcat capture not supported on Android 11+ — READ_LOGS permission unavailable; this path is expected to fail",
+                )
+                return@Thread
+            }
+            while (!Thread.currentThread().isInterrupted) {
+                try {
+                    val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time", "*:D"))
+                    val reader = process.inputStream.bufferedReader()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        val currentLine = line ?: continue
+                        @Suppress("ComplexCondition")
+                        if (currentLine.contains(
+                                "Torvox",
+                            ) || currentLine.contains("TerminalSurface") || currentLine.contains("TorvoxRuntime") ||
+                            currentLine.contains("AndroidRuntime")
+                        ) {
+                            val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
+                            synchronized(logLock) {
+                                logWriter?.write("$timestamp $currentLine\n")
+                                logWriter?.flush()
+                            }
                         }
                     }
+                    Log.w("Torvox", "Logcat stream ended, restarting in 5s")
+                    Thread.sleep(LOGCAT_RETRY_DELAY_MS.toLong())
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    break
+                } catch (e: Exception) {
+                    Log.e("Torvox", "Logcat capture failed, retrying in 5s: ${e.message}")
+                    try {
+                        Thread.sleep(LOGCAT_RETRY_DELAY_MS.toLong())
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
+                    }
                 }
-            } catch (_: Exception) {
             }
         }, "TorvoxFileLog").apply { isDaemon = true }
 
@@ -101,7 +126,19 @@ class MainActivity : ComponentActivity() {
         try {
             logWriter?.close()
             logWriter = null
-        } catch (_: Exception) {
+        } catch (exception: Exception) {
+            Log.w(TAG, "stopFileLogging failed", exception)
+        }
+    }
+
+    private fun tryUnregisterReceiver(
+        receiver: BroadcastReceiver,
+        name: String,
+    ) {
+        try {
+            unregisterReceiver(receiver)
+        } catch (exception: IllegalArgumentException) {
+            Log.w(TAG, "$name not registered", exception)
         }
     }
 
@@ -149,8 +186,7 @@ class MainActivity : ComponentActivity() {
                                 .replace("\\n", "\n")
                                 .replace("\\r", "\r")
                                 .replace("\\t", "\t")
-                        val withNewline = processed + "\n"
-                        val data = withNewline.byteInputStream().readBytes()
+                        val data = (processed + "\n").byteInputStream().readBytes()
                         torvoxRuntime.writeToPty(data)
                         Log.d("Torvox", "Input sent: ${data.size} bytes")
                     } catch (exception: Exception) {
@@ -164,6 +200,10 @@ class MainActivity : ComponentActivity() {
         }
 
     private var terminalViewModel: io.torvox.TerminalViewModel? = null
+
+    private var previousNightMode: Int? = null
+
+    private val terminalVm: io.torvox.TerminalViewModel by viewModels()
 
     private val selectAllReceiver =
         object : BroadcastReceiver() {
@@ -212,62 +252,82 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        previousNightMode =
+            resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        androidx.core.view.WindowCompat
+            .setDecorFitsSystemWindows(window, false)
         window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        window.attributes = window.attributes.apply { format = PixelFormat.TRANSPARENT }
+        window.setFormat(PixelFormat.TRANSPARENT)
         initFileLogging()
         registerReceiver(
             terminalDumpReceiver,
             IntentFilter("io.torvox.DUMP_TERMINAL"),
-            Context.RECEIVER_EXPORTED,
+            Context.RECEIVER_NOT_EXPORTED,
         )
         registerReceiver(
             inputReceiver,
             IntentFilter("io.torvox.INPUT"),
-            Context.RECEIVER_EXPORTED,
+            Context.RECEIVER_NOT_EXPORTED,
         )
         registerReceiver(
             selectAllReceiver,
             IntentFilter("io.torvox.SELECT_ALL"),
-            Context.RECEIVER_EXPORTED,
+            Context.RECEIVER_NOT_EXPORTED,
         )
         registerReceiver(
             partialSelectReceiver,
             IntentFilter("io.torvox.PARTIAL_SELECT"),
-            Context.RECEIVER_EXPORTED,
+            Context.RECEIVER_NOT_EXPORTED,
         )
         registerReceiver(
             showPasteReceiver,
             IntentFilter("io.torvox.SHOW_PASTE"),
-            Context.RECEIVER_EXPORTED,
+            Context.RECEIVER_NOT_EXPORTED,
         )
+        io.torvox.service.TerminalForegroundService
+            .start(this)
+        terminalViewModel = terminalVm
         setContent {
             TorvoxNavHost(viewModelReady = { terminalViewModel = it })
         }
     }
 
     override fun onDestroy() {
+        lifecycleScope.launch {
+            try {
+                terminalViewModel?.runtime?.saveAllSessions()
+            } catch (exception: Exception) {
+                Log.e(TAG, "Failed to save sessions during destroy", exception)
+            }
+        }
         super.onDestroy()
         stopFileLogging()
-        try {
-            unregisterReceiver(terminalDumpReceiver)
-        } catch (_: Exception) {
+        tryUnregisterReceiver(terminalDumpReceiver, "terminalDumpReceiver")
+        tryUnregisterReceiver(inputReceiver, "inputReceiver")
+        tryUnregisterReceiver(selectAllReceiver, "selectAllReceiver")
+        tryUnregisterReceiver(partialSelectReceiver, "partialSelectReceiver")
+        tryUnregisterReceiver(showPasteReceiver, "showPasteReceiver")
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val currentNightMode =
+            newConfig.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        if (currentNightMode != previousNightMode) {
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                torvoxRuntime.applySettings()
+            }
         }
-        try {
-            unregisterReceiver(inputReceiver)
-        } catch (_: Exception) {
+        previousNightMode = currentNightMode
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val handled = terminalViewModel?.handleLayoutAwareHardwareKey(event) ?: false
+        if (handled) {
+            Log.d(TAG, "dispatchKeyEvent: consumed physical-key layout-aware char")
+            return true
         }
-        try {
-            unregisterReceiver(selectAllReceiver)
-        } catch (_: Exception) {
-        }
-        try {
-            unregisterReceiver(partialSelectReceiver)
-        } catch (_: Exception) {
-        }
-        try {
-            unregisterReceiver(showPasteReceiver)
-        } catch (_: Exception) {
-        }
+        return super.dispatchKeyEvent(event)
     }
 
     @Deprecated("Use View.OnKeyListener pattern")
@@ -327,11 +387,9 @@ class MainActivity : ComponentActivity() {
         return super.onKeyUp(keyCode, event)
     }
 
-    private fun isVolumeKeyMappingEnabled(): Boolean = try {
+    private fun isVolumeKeyMappingEnabled(): Boolean {
         val viewModel = terminalViewModel
-        viewModel?.volumeKeyMap?.value == true
-    } catch (_: Exception) {
-        false
+        return viewModel?.volumeKeyMap?.value == true
     }
 }
 
@@ -340,9 +398,9 @@ private fun TorvoxNavHost(viewModelReady: (TerminalViewModel) -> Unit = {}) {
     val viewModel: TerminalViewModel = hiltViewModel()
     LaunchedEffect(viewModel) { viewModelReady(viewModel) }
     var showSettings by remember { mutableStateOf(false) }
-    var showFileManager by remember { mutableStateOf(false) }
     val appThemeMode by viewModel.appThemeMode.collectAsState()
     val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val context = LocalContext.current
 
     val forceDark =
         when (appThemeMode) {
@@ -354,7 +412,6 @@ private fun TorvoxNavHost(viewModelReady: (TerminalViewModel) -> Unit = {}) {
     val colorScheme =
         when {
             appThemeMode == "follow_system" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                val context = LocalContext.current
                 if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             }
 
@@ -369,20 +426,15 @@ private fun TorvoxNavHost(viewModelReady: (TerminalViewModel) -> Unit = {}) {
 
     Box(Modifier.semantics { testTagsAsResourceId = true }) {
         MaterialTheme(colorScheme = colorScheme) {
+            TerminalScreen(
+                viewModel = viewModel,
+                onSettings = { showSettings = true },
+                isOverlayVisible = showSettings,
+            )
             if (showSettings) {
                 SettingsScreen(
                     viewModel = viewModel,
                     onBack = { showSettings = false },
-                )
-            } else if (showFileManager) {
-                FileManagerScreen(
-                    onClose = { showFileManager = false },
-                )
-            } else {
-                TerminalScreen(
-                    viewModel = viewModel,
-                    onSettings = { showSettings = true },
-                    onFileManager = { showFileManager = true },
                 )
             }
         }

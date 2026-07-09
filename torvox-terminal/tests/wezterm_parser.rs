@@ -13,13 +13,6 @@ fn check_inv(t: &GhosttyTerminal) {
     assert_invariants(&t.take_snapshot());
 }
 
-#[allow(unused_macros)]
-macro_rules! bs {
-    ($s:expr) => {
-        &$s[..]
-    };
-}
-
 // ── Layer 1: Basic input acceptance ──────────────────────────────────
 
 #[test]
@@ -35,7 +28,7 @@ fn layer1_accepts_text() {
 #[test]
 fn layer1_accepts_newlines() {
     let mut t = make_term();
-    t.vt_write(b"A\nB\nC");
+    t.pty_write(b"A\nB\nC");
     t.flush();
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 'A' as u32);
@@ -72,18 +65,8 @@ fn layer2_cup_params() {
         t.vt_write(seq);
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(
-            snap.cursor_row,
-            *exp_row,
-            "CUP {:?}: row",
-            String::from_utf8_lossy(seq)
-        );
-        assert_eq!(
-            snap.cursor_col,
-            *exp_col,
-            "CUP {:?}: col",
-            String::from_utf8_lossy(seq)
-        );
+        assert_eq!(snap.cursor_row, *exp_row, "CUP {:?}: row", String::from_utf8_lossy(seq));
+        assert_eq!(snap.cursor_col, *exp_col, "CUP {:?}: col", String::from_utf8_lossy(seq));
     }
 }
 
@@ -119,7 +102,9 @@ fn layer2_sgr_multi_param() {
         }
         if *will_have_fg {
             assert!(
-                snap.cells[0].fg[0] > 0.0 || snap.cells[0].fg[1] > 0.0 || snap.cells[0].fg[2] > 0.0,
+                snap.cells[0].foreground[0] > 0.0
+                    || snap.cells[0].foreground[1] > 0.0
+                    || snap.cells[0].foreground[2] > 0.0,
                 "SGR {:?}: should have fg set",
                 String::from_utf8_lossy(seq)
             );
@@ -162,10 +147,7 @@ fn layer2_sgr_unknown_params_ignored() {
     t.vt_write(b"\x1b[4;55;99;1mB");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(
-        snap.cells[0].bold,
-        "SGR with unknown params: bold should be set"
-    );
+    assert!(snap.cells[0].bold, "SGR with unknown params: bold should be set");
     assert!(
         snap.cells[0].underline,
         "SGR with unknown params: underline should be set"
@@ -214,10 +196,7 @@ fn layer3_cursor_left() {
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 'A' as u32);
     assert_eq!(snap.cells[1].codepoint, 'B' as u32, "col preserved on CUB");
-    assert_eq!(
-        snap.cells[2].codepoint, 'A' as u32,
-        "CUB to col 2, overwrite C"
-    );
+    assert_eq!(snap.cells[2].codepoint, 'A' as u32, "CUB to col 2, overwrite C");
 }
 
 #[test]
@@ -374,8 +353,8 @@ fn layer6_sgr_fg_bg_256_toppage() {
     t.vt_write(b"\x1b[38;5;1;48;5;2mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[0].fg[0] > 0.0, "256 fg has color");
-    assert!(snap.cells[0].bg[1] > 0.0, "256 bg has color");
+    assert!(snap.cells[0].foreground[0] > 0.0, "256 fg has color");
+    assert!(snap.cells[0].background[1] > 0.0, "256 bg has color");
 }
 
 // ── Layer 7: DEC private mode combinations ──────────────────────────

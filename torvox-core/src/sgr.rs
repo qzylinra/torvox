@@ -1,3 +1,4 @@
+//! Select Graphic Rendition (SGR) attribute parsing.
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
@@ -5,10 +6,7 @@ use crate::cell::Color;
 
 /// Underline styles for SGR
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum UnderlineStyle {
     #[default]
     None,
@@ -21,10 +19,7 @@ pub enum UnderlineStyle {
 
 /// Blink styles for SGR
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum BlinkStyle {
     #[default]
     None,
@@ -34,10 +29,7 @@ pub enum BlinkStyle {
 
 /// Color specification for SGR sequences
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum ColorSpec {
     /// Named color (0-15)
     Named(u8),
@@ -49,10 +41,7 @@ pub enum ColorSpec {
 
 /// SGR attribute (Select Graphic Rendition)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum SgrAttribute {
     Reset,
     Bold(bool),
@@ -64,6 +53,7 @@ pub enum SgrAttribute {
     Conceal(bool),
     Strikethrough(bool),
     Overline(bool),
+    NormalIntensity,
     ForegroundColor(ColorSpec),
     BackgroundColor(ColorSpec),
     DefaultForegroundColor,
@@ -71,7 +61,17 @@ pub enum SgrAttribute {
 }
 
 impl SgrAttribute {
-    /// Parse a single SGR parameter code
+    /// Parse a single SGR parameter code.
+    ///
+    /// ```
+    /// use torvox_core::sgr::SgrAttribute;
+    ///
+    /// assert_eq!(SgrAttribute::from_code(0), Some(SgrAttribute::Reset));
+    /// assert_eq!(SgrAttribute::from_code(1), Some(SgrAttribute::Bold(true)));
+    /// assert_eq!(SgrAttribute::from_code(3), Some(SgrAttribute::Italic(true)));
+    /// assert_eq!(SgrAttribute::from_code(24), Some(SgrAttribute::Underline(torvox_core::sgr::UnderlineStyle::None)));
+    /// assert_eq!(SgrAttribute::from_code(999), None);
+    /// ```
     pub fn from_code(code: u16) -> Option<Self> {
         match code {
             0 => Some(Self::Reset),
@@ -84,8 +84,8 @@ impl SgrAttribute {
             7 => Some(Self::Reverse(true)),
             8 => Some(Self::Conceal(true)),
             9 => Some(Self::Strikethrough(true)),
-            21 => Some(Self::Bold(false)),
-            22 => Some(Self::Reset), // Normal intensity
+            21 => Some(Self::Underline(UnderlineStyle::Double)),
+            22 => Some(Self::NormalIntensity),
             23 => Some(Self::Italic(false)),
             24 => Some(Self::Underline(UnderlineStyle::None)),
             25 => Some(Self::Blink(BlinkStyle::None)),
@@ -100,26 +100,22 @@ impl SgrAttribute {
         }
     }
 
-    /// Parse FG color code (30-37, 90-97)
-    pub fn fg_color(code: u16) -> Option<Self> {
+    /// Parse foreground color code (30-37, 90-97)
+    pub fn foreground_color(code: u16) -> Option<Self> {
         match code {
             30..=37 => Some(Self::ForegroundColor(ColorSpec::Named((code - 30) as u8))),
             39 => Some(Self::DefaultForegroundColor),
-            90..=97 => Some(Self::ForegroundColor(ColorSpec::Named(
-                (code - 90 + 8) as u8,
-            ))),
+            90..=97 => Some(Self::ForegroundColor(ColorSpec::Named((code - 90 + 8) as u8))),
             _ => None,
         }
     }
 
-    /// Parse BG color code (40-47, 100-107)
-    pub fn bg_color(code: u16) -> Option<Self> {
+    /// Parse background color code (40-47, 100-107)
+    pub fn background_color(code: u16) -> Option<Self> {
         match code {
             40..=47 => Some(Self::BackgroundColor(ColorSpec::Named((code - 40) as u8))),
             49 => Some(Self::DefaultBackgroundColor),
-            100..=107 => Some(Self::BackgroundColor(ColorSpec::Named(
-                (code - 100 + 8) as u8,
-            ))),
+            100..=107 => Some(Self::BackgroundColor(ColorSpec::Named((code - 100 + 8) as u8))),
             _ => None,
         }
     }
@@ -146,8 +142,8 @@ pub fn parse_sgr(params: &[u16]) -> Vec<SgrAttribute> {
             }
             _ => {
                 if let Some(attr) = SgrAttribute::from_code(code)
-                    .or_else(|| SgrAttribute::fg_color(code))
-                    .or_else(|| SgrAttribute::bg_color(code))
+                    .or_else(|| SgrAttribute::foreground_color(code))
+                    .or_else(|| SgrAttribute::background_color(code))
                 {
                     attrs.push(attr);
                 }
@@ -192,8 +188,8 @@ pub fn apply_sgr(attrs: &[SgrAttribute], cell: &mut crate::cell::Cell) {
     for attr in attrs {
         match attr {
             SgrAttribute::Reset => {
-                cell.fg = Color::default();
-                cell.bg = Color::default();
+                cell.foreground = Color::default();
+                cell.background = Color::default();
                 cell.attrs = crate::cell::Attrs::default();
             }
             SgrAttribute::Bold(v) => cell.attrs.bold = *v,
@@ -208,15 +204,30 @@ pub fn apply_sgr(attrs: &[SgrAttribute], cell: &mut crate::cell::Cell) {
             SgrAttribute::Conceal(v) => cell.attrs.hidden = *v,
             SgrAttribute::Strikethrough(v) => cell.attrs.strikethrough = *v,
             SgrAttribute::Overline(v) => cell.attrs.overline = *v,
-            SgrAttribute::ForegroundColor(spec) => cell.fg = color_from_spec(spec),
-            SgrAttribute::BackgroundColor(spec) => cell.bg = color_from_spec(spec),
-            SgrAttribute::DefaultForegroundColor => cell.fg = Color::default(),
-            SgrAttribute::DefaultBackgroundColor => cell.bg = Color::default(),
+            SgrAttribute::NormalIntensity => {
+                cell.attrs.bold = false;
+                cell.attrs.dim = false;
+            }
+            SgrAttribute::ForegroundColor(spec) => cell.foreground = color_from_spec(spec),
+            SgrAttribute::BackgroundColor(spec) => cell.background = color_from_spec(spec),
+            SgrAttribute::DefaultForegroundColor => cell.foreground = Color::default(),
+            SgrAttribute::DefaultBackgroundColor => cell.background = Color::default(),
         }
     }
 }
 
-/// Convert ColorSpec to Color
+/// Convert ColorSpec to Color.
+///
+/// ```
+/// use torvox_core::sgr::{color_from_spec, ColorSpec};
+/// use torvox_core::cell::Color;
+///
+/// let named = color_from_spec(&ColorSpec::Named(1)); // ANSI red
+/// assert_eq!(named, Color::from_ansi(1));
+///
+/// let rgb = color_from_spec(&ColorSpec::Rgb { r: 255, g: 128, b: 0 });
+/// assert_eq!(rgb, Color::new(255, 128, 0));
+/// ```
 pub fn color_from_spec(spec: &ColorSpec) -> Color {
     match spec {
         ColorSpec::Named(idx) => Color::from_ansi(*idx),
@@ -236,7 +247,7 @@ mod tests {
         cell.attrs.bold = true;
         apply_sgr(&[SgrAttribute::Reset], &mut cell);
         assert!(!cell.attrs.bold);
-        assert_eq!(cell.fg, Color::default());
+        assert_eq!(cell.foreground, Color::default());
     }
 
     #[test]
@@ -271,10 +282,7 @@ mod tests {
     #[test]
     fn sgr_underline_single() {
         let mut cell = Cell::default();
-        apply_sgr(
-            &[SgrAttribute::Underline(UnderlineStyle::Single)],
-            &mut cell,
-        );
+        apply_sgr(&[SgrAttribute::Underline(UnderlineStyle::Single)], &mut cell);
         assert!(cell.attrs.underline);
         assert!(!cell.attrs.double_underline);
     }
@@ -282,10 +290,7 @@ mod tests {
     #[test]
     fn sgr_underline_double() {
         let mut cell = Cell::default();
-        apply_sgr(
-            &[SgrAttribute::Underline(UnderlineStyle::Double)],
-            &mut cell,
-        );
+        apply_sgr(&[SgrAttribute::Underline(UnderlineStyle::Double)], &mut cell);
         assert!(cell.attrs.underline);
         assert!(cell.attrs.double_underline);
     }
@@ -344,79 +349,62 @@ mod tests {
     #[test]
     fn sgr_fg_named() {
         let mut cell = Cell::default();
-        apply_sgr(
-            &[SgrAttribute::ForegroundColor(ColorSpec::Named(1))],
-            &mut cell,
-        );
-        assert_eq!(cell.fg, Color::from_ansi(1));
+        apply_sgr(&[SgrAttribute::ForegroundColor(ColorSpec::Named(1))], &mut cell);
+        assert_eq!(cell.foreground, Color::from_ansi(1));
     }
 
     #[test]
     fn sgr_bg_named() {
         let mut cell = Cell::default();
-        apply_sgr(
-            &[SgrAttribute::BackgroundColor(ColorSpec::Named(4))],
-            &mut cell,
-        );
-        assert_eq!(cell.bg, Color::from_ansi(4));
+        apply_sgr(&[SgrAttribute::BackgroundColor(ColorSpec::Named(4))], &mut cell);
+        assert_eq!(cell.background, Color::from_ansi(4));
     }
 
     #[test]
     fn sgr_fg_rgb() {
         let mut cell = Cell::default();
         apply_sgr(
-            &[SgrAttribute::ForegroundColor(ColorSpec::Rgb {
-                r: 10,
-                g: 20,
-                b: 30,
-            })],
+            &[SgrAttribute::ForegroundColor(ColorSpec::Rgb { r: 10, g: 20, b: 30 })],
             &mut cell,
         );
-        assert_eq!(cell.fg, Color::new(10, 20, 30));
+        assert_eq!(cell.foreground, Color::new(10, 20, 30));
     }
 
     #[test]
     fn sgr_bg_rgb() {
         let mut cell = Cell::default();
         apply_sgr(
-            &[SgrAttribute::BackgroundColor(ColorSpec::Rgb {
-                r: 100,
-                g: 200,
-                b: 50,
-            })],
+            &[SgrAttribute::BackgroundColor(ColorSpec::Rgb { r: 100, g: 200, b: 50 })],
             &mut cell,
         );
-        assert_eq!(cell.bg, Color::new(100, 200, 50));
+        assert_eq!(cell.background, Color::new(100, 200, 50));
     }
 
     #[test]
     fn sgr_fg_indexed() {
         let mut cell = Cell::default();
-        apply_sgr(
-            &[SgrAttribute::ForegroundColor(ColorSpec::Indexed(200))],
-            &mut cell,
-        );
-        assert_eq!(cell.fg, Color::from_ansi(200));
+        apply_sgr(&[SgrAttribute::ForegroundColor(ColorSpec::Indexed(200))], &mut cell);
+        assert_eq!(cell.foreground, Color::from_ansi(200));
     }
 
     #[test]
     fn sgr_default_fg() {
         let mut cell = Cell {
-            fg: Color::new(100, 100, 100),
+            foreground: Color::new(100, 100, 100),
             ..Cell::default()
         };
         apply_sgr(&[SgrAttribute::DefaultForegroundColor], &mut cell);
-        assert_eq!(cell.fg, Color::default());
+        assert_eq!(cell.foreground, Color::default());
     }
 
     #[test]
     fn sgr_default_bg() {
         let mut cell = Cell {
-            bg: Color::new(100, 100, 100),
+            background: Color::new(100, 100, 100),
             ..Cell::default()
         };
         apply_sgr(&[SgrAttribute::DefaultBackgroundColor], &mut cell);
-        assert_eq!(cell.bg, Color::default());
+        assert_eq!(cell.background, Color::default());
     }
 
     #[test]
@@ -432,20 +420,14 @@ mod tests {
         );
         assert!(cell.attrs.bold);
         assert!(cell.attrs.italic);
-        assert_eq!(cell.fg, Color::from_ansi(1));
+        assert_eq!(cell.foreground, Color::from_ansi(1));
     }
 
     #[test]
     fn sgr_from_code_all_valid() {
         // All codes that should return Some
-        for code in [
-            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 21, 22, 23, 24, 25, 27, 28, 29, 53, 55,
-        ] {
-            assert!(
-                SgrAttribute::from_code(code).is_some(),
-                "Code {} should be valid",
-                code
-            );
+        for code in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 21, 22, 23, 24, 25, 27, 28, 29, 53, 55] {
+            assert!(SgrAttribute::from_code(code).is_some(), "Code {} should be valid", code);
         }
     }
 
@@ -462,9 +444,9 @@ mod tests {
     }
 
     #[test]
-    fn sgr_fg_color_30_37() {
-        for i in 30..=37 {
-            let attr = SgrAttribute::fg_color(i).unwrap();
+    fn sgr_foreground_color_30_37() {
+        for i in 30..=37u16 {
+            let attr = SgrAttribute::foreground_color(i).unwrap();
             if let SgrAttribute::ForegroundColor(ColorSpec::Named(idx)) = attr {
                 assert_eq!(idx, (i - 30) as u8);
             } else {
@@ -474,9 +456,9 @@ mod tests {
     }
 
     #[test]
-    fn sgr_fg_color_90_97() {
-        for i in 90..=97 {
-            let attr = SgrAttribute::fg_color(i).unwrap();
+    fn sgr_foreground_color_90_97() {
+        for i in 90..=97u16 {
+            let attr = SgrAttribute::foreground_color(i).unwrap();
             if let SgrAttribute::ForegroundColor(ColorSpec::Named(idx)) = attr {
                 assert_eq!(idx, (i - 90 + 8) as u8);
             } else {
@@ -486,17 +468,17 @@ mod tests {
     }
 
     #[test]
-    fn sgr_fg_color_39_default() {
+    fn sgr_foreground_color_39_default() {
         assert_eq!(
-            SgrAttribute::fg_color(39),
+            SgrAttribute::foreground_color(39),
             Some(SgrAttribute::DefaultForegroundColor)
         );
     }
 
     #[test]
-    fn sgr_bg_color_40_47() {
-        for i in 40..=47 {
-            let attr = SgrAttribute::bg_color(i).unwrap();
+    fn sgr_background_color_40_47() {
+        for i in 40..=47u16 {
+            let attr = SgrAttribute::background_color(i).unwrap();
             if let SgrAttribute::BackgroundColor(ColorSpec::Named(idx)) = attr {
                 assert_eq!(idx, (i - 40) as u8);
             } else {
@@ -506,9 +488,9 @@ mod tests {
     }
 
     #[test]
-    fn sgr_bg_color_100_107() {
-        for i in 100..=107 {
-            let attr = SgrAttribute::bg_color(i).unwrap();
+    fn sgr_background_color_100_107() {
+        for i in 100..=107u16 {
+            let attr = SgrAttribute::background_color(i).unwrap();
             if let SgrAttribute::BackgroundColor(ColorSpec::Named(idx)) = attr {
                 assert_eq!(idx, (i - 100 + 8) as u8);
             } else {
@@ -518,9 +500,9 @@ mod tests {
     }
 
     #[test]
-    fn sgr_bg_color_49_default() {
+    fn sgr_background_color_49_default() {
         assert_eq!(
-            SgrAttribute::bg_color(49),
+            SgrAttribute::background_color(49),
             Some(SgrAttribute::DefaultBackgroundColor)
         );
     }
@@ -563,10 +545,7 @@ mod tests {
     fn parse_sgr_fg_256() {
         let attrs = parse_sgr(&[38, 5, 128]);
         assert_eq!(attrs.len(), 1);
-        assert_eq!(
-            attrs[0],
-            SgrAttribute::ForegroundColor(ColorSpec::Indexed(128))
-        );
+        assert_eq!(attrs[0], SgrAttribute::ForegroundColor(ColorSpec::Indexed(128)));
     }
 
     #[test]
@@ -575,11 +554,7 @@ mod tests {
         assert_eq!(attrs.len(), 1);
         assert_eq!(
             attrs[0],
-            SgrAttribute::ForegroundColor(ColorSpec::Rgb {
-                r: 255,
-                g: 128,
-                b: 64
-            })
+            SgrAttribute::ForegroundColor(ColorSpec::Rgb { r: 255, g: 128, b: 64 })
         );
     }
 
@@ -587,10 +562,7 @@ mod tests {
     fn parse_sgr_bg_256() {
         let attrs = parse_sgr(&[48, 5, 200]);
         assert_eq!(attrs.len(), 1);
-        assert_eq!(
-            attrs[0],
-            SgrAttribute::BackgroundColor(ColorSpec::Indexed(200))
-        );
+        assert_eq!(attrs[0], SgrAttribute::BackgroundColor(ColorSpec::Indexed(200)));
     }
 
     #[test]
@@ -599,11 +571,7 @@ mod tests {
         assert_eq!(attrs.len(), 1);
         assert_eq!(
             attrs[0],
-            SgrAttribute::BackgroundColor(ColorSpec::Rgb {
-                r: 10,
-                g: 20,
-                b: 30
-            })
+            SgrAttribute::BackgroundColor(ColorSpec::Rgb { r: 10, g: 20, b: 30 })
         );
     }
 
@@ -622,10 +590,7 @@ mod tests {
     #[test]
     fn sgr_bold_and_reverse() {
         let mut cell = Cell::default();
-        apply_sgr(
-            &[SgrAttribute::Bold(true), SgrAttribute::Reverse(true)],
-            &mut cell,
-        );
+        apply_sgr(&[SgrAttribute::Bold(true), SgrAttribute::Reverse(true)], &mut cell);
         assert!(cell.attrs.bold);
         assert!(cell.attrs.reverse);
     }
@@ -705,8 +670,13 @@ mod tests {
         let mut cell = Cell::default();
         cell.attrs.bold = true;
         let attr = SgrAttribute::from_code(21).unwrap();
+        assert_eq!(attr, SgrAttribute::Underline(UnderlineStyle::Double));
         apply_sgr(&[attr], &mut cell);
-        assert!(!cell.attrs.bold);
+        assert!(
+            cell.attrs.bold,
+            "SGR 21 must not clear bold (it means double underline)"
+        );
+        assert!(cell.attrs.double_underline, "SGR 21 must set double underline");
     }
 
     #[test]
@@ -714,10 +684,24 @@ mod tests {
         let mut cell = Cell::default();
         cell.attrs.bold = true;
         cell.attrs.dim = true;
+        cell.foreground = Color::new(255, 0, 0);
+        cell.background = Color::new(0, 255, 0);
+        cell.attrs.italic = true;
         let attr = SgrAttribute::from_code(22).unwrap();
         apply_sgr(&[attr], &mut cell);
         assert!(!cell.attrs.bold);
         assert!(!cell.attrs.dim);
+        assert_eq!(
+            cell.foreground,
+            Color::new(255, 0, 0),
+            "SGR 22 must not destroy fg color"
+        );
+        assert_eq!(
+            cell.background,
+            Color::new(0, 255, 0),
+            "SGR 22 must not destroy bg color"
+        );
+        assert!(cell.attrs.italic, "SGR 22 must not destroy other attributes");
     }
 
     #[test]
@@ -727,5 +711,137 @@ mod tests {
         let attr = SgrAttribute::from_code(25).unwrap();
         apply_sgr(&[attr], &mut cell);
         assert!(!cell.attrs.blink);
+    }
+
+    // ── ColorSpec edge cases ──
+
+    #[test]
+    fn color_from_spec_named_extremes() {
+        assert_eq!(color_from_spec(&ColorSpec::Named(0)), Color::from_ansi(0));
+        assert_eq!(color_from_spec(&ColorSpec::Named(15)), Color::from_ansi(15));
+    }
+
+    #[test]
+    fn color_from_spec_indexed_extremes() {
+        assert_eq!(color_from_spec(&ColorSpec::Indexed(0)), Color::from_ansi(0));
+        assert_eq!(color_from_spec(&ColorSpec::Indexed(255)), Color::from_ansi(255));
+    }
+
+    #[test]
+    fn color_from_spec_rgb_extremes() {
+        let black = color_from_spec(&ColorSpec::Rgb { r: 0, g: 0, b: 0 });
+        assert_eq!(black, Color::new(0, 0, 0));
+        let white = color_from_spec(&ColorSpec::Rgb { r: 255, g: 255, b: 255 });
+        assert_eq!(white, Color::new(255, 255, 255));
+        let mid = color_from_spec(&ColorSpec::Rgb { r: 128, g: 128, b: 128 });
+        assert_eq!(mid, Color::new(128, 128, 128));
+    }
+
+    #[test]
+    fn color_from_spec_named_all_16() {
+        for i in 0..16u8 {
+            assert_eq!(
+                color_from_spec(&ColorSpec::Named(i)),
+                Color::from_ansi(i),
+                "Named({i}) should map to from_ansi({i})"
+            );
+        }
+    }
+
+    // ── SGR reset clears all attributes ──
+
+    #[test]
+    fn sgr_reset_clears_every_attribute() {
+        let mut cell = Cell::default();
+        // Set every attribute to a non-default value
+        cell.attrs.bold = true;
+        cell.attrs.dim = true;
+        cell.attrs.italic = true;
+        cell.attrs.underline = true;
+        cell.attrs.double_underline = true;
+        cell.attrs.reverse = true;
+        cell.attrs.strikethrough = true;
+        cell.attrs.blink = true;
+        cell.attrs.hidden = true;
+        cell.attrs.overline = true;
+        cell.attrs.protected = true;
+        cell.attrs.double_width = true;
+        cell.attrs.double_height_top = true;
+        cell.attrs.double_height_bottom = true;
+        cell.foreground = Color::new(100, 50, 25);
+        cell.background = Color::new(200, 150, 100);
+        cell.width = 2;
+
+        apply_sgr(&[SgrAttribute::Reset], &mut cell);
+
+        assert_eq!(cell.foreground, Color::default(), "fg must reset");
+        assert_eq!(cell.background, Color::default(), "bg must reset");
+        assert!(!cell.attrs.bold, "bold must reset");
+        assert!(!cell.attrs.dim, "dim must reset");
+        assert!(!cell.attrs.italic, "italic must reset");
+        assert!(!cell.attrs.underline, "underline must reset");
+        assert!(!cell.attrs.double_underline, "double_underline must reset");
+        assert!(!cell.attrs.reverse, "reverse must reset");
+        assert!(!cell.attrs.strikethrough, "strikethrough must reset");
+        assert!(!cell.attrs.blink, "blink must reset");
+        assert!(!cell.attrs.hidden, "hidden must reset");
+        assert!(!cell.attrs.overline, "overline must reset");
+        assert!(!cell.attrs.protected, "protected must reset");
+        assert!(!cell.attrs.double_width, "double_width must reset");
+        assert!(!cell.attrs.double_height_top, "double_height_top must reset");
+        assert!(!cell.attrs.double_height_bottom, "double_height_bottom must reset");
+    }
+
+    #[test]
+    fn sgr_bold_then_normal_intensity_clears() {
+        let mut cell = Cell::default();
+        apply_sgr(&[SgrAttribute::Bold(true)], &mut cell);
+        assert!(cell.attrs.bold);
+        apply_sgr(&[SgrAttribute::NormalIntensity], &mut cell);
+        assert!(!cell.attrs.bold, "NormalIntensity must clear bold");
+        assert!(!cell.attrs.dim, "NormalIntensity must clear dim");
+    }
+
+    #[test]
+    fn sgr_reverse_then_off() {
+        let mut cell = Cell::default();
+        apply_sgr(&[SgrAttribute::Reverse(true)], &mut cell);
+        assert!(cell.attrs.reverse);
+        apply_sgr(&[SgrAttribute::Reverse(false)], &mut cell);
+        assert!(!cell.attrs.reverse);
+    }
+
+    #[test]
+    fn sgr_stacking_bold_italic_underline_strikethrough() {
+        let mut cell = Cell::default();
+        apply_sgr(
+            &[
+                SgrAttribute::Bold(true),
+                SgrAttribute::Italic(true),
+                SgrAttribute::Underline(UnderlineStyle::Single),
+                SgrAttribute::Strikethrough(true),
+            ],
+            &mut cell,
+        );
+        assert!(cell.attrs.bold);
+        assert!(cell.attrs.italic);
+        assert!(cell.attrs.underline);
+        assert!(cell.attrs.strikethrough);
+    }
+
+    #[test]
+    fn sgr_reset_in_middle_preserves_later_attrs() {
+        let mut cell = Cell::default();
+        apply_sgr(
+            &[
+                SgrAttribute::Bold(true),
+                SgrAttribute::Reset,
+                SgrAttribute::Italic(true),
+            ],
+            &mut cell,
+        );
+        assert!(!cell.attrs.bold, "Reset must clear bold");
+        assert!(cell.attrs.italic, "Italic after reset must remain");
+        assert!(!cell.attrs.underline, "Reset must not leave underline set");
     }
 }

@@ -19,8 +19,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:windowSoftInputMode="adjustResize">
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:windowSoftInputMode="adjustNothing">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -31,6 +31,18 @@
             android:name=".service.TerminalForegroundService"
             android:foregroundServiceType="specialUse"
             android:exported="false" />
+
+        <provider
+            android:name=".TorvoxDocumentsProvider"
+            android:authorities="io.torvox.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
 
     </application>
 

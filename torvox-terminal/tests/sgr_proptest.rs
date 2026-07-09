@@ -29,8 +29,7 @@ fn sgr_256_seq() -> impl Strategy<Value = Vec<u8>> {
 
 #[allow(dead_code)]
 fn sgr_truecolor_seq() -> impl Strategy<Value = Vec<u8>> {
-    (0u8..=255u8, 0u8..=255u8, 0u8..=255u8)
-        .prop_map(|(r, g, b)| format!("\x1b[38;2;{};{};{}mX", r, g, b).into_bytes())
+    (0u8..=255u8, 0u8..=255u8, 0u8..=255u8).prop_map(|(r, g, b)| format!("\x1b[38;2;{};{};{}mX", r, g, b).into_bytes())
 }
 
 proptest! {
@@ -49,10 +48,10 @@ proptest! {
         let snap = t.take_snapshot();
         // Color channels in range
         for i in 0..3 {
-            prop_assert!(snap.cells[0].fg[i] >= 0.0 && snap.cells[0].fg[i] <= 1.0,
-                "fg[{}]={} out of range", i, snap.cells[0].fg[i]);
-            prop_assert!(snap.cells[0].bg[i] >= 0.0 && snap.cells[0].bg[i] <= 1.0,
-                "bg[{}]={} out of range", i, snap.cells[0].bg[i]);
+            prop_assert!(snap.cells[0].foreground[i] >= 0.0 && snap.cells[0].foreground[i] <= 1.0,
+                "fg[{}]={} out of range", i, snap.cells[0].foreground[i]);
+            prop_assert!(snap.cells[0].background[i] >= 0.0 && snap.cells[0].background[i] <= 1.0,
+                "bg[{}]={} out of range", i, snap.cells[0].background[i]);
         }
     }
 
@@ -63,8 +62,8 @@ proptest! {
         t.flush();
         let snap = t.take_snapshot();
         for i in 0..3 {
-            prop_assert!(snap.cells[0].fg[i] >= 0.0, "fg[{i}] < 0 for idx={idx}");
-            prop_assert!(snap.cells[0].fg[i] <= 1.0, "fg[{i}] > 1 for idx={idx}");
+            prop_assert!(snap.cells[0].foreground[i] >= 0.0, "fg[{i}] < 0 for idx={idx}");
+            prop_assert!(snap.cells[0].foreground[i] <= 1.0, "fg[{i}] > 1 for idx={idx}");
         }
     }
 
@@ -75,8 +74,8 @@ proptest! {
         t.flush();
         let snap = t.take_snapshot();
         for i in 0..3 {
-            prop_assert!(snap.cells[0].fg[i] >= 0.0, "fg[{i}] < 0");
-            prop_assert!(snap.cells[0].fg[i] <= 1.0, "fg[{i}] > 1");
+            prop_assert!(snap.cells[0].foreground[i] >= 0.0, "fg[{i}] < 0");
+            prop_assert!(snap.cells[0].foreground[i] <= 1.0, "fg[{i}] > 1");
         }
     }
 }
@@ -121,14 +120,14 @@ fn sgr_256_color_systematic_64_pairs() {
             assert_invariants(&snap);
             for i in 0..3 {
                 assert!(
-                    snap.cells[0].fg[i] >= 0.0 && snap.cells[0].fg[i] <= 1.0,
+                    snap.cells[0].foreground[i] >= 0.0 && snap.cells[0].foreground[i] <= 1.0,
                     "fg[{i}]={} out for fg={fg},bg={bg}",
-                    snap.cells[0].fg[i]
+                    snap.cells[0].foreground[i]
                 );
                 assert!(
-                    snap.cells[0].bg[i] >= 0.0 && snap.cells[0].bg[i] <= 1.0,
+                    snap.cells[0].background[i] >= 0.0 && snap.cells[0].background[i] <= 1.0,
                     "bg[{i}]={} out for fg={fg},bg={bg}",
-                    snap.cells[0].bg[i]
+                    snap.cells[0].background[i]
                 );
             }
         }
@@ -174,10 +173,7 @@ fn sgr_attr_4way_combinations() {
             for k in j + 1..n {
                 for l in k + 1..n {
                     let mut t = make_term(5, 40);
-                    t.vt_write(
-                        format!("\x1b[{};{};{};{}mX", attrs[i], attrs[j], attrs[k], attrs[l])
-                            .as_bytes(),
-                    );
+                    t.vt_write(format!("\x1b[{};{};{};{}mX", attrs[i], attrs[j], attrs[k], attrs[l]).as_bytes());
                     t.flush();
                     assert_invariants(&t.take_snapshot());
                 }
@@ -194,7 +190,9 @@ fn sgr_256_all_fg_8_loop() {
         t.flush();
         let snap = t.take_snapshot();
         assert!(
-            snap.cells[0].fg[0] >= 0.0 || snap.cells[0].fg[1] >= 0.0 || snap.cells[0].fg[2] >= 0.0,
+            snap.cells[0].foreground[0] >= 0.0
+                || snap.cells[0].foreground[1] >= 0.0
+                || snap.cells[0].foreground[2] >= 0.0,
             "all fg channels zero for 256 idx={fg}"
         );
     }
@@ -208,7 +206,9 @@ fn sgr_256_all_bg_8_loop() {
         t.flush();
         let snap = t.take_snapshot();
         assert!(
-            snap.cells[0].bg[0] >= 0.0 || snap.cells[0].bg[1] >= 0.0 || snap.cells[0].bg[2] >= 0.0,
+            snap.cells[0].background[0] >= 0.0
+                || snap.cells[0].background[1] >= 0.0
+                || snap.cells[0].background[2] >= 0.0,
             "all bg channels zero for 256 idx={bg}"
         );
     }
@@ -222,10 +222,7 @@ fn sgr_fg_bg_then_sgr_0_reset() {
             t.vt_write(format!("\x1b[{};{}mX\x1b[0mY", fg, bg).as_bytes());
             t.flush();
             let snap = t.take_snapshot();
-            assert!(
-                !snap.cells[1].bold,
-                "SGR 0: bold not reset for fg={fg},bg={bg}"
-            );
+            assert!(!snap.cells[1].bold, "SGR 0: bold not reset for fg={fg},bg={bg}");
         }
     }
 }

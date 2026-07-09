@@ -1,16 +1,27 @@
-// @Terminal event types, IMPL_CORE_004, impl, [REQ_CORE_004]
-// @need-ids: REQ_CORE_004, REQ_CORE_005
+// @REQ_CORE_004
+//! Terminal event types — focus, cwd, clipboard, notification.
 use alloc::string::String;
 use serde::{Deserialize, Serialize};
 
 use crate::cursor::CursorState;
 use crate::selection::Selection;
 
+/// Events produced by the terminal emulator for consumption by the UI layer.
+///
+/// Each variant represents a distinct category of terminal output:
+///
+/// * **Output events** — `OutputReady`, `Bell` — signal that new data is available
+///   or an audible alert is requested.
+/// * **State change events** — `TitleChanged`, `CursorChanged`, `SelectionChanged` —
+///   notify the UI of changes to terminal metadata.
+/// * **Input/request events** — `ClipboardRequest`, `HyperlinkHover` — request
+///   interaction with the host system (clipboard access, URL hover display).
+/// * **Lifecycle events** — `ProcessExited` — signals that the child process has
+///   terminated.
+/// * **Rendering events** — `DirtyRegion` — identifies which rows of the grid
+///   have changed and need re-rendering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum TerminalEvent {
     OutputReady,
     Bell,
@@ -23,11 +34,16 @@ pub enum TerminalEvent {
     DirtyRegion(DirtyRegion),
 }
 
+/// A range of rows in the terminal grid that have been modified.
+///
+/// The `start_row` and `end_row` define an inclusive range of row indices
+/// that contain dirty (modified) content since the last render frame.
+/// The renderer uses this information to only repaint affected rows.
+///
+/// Row indices are 0-based and reference the visible viewport rows,
+/// not scrollback history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct DirtyRegion {
     pub start_row: u32,
     pub end_row: u32,
@@ -38,6 +54,7 @@ mod tests {
     use super::*;
     use crate::cursor::{CursorState, CursorStyle};
     use crate::selection::{Selection, SelectionAnchor, SelectionMode};
+    use alloc::format;
 
     #[test]
     fn event_title_changed_carries_string() {
@@ -186,10 +203,59 @@ mod tests {
             start_row: 3,
             end_row: 7,
         };
-        assert_eq!(
-            region.end_row - region.start_row,
-            4,
-            "region should span 4 rows"
-        );
+        assert_eq!(region.end_row - region.start_row, 4, "region should span 4 rows");
+    }
+
+    #[cfg(feature = "rkyv")]
+    #[test]
+    fn event_rkyv_roundtrip() {
+        use alloc::vec;
+        use rkyv::rancor::Error;
+        let events = vec![
+            TerminalEvent::OutputReady,
+            TerminalEvent::Bell,
+            TerminalEvent::TitleChanged(String::from("hello")),
+            TerminalEvent::ClipboardRequest(String::from("paste")),
+            TerminalEvent::HyperlinkHover(Some(String::from("https://example.com"))),
+            TerminalEvent::HyperlinkHover(None),
+            TerminalEvent::ProcessExited(42),
+            TerminalEvent::CursorChanged(CursorState::new(5, 10)),
+            TerminalEvent::SelectionChanged(None),
+            TerminalEvent::DirtyRegion(DirtyRegion {
+                start_row: 0,
+                end_row: 24,
+            }),
+        ];
+        for e in events {
+            let bytes = rkyv::to_bytes::<Error>(&e).expect("rkyv serialize");
+            let archived =
+                rkyv::access::<<TerminalEvent as rkyv::Archive>::Archived, Error>(&bytes).expect("rkyv access");
+            let restored: TerminalEvent =
+                rkyv::deserialize::<TerminalEvent, Error>(archived).expect("rkyv deserialize");
+            assert_eq!(e, restored);
+        }
+    }
+
+    #[test]
+    fn terminal_event_debug_not_empty() {
+        let events = [
+            TerminalEvent::OutputReady,
+            TerminalEvent::Bell,
+            TerminalEvent::TitleChanged(String::from("hello")),
+            TerminalEvent::ClipboardRequest(String::from("text")),
+            TerminalEvent::HyperlinkHover(Some(String::from("https://example.com"))),
+            TerminalEvent::HyperlinkHover(None),
+            TerminalEvent::ProcessExited(0),
+            TerminalEvent::CursorChanged(CursorState::new(1, 2)),
+            TerminalEvent::SelectionChanged(None),
+            TerminalEvent::DirtyRegion(DirtyRegion {
+                start_row: 0,
+                end_row: 24,
+            }),
+        ];
+        for event in &events {
+            let debug = format!("{:?}", event);
+            assert!(!debug.is_empty(), "Event should have non-empty debug");
+        }
     }
 }

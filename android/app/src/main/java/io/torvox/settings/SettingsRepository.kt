@@ -35,26 +35,53 @@ constructor(
         val USB_SERIAL_ENABLED = booleanPreferencesKey("usb_serial_enabled")
         val MCP_SERVER_ENABLED = booleanPreferencesKey("mcp_server_enabled")
         val VOLUME_KEY_MAP = booleanPreferencesKey("volume_key_map")
+        val BG_IMAGE_PATH = stringPreferencesKey("bg_image_path")
+        val BG_BLUR_RADIUS = intPreferencesKey("bg_blur_radius")
+        val BG_ALPHA = floatPreferencesKey("bg_alpha")
+        val CURSOR_BLINK = booleanPreferencesKey("cursor_blink")
+        val CURSOR_STYLE = stringPreferencesKey("cursor_style")
+        val CURSOR_SPEED = intPreferencesKey("cursor_speed")
     }
 
-    val appThemeMode: Flow<String> = provider.dataStore.data.map { it[Keys.APP_THEME_MODE] ?: "follow_system" }
-    val fontSize: Flow<Float> = provider.dataStore.data.map { it[Keys.FONT_SIZE] ?: 18f }
+    companion object {
+        const val DEFAULT_FONT_SIZE = 18f
+        const val DEFAULT_SCROLLBACK_LINES = 50_000
+        private const val DEFAULT_THEME = "Dracula Plus"
+        const val DEFAULT_DAY_THEME_NAME = "Catppuccin Latte"
+        const val DEFAULT_FOLLOW_SYSTEM = "follow_system"
+        const val DEFAULT_THEME_MODE = "fixed"
+        const val DEFAULT_TOUCH_BEHAVIOR = "right_click"
+        const val DEFAULT_KEYBOARD_MODE = "secure"
+        const val DEFAULT_SHELL = "/system/bin/sh"
+        const val DEFAULT_BG_BLUR_RADIUS = 0
+        const val DEFAULT_BG_ALPHA = 0.8f
+        const val DEFAULT_CURSOR_SPEED_MS = 530
+    }
+
+    val appThemeMode: Flow<String> = provider.dataStore.data.map { it[Keys.APP_THEME_MODE] ?: DEFAULT_FOLLOW_SYSTEM }
+    val fontSize: Flow<Float> = provider.dataStore.data.map { it[Keys.FONT_SIZE] ?: DEFAULT_FONT_SIZE }
     val fontFamily: Flow<String> = provider.dataStore.data.map { it[Keys.FONT_FAMILY] ?: "" }
-    val themeName: Flow<String> = provider.dataStore.data.map { it[Keys.THEME_NAME] ?: "Dracula Plus" }
-    val dayThemeName: Flow<String> = provider.dataStore.data.map { it[Keys.DAY_THEME_NAME] ?: "Catppuccin Latte" }
-    val nightThemeName: Flow<String> = provider.dataStore.data.map { it[Keys.NIGHT_THEME_NAME] ?: "Dracula Plus" }
-    val themeMode: Flow<String> = provider.dataStore.data.map { it[Keys.THEME_MODE] ?: "fixed" }
-    val shell: Flow<String> = provider.dataStore.data.map { it[Keys.SHELL] ?: "/system/bin/sh" }
-    val scrollbackLines: Flow<Int> = provider.dataStore.data.map { it[Keys.SCROLLBACK_LINES] ?: 50000 }
-    val touchBehavior: Flow<String> = provider.dataStore.data.map { it[Keys.TOUCH_BEHAVIOR] ?: "right_click" }
+    val themeName: Flow<String> = provider.dataStore.data.map { it[Keys.THEME_NAME] ?: DEFAULT_THEME }
+    val dayThemeName: Flow<String> = provider.dataStore.data.map { it[Keys.DAY_THEME_NAME] ?: DEFAULT_DAY_THEME_NAME }
+    val nightThemeName: Flow<String> = provider.dataStore.data.map { it[Keys.NIGHT_THEME_NAME] ?: DEFAULT_THEME }
+    val themeMode: Flow<String> = provider.dataStore.data.map { it[Keys.THEME_MODE] ?: DEFAULT_THEME_MODE }
+    val shell: Flow<String> = provider.dataStore.data.map { it[Keys.SHELL] ?: DEFAULT_SHELL }
+    val scrollbackLines: Flow<Int> = provider.dataStore.data.map { it[Keys.SCROLLBACK_LINES] ?: DEFAULT_SCROLLBACK_LINES }
+    val touchBehavior: Flow<String> = provider.dataStore.data.map { it[Keys.TOUCH_BEHAVIOR] ?: DEFAULT_TOUCH_BEHAVIOR }
     val bootstrapUrl: Flow<String> = provider.dataStore.data.map { it[Keys.BOOTSTRAP_URL] ?: "" }
     val useNerdFontGlyphs: Flow<Boolean> = provider.dataStore.data.map { it[Keys.USE_NERD_FONT_GLYPHS] ?: false }
     val useSemanticSelection: Flow<Boolean> = provider.dataStore.data.map { it[Keys.USE_SEMANTIC_SELECTION] ?: false }
     val sessionRestore: Flow<Boolean> = provider.dataStore.data.map { it[Keys.SESSION_RESTORE] ?: false }
-    val keyboardMode: Flow<String> = provider.dataStore.data.map { it[Keys.KEYBOARD_MODE] ?: "secure" }
+    val keyboardMode: Flow<String> = provider.dataStore.data.map { it[Keys.KEYBOARD_MODE] ?: DEFAULT_KEYBOARD_MODE }
     val usbSerialEnabled: Flow<Boolean> = provider.dataStore.data.map { it[Keys.USB_SERIAL_ENABLED] ?: false }
     val mcpServerEnabled: Flow<Boolean> = provider.dataStore.data.map { it[Keys.MCP_SERVER_ENABLED] ?: false }
     val volumeKeyMap: Flow<Boolean> = provider.dataStore.data.map { it[Keys.VOLUME_KEY_MAP] ?: false }
+    val bgImagePath: Flow<String> = provider.dataStore.data.map { it[Keys.BG_IMAGE_PATH] ?: "" }
+    val bgBlurRadius: Flow<Int> = provider.dataStore.data.map { it[Keys.BG_BLUR_RADIUS] ?: DEFAULT_BG_BLUR_RADIUS }
+    val bgAlpha: Flow<Float> = provider.dataStore.data.map { it[Keys.BG_ALPHA] ?: DEFAULT_BG_ALPHA }
+    val cursorBlink: Flow<Boolean> = provider.dataStore.data.map { it[Keys.CURSOR_BLINK] ?: true }
+    val cursorStyle: Flow<String> = provider.dataStore.data.map { it[Keys.CURSOR_STYLE] ?: "block" }
+    val cursorSpeed: Flow<Int> = provider.dataStore.data.map { it[Keys.CURSOR_SPEED] ?: DEFAULT_CURSOR_SPEED_MS }
 
     suspend fun setFontSize(size: Float) {
         provider.dataStore.edit { it[Keys.FONT_SIZE] = size }
@@ -126,5 +153,29 @@ constructor(
 
     suspend fun setVolumeKeyMap(enabled: Boolean) {
         provider.dataStore.edit { it[Keys.VOLUME_KEY_MAP] = enabled }
+    }
+
+    suspend fun setBgImagePath(path: String) {
+        provider.dataStore.edit { it[Keys.BG_IMAGE_PATH] = path }
+    }
+
+    suspend fun setBgBlurRadius(radius: Int) {
+        provider.dataStore.edit { it[Keys.BG_BLUR_RADIUS] = radius }
+    }
+
+    suspend fun setBgAlpha(alpha: Float) {
+        provider.dataStore.edit { it[Keys.BG_ALPHA] = alpha }
+    }
+
+    suspend fun setCursorBlink(enabled: Boolean) {
+        provider.dataStore.edit { it[Keys.CURSOR_BLINK] = enabled }
+    }
+
+    suspend fun setCursorStyle(style: String) {
+        provider.dataStore.edit { it[Keys.CURSOR_STYLE] = style }
+    }
+
+    suspend fun setCursorSpeed(speedMs: Int) {
+        provider.dataStore.edit { it[Keys.CURSOR_SPEED] = speedMs }
     }
 }

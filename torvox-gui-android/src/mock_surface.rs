@@ -4,7 +4,6 @@ use torvox_core::config::Theme;
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 use torvox_terminal::shell_env::ShellEnv;
 
-#[allow(dead_code)]
 pub struct MockSurface {
     terminal: GhosttyTerminal,
     rows: u32,
@@ -17,8 +16,7 @@ pub struct MockSurface {
 
 impl MockSurface {
     pub fn new(rows: u32, cols: u32, scrollback_lines: u32, _font_size: f32) -> Self {
-        let terminal =
-            GhosttyTerminal::new(rows, cols, scrollback_lines).expect("GhosttyTerminal::new");
+        let terminal = GhosttyTerminal::new(rows, cols, scrollback_lines).expect("GhosttyTerminal::new");
         Self {
             terminal,
             rows,
@@ -47,8 +45,7 @@ impl MockSurface {
     }
 
     pub fn spawn_session(&mut self, _shell: &str, _env: &ShellEnv) -> Result<(), String> {
-        self.terminal = GhosttyTerminal::new(self.rows, self.cols, 5000)
-            .map_err(|e| format!("session: {e}"))?;
+        self.terminal = GhosttyTerminal::new(self.rows, self.cols, 5000).map_err(|e| format!("session: {e}"))?;
         Ok(())
     }
 
@@ -84,32 +81,32 @@ impl MockSurface {
         let snap = self.terminal.take_snapshot();
         let cell_w = (width / self.cols as usize).max(1);
         let cell_h = (height / self.rows as usize).max(1);
-        let bg = self.theme.bg;
+        let background_color = self.theme.background;
 
         for row in 0..snap.rows.min(self.rows) {
             for col in 0..snap.cols.min(self.cols) {
-                let idx = (row * snap.cols + col) as usize;
-                let fg = if idx < snap.cells.len() {
-                    let cell = &snap.cells[idx];
-                    let red = (cell.fg[0] * 255.0) as u8;
-                    let green = (cell.fg[1] * 255.0) as u8;
-                    let blue = (cell.fg[2] * 255.0) as u8;
-                    let alpha = (cell.fg[3] * 255.0) as u8;
+                let index = (row * snap.cols + col) as usize;
+                let foreground_color = if index < snap.cells.len() {
+                    let cell = &snap.cells[index];
+                    let red = (cell.foreground[0] * 255.0) as u8;
+                    let green = (cell.foreground[1] * 255.0) as u8;
+                    let blue = (cell.foreground[2] * 255.0) as u8;
+                    let alpha = (cell.foreground[3] * 255.0) as u8;
                     (red, green, blue, alpha)
                 } else {
-                    (bg[0], bg[1], bg[2], 255)
+                    (background_color[0], background_color[1], background_color[2], 255)
                 };
 
-                let py = row as usize * cell_h;
-                let px = col as usize * cell_w;
-                for y in py..py + cell_h {
-                    for x in px..px + cell_w {
-                        let pi = (y * width + x) * 4;
-                        if pi + 3 < self.pixels.len() {
-                            self.pixels[pi] = fg.0;
-                            self.pixels[pi + 1] = fg.1;
-                            self.pixels[pi + 2] = fg.2;
-                            self.pixels[pi + 3] = fg.3;
+                let pixel_y = row as usize * cell_h;
+                let pixel_x = col as usize * cell_w;
+                for y in pixel_y..pixel_y + cell_h {
+                    for x in pixel_x..pixel_x + cell_w {
+                        let pixel_index = (y * width + x) * 4;
+                        if pixel_index + 3 < self.pixels.len() {
+                            self.pixels[pixel_index] = foreground_color.0;
+                            self.pixels[pixel_index + 1] = foreground_color.1;
+                            self.pixels[pixel_index + 2] = foreground_color.2;
+                            self.pixels[pixel_index + 3] = foreground_color.3;
                         }
                     }
                 }
@@ -165,10 +162,7 @@ mod tests {
         assert!(ms.render().is_ok());
         // foreground pixels should exist because text was written
         let has_non_bg = ms.pixels().chunks(4).any(|p| p != [0, 0, 0, 0]);
-        assert!(
-            has_non_bg,
-            "render should produce non-zero pixels after text"
-        );
+        assert!(has_non_bg, "render should produce non-zero pixels after text");
     }
 
     #[test]
@@ -238,10 +232,7 @@ mod tests {
         ms.write_to_pty(b"\x1b[?2026h");
         assert!(ms.poll_sync_active(), "should be in sync after DECSET 2026");
         ms.write_to_pty(b"\x1b[?2026l");
-        assert!(
-            !ms.poll_sync_active(),
-            "should not be in sync after DECRST 2026"
-        );
+        assert!(!ms.poll_sync_active(), "should not be in sync after DECRST 2026");
     }
 
     #[test]
@@ -287,11 +278,7 @@ mod tests {
         ms.write_to_pty(b"\x1b[1;33mBOLD YELLOW\x1b[0m\n");
         ms.render().ok();
         let non_bg = ms.pixels().chunks(4).filter(|p| p[3] > 0).count();
-        assert!(
-            non_bg > 0,
-            "bold text should produce non-bg pixels, got {}",
-            non_bg
-        );
+        assert!(non_bg > 0, "bold text should produce non-bg pixels, got {}", non_bg);
     }
 
     #[test]
@@ -302,11 +289,7 @@ mod tests {
         ms.render().ok();
         let non_bg = ms.pixels().chunks(4).filter(|p| p[3] > 0).count();
         // At minimum, the cursor and text should produce non-bg pixels
-        assert!(
-            non_bg > 0,
-            "cursor+text should produce non-bg pixels, got {}",
-            non_bg
-        );
+        assert!(non_bg > 0, "cursor+text should produce non-bg pixels, got {}", non_bg);
     }
 
     #[test]
@@ -347,13 +330,10 @@ mod tests {
             // Find any non-bg pixel in the right general area
             for row in 4..6 {
                 for col in 9..11 {
-                    let check_px = (row * cell_h as usize) * ms.surface_width() as usize
-                        + (col * cell_w as usize);
+                    let check_px = (row * cell_h as usize) * ms.surface_width() as usize + (col * cell_w as usize);
                     let check_pi = check_px * 4;
                     if check_pi + 3 < pixels.len() {
-                        let has_color = pixels[check_pi] > 0
-                            || pixels[check_pi + 1] > 0
-                            || pixels[check_pi + 2] > 0;
+                        let has_color = pixels[check_pi] > 0 || pixels[check_pi + 1] > 0 || pixels[check_pi + 2] > 0;
                         if has_color {
                             return; // found non-bg pixel near expected position
                         }
@@ -362,10 +342,7 @@ mod tests {
             }
             // Fail: no non-bg pixel found in the '.' area
             let total_nz = pixels.chunks(4).filter(|p| p[3] > 0).count();
-            let all_nz = pixels
-                .chunks(4)
-                .filter(|p| p[0] > 0 || p[1] > 0 || p[2] > 0)
-                .count();
+            let all_nz = pixels.chunks(4).filter(|p| p[0] > 0 || p[1] > 0 || p[2] > 0).count();
             panic!(
                 "No non-bg pixel at '.' position (row 5, col 10). p={}x{} cell={}x{}. total_nz={} all_nz={}",
                 cell_w, cell_h, px, py, total_nz, all_nz
@@ -381,13 +358,13 @@ mod tests {
         let mocha = Theme::catppuccin_mocha();
         let dracula = Theme::dracula_plus();
         assert_ne!(
-            mocha.bg, dracula.bg,
+            mocha.background, dracula.background,
             "Catppuccin Mocha and Dracula should have different BG colors"
         );
         // Verify known values: mocha bg = #1e1e2e (30,30,46)
-        assert_eq!(mocha.bg, [30, 30, 46], "Mocha BG should be #1e1e2e");
+        assert_eq!(mocha.background, [30, 30, 46], "Mocha BG should be #1e1e2e");
         // Dracula Plus bg = #212121 (33,33,33)
-        assert_eq!(dracula.bg, [33, 33, 33], "Dracula BG should be #212121");
+        assert_eq!(dracula.background, [33, 33, 33], "Dracula BG should be #212121");
     }
 
     // 4b.6: CJK text renders correctly in grid
@@ -399,10 +376,6 @@ mod tests {
         ms.write_to_pty(b"\xe4\xbd\xa0\xe5\xa5\xbd\n"); // 你好 + newline
         ms.render().ok();
         let non_bg = ms.pixels().chunks(4).filter(|p| p[3] > 0).count();
-        assert!(
-            non_bg > 0,
-            "CJK text should produce non-bg pixels, got {}",
-            non_bg
-        );
+        assert!(non_bg > 0, "CJK text should produce non-bg pixels, got {}", non_bg);
     }
 }

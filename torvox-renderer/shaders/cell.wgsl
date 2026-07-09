@@ -19,6 +19,7 @@ struct VertexOutput {
     @location(6) quad_size: vec2<f32>,
     @location(7) uv_offset: vec2<f32>,
     @location(8) glyph_advance_w: f32,
+    @location(9) flags: f32,
 };
 
 @vertex
@@ -50,6 +51,7 @@ fn vs_main(
     output.quad_size = quad_size;
     output.uv_offset = uv_offset;
     output.glyph_advance_w = glyph_advance_w;
+    output.flags = flags;
     return output;
 }
 
@@ -64,6 +66,7 @@ fn fs_main(
     @location(6) quad_size: vec2<f32>,
     @location(7) uv_offset: vec2<f32>,
     @location(8) glyph_advance_w: f32,
+    @location(9) flags: f32,
 ) -> @location(0) vec4<f32> {
     var color: vec4<f32>;
     if has_glyph > 0.5 {
@@ -89,5 +92,26 @@ fn fs_main(
     } else {
         color = bg_color;
     }
+
+    let f = u32(flags);
+    let deco_color = fg_color;
+    let deco_thickness = 0.06;
+    if (f & 64u) != 0u && cell_uv.y < deco_thickness {
+        color = deco_color;
+    }
+    if (f & 32u) != 0u && abs(cell_uv.y - 0.5) < deco_thickness * 0.5 {
+        color = deco_color;
+    }
+    if (f & 8u) != 0u && cell_uv.y > 1.0 - deco_thickness {
+        color = deco_color;
+    }
+    if (f & 256u) != 0u && abs(cell_uv.y - 0.92) < deco_thickness * 0.4 {
+        color = deco_color;
+    }
+
+    if (f & 128u) != 0u {
+        color = vec4<f32>(color.rgb * 0.5, color.a);
+    }
+
     return color;
 }

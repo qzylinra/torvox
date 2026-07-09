@@ -408,7 +408,7 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[31mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cells[0].fg[0] > 0.0);
+        assert!(snap.cells[0].foreground[0] > 0.0);
         assert_invariants(&snap);
     }
     #[test]
@@ -417,7 +417,7 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[44mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cells[0].bg[2] > 0.0);
+        assert!(snap.cells[0].background[2] > 0.0);
         assert_invariants(&snap);
     }
     #[test]
@@ -426,7 +426,7 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[38;5;196mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cells[0].fg[0] > 0.0);
+        assert!(snap.cells[0].foreground[0] > 0.0);
         assert_invariants(&snap);
     }
     #[test]
@@ -590,11 +590,7 @@ mod kitty_termtests {
         t.vt_write(b"\n\n\n\n");
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(
-            t.cursor_y(),
-            2,
-            "4 LFs in 3-row terminal → cursor at bottom"
-        );
+        assert_eq!(t.cursor_y(), 2, "4 LFs in 3-row terminal → cursor at bottom");
         assert_invariants(&snap);
     }
     #[test]
@@ -696,10 +692,7 @@ mod kitty_termtests {
         t.vt_write(b"a\xcc\x80");
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(
-            snap.cells[0].codepoint, 'a' as u32,
-            "combining: 'a' preserved"
-        );
+        assert_eq!(snap.cells[0].codepoint, 'a' as u32, "combining: 'a' preserved");
         assert_invariants(&snap);
     }
 
@@ -724,15 +717,11 @@ mod kitty_termtests {
         t.flush();
         let snap = t.take_snapshot();
         // Check that "ALT" (uppercase, unique) does not appear on main screen
-        let has_alt = snap.cells.windows(3).any(|w| {
-            w[0].codepoint == 'A' as u32
-                && w[1].codepoint == 'L' as u32
-                && w[2].codepoint == 'T' as u32
-        });
-        assert!(
-            !has_alt,
-            "alt screen content 'ALT' should not appear on main screen"
-        );
+        let has_alt = snap
+            .cells
+            .windows(3)
+            .any(|w| w[0].codepoint == 'A' as u32 && w[1].codepoint == 'L' as u32 && w[2].codepoint == 'T' as u32);
+        assert!(!has_alt, "alt screen content 'ALT' should not appear on main screen");
     }
 
     // ── OSC 4 palette + SGR verify ─────────────────────────────────
@@ -745,7 +734,7 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[31mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cells[0].fg[0] > 0.0, "OSC 4 + SGR 31: fg red");
+        assert!(snap.cells[0].foreground[0] > 0.0, "OSC 4 + SGR 31: fg red");
         check(&mut t, b"");
     }
 
@@ -757,13 +746,13 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[38;2;255;128;64mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cells[0].fg[0] > 0.9, "fg.R ~ 1.0");
+        assert!(snap.cells[0].foreground[0] > 0.9, "fg.R ~ 1.0");
         assert!(
-            snap.cells[0].fg[1] > 0.4 && snap.cells[0].fg[1] < 0.6,
+            snap.cells[0].foreground[1] > 0.4 && snap.cells[0].foreground[1] < 0.6,
             "fg.G ~ 0.5"
         );
         assert!(
-            snap.cells[0].fg[2] > 0.2 && snap.cells[0].fg[2] < 0.3,
+            snap.cells[0].foreground[2] > 0.2 && snap.cells[0].foreground[2] < 0.3,
             "fg.B ~ 0.25"
         );
     }
@@ -1002,7 +991,7 @@ mod kitty_termtests {
         assert!(t.cursor_y() >= 4);
         t.vt_write(b"\x1b[5B");
         t.flush();
-        assert!(t.cursor_y() == 4);
+        assert_eq!(t.cursor_y(), 4);
     }
     #[test]
     fn kt_cursor_right_edge_then_write() {
@@ -1111,9 +1100,9 @@ mod kitty_termtests {
             t.flush();
             let snap = t.take_snapshot();
             assert!(
-                snap.cell_at(0, c - 30).fg[0] != 0.0
-                    || snap.cell_at(0, c - 30).fg[1] != 0.0
-                    || snap.cell_at(0, c - 30).fg[2] != 0.0
+                snap.cell_at(0, c - 30).foreground[0] != 0.0
+                    || snap.cell_at(0, c - 30).foreground[1] != 0.0
+                    || snap.cell_at(0, c - 30).foreground[2] != 0.0
             );
         }
     }
@@ -1125,9 +1114,9 @@ mod kitty_termtests {
             t.flush();
             let snap = t.take_snapshot();
             assert!(
-                snap.cell_at(0, c - 40).bg[0] != 0.0
-                    || snap.cell_at(0, c - 40).bg[1] != 0.0
-                    || snap.cell_at(0, c - 40).bg[2] != 0.0
+                snap.cell_at(0, c - 40).background[0] != 0.0
+                    || snap.cell_at(0, c - 40).background[1] != 0.0
+                    || snap.cell_at(0, c - 40).background[2] != 0.0
             );
         }
     }
@@ -1155,7 +1144,7 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[38;2;255;128;0mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cell_at(0, 0).fg[0] > 0.9);
+        assert!(snap.cell_at(0, 0).foreground[0] > 0.9);
     }
     #[test]
     fn kt_sgr_bg_rgb() {
@@ -1163,7 +1152,7 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[48;2;0;128;255mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cell_at(0, 0).bg[2] > 0.9);
+        assert!(snap.cell_at(0, 0).background[2] > 0.9);
     }
     #[test]
     fn kt_sgr_fg_bg_together() {
@@ -1172,24 +1161,24 @@ mod kitty_termtests {
         t.flush();
         let snap = t.take_snapshot();
         assert!(
-            snap.cell_at(0, 0).fg[0] > 0.9,
+            snap.cell_at(0, 0).foreground[0] > 0.9,
             "fg red channel should be ~1.0, got {}",
-            snap.cell_at(0, 0).fg[0]
+            snap.cell_at(0, 0).foreground[0]
         );
         assert!(
-            snap.cell_at(0, 0).fg[1] < 0.1,
+            snap.cell_at(0, 0).foreground[1] < 0.1,
             "fg green channel should be ~0.0, got {}",
-            snap.cell_at(0, 0).fg[1]
+            snap.cell_at(0, 0).foreground[1]
         );
         assert!(
-            snap.cell_at(0, 0).bg[2] > 0.9,
+            snap.cell_at(0, 0).background[2] > 0.9,
             "bg blue channel should be ~1.0, got {}",
-            snap.cell_at(0, 0).bg[2]
+            snap.cell_at(0, 0).background[2]
         );
         assert!(
-            snap.cell_at(0, 0).bg[0] < 0.1,
+            snap.cell_at(0, 0).background[0] < 0.1,
             "bg red channel should be ~0.0, got {}",
-            snap.cell_at(0, 0).bg[0]
+            snap.cell_at(0, 0).background[0]
         );
     }
     #[test]
@@ -1667,10 +1656,7 @@ mod kitty_termtests {
         if !r.is_empty() {
             let txt = String::from_utf8_lossy(r.last().unwrap());
             // Format: ESC [ ? 7 ; 1 $ y or similar
-            assert!(
-                txt.contains('y') || txt.contains('$'),
-                "response ends with $y"
-            );
+            assert!(txt.contains('y') || txt.contains('$'), "response ends with $y");
         }
     }
     #[test]
@@ -1752,7 +1738,7 @@ mod kitty_termtests {
     #[test]
     fn kt_erase_ed_to_end() {
         let mut t = sized_term(5, 20, 100);
-        t.vt_write(b"Line1\nLine2\nLine3\nLine4\nLine5");
+        t.pty_write(b"Line1\nLine2\nLine3\nLine4\nLine5");
         t.flush();
         t.vt_write(b"\x1b[2;1H\x1b[0J"); // ED 0 from row 2
         t.flush();
@@ -1892,18 +1878,11 @@ mod kitty_termtests {
         t.vt_write(b"\x1b[31mX\x1b[0mY");
         t.flush();
         let snap = t.take_snapshot();
-        let x_fg = snap.cells[0].fg;
-        let y_fg = snap.cells[1].fg;
-        assert!(
-            x_fg[0] > 0.5,
-            "SGR 31 should set X to red foreground, got {:?}",
-            x_fg
-        );
+        let x_fg = snap.cells[0].foreground;
+        let y_fg = snap.cells[1].foreground;
+        assert!(x_fg[0] > 0.5, "SGR 31 should set X to red foreground, got {:?}", x_fg);
         assert_ne!(x_fg, y_fg, "SGR 0 should change fg between X and Y");
-        assert_eq!(
-            snap.cells[1].codepoint, 'Y' as u32,
-            "cell 1 should contain Y"
-        );
+        assert_eq!(snap.cells[1].codepoint, 'Y' as u32, "cell 1 should contain Y");
     }
     #[test]
     fn kt_soft_reset() {

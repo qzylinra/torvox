@@ -51,15 +51,13 @@ class TextSearchTest {
 
     @Test
     fun findMatchesEmptyQuery() {
-        val text = "Hello World"
-        val results = findMatches(text, "")
+        val results = findMatches("Hello World", "")
         assertTrue(results.isEmpty())
     }
 
     @Test
     fun findMatchesNoResults() {
-        val text = "Hello World"
-        val results = findMatches(text, "xyz")
+        val results = findMatches("Hello World", "xyz")
         assertTrue(results.isEmpty())
     }
 
@@ -71,16 +69,14 @@ class TextSearchTest {
 
     @Test
     fun findMatchesQueryAtStart() {
-        val text = "Hello World"
-        val results = findMatches(text, "Hello")
+        val results = findMatches("Hello World", "Hello")
         assertEquals(1, results.size)
         assertEquals(0, results[0].startIndex)
     }
 
     @Test
     fun findMatchesQueryAtEnd() {
-        val text = "Hello World"
-        val results = findMatches(text, "World")
+        val results = findMatches("Hello World", "World")
         assertEquals(1, results.size)
         assertEquals(6, results[0].startIndex)
         assertEquals(11, results[0].endIndex)
@@ -88,8 +84,7 @@ class TextSearchTest {
 
     @Test
     fun findMatchesOverlappingNotDuplicated() {
-        val text = "aaaa"
-        val results = findMatches(text, "aa")
+        val results = findMatches("aaaa", "aa")
         assertEquals(3, results.size)
         assertEquals(0, results[0].startIndex)
         assertEquals(1, results[1].startIndex)
@@ -103,5 +98,40 @@ class TextSearchTest {
         assertEquals(1, results[0].lineIndex)
         assertEquals(0, results[0].startIndex)
         assertEquals(6, results[0].endIndex)
+    }
+
+    @Test
+    fun findMatchesSearchHighlightUsesSameTotalLinesAsCanvas() {
+        val text = "line one\nline two\nline three"
+        val results = findMatches(text, "two")
+        assertEquals(1, results.size)
+        val lines = text.split("\n")
+        val searchTotalLines = lines.size
+        val canvasTotalLines = searchTotalLines
+        assertEquals("search and canvas must use same totalLines", searchTotalLines, canvasTotalLines)
+        assertEquals(1, results[0].lineIndex)
+    }
+
+    @Test
+    fun narrowingDown_widerResultsContainNarrowerMatches() {
+        val text = "hello world\nhell yeah\nshell"
+        val resultsHello = findMatches(text, "hello")
+        val resultsHell = findMatches(text, "hell")
+        val matchLine0 = resultsHello[0]
+        val foundInWiderSet =
+            resultsHell.any {
+                it.lineIndex == matchLine0.lineIndex && it.startIndex == matchLine0.startIndex
+            }
+        assertTrue("Current match must exist in narrower results", foundInWiderSet)
+    }
+
+    @Test
+    fun narrowingDown_typingNewCharacterResetsToOne() {
+        val text = "abc abcd"
+        val resultsAbc = findMatches(text, "abc")
+        assertEquals(2, resultsAbc.size)
+        val resultsAbcd = findMatches(text, "abcd")
+        assertEquals(1, resultsAbcd.size)
+        assertEquals(4, resultsAbcd[0].startIndex)
     }
 }

@@ -38,8 +38,5 @@ fn br5_drain_pty_cpr_response() {
     let r = g.drain_pty_write_responses();
     let combined: Vec<u8> = r.into_iter().flatten().collect();
     let resp = String::from_utf8_lossy(&combined);
-    assert!(
-        resp.contains(';'),
-        "CPR response should contain row;col, got: {resp}"
-    );
+    assert!(resp.contains(';'), "CPR response should contain row;col, got: {resp}");
 }

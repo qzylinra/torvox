@@ -1,4 +1,4 @@
-#[allow(clippy::cast_possible_truncation)]
+//! ANSI 256-color table — color cube and grayscale ramp.
 pub const ANSI_256: [[u8; 3]; 256] = {
     let mut table = [[0u8; 3]; 256];
     let mut i = 0;
@@ -6,22 +6,43 @@ pub const ANSI_256: [[u8; 3]; 256] = {
         table[i] = ANSI_16[i];
         i += 1;
     }
+    // 6x6x6 color cube: indices 16..=231
+    // Each channel step = 255 / (CUBE_SIDE - 1) = 51
     let mut v = 0;
-    while v < 216 {
-        let r = (v / 36) * 51;
-        let g = ((v % 36) / 6) * 51;
-        let b = (v % 6) * 51;
+    while v < CUBE_COLORS {
+        let r = (v / CUBE_SQUARE) * CHANNEL_STEP;
+        let g = ((v % CUBE_SQUARE) / CUBE_SIDE) * CHANNEL_STEP;
+        let b = (v % CUBE_SIDE) * CHANNEL_STEP;
         table[16 + v] = [r as u8, g as u8, b as u8];
         v += 1;
     }
-    let mut g = 0;
-    while g < 24 {
-        let v = 8 + g * 10;
-        table[232 + g] = [v as u8, v as u8, v as u8];
-        g += 1;
+    // 24-shade grayscale: indices 232..=255
+    // Values range from 8 to 238 in steps of 10
+    let mut shade = 0;
+    while shade < GRAYSCALE_SHADES {
+        let value = GRAYSCALE_MIN + shade * GRAYSCALE_STEP;
+        table[GRAYSCALE_OFFSET + shade] = [value as u8, value as u8, value as u8];
+        shade += 1;
     }
     table
 };
+
+/// Number of colors in the 6x6x6 color cube (indices 16..=231)
+const CUBE_COLORS: usize = 216;
+/// Side length of the 6x6x6 color cube
+const CUBE_SIDE: usize = 6;
+/// Square of the cube side (6*6 = 36), used for red channel indexing
+const CUBE_SQUARE: usize = CUBE_SIDE * CUBE_SIDE;
+/// Step between adjacent channel values: 255 / (CUBE_SIDE - 1) = 51
+const CHANNEL_STEP: usize = 255 / (CUBE_SIDE - 1);
+/// Number of grayscale shades (indices 232..=255)
+const GRAYSCALE_SHADES: usize = 24;
+/// Index where grayscale begins in the 256-color table
+const GRAYSCALE_OFFSET: usize = 232;
+/// Minimum grayscale value (lightest black)
+const GRAYSCALE_MIN: usize = 8;
+/// Step between adjacent grayscale values
+const GRAYSCALE_STEP: usize = 10;
 
 const ANSI_16: [[u8; 3]; 16] = [
     [0, 0, 0],
@@ -92,10 +113,10 @@ mod tests {
 
     #[test]
     fn ansi_216_cube_starts_black() {
-        for v in 0..216 {
-            let r = ((v / 36) * 51) as u8;
-            let g = (((v % 36) / 6) * 51) as u8;
-            let b = ((v % 6) * 51) as u8;
+        for v in 0..CUBE_COLORS {
+            let r = ((v / CUBE_SQUARE) * CHANNEL_STEP) as u8;
+            let g = (((v % CUBE_SQUARE) / CUBE_SIDE) * CHANNEL_STEP) as u8;
+            let b = ((v % CUBE_SIDE) * CHANNEL_STEP) as u8;
             assert_eq!(ANSI_256[16 + v], [r, g, b]);
         }
     }
@@ -153,6 +174,81 @@ mod tests {
         ];
         for (idx, expected) in cases {
             assert_eq!(ansi_to_rgb(idx), expected, "ANSI index {}", idx);
+        }
+    }
+
+    #[test]
+    fn ansi_256_all_values_map_to_valid_rgb() {
+        for i in 0..=255u8 {
+            let [r, g, b] = ansi_to_rgb(i);
+            // All values are u8, guaranteed 0-255 by type system
+            let _ = (r, g, b);
+        }
+    }
+
+    #[test]
+    fn ansi_16_indexed_match() {
+        for i in 0..=15u8 {
+            assert_eq!(ansi_to_rgb(i), ANSI_16[i as usize], "ANSI 16 color {i} mismatch");
+        }
+    }
+
+    #[test]
+    fn ansi_color_cube_symmetry() {
+        let valid_values = [0, 51, 102, 153, 204, 255];
+        for i in 16u8..=231 {
+            let [r, g, b] = ansi_to_rgb(i);
+            assert!(valid_values.contains(&r), "Red {r} not in valid set for index {i}");
+            assert!(valid_values.contains(&g), "Green {g} not in valid set for index {i}");
+            assert!(valid_values.contains(&b), "Blue {b} not in valid set for index {i}");
+        }
+    }
+
+    #[test]
+    fn ansi_216_cube_red_values() {
+        // First column (red=0): indices 16..=51
+        for i in 16..52 {
+            assert_eq!(ANSI_256[i][0], 0, "index {i} should have red=0");
+        }
+        // Column 1 (red=51): indices 52..=87
+        for i in 52..88 {
+            assert_eq!(ANSI_256[i][0], 51, "index {i} should have red=51");
+        }
+    }
+
+    #[test]
+    fn prop_ansi_all_indices_valid() {
+        for index in 0..=255u8 {
+            let [r, g, b] = ansi_to_rgb(index);
+            assert!(
+                (r, g, b) != (0, 0, 0) || index == 0 || index == 16,
+                "index {index} returned [{r},{g},{b}]"
+            );
+        }
+    }
+
+    #[test]
+    fn prop_ansi_16_matches_table() {
+        for index in 0..16u8 {
+            assert_eq!(
+                ansi_to_rgb(index),
+                ANSI_16[index as usize],
+                "index {index} should match ANSI_16 table"
+            );
+        }
+    }
+
+    #[test]
+    fn ansi_grayscale_values_increasing() {
+        for i in 0..23 {
+            let v1 = ANSI_256[232 + i][0];
+            let v2 = ANSI_256[232 + i + 1][0];
+            assert!(
+                v2 > v1,
+                "grayscale values must increase: index {} has {v1}, {} has {v2}",
+                232 + i,
+                232 + i + 1
+            );
         }
     }
 }

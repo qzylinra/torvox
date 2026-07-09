@@ -26,6 +26,21 @@ class TerminalForegroundService : Service() {
         fun stop(context: Context) {
             context.stopService(Intent(context, TerminalForegroundService::class.java))
         }
+
+        fun updateSessionCount(
+            context: Context,
+            count: Int,
+        ) {
+            if (count <= 0) {
+                stop(context)
+                return
+            }
+            val intent =
+                Intent(context, TerminalForegroundService::class.java).apply {
+                    putExtra("session_count", count)
+                }
+            context.startForegroundService(intent)
+        }
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -42,8 +57,8 @@ class TerminalForegroundService : Service() {
                 description = getString(R.string.notification_channel_desc)
                 setShowBadge(false)
             }
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(channel)
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.createNotificationChannel(channel)
     }
 
     override fun onStartCommand(
@@ -107,6 +122,15 @@ class TerminalForegroundService : Service() {
         wakeLock = null
     }
 
+    fun updateSessionCount(count: Int) {
+        sessionCount = count
+        if (count <= 0) {
+            stopSelf()
+            return
+        }
+        startForegroundWithSessionCount(count)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
@@ -117,7 +141,6 @@ class TerminalForegroundService : Service() {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         releaseWakeLock()
-        stopSelf()
     }
 }
 

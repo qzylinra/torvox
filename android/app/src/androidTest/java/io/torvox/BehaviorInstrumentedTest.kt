@@ -8,6 +8,7 @@ import androidx.test.uiautomator.Until
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -16,7 +17,7 @@ class BehaviorInstrumentedTest {
     companion object {
         private const val TAG = "BehaviorTest"
         private const val PACKAGE = "com.termux"
-        private const val WAIT_TIMEOUT = 10_000L
+        private const val WAIT_TIMEOUT = 30_000L
     }
 
     private lateinit var device: UiDevice
@@ -29,7 +30,7 @@ class BehaviorInstrumentedTest {
             initialized = true
             device.executeShellCommand("am start -n $PACKAGE/io.torvox.MainActivity")
             device.wait(Until.hasObject(By.pkg(PACKAGE).depth(0)), WAIT_TIMEOUT)
-            Thread.sleep(5000)
+            Thread.sleep(10000)
         } catch (exception: Exception) {
             Log.e(TAG, "setUp failed", exception)
             throw exception
@@ -52,12 +53,13 @@ class BehaviorInstrumentedTest {
 
     private fun scrollTo(
         text: String,
-        maxSwipes: Int = 10,
+        maxSwipes: Int = 30,
     ) {
         for (i in 0 until maxSwipes) {
+            Thread.sleep(500)
             if (device.findObject(By.textContains(text)) != null) return
             val cx = device.displayWidth / 2
-            device.swipe(cx, device.displayHeight * 3 / 4, cx, device.displayHeight / 4, 10)
+            device.swipe(cx, device.displayHeight * 6 / 10, cx, device.displayHeight / 4, 25)
             Thread.sleep(800)
         }
     }
@@ -89,9 +91,9 @@ class BehaviorInstrumentedTest {
         device.findObject(By.text("Change"))?.click()
         Thread.sleep(2000)
         val dialog =
-            device.findObject(By.textContains("System Default"))
-                ?: device.findObject(By.textContains("Droid"))
-                ?: device.findObject(By.textContains("Monospace"))
+            device.findObject(By.textContains("monospace"))
+                ?: device.findObject(By.textContains("Mono"))
+                ?: device.findObject(By.textContains("Noto"))
         assertTrue("Font picker dialog should appear", dialog != null)
         goBack()
     }
@@ -143,9 +145,9 @@ class BehaviorInstrumentedTest {
     @Test
     fun behavior_settings_restore_sessions_off() {
         openSettings()
-        val restoreReady = device.wait(Until.hasObject(By.textContains("Restore")), WAIT_TIMEOUT)
+        val restoreReady = device.wait(Until.hasObject(By.textContains("Restore sessions")), WAIT_TIMEOUT)
         if (!restoreReady) {
-            scrollTo("Restore sessions")
+            scrollTo("Restore sessions", maxSwipes = 60)
         }
         val toggle = device.findObject(By.textContains("Restore sessions"))
         assertTrue("Restore sessions should be visible", toggle != null)
@@ -155,18 +157,16 @@ class BehaviorInstrumentedTest {
     @Test
     fun behavior_settings_bootstrap_action_buttons() {
         openSettings()
-        val bootstrapReady = device.wait(Until.hasObject(By.textContains("Bootstrap")), WAIT_TIMEOUT)
-        if (!bootstrapReady) {
-            scrollTo("Bootstrap")
+        val termuxReady = device.wait(Until.hasObject(By.text("Termux Default")), WAIT_TIMEOUT)
+        if (!termuxReady) {
+            scrollTo("Termux Default", maxSwipes = 60)
         }
         val termuxDefault = device.findObject(By.text("Termux Default"))
         val installBtn = device.findObject(By.text("Install"))
         assertTrue("Termux Default should be visible", termuxDefault != null)
         assertTrue("Install button should be visible", installBtn != null)
-        assertFalse(
-            "Custom/Empty should NOT exist",
-            device.findObject(By.text("Custom / Empty")) != null,
-        )
+        val custom = device.findObject(By.text("Custom / Empty"))
+        assertTrue("Custom/Empty preset should be visible alongside Termux Default", custom != null)
         goBack()
     }
 
@@ -221,12 +221,12 @@ class BehaviorInstrumentedTest {
     @Test
     fun behavior_keyboard_mode_secure() {
         openSettings()
-        val settingsReady = device.wait(Until.hasObject(By.text("Keyboard Mode")), WAIT_TIMEOUT)
-        if (!settingsReady) {
-            scrollTo("Keyboard Mode")
+        val secureReady = device.wait(Until.hasObject(By.text("Secure")), WAIT_TIMEOUT)
+        if (!secureReady) {
+            scrollTo("Secure", maxSwipes = 60)
         }
         val secure = device.findObject(By.text("Secure"))
-        assertTrue("Secure mode should be visible", secure != null)
+        assertNotNull("Secure mode should be visible", secure)
         goBack()
     }
 

@@ -32,6 +32,8 @@
     <string name="bootstrap_preset_custom">Benutzerdefiniert / Leer</string>
     <string name="bootstrap_preset_custom_desc">Mit leerem Root-Dateisystem starten</string>
     <string name="bootstrap">Bootstrap</string>
+    <string name="bootstrap_install">Bootstrap installieren</string>
+    <string name="bootstrap_installing">Installation\u2026</string>
     <string name="session_restore">Sitzung wiederherstellen</string>
     <string name="session_restore_desc">Vorherige Sitzung beim Start der App wieder öffnen</string>
     <string name="keyboard_mode">Tastaturmodus</string>
@@ -97,4 +99,14 @@
     <string name="volume_key_map">Lautstärketasten-Zuordnung</string>
     <string name="volume_key_map_desc">Lauter auf Ctrl und Leiser auf Fn zuordnen</string>
     <string name="install">Installieren</string>
+
+    <!-- Cursor Settings -->
+    <string name="session_restore_off_desc">Sitzungen werden beim App-Start nicht wiederhergestellt</string>
+    <string name="on">Ein</string>
+    <string name="off">Aus</string>
+    <string name="cjk_fallback_missing_warning">Keine CJK-Schriftart erkannt. Ostasiatische Zeichen werden möglicherweise nicht korrekt dargestellt.</string>
+    <string name="cursor_blink">Cursor blinken</string>
+    <string name="cursor_blink_desc">Cursor-Blinkanimation ein-/ausschalten</string>
+    <string name="cursor_speed">Blinkgeschwindigkeit</string>
+    <string name="cursor_style_label">Cursor-Stil</string>
 </resources>

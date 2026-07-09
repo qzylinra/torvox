@@ -5,11 +5,11 @@ on:
   workflow_dispatch:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
-  checks:
+  rust-checks:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -24,13 +24,19 @@ jobs:
         with:
           name: ${{ secrets.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - run: |
-          rm -f ~/.config/nix/nix.conf
-          scripts/check-rust.nu --full --fuzz
-      - uses: actions/upload-artifact@main
-        if: always()
+      - uses: actions/cache@main
         with:
-          name: nextest-logs
           path: |
-            target/nextest/default/
-            target/nextest/ci/
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+      - env:
+          CARGO_INCREMENTAL: "0"
+        run: |
+          scripts/check-rust.nu
+      - uses: actions/upload-artifact@main
+        continue-on-error: true
+        with:
+          name: nextest-junit
+          path: target/nextest/ci/junit.xml

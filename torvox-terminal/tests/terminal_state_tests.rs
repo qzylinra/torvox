@@ -131,14 +131,8 @@ fn l4_autowrap_at_right_margin() {
     let snap = t.take_snapshot();
     // "123456789A" on row 0, "B" on row 1 (11 chars, 10 cols → wraps after 10)
     assert_eq!(snap.cells[0].codepoint, '1' as u32, "wrap: col 0 = 1");
-    assert_eq!(
-        snap.cells[9].codepoint, 'A' as u32,
-        "wrap: col 9 = A (10th char)"
-    );
-    assert_eq!(
-        snap.cells[10].codepoint, 'B' as u32,
-        "wrap: row 1 col 0 = B"
-    );
+    assert_eq!(snap.cells[9].codepoint, 'A' as u32, "wrap: col 9 = A (10th char)");
+    assert_eq!(snap.cells[10].codepoint, 'B' as u32, "wrap: row 1 col 0 = B");
 }
 
 #[test]
@@ -166,10 +160,7 @@ fn l4_autowrap_reset() {
     t.flush();
     let snap = t.take_snapshot();
     // With autowrap re-enabled: 11 chars, 10 cols → wraps
-    assert_eq!(
-        snap.cells[10].codepoint, 'B' as u32,
-        "wrap re-enabled: row 1 col 0 = B"
-    );
+    assert_eq!(snap.cells[10].codepoint, 'B' as u32, "wrap re-enabled: row 1 col 0 = B");
 }
 
 // ── Cursor visibility ───────────────────────────────────────────────
@@ -237,7 +228,7 @@ fn l4_alt_screen_set_and_exit() {
 #[test]
 fn l4_lf_scrolls_at_bottom() {
     let mut t = sized(5, 20);
-    t.vt_write(b"Row1\nRow2\nRow3\nRow4\nRow5\nRow6"); // last line triggers scroll
+    t.pty_write(b"Row1\nRow2\nRow3\nRow4\nRow5\nRow6"); // last line triggers scroll
     t.flush();
     let snap = t.take_snapshot();
     // Row 0 should now have "Row2" (Row1 scrolled into scrollback)
@@ -251,11 +242,7 @@ fn l4_lf_scrolls_at_bottom() {
             }
         })
         .collect();
-    assert_eq!(
-        r0_text.trim(),
-        "Row2",
-        "LF scroll: Row1 -> scrollback, Row2 -> row 0"
-    );
+    assert_eq!(r0_text.trim(), "Row2", "LF scroll: Row1 -> scrollback, Row2 -> row 0");
 }
 
 #[test]
@@ -281,7 +268,7 @@ fn l4_nel_moves_next_line_first_col() {
 #[test]
 fn l4_scrollback_empty_initial() {
     let t = sized(5, 20);
-    assert_eq!(t.scrollback_len(), 0, "empty scrollback initial");
+    assert_eq!(t.scrollback_length(), 0, "empty scrollback initial");
 }
 
 #[test]
@@ -291,10 +278,7 @@ fn l4_scrollback_accumulates_lines() {
         t.vt_write(b"\n");
     }
     t.flush();
-    assert!(
-        t.scrollback_len() > 0,
-        "scrollback has lines after 10 newlines"
-    );
+    assert!(t.scrollback_length() > 0, "scrollback has lines after 10 newlines");
 }
 
 // ── Resize ──────────────────────────────────────────────────────────

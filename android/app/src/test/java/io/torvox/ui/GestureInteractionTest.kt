@@ -8,7 +8,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,7 +44,7 @@ class GestureInteractionTest {
         view.dispatchTouchEvent(
             MotionEvent.obtain(downTime + 80, downTime + 120, MotionEvent.ACTION_UP, 100f, 200f, 0),
         )
-        assertNotNull("view should still exist after double tap", view)
+        assertTrue("view width should remain valid after double tap", view.width > 0)
     }
 
     @Test
@@ -290,7 +289,7 @@ class GestureInteractionTest {
         view.dispatchTouchEvent(
             MotionEvent.obtain(downTime, downTime + 80, MotionEvent.ACTION_UP, 100f, 50f, 0),
         )
-        assertNotNull("view should still exist after fling", view)
+        assertTrue("view width should remain valid after fling", view.width > 0)
     }
 
     @Test

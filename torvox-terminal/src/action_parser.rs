@@ -97,11 +97,7 @@ impl CsiSeq {
     /// The "effective" param at index `idx`, applying the ECMA-48 default rule:
     /// missing/zero param is treated as 1 (for most cursor sequences).
     pub fn param_or_default(&self, index: usize, default: u32) -> u32 {
-        self.params
-            .get(index)
-            .copied()
-            .filter(|&p| p != 0)
-            .unwrap_or(default)
+        self.params.get(index).copied().filter(|&p| p != 0).unwrap_or(default)
     }
 
     pub fn has_private_marker(&self, marker: u8) -> bool {

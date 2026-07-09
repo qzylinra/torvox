@@ -12,6 +12,13 @@ import java.net.URL
 class BootstrapDownloader(
     private val context: Context,
 ) {
+    companion object {
+        private const val NETWORK_CONNECT_TIMEOUT_MS = 30_000
+        private const val NETWORK_READ_TIMEOUT_MS = 300_000
+        private const val MIN_BOOTSTRAP_SIZE_BYTES = 1_048_576L
+        private const val DOWNLOAD_BUFFER_SIZE = 8192
+    }
+
     suspend fun download(
         url: String,
         arch: String,
@@ -20,8 +27,8 @@ class BootstrapDownloader(
             val cachedDir = File(context.cacheDir, "bootstrap-$arch.zip")
             cachedDir.delete()
             val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 30_000
-            connection.readTimeout = 300_000
+            connection.connectTimeout = NETWORK_CONNECT_TIMEOUT_MS
+            connection.readTimeout = NETWORK_READ_TIMEOUT_MS
             connection.instanceFollowRedirects = true
             connection.connect()
             if (connection.responseCode !in 200..299) {
@@ -30,13 +37,13 @@ class BootstrapDownloader(
                 )
             }
             connection.contentLength.let { length ->
-                if (length > 0 && length < 1_048_576) {
+                if (length > 0 && length < MIN_BOOTSTRAP_SIZE_BYTES) {
                     return@withContext Result.failure(Exception("File too small: $length bytes"))
                 }
             }
             connection.inputStream.use { input ->
                 FileOutputStream(cachedDir).use { output ->
-                    val buffer = ByteArray(8192)
+                    val buffer = ByteArray(DOWNLOAD_BUFFER_SIZE)
                     var total = 0L
                     while (true) {
                         if (!isActive) {
@@ -48,7 +55,7 @@ class BootstrapDownloader(
                         output.write(buffer, 0, bytesRead)
                         total += bytesRead
                     }
-                    if (total < 1_048_576) {
+                    if (total < MIN_BOOTSTRAP_SIZE_BYTES) {
                         cachedDir.delete()
                         return@withContext Result.failure(Exception("Download too small: $total bytes"))
                     }

@@ -7,9 +7,11 @@ description = "Criterion benchmarks for Torvox terminal operations"
 [dependencies]
 torvox-core = { workspace = true }
 torvox-terminal = { workspace = true }
+torvox-renderer = { workspace = true }
+wgpu = { workspace = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 guillotiere = "0.7"
 
 [[bench]]

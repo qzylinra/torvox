@@ -19,12 +19,7 @@ fn cjk_ideograph_width() {
 fn fullwidth_latin_width() {
     let fullwidth = ['\u{FF21}', '\u{FF36}', '\u{FF41}', '\u{FF5A}'];
     for &ch in &fullwidth {
-        assert_eq!(
-            ch.width(),
-            Some(2),
-            "Fullwidth U+{:04X} should have width 2",
-            ch as u32
-        );
+        assert_eq!(ch.width(), Some(2), "Fullwidth U+{:04X} should have width 2", ch as u32);
     }
 }
 
@@ -50,11 +45,7 @@ fn regional_indicator_pair_width() {
         "\u{1F1F0}\u{1F1F7}",
     ];
     for &flag in &flags {
-        assert_eq!(
-            torvox_core::unicode::string_width(flag),
-            2,
-            "flag should have width 2"
-        );
+        assert_eq!(torvox_core::unicode::string_width(flag), 2, "flag should have width 2");
     }
 }
 

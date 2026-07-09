@@ -1,22 +1,59 @@
-// @VT engine (libghostty-vt), IMPL_TERM_002, impl, [REQ_TERM_002]
-// @need-ids: REQ_TERM_002, REQ_TERM_003
+// @REQ_TERM_004
+// @REQ_TERM_005
+// @REQ_TERM_006
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 use flume::{Receiver, Sender, bounded};
+use libghostty_vt::key::{self, Key, Mods};
+use libghostty_vt::screen::GridRef;
 use libghostty_vt::style::{PaletteIndex, StyleColor};
 use libghostty_vt::terminal::{Mode, ModeKind, Point, PointCoordinate};
 use libghostty_vt::{Terminal, TerminalOptions};
 
+/// A single match from search_all_in_scrollback.
+/// Row and column positions are byte offsets in the line text.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchMatch {
+    pub row: u32,
+    pub start_col: u32,
+    pub end_col: u32,
+}
+
 /// Render snapshot of the terminal grid.
 /// Built on the terminal thread; consumed by the renderer thread.
+#[derive(Debug, Default)]
 pub struct GridSnapshot {
     pub rows: u32,
     pub cols: u32,
     pub cursor_row: u32,
     pub cursor_col: u32,
     pub cursor_visible: bool,
+    pub cursor_style: torvox_core::cursor::CursorStyle,
     pub cells: Vec<CellSnapshot>,
+    pub dirty: Vec<bool>,
+    pub kgp_placements: Vec<KgpPlacement>,
+    pub title: String,
+    pub scrollback_length: u32,
+}
+
+/// A Kitty Graphics Protocol (KGP) placement for rendering.
+#[derive(Clone, Debug)]
+pub struct KgpPlacement {
+    pub image_id: u32,
+    pub placement_id: u32,
+    pub row: i32,
+    pub col: i32,
+    pub z: u8,
+}
+
+/// Raw pixel data for a KGP image (RGBA8).
+#[derive(Clone, Debug)]
+pub struct KgpImageData {
+    pub id: u32,
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
 }
 
 impl GridSnapshot {
@@ -51,8 +88,9 @@ pub enum SemanticContent {
 #[derive(Clone, Debug, Default)]
 pub struct CellSnapshot {
     pub codepoint: u32,
-    pub fg: [f32; 4],
-    pub bg: [f32; 4],
+    pub graphemes: Vec<u32>,
+    pub foreground: [f32; 4],
+    pub background: [f32; 4],
     pub bold: bool,
     pub dim: bool,
     pub italic: bool,
@@ -64,8 +102,24 @@ pub struct CellSnapshot {
     pub uri: Option<String>,
     pub semantic: SemanticContent,
     pub overline: bool,
+    pub double_underline: bool,
     pub width: u8,
 }
+
+const COMMAND_CHANNEL_CAPACITY: usize = 256;
+const DISCONNECTED_ROWS: u32 = 24;
+const DISCONNECTED_COLS: u32 = 80;
+const DISCONNECTED_CURSOR_X: u32 = 0;
+const DISCONNECTED_CURSOR_Y: u32 = 0;
+const DISCONNECTED_CURSOR_VISIBLE: bool = true;
+const DISCONNECTED_MODE_ORIGIN: bool = false;
+const DISCONNECTED_MODE_AUTOWRAP: bool = false;
+const DISCONNECTED_TITLE: &str = "";
+const DISCONNECTED_SCROLLBACK: u32 = 0;
+const KGP_STORAGE_LIMIT: u64 = 64 * 1024 * 1024;
+const MAX_GRAPHEME_CLUSTERS: usize = 8;
+const DEFAULT_CELL_WIDTH: u32 = 8;
+const DEFAULT_CELL_HEIGHT: u32 = 16;
 
 enum Command {
     Write(Vec<u8>),
@@ -79,8 +133,11 @@ enum Command {
         rows: u32,
         cols: u32,
     },
-    TakeSnapshot(Sender<GridSnapshot>),
-    ScrollbackLen(Sender<u32>),
+    TakeSnapshot {
+        tx: Sender<GridSnapshot>,
+        scroll_offset: u32,
+    },
+    ScrollbackLength(Sender<u32>),
     ReadLineText {
         row: u32,
         tx: Sender<Option<String>>,
@@ -89,6 +146,11 @@ enum Command {
     SearchInScrollback {
         query: String,
         tx: Sender<Option<(u32, u32)>>,
+    },
+    SearchInScrollbackAll {
+        query: String,
+        case_sensitive: bool,
+        tx: Sender<Vec<SearchMatch>>,
     },
     DumpGrid {
         tx: Sender<DumpedGrid>,
@@ -104,7 +166,30 @@ enum Command {
     Title(Sender<String>),
     Cwd(Sender<String>),
     ModeGet(u16, u8, Sender<bool>),
+    TakeKgpImage {
+        id: u32,
+        tx: Sender<Option<KgpImageData>>,
+    },
+    KeyEncode {
+        key_code: u32,
+        modifiers: u16,
+        action: u8,
+        unicode_char: u32,
+        unshifted_char: u32,
+        tx: Sender<Vec<u8>>,
+    },
     Terminate,
+}
+
+struct RunConfig {
+    command_receiver: Receiver<Command>,
+    rows: u32,
+    cols: u32,
+    scrollback_lines: u32,
+    background_color: [u8; 3],
+    foreground_color: [u8; 3],
+    ansi_colors: [[u8; 3]; 16],
+    response_buffer: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
 /// Thread-safe wrapper around libghostty_vt::Terminal.
@@ -114,22 +199,18 @@ pub struct GhosttyTerminal {
     cmd_tx: Sender<Command>,
     handle: Option<thread::JoinHandle<()>>,
     pty_write_responses: Arc<Mutex<Vec<Vec<u8>>>>,
+    key_encode_rx: Receiver<Vec<u8>>,
+    key_encode_tx_base: Sender<Vec<u8>>,
 }
 
 impl GhosttyTerminal {
     pub fn new(rows: u32, cols: u32, scrollback_lines: u32) -> Result<Self, String> {
-        Self::new_with_theme(
-            rows,
-            cols,
-            scrollback_lines,
-            [30, 30, 46],
-            [205, 214, 244],
-            Self::catppuccin_mocha_ansi(),
-        )
+        let (ansi, bg, fg) = Self::catppuccin_mocha_palette();
+        Self::new_with_theme(rows, cols, scrollback_lines, bg, fg, ansi)
     }
 
-    const fn catppuccin_mocha_ansi() -> [[u8; 3]; 16] {
-        [
+    pub fn catppuccin_mocha_palette() -> ([[u8; 3]; 16], [u8; 3], [u8; 3]) {
+        let ansi = [
             [24, 24, 37],
             [243, 139, 168],
             [166, 227, 161],
@@ -146,7 +227,8 @@ impl GhosttyTerminal {
             [203, 166, 247],
             [148, 226, 213],
             [187, 194, 222],
-        ]
+        ];
+        (ansi, [30, 30, 46], [205, 214, 244])
     }
 
     pub fn new_with_theme(
@@ -157,37 +239,38 @@ impl GhosttyTerminal {
         initial_fg: [u8; 3],
         initial_ansi: [[u8; 3]; 16],
     ) -> Result<Self, String> {
-        let (cmd_tx, cmd_rx) = bounded::<Command>(256);
+        let (cmd_tx, cmd_rx) = bounded::<Command>(COMMAND_CHANNEL_CAPACITY);
         let pty_write_responses = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
         let pty_for_run = pty_write_responses.clone();
         let handle = thread::Builder::new()
             .name("ghostty-terminal".into())
             .spawn(move || {
-                Self::run(
-                    cmd_rx,
+                Self::run(RunConfig {
+                    command_receiver: cmd_rx,
                     rows,
                     cols,
                     scrollback_lines,
-                    initial_bg,
-                    initial_fg,
-                    initial_ansi,
-                    pty_for_run,
-                )
+                    background_color: initial_bg,
+                    foreground_color: initial_fg,
+                    ansi_colors: initial_ansi,
+                    response_buffer: pty_for_run,
+                })
             })
             .map_err(|e| format!("failed to spawn terminal thread: {e}"))?;
+
+        let (key_encode_tx_base, key_encode_rx) = bounded(1);
 
         Ok(Self {
             cmd_tx,
             handle: Some(handle),
             pty_write_responses,
+            key_encode_rx,
+            key_encode_tx_base,
         })
     }
 
     pub fn drain_pty_write_responses(&self) -> Vec<Vec<u8>> {
-        let mut guard = self
-            .pty_write_responses
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
+        let mut guard = self.pty_write_responses.lock().unwrap_or_else(|e| e.into_inner());
         std::mem::take(&mut *guard)
     }
 
@@ -195,75 +278,84 @@ impl GhosttyTerminal {
         format!("\x1b]{};rgb:{:02x}/{:02x}/{:02x}\x1b\\", command, r, g, b).into_bytes()
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn run(
-        rx: Receiver<Command>,
-        rows: u32,
-        cols: u32,
-        scrollback_lines: u32,
-        initial_bg: [u8; 3],
-        initial_fg: [u8; 3],
-        initial_ansi: [[u8; 3]; 16],
-        pty_responses: Arc<Mutex<Vec<Vec<u8>>>>,
-    ) {
+    fn run(config: RunConfig) {
         let Ok(mut terminal) = Terminal::new(TerminalOptions {
-            cols: cols as u16,
-            rows: rows as u16,
-            max_scrollback: scrollback_lines as usize,
+            cols: config.cols as u16,
+            rows: config.rows as u16,
+            max_scrollback: config.scrollback_lines as usize,
         }) else {
+            log::error!("ghostty_terminal: Terminal::new failed — thread exiting");
             return;
         };
 
+        // Initialize Kitty Graphics Protocol (KGP) support
+        if let Err(error) = terminal.set_kitty_image_storage_limit(KGP_STORAGE_LIMIT) {
+            log::error!("ghostty_terminal: set_kitty_image_storage_limit failed: {error}");
+        }
+        // PNG decoder is disabled because the upstream RustPngDecoder API has not
+        // stabilized across libghostty-vt versions. KGP image storage still accepts
+        // pre-decoded raw RGBA data from external PNG decoders.
+
         // Register PTY write-back callback for terminal responses
         // (DECRPM mode reports, DSR, DA, etc.)
-        let _ = terminal.on_pty_write({
+        if let Err(error) = terminal.on_pty_write({
+            let response_buffer = config.response_buffer.clone();
             move |_term, data| {
-                if let Ok(mut guard) = pty_responses.lock() {
+                if let Ok(mut guard) = response_buffer.lock() {
                     guard.push(data.to_vec());
                 }
             }
-        });
+        }) {
+            log::error!("ghostty_terminal: on_pty_write callback registration failed: {error}");
+        }
 
-        let mut default_bg = Self::byte_color_to_float(initial_bg);
-        let mut default_fg = Self::byte_color_to_float(initial_fg);
+        let mut default_bg = Self::byte_color_to_float(config.background_color);
+        let mut default_fg = Self::byte_color_to_float(config.foreground_color);
 
-        // Use VT OSC sequences to set default colors — this is the standard
-        // VT500+ protocol that every terminal emulator supports. OSC 10 = fg,
-        // OSC 11 = bg. Writing via vt_write() ensures Ghostty processes them
-        // through its VT parser, which is more reliable than set_default_*_color.
+        // Reused per-keystroke encoder/event. Allocating these once per
+        // terminal (instead of per keystroke) matches the reference
+        // implementation and avoids losing per-encoder state between keys.
+        // `set_options_from_terminal` still re-syncs encoder modes each key.
+        let mut encoder = key::Encoder::new().ok();
+        let mut event = key::Event::new().ok();
+
         terminal.vt_write(&Self::osc_sequence(
             11,
-            initial_bg[0],
-            initial_bg[1],
-            initial_bg[2],
+            config.background_color[0],
+            config.background_color[1],
+            config.background_color[2],
         ));
         terminal.vt_write(&Self::osc_sequence(
             10,
-            initial_fg[0],
-            initial_fg[1],
-            initial_fg[2],
+            config.foreground_color[0],
+            config.foreground_color[1],
+            config.foreground_color[2],
         ));
 
-        // Set the full 256-color palette so palette-indexed cells resolve correctly
-
-        while let Ok(cmd) = rx.recv() {
-            match cmd {
+        while let Ok(command) = config.command_receiver.recv() {
+            match command {
                 Command::Write(data) => terminal.vt_write(&data),
                 Command::FlushAck(tx) => {
-                    let _ = tx.send(());
+                    if let Err(error) = tx.send(()) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
-                Command::SetTheme { bg, fg, ansi } => {
-                    default_bg = Self::byte_color_to_float(bg);
-                    default_fg = Self::byte_color_to_float(fg);
+                Command::SetTheme {
+                    bg: background,
+                    fg: foreground,
+                    ansi,
+                } => {
+                    default_bg = Self::byte_color_to_float(background);
+                    default_fg = Self::byte_color_to_float(foreground);
                     log::debug!(
                         "SetTheme: bg={:?} fg={:?} -> default_bg={:?} default_fg={:?}",
-                        bg,
-                        fg,
+                        background,
+                        foreground,
                         default_bg,
                         default_fg
                     );
-                    terminal.vt_write(&Self::osc_sequence(11, bg[0], bg[1], bg[2]));
-                    terminal.vt_write(&Self::osc_sequence(10, fg[0], fg[1], fg[2]));
+                    terminal.vt_write(&Self::osc_sequence(11, background[0], background[1], background[2]));
+                    terminal.vt_write(&Self::osc_sequence(10, foreground[0], foreground[1], foreground[2]));
                     for (i, color) in ansi.iter().enumerate() {
                         let osc4 = format!(
                             "\x1b]4;{};rgb:{:02x}/{:02x}/{:02x}\x1b\\",
@@ -273,19 +365,29 @@ impl GhosttyTerminal {
                     }
                 }
                 Command::Resize { rows, cols } => {
-                    let _ = terminal.resize(cols as u16, rows as u16, 8, 16);
+                    if let Err(error) =
+                        terminal.resize(cols as u16, rows as u16, DEFAULT_CELL_WIDTH, DEFAULT_CELL_HEIGHT)
+                    {
+                        log::error!("ghostty_terminal: pty write to ghostty failed: {error}");
+                    }
                 }
-                Command::TakeSnapshot(tx) => {
+                Command::TakeSnapshot { tx, scroll_offset } => {
                     let snapshot =
-                        Self::build_snapshot(&terminal, default_fg, default_bg, &initial_ansi);
-                    let _ = tx.send(snapshot);
+                        Self::build_snapshot(&terminal, default_fg, default_bg, &config.ansi_colors, scroll_offset);
+                    if let Err(error) = tx.send(snapshot) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
-                Command::ScrollbackLen(tx) => {
-                    let _ = tx.send(terminal.scrollback_rows().unwrap_or(0) as u32);
+                Command::ScrollbackLength(tx) => {
+                    if let Err(error) = tx.send(terminal.scrollback_rows().unwrap_or(0) as u32) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::ReadLineText { row, tx } => {
                     let text = Self::read_line_text_impl(&terminal, row);
-                    let _ = tx.send(text);
+                    if let Err(error) = tx.send(text) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::ReadVisibleText(tx) => {
                     let rows = terminal.rows().unwrap_or(24) as u32;
@@ -296,60 +398,194 @@ impl GhosttyTerminal {
                             text.push('\n');
                         }
                     }
-                    let _ = tx.send(text);
+                    if let Err(error) = tx.send(text) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::SearchInScrollback { query, tx } => {
                     let result = Self::search_in_scrollback_impl(&terminal, &query);
-                    let _ = tx.send(result);
+                    if let Err(error) = tx.send(result) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
+                }
+                Command::SearchInScrollbackAll {
+                    query,
+                    case_sensitive,
+                    tx,
+                } => {
+                    let results = Self::search_in_scrollback_all_impl(&terminal, &query, case_sensitive);
+                    if let Err(error) = tx.send(results) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::Rows(tx) => {
-                    let _ = tx.send(terminal.rows().unwrap_or(24) as u32);
+                    if let Err(error) = tx.send(terminal.rows().unwrap_or(24) as u32) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::Cols(tx) => {
-                    let _ = tx.send(terminal.cols().unwrap_or(80) as u32);
+                    if let Err(error) = tx.send(terminal.cols().unwrap_or(80) as u32) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::CursorX(tx) => {
-                    let _ = tx.send(terminal.cursor_x().unwrap_or(0) as u32);
+                    if let Err(error) = tx.send(terminal.cursor_x().unwrap_or(0) as u32) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::CursorY(tx) => {
-                    let _ = tx.send(terminal.cursor_y().unwrap_or(0) as u32);
+                    if let Err(error) = tx.send(terminal.cursor_y().unwrap_or(0) as u32) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::CursorVisible(tx) => {
-                    let _ = tx.send(terminal.is_cursor_visible().unwrap_or(true));
+                    if let Err(error) = tx.send(terminal.is_cursor_visible().unwrap_or(true)) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::OriginMode(tx) => {
-                    let _ = tx.send(terminal.mode(Mode::new(6, ModeKind::Dec)).unwrap_or(false));
+                    if let Err(error) = tx.send(terminal.mode(Mode::new(6, ModeKind::Dec)).unwrap_or(false)) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::Autowrap(tx) => {
-                    let _ = tx.send(terminal.mode(Mode::new(7, ModeKind::Dec)).unwrap_or(false));
+                    if let Err(error) = tx.send(terminal.mode(Mode::new(7, ModeKind::Dec)).unwrap_or(false)) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::AltScreen(tx) => {
                     let is_alt = terminal
                         .active_screen()
-                        .map(|s| s == libghostty_vt::screen::Screen::Alternate)
-                        .unwrap_or(false);
-                    let _ = tx.send(is_alt);
+                        .is_ok_and(|s| s == libghostty_vt::screen::Screen::Alternate);
+                    if let Err(error) = tx.send(is_alt) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::Cwd(tx) => {
-                    let _ = tx.send(terminal.pwd().map(|s| s.to_string()).unwrap_or_default());
+                    if let Err(error) = tx.send(terminal.pwd().map(|path| path.to_string()).unwrap_or_default()) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::ModeGet(num, kind, tx) => {
                     let mode_kind = match kind {
                         0 => libghostty_vt::terminal::ModeKind::Dec,
                         _ => libghostty_vt::terminal::ModeKind::Ansi,
                     };
-                    let _ = tx.send(
+                    if let Err(error) = tx.send(
                         terminal
                             .mode(libghostty_vt::terminal::Mode::new(num, mode_kind))
                             .unwrap_or(false),
-                    );
+                    ) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::Title(tx) => {
-                    let _ = tx.send(terminal.title().unwrap_or("").to_string());
+                    if let Err(error) = tx.send(terminal.title().unwrap_or("").to_string()) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
                 }
                 Command::DumpGrid { tx } => {
                     let dumped = Self::build_dumped_grid(&terminal);
-                    let _ = tx.send(dumped);
+                    if let Err(error) = tx.send(dumped) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
+                }
+                Command::TakeKgpImage { id, tx } => {
+                    let kgp_data = (|| -> Option<KgpImageData> {
+                        let graphics = terminal.kitty_graphics().ok()?;
+                        let image = graphics.image(id)?;
+                        let width = image.width().ok()?;
+                        let height = image.height().ok()?;
+                        let data = image.data().ok()?;
+                        Some(KgpImageData {
+                            id,
+                            width,
+                            height,
+                            data: data.to_vec(),
+                        })
+                    })();
+                    if let Err(error) = tx.send(kgp_data) {
+                        log::error!("ghostty_terminal: command channel send failed: {error}");
+                    }
+                }
+                Command::KeyEncode {
+                    key_code,
+                    modifiers,
+                    action,
+                    unicode_char,
+                    unshifted_char,
+                    tx,
+                } => {
+                    let (encoder, event) = match (encoder.as_mut(), event.as_mut()) {
+                        (Some(enc), Some(evt)) => (enc, evt),
+                        _ => {
+                            log::warn!("ghostty_terminal: key encoder/event unavailable — dropping key");
+                            let _ = tx.send(Vec::new());
+                            continue;
+                        }
+                    };
+
+                    let ghostty_key = map_android_key_code(key_code);
+                    let mods = Mods::from_bits_retain(modifiers);
+                    let encoder_action = match action {
+                        1 => key::Action::Release,
+                        2 => key::Action::Repeat,
+                        _ => key::Action::Press,
+                    };
+
+                    encoder.set_options_from_terminal(&terminal);
+                    event.set_action(encoder_action);
+                    event.set_key(ghostty_key);
+                    event.set_consumed_mods(Mods::empty());
+                    // Clear text state left over from the previous keystroke.
+                    event.set_utf8(None::<&str>);
+                    event.set_unshifted_codepoint('\0');
+
+                    // Per libghostty-vt key/event.h:
+                    // - `utf8` is the produced text WITHOUT Ctrl/Alt
+                    //   transformations. C0 control characters
+                    //   (U+0000..U+001F, U+007F) must NOT be passed; pass NULL
+                    //   so the encoder uses the logical key instead.
+                    // - `unshifted_codepoint` is the base key with NO modifiers.
+                    // The Kotlin bridge supplies `unshifted_char`; when absent we
+                    // fall back to `unicode_char` for both fields.
+                    let is_c0 = unicode_char <= 0x1F || unicode_char == 0x7F;
+                    if !is_c0 {
+                        if let Some(character) = char::from_u32(unicode_char) {
+                            let mut utf8_buf = [0u8; 4];
+                            event.set_utf8(Some(character.encode_utf8(&mut utf8_buf)));
+                        }
+                        let unshifted_cp = char::from_u32(if unshifted_char > 0 {
+                            unshifted_char
+                        } else {
+                            unicode_char
+                        });
+                        if let Some(cp) = unshifted_cp {
+                            event.set_unshifted_codepoint(cp);
+                        }
+                        // RK2: when SHIFT only changed the printed character
+                        // (e.g. Shift+; -> :), strip SHIFT so the Kitty
+                        // keyboard protocol does not emit a spurious
+                        // `\033[59;2u` for plain printable input. Requires the
+                        // unshifted codepoint to detect the shift-only change.
+                        let final_mods =
+                            if mods.contains(Mods::SHIFT) && unshifted_char > 0 && unicode_char != unshifted_char {
+                                mods & !Mods::SHIFT
+                            } else {
+                                mods
+                            };
+                        event.set_mods(final_mods);
+                    } else {
+                        event.set_mods(mods);
+                    }
+
+                    let mut response = Vec::new();
+                    if let Err(error) = encoder.encode_to_vec(event, &mut response) {
+                        log::warn!("ghostty_terminal: encoder.encode_to_vec failed: {error}");
+                    }
+                    if let Err(error) = tx.send(response) {
+                        log::warn!("ghostty_terminal: key_encode response send failed: {error}");
+                    }
                 }
                 Command::Terminate => break,
             }
@@ -358,106 +594,256 @@ impl GhosttyTerminal {
 
     // ── Public API ───────────────────────────────────────
 
+    /// Write raw VT data to the terminal engine.
+    ///
+    /// # Contract
+    /// This method appends a String Terminator (`ST`, `\x1b\\`) followed by an
+    /// SGR reset (`\x1b[0m`) after the supplied `data`. The `ST` closes any
+    /// incomplete OSC/DCS sequence left over from a previous write, and the SGR
+    /// reset flushes any pending style state so cell attributes are committed
+    /// deterministically before the next snapshot.
+    ///
+    /// Because of this suffix, **callers MUST NOT split a single escape
+    /// sequence (CSI/DCS/OSC) across multiple `vt_write` calls.** Each call
+    /// must contain complete, self-terminated sequences; build a whole sequence
+    /// into one buffer and pass it here in a single call. Plain text and
+    /// complete sequences may be concatenated freely.
     pub fn vt_write(&mut self, data: &[u8]) {
         let mut buf = Vec::with_capacity(data.len() + 2);
+        buf.extend_from_slice(data);
+        buf.extend_from_slice(b"\x1b\\\x1b[0m");
+        if let Err(error) = self.cmd_tx.send(Command::Write(buf)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+    }
+
+    /// Write PTY output to the terminal, converting LF (`\n`) to CR+LF (`\r\n`).
+    /// This is necessary because Ghostty's VT engine treats LF as a line feed
+    /// without carriage return, which produces incorrect line advancement for
+    /// typical terminal output.
+    ///
+    /// Unlike [`vt_write`], this method applies text-level `\n`→`\r\n` conversion
+    /// suitable for PTY output. VT control sequences, DEC rectangle operations,
+    /// and binary VT data should use [`vt_write`] instead.
+    pub fn pty_write(&mut self, data: &[u8]) {
+        let mut buf = Vec::with_capacity(data.len() + 2);
+        let mut prev: u8 = 0;
         for &b in data {
-            if b == b'\n' {
-                buf.extend_from_slice(b"\r\n");
-            } else {
-                buf.push(b);
+            // Convert a bare LF to CRLF, but only when the LF is not already
+            // preceded by a CR. Input that already contains CRLF (common from
+            // PTY output) would otherwise become CRCRLF, producing a spurious
+            // extra carriage return.
+            if b == b'\n' && prev != b'\r' {
+                buf.push(b'\r');
+            }
+            buf.push(b);
+            prev = b;
+        }
+        buf.extend_from_slice(b"\x1b\\\x1b[0m");
+        if let Err(error) = self.cmd_tx.send(Command::Write(buf)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+    }
+
+    /// Returns `true` if the terminal thread is still alive and accepting commands.
+    /// Uses flume's built-in disconnect detection: when the terminal thread exits,
+    /// its `Receiver<Command>` is dropped, causing `Sender::is_disconnected()` to
+    /// return `true`.
+    ///
+    /// Note: there is an inherent race — the terminal can die between an
+    /// `is_alive()` check and the next command send. This is acceptable for
+    /// zombie-detection purposes; at most one command will silently fail before
+    /// the next check detects the disconnection.
+    pub fn is_alive(&self) -> bool {
+        !self.cmd_tx.is_disconnected()
+    }
+
+    /// Receive a response from the terminal thread, logging a warning on
+    /// disconnection and returning `fallback` if the thread is dead.
+    /// Each method label is logged once per session to avoid log spam.
+    fn recv_or_fallback<T: core::fmt::Debug>(rx: flume::Receiver<T>, fallback: T, method: &str) -> T {
+        match rx.recv() {
+            Ok(value) => value,
+            Err(_) => {
+                log::warn!(
+                    "ghostty_terminal: terminal thread disconnected — returning fallback for {method}: {fallback:?}"
+                );
+                fallback
             }
         }
-        // Send ST (String Terminator) to close any incomplete OSC/DCS sequence
-        // from prior writes, followed by SGR reset to flush pending style state
-        // and ensure cell attributes are correctly committed before snapshot.
-        buf.extend_from_slice(b"\x1b\\\x1b[0m");
-        let _ = self.cmd_tx.send(Command::Write(buf));
     }
 
     pub fn flush(&self) {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::FlushAck(tx));
-        let _ = rx.recv();
+        if let Err(error) = self.cmd_tx.send(Command::FlushAck(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        if rx.recv().is_err() {
+            log::warn!("ghostty_terminal: flush_ack recv failed — session may be dead");
+        }
     }
 
-    pub fn set_theme(&self, bg: [u8; 3], fg: [u8; 3], ansi: [[u8; 3]; 16]) {
-        let _ = self.cmd_tx.send(Command::SetTheme { bg, fg, ansi });
+    pub fn set_theme(&self, background: [u8; 3], foreground: [u8; 3], ansi: [[u8; 3]; 16]) {
+        if let Err(error) = self.cmd_tx.send(Command::SetTheme {
+            bg: background,
+            fg: foreground,
+            ansi,
+        }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
     }
 
     pub fn resize(&mut self, rows: u32, cols: u32) {
-        let _ = self.cmd_tx.send(Command::Resize { rows, cols });
+        if let Err(error) = self.cmd_tx.send(Command::Resize { rows, cols }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
     }
 
     pub fn rows(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::Rows(tx));
-        rx.recv().unwrap_or(24)
+        if let Err(error) = self.cmd_tx.send(Command::Rows(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_ROWS, "rows")
     }
 
     pub fn cols(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::Cols(tx));
-        rx.recv().unwrap_or(80)
+        if let Err(error) = self.cmd_tx.send(Command::Cols(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_COLS, "cols")
     }
 
     pub fn take_snapshot(&self) -> GridSnapshot {
+        self.take_snapshot_with_scroll(0)
+    }
+
+    pub fn take_snapshot_with_scroll(&self, scroll_offset: u32) -> GridSnapshot {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::TakeSnapshot(tx));
-        rx.recv().unwrap_or_else(|_| GridSnapshot {
-            rows: 0,
-            cols: 0,
-            cursor_row: 0,
-            cursor_col: 0,
-            cursor_visible: true,
-            cells: Vec::new(),
-        })
+        if let Err(error) = self.cmd_tx.send(Command::TakeSnapshot { tx, scroll_offset }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(
+            rx,
+            GridSnapshot {
+                rows: DISCONNECTED_ROWS,
+                cols: DISCONNECTED_COLS,
+                cursor_row: DISCONNECTED_CURSOR_Y,
+                cursor_col: DISCONNECTED_CURSOR_X,
+                cursor_visible: DISCONNECTED_CURSOR_VISIBLE,
+                cursor_style: Default::default(),
+                cells: Vec::new(),
+                dirty: Vec::new(),
+                kgp_placements: Vec::new(),
+                title: String::new(),
+                scrollback_length: 0,
+            },
+            "take_snapshot",
+        )
+    }
+
+    pub fn take_kgp_image(&self, image_id: u32) -> Option<KgpImageData> {
+        let (tx, rx) = bounded(1);
+        if let Err(error) = self.cmd_tx.send(Command::TakeKgpImage { id: image_id, tx }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        match rx.recv() {
+            Ok(result) => result,
+            Err(error) => {
+                log::warn!("ghostty_terminal: take_kgp_image recv failed — terminal may be dead: {error}");
+                None
+            }
+        }
     }
 
     pub fn cursor_x(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::CursorX(tx));
-        rx.recv().unwrap_or(0)
+        if let Err(error) = self.cmd_tx.send(Command::CursorX(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_CURSOR_X, "cursor_x")
     }
 
     pub fn cursor_y(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::CursorY(tx));
-        rx.recv().unwrap_or(0)
+        if let Err(error) = self.cmd_tx.send(Command::CursorY(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_CURSOR_Y, "cursor_y")
     }
 
     pub fn cursor_visible(&self) -> bool {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::CursorVisible(tx));
-        rx.recv().unwrap_or(true)
+        if let Err(error) = self.cmd_tx.send(Command::CursorVisible(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_CURSOR_VISIBLE, "cursor_visible")
     }
 
     pub fn cwd(&self) -> String {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::Cwd(tx));
+        if let Err(error) = self.cmd_tx.send(Command::Cwd(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
         rx.recv().unwrap_or_default()
+    }
+
+    pub fn key_encode(
+        &self,
+        key_code: u32,
+        modifiers: u16,
+        action: u8,
+        unicode_char: u32,
+        unshifted_char: u32,
+    ) -> Option<Vec<u8>> {
+        let tx = self.key_encode_tx_base.clone();
+        if self
+            .cmd_tx
+            .send(Command::KeyEncode {
+                key_code,
+                modifiers,
+                action,
+                unicode_char,
+                unshifted_char,
+                tx,
+            })
+            .is_err()
+        {
+            return None;
+        }
+        self.key_encode_rx.recv().ok()
     }
 
     pub fn mode_get(&self, mode_num: u16, kind: u8) -> bool {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::ModeGet(mode_num, kind, tx));
+        if let Err(error) = self.cmd_tx.send(Command::ModeGet(mode_num, kind, tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
         rx.recv().unwrap_or(false)
     }
 
     pub fn origin_mode(&self) -> bool {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::OriginMode(tx));
-        rx.recv().unwrap_or(false)
+        if let Err(error) = self.cmd_tx.send(Command::OriginMode(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_MODE_ORIGIN, "origin_mode")
     }
 
     pub fn autowrap(&self) -> bool {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::Autowrap(tx));
-        rx.recv().unwrap_or(false)
+        if let Err(error) = self.cmd_tx.send(Command::Autowrap(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_MODE_AUTOWRAP, "autowrap")
     }
 
     pub fn alt_screen(&self) -> bool {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::AltScreen(tx));
+        if let Err(error) = self.cmd_tx.send(Command::AltScreen(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
         rx.recv().unwrap_or(false)
     }
 
@@ -487,40 +873,64 @@ impl GhosttyTerminal {
 
     pub fn title(&self) -> String {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::Title(tx));
-        rx.recv().unwrap_or_default()
+        if let Err(error) = self.cmd_tx.send(Command::Title(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_TITLE.to_string(), "title")
     }
 
-    pub fn scrollback_len(&self) -> u32 {
+    pub fn scrollback_length(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::ScrollbackLen(tx));
-        rx.recv().unwrap_or(0)
+        if let Err(error) = self.cmd_tx.send(Command::ScrollbackLength(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        Self::recv_or_fallback(rx, DISCONNECTED_SCROLLBACK, "scrollback_length")
     }
 
     pub fn read_line_text(&self, row: u32) -> Option<String> {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::ReadLineText { row, tx });
+        if let Err(error) = self.cmd_tx.send(Command::ReadLineText { row, tx }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
         rx.recv().unwrap_or(None)
     }
 
     pub fn read_visible_text(&self) -> String {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::ReadVisibleText(tx));
+        if let Err(error) = self.cmd_tx.send(Command::ReadVisibleText(tx)) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
         rx.recv().unwrap_or_default()
     }
 
     pub fn search_in_scrollback(&self, query: &str) -> Option<(u32, u32)> {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::SearchInScrollback {
+        if let Err(error) = self.cmd_tx.send(Command::SearchInScrollback {
             query: query.to_string(),
             tx,
-        });
+        }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
         rx.recv().unwrap_or(None)
+    }
+
+    pub fn search_all_in_scrollback(&self, query: &str, case_sensitive: bool) -> Vec<SearchMatch> {
+        let (tx, rx) = bounded(1);
+        if let Err(error) = self.cmd_tx.send(Command::SearchInScrollbackAll {
+            query: query.to_string(),
+            case_sensitive,
+            tx,
+        }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
+        rx.recv().unwrap_or_default()
     }
 
     pub fn dump_grid(&self) -> DumpedGrid {
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::DumpGrid { tx });
+        if let Err(error) = self.cmd_tx.send(Command::DumpGrid { tx }) {
+            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        }
         rx.recv().unwrap_or(DumpedGrid {
             rows: 0,
             cols: 0,
@@ -538,12 +948,16 @@ impl GhosttyTerminal {
 
     /// DECFRA: Fill rectangle with char_code (rows top..bottom, cols left..right, 1-indexed).
     pub fn dec_fill_rect(&mut self, char_code: u8, top: u32, left: u32, bottom: u32, right: u32) {
+        let count = (right - left + 1) as usize;
         for row in top..=bottom {
+            // Build the full cursor-move + fill sequence in one buffer so the
+            // single `vt_write` call contains a complete, self-terminated
+            // sequence (see `vt_write` contract — never split one sequence).
+            let mut buf = Vec::with_capacity(count + 16);
             let pos = format!("\x1b[{};{}H", row, left);
-            self.vt_write(pos.as_bytes());
-            let count = (right - left + 1) as usize;
-            let fill = vec![char_code; count];
-            self.vt_write(&fill);
+            buf.extend_from_slice(pos.as_bytes());
+            buf.extend(std::iter::repeat_n(char_code, count));
+            self.vt_write(&buf);
         }
         self.flush();
     }
@@ -555,23 +969,21 @@ impl GhosttyTerminal {
 
     /// DECCARA: Change attribute in rectangle.
     /// Writes spaces with the given SGR attribute applied.
-    pub fn dec_change_attr_rect(
-        &mut self,
-        sgr_seq: &[u8],
-        top: u32,
-        left: u32,
-        bottom: u32,
-        right: u32,
-    ) {
+    pub fn dec_change_attr_rect(&mut self, sgr_seq: &[u8], top: u32, left: u32, bottom: u32, right: u32) {
+        let count = (right - left + 1) as usize;
         for row in top..=bottom {
+            // Build the entire cursor-move + SGR + fill sequence in one buffer.
+            // Splitting the SGR escape sequence (`\x1b[` + params + `m`) across
+            // multiple `vt_write` calls would inject a stray ST/SGR reset inside
+            // the sequence and is therefore forbidden by the `vt_write` contract.
+            let mut buf = Vec::with_capacity(count + sgr_seq.len() + 16);
             let pos = format!("\x1b[{};{}H", row, left);
-            self.vt_write(pos.as_bytes());
-            self.vt_write(b"\x1b[");
-            self.vt_write(sgr_seq);
-            self.vt_write(b"m");
-            let count = (right - left + 1) as usize;
-            let fill = vec![b' '; count];
-            self.vt_write(&fill);
+            buf.extend_from_slice(pos.as_bytes());
+            buf.extend_from_slice(b"\x1b[");
+            buf.extend_from_slice(sgr_seq);
+            buf.extend_from_slice(b"m");
+            buf.extend(std::iter::repeat_n(b' ', count));
+            self.vt_write(&buf);
         }
         self.flush();
     }
@@ -587,28 +999,28 @@ impl GhosttyTerminal {
     ) {
         match style.fg_color {
             StyleColor::Rgb(c) => {
-                data.fg = Self::byte_color_to_float([c.r, c.g, c.b]);
+                data.foreground = Self::byte_color_to_float([c.r, c.g, c.b]);
             }
             StyleColor::Palette(idx) => {
-                data.fg = Self::palette_index_to_float(idx, palette);
+                data.foreground = Self::palette_index_to_float(idx, palette);
             }
             _ => {
-                data.fg = default_fg;
+                data.foreground = default_fg;
             }
         }
         match style.bg_color {
             StyleColor::Rgb(c) => {
-                data.bg = Self::byte_color_to_float([c.r, c.g, c.b]);
+                data.background = Self::byte_color_to_float([c.r, c.g, c.b]);
             }
             StyleColor::Palette(idx) => {
-                data.bg = Self::palette_index_to_float(idx, palette);
+                data.background = Self::palette_index_to_float(idx, palette);
             }
             _ => {
-                data.bg = default_bg;
+                data.background = default_bg;
             }
         }
         data.bold = style.bold;
-        data.dim = false; // Ghostty C API does not expose dim/faint
+        data.dim = style.faint;
         data.italic = style.italic;
         data.strikethrough = style.strikethrough;
         data.overline = style.overline;
@@ -622,6 +1034,7 @@ impl GhosttyTerminal {
                 | libghostty_vt::style::Underline::Dashed
                 | libghostty_vt::style::Underline::Dotted
         );
+        data.double_underline = style.underline == libghostty_vt::style::Underline::Double;
         data.reverse = style.inverse;
     }
 
@@ -637,27 +1050,19 @@ impl GhosttyTerminal {
         let rows = terminal.rows().unwrap_or(24) as u32;
         let cols = terminal.cols().unwrap_or(80) as u32;
         let scrollback_rows = terminal.scrollback_rows().unwrap_or(0) as u32;
+        let palette = Self::catppuccin_mocha_palette().0;
 
         let mut visible = Vec::with_capacity((rows * cols) as usize);
         for row in 0..rows {
             for col in 0..cols {
-                let coord = PointCoordinate {
-                    x: col as u16,
-                    y: row,
-                };
+                let coord = PointCoordinate { x: col as u16, y: row };
                 let mut data = CellSnapshot::default();
                 if let Ok(point) = terminal.grid_ref(Point::Viewport(coord)) {
                     if let Ok(cell) = point.cell() {
                         data.codepoint = cell.codepoint().unwrap_or(0);
                     }
                     if let Ok(style) = point.style() {
-                        Self::apply_style_to_snapshot(
-                            &mut data,
-                            &style,
-                            [0.0; 4],
-                            [0.0; 4],
-                            &Self::catppuccin_mocha_ansi(),
-                        );
+                        Self::apply_style_to_snapshot(&mut data, &style, [0.0; 4], [0.0; 4], &palette);
                     }
                 }
                 visible.push(data);
@@ -668,23 +1073,14 @@ impl GhosttyTerminal {
         for i in 0..scrollback_rows {
             let mut row_cells = Vec::with_capacity(cols as usize);
             for col in 0..cols {
-                let coord = PointCoordinate {
-                    x: col as u16,
-                    y: i,
-                };
+                let coord = PointCoordinate { x: col as u16, y: i };
                 let mut data = CellSnapshot::default();
                 if let Ok(point) = terminal.grid_ref(Point::History(coord)) {
                     if let Ok(cell) = point.cell() {
                         data.codepoint = cell.codepoint().unwrap_or(0);
                     }
                     if let Ok(style) = point.style() {
-                        Self::apply_style_to_snapshot(
-                            &mut data,
-                            &style,
-                            [0.0; 4],
-                            [0.0; 4],
-                            &Self::catppuccin_mocha_ansi(),
-                        );
+                        Self::apply_style_to_snapshot(&mut data, &style, [0.0; 4], [0.0; 4], &palette);
                     }
                 }
                 row_cells.push(data);
@@ -744,60 +1140,79 @@ impl GhosttyTerminal {
         default_fg: [f32; 4],
         default_bg: [f32; 4],
         palette: &[[u8; 3]; 16],
+        scroll_offset: u32,
     ) -> GridSnapshot {
         let rows = terminal.rows().unwrap_or(24) as u32;
         let cols = terminal.cols().unwrap_or(80) as u32;
         let size = (rows * cols) as usize;
+        let scrollback_rows = terminal.scrollback_rows().unwrap_or(0) as u32;
+
+        let history_rows = scroll_offset.min(scrollback_rows).min(rows);
+        let viewport_rows = rows - history_rows;
+
         let mut cells = Vec::with_capacity(size);
 
-        for row in 0..rows {
+        let default_data = || -> CellSnapshot {
+            CellSnapshot {
+                codepoint: 0,
+                graphemes: Vec::new(),
+                foreground: default_fg,
+                background: default_bg,
+                bold: false,
+                dim: false,
+                italic: false,
+                underline: false,
+                reverse: false,
+                strikethrough: false,
+                blink: false,
+                hidden: false,
+                uri: None,
+                semantic: SemanticContent::Output,
+                overline: false,
+                double_underline: false,
+                width: 1,
+            }
+        };
+
+        // Fill from scrollback history for scrolled-up portion
+        for row in 0..history_rows {
+            let history_row = scrollback_rows - history_rows + row;
             for col in 0..cols {
                 let coord = PointCoordinate {
                     x: col as u16,
-                    y: row,
+                    y: history_row,
                 };
-                let mut data = CellSnapshot {
-                    codepoint: 0,
-                    fg: default_fg,
-                    bg: default_bg,
-                    bold: false,
-                    dim: false,
-                    italic: false,
-                    underline: false,
-                    reverse: false,
-                    strikethrough: false,
-                    blink: false,
-                    hidden: false,
-                    uri: None,
-                    semantic: SemanticContent::Output,
-                    overline: false,
-                    width: 1,
-                };
-
-                if let Ok(point) = terminal.grid_ref(Point::Viewport(coord)) {
-                    if let Ok(cell) = point.cell() {
-                        data.codepoint = cell.codepoint().unwrap_or(0);
-                        if let Some(ch) = char::from_u32(data.codepoint)
-                            && torvox_core::unicode::is_wide(ch)
-                        {
-                            data.width = 2;
-                        }
-                    }
-                    if let Ok(style) = point.style() {
-                        Self::apply_style_to_snapshot(
-                            &mut data, &style, default_fg, default_bg, palette,
-                        );
-                    }
-                    data.semantic = Self::read_semantic_content(&point);
+                let mut data = default_data();
+                if let Ok(grid_ref) = terminal.grid_ref(Point::History(coord)) {
+                    Self::read_cell_into_snapshot(&grid_ref, &mut data, default_fg, default_bg, palette);
                 }
-
                 cells.push(data);
             }
         }
 
+        // Fill from viewport for remaining bottom rows
+        for row in 0..viewport_rows {
+            for col in 0..cols {
+                let coord = PointCoordinate { x: col as u16, y: row };
+                let mut data = default_data();
+                if let Ok(grid_ref) = terminal.grid_ref(Point::Viewport(coord)) {
+                    Self::read_cell_into_snapshot(&grid_ref, &mut data, default_fg, default_bg, palette);
+                }
+                cells.push(data);
+            }
+        }
+
+        let cursor_visible = if scroll_offset > 0 {
+            false
+        } else {
+            terminal.is_cursor_visible().unwrap_or(true)
+        };
         let cursor_row = terminal.cursor_y().unwrap_or(0) as u32;
         let cursor_col = terminal.cursor_x().unwrap_or(0) as u32;
-        let cursor_visible = terminal.is_cursor_visible().unwrap_or(true);
+
+        let dirty = vec![true; rows as usize];
+
+        let kgp_placements = Self::collect_kgp_placements(terminal);
 
         GridSnapshot {
             rows,
@@ -805,19 +1220,101 @@ impl GhosttyTerminal {
             cursor_row,
             cursor_col,
             cursor_visible,
+            cursor_style: Default::default(),
             cells,
+            dirty,
+            kgp_placements,
+            title: terminal.title().unwrap_or_default().to_string(),
+            scrollback_length: terminal.scrollback_rows().unwrap_or(0) as u32,
         }
+    }
+
+    fn read_cell_into_snapshot(
+        grid_ref: &GridRef<'_>,
+        data: &mut CellSnapshot,
+        default_fg: [f32; 4],
+        default_bg: [f32; 4],
+        palette: &[[u8; 3]; 16],
+    ) {
+        if let Ok(cell) = grid_ref.cell() {
+            data.codepoint = cell.codepoint().unwrap_or(0);
+            let mut buf = [char::default(); MAX_GRAPHEME_CLUSTERS];
+            if let Ok(n) = grid_ref.graphemes(&mut buf) {
+                data.graphemes = buf[..n].iter().map(|&c| c as u32).collect();
+            }
+            if let Some(ch) = char::from_u32(data.codepoint)
+                && torvox_core::unicode::is_wide(ch)
+            {
+                data.width = 2;
+            }
+        }
+        if let Ok(style) = grid_ref.style() {
+            Self::apply_style_to_snapshot(data, &style, default_fg, default_bg, palette);
+        }
+        data.semantic = Self::read_semantic_content(grid_ref);
+    }
+
+    fn collect_kgp_placements(terminal: &libghostty_vt::Terminal) -> Vec<KgpPlacement> {
+        use libghostty_vt::kitty::graphics::PlacementIterator;
+
+        let Ok(graphics) = terminal.kitty_graphics() else {
+            log::warn!("ghostty_terminal: kitty_graphics() failed — no KGP placements");
+            return Vec::new();
+        };
+        let Ok(mut iter) = PlacementIterator::new() else {
+            log::warn!("ghostty_terminal: PlacementIterator::new() failed");
+            return Vec::new();
+        };
+        let Ok(iteration) = iter.update(&graphics) else {
+            log::warn!("ghostty_terminal: PlacementIterator::update() failed");
+            return Vec::new();
+        };
+
+        let mut placements = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut it = iteration;
+        while let Some(place) = it.next() {
+            let Ok(image_id) = place.image_id() else { continue };
+            let Ok(placement_id) = place.placement_id() else {
+                continue;
+            };
+            if !seen.insert((image_id, placement_id)) {
+                continue;
+            }
+
+            let Some(image) = graphics.image(image_id) else {
+                continue;
+            };
+            if let Ok(Some(pos)) = place.viewport_pos(&image, terminal) {
+                placements.push(KgpPlacement {
+                    image_id,
+                    placement_id,
+                    row: pos.row,
+                    col: pos.col,
+                    z: 0,
+                });
+            }
+        }
+        placements
     }
 
     fn read_line_text_impl(terminal: &Terminal, row: u32) -> Option<String> {
         let cols = terminal.cols().unwrap_or(80) as u32;
+        let scrollback_rows = terminal.scrollback_rows().unwrap_or(0) as u32;
         let mut text = String::new();
         for col in 0..cols {
-            let coord = PointCoordinate {
-                x: col as u16,
-                y: row,
+            let coord = PointCoordinate { x: col as u16, y: row };
+            let point = if row < scrollback_rows {
+                terminal.grid_ref(Point::History(coord))
+            } else {
+                let viewport_row = row - scrollback_rows;
+                let vp_coord = PointCoordinate {
+                    x: col as u16,
+                    y: viewport_row,
+                };
+                terminal.grid_ref(Point::Viewport(vp_coord))
             };
-            if let Ok(point) = terminal.grid_ref(Point::Viewport(coord))
+            if let Ok(point) = point
                 && let Ok(cell) = point.cell()
             {
                 let cp = cell.codepoint().unwrap_or(0);
@@ -831,11 +1328,7 @@ impl GhosttyTerminal {
             }
         }
         let trimmed = text.trim_end().to_string();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed)
-        }
+        if trimmed.is_empty() { None } else { Some(trimmed) }
     }
 
     fn search_in_scrollback_impl(terminal: &Terminal, query: &str) -> Option<(u32, u32)> {
@@ -852,21 +1345,185 @@ impl GhosttyTerminal {
         }
         None
     }
+
+    fn search_in_scrollback_all_impl(terminal: &Terminal, query: &str, case_sensitive: bool) -> Vec<SearchMatch> {
+        if query.is_empty() {
+            return vec![];
+        }
+        let total = terminal.total_rows().unwrap_or(0) as u32;
+        let mut results = Vec::new();
+        let search_query = if case_sensitive {
+            query.to_string()
+        } else {
+            query.to_lowercase()
+        };
+        for row in 0..total {
+            if let Some(line) = Self::read_line_text_impl(terminal, row) {
+                let search_line = if case_sensitive {
+                    line.clone()
+                } else {
+                    line.to_lowercase()
+                };
+                let mut start = 0;
+                while let Some(col) = search_line[start..].find(&search_query) {
+                    let abs_col = start + col;
+                    results.push(SearchMatch {
+                        row,
+                        start_col: abs_col as u32,
+                        end_col: (abs_col + search_query.len()) as u32,
+                    });
+                    start = abs_col + 1;
+                }
+            }
+        }
+        results
+    }
 }
 
 impl Drop for GhosttyTerminal {
     fn drop(&mut self) {
-        let _ = self.cmd_tx.send(Command::Terminate);
-        if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
+        if let Err(error) = self.cmd_tx.send(Command::Terminate) {
+            log::error!("ghostty_terminal: cmd_tx send Terminate failed: {error}");
         }
+        if let Some(handle) = self.handle.take()
+            && let Err(error) = handle.join()
+        {
+            log::error!("ghostty_terminal: thread join failed: {:?}", error);
+        }
+    }
+}
+
+/// Map Android `KeyEvent` key codes to ghostty `key::Key` values.
+/// Reference: <https://developer.android.com/reference/android/view/KeyEvent>
+fn map_android_key_code(key_code: u32) -> Key {
+    match key_code {
+        // Alphabet keys
+        29 => Key::A,
+        30 => Key::B,
+        31 => Key::C,
+        32 => Key::D,
+        33 => Key::E,
+        34 => Key::F,
+        35 => Key::G,
+        36 => Key::H,
+        37 => Key::I,
+        38 => Key::J,
+        39 => Key::K,
+        40 => Key::L,
+        41 => Key::M,
+        42 => Key::N,
+        43 => Key::O,
+        44 => Key::P,
+        45 => Key::Q,
+        46 => Key::R,
+        47 => Key::S,
+        48 => Key::T,
+        49 => Key::U,
+        50 => Key::V,
+        51 => Key::W,
+        52 => Key::X,
+        53 => Key::Y,
+        54 => Key::Z,
+        // Digit keys
+        7 => Key::Digit0,
+        8 => Key::Digit1,
+        9 => Key::Digit2,
+        10 => Key::Digit3,
+        11 => Key::Digit4,
+        12 => Key::Digit5,
+        13 => Key::Digit6,
+        14 => Key::Digit7,
+        15 => Key::Digit8,
+        16 => Key::Digit9,
+        // Symbol keys
+        68 => Key::Backquote,
+        69 => Key::Minus,
+        70 => Key::Equal,
+        71 => Key::BracketLeft,
+        72 => Key::BracketRight,
+        73 => Key::Backslash,
+        74 => Key::Semicolon,
+        75 => Key::Quote,
+        76 => Key::Slash,
+        55 => Key::Comma,
+        56 => Key::Period,
+        // Navigation and editing
+        19 => Key::ArrowUp,
+        20 => Key::ArrowDown,
+        21 => Key::ArrowLeft,
+        22 => Key::ArrowRight,
+        66 => Key::Enter,
+        67 => Key::Backspace,
+        112 => Key::Delete,
+        61 => Key::Tab,
+        62 => Key::Space,
+        111 => Key::Escape,
+        122 => Key::Home,
+        123 => Key::End,
+        92 => Key::PageUp,
+        93 => Key::PageDown,
+        124 => Key::Insert,
+        // Modifier keys
+        57 => Key::AltLeft,
+        58 => Key::AltRight,
+        59 => Key::ShiftLeft,
+        60 => Key::ShiftRight,
+        113 => Key::ControlLeft,
+        114 => Key::ControlRight,
+        115 => Key::CapsLock,
+        116 => Key::ScrollLock,
+        143 => Key::NumLock,
+        119 => Key::Fn,
+        // Function keys
+        131 => Key::F1,
+        132 => Key::F2,
+        133 => Key::F3,
+        134 => Key::F4,
+        135 => Key::F5,
+        136 => Key::F6,
+        137 => Key::F7,
+        138 => Key::F8,
+        139 => Key::F9,
+        140 => Key::F10,
+        141 => Key::F11,
+        142 => Key::F12,
+        // System keys
+        117 => Key::MetaLeft,
+        118 => Key::MetaRight,
+        120 => Key::PrintScreen,
+        121 => Key::Pause,
+        // Numpad keys
+        144 => Key::Numpad0,
+        145 => Key::Numpad1,
+        146 => Key::Numpad2,
+        147 => Key::Numpad3,
+        148 => Key::Numpad4,
+        149 => Key::Numpad5,
+        150 => Key::Numpad6,
+        151 => Key::Numpad7,
+        152 => Key::Numpad8,
+        153 => Key::Numpad9,
+        154 => Key::NumpadDivide,
+        155 => Key::NumpadMultiply,
+        156 => Key::NumpadSubtract,
+        157 => Key::NumpadAdd,
+        158 => Key::NumpadDecimal,
+        159 => Key::NumpadComma,
+        160 => Key::NumpadEnter,
+        161 => Key::NumpadEqual,
+        // Media keys
+        85 => Key::MediaPlayPause,
+        86 => Key::MediaStop,
+        87 => Key::MediaTrackNext,
+        88 => Key::MediaTrackPrevious,
+        _ => Key::Unidentified,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::test_helpers::{EffectFlag, assert_invariants, colors_approx_eq, tc};
     use super::*;
+    use crate::test_helpers::{EffectFlag, assert_invariants, colors_approx_eq, tc};
 
     fn term() -> GhosttyTerminal {
         GhosttyTerminal::new(24, 80, 1000).expect("terminal create")
@@ -922,7 +1579,7 @@ mod tests {
     #[test]
     fn create_terminal_zero_scrollback() {
         let t = GhosttyTerminal::new(5, 10, 0).expect("term");
-        assert_eq!(t.scrollback_len(), 0);
+        assert_eq!(t.scrollback_length(), 0);
     }
 
     #[test]
@@ -951,15 +1608,7 @@ mod tests {
         tc(&mut t)
             .write(b"\x1b[1mA")
             .assert_effects(0, 0, &[EffectFlag::Bold])
-            .assert_no_effects(
-                0,
-                0,
-                &[
-                    EffectFlag::Italic,
-                    EffectFlag::Underline,
-                    EffectFlag::Reverse,
-                ],
-            )
+            .assert_no_effects(0, 0, &[EffectFlag::Italic, EffectFlag::Underline, EffectFlag::Reverse])
             .assert_row_text(0, "A")
             .take_and_invariants();
     }
@@ -970,11 +1619,7 @@ mod tests {
         tc(&mut t)
             .write(b"\x1b[3mA")
             .assert_effects(0, 0, &[EffectFlag::Italic])
-            .assert_no_effects(
-                0,
-                0,
-                &[EffectFlag::Bold, EffectFlag::Underline, EffectFlag::Reverse],
-            )
+            .assert_no_effects(0, 0, &[EffectFlag::Bold, EffectFlag::Underline, EffectFlag::Reverse])
             .assert_row_text(0, "A")
             .take_and_invariants();
     }
@@ -985,11 +1630,7 @@ mod tests {
         tc(&mut t)
             .write(b"\x1b[4mA")
             .assert_effects(0, 0, &[EffectFlag::Underline])
-            .assert_no_effects(
-                0,
-                0,
-                &[EffectFlag::Bold, EffectFlag::Italic, EffectFlag::Reverse],
-            )
+            .assert_no_effects(0, 0, &[EffectFlag::Bold, EffectFlag::Italic, EffectFlag::Reverse])
             .assert_row_text(0, "A")
             .take_and_invariants();
     }
@@ -1000,11 +1641,7 @@ mod tests {
         tc(&mut t)
             .write(b"\x1b[7mA")
             .assert_effects(0, 0, &[EffectFlag::Reverse])
-            .assert_no_effects(
-                0,
-                0,
-                &[EffectFlag::Bold, EffectFlag::Italic, EffectFlag::Underline],
-            )
+            .assert_no_effects(0, 0, &[EffectFlag::Bold, EffectFlag::Italic, EffectFlag::Underline])
             .assert_row_text(0, "A")
             .take_and_invariants();
     }
@@ -1044,19 +1681,16 @@ mod tests {
         t.vt_write(b"\x1b[38;5;196mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(
-            snap.cells[0].codepoint, 'X' as u32,
-            "256-color should write 'X'"
-        );
+        assert_eq!(snap.cells[0].codepoint, 'X' as u32, "256-color should write 'X'");
         assert!(
-            snap.cells[0].fg[0] > 0.5,
+            snap.cells[0].foreground[0] > 0.5,
             "256-color 196 should be bright red, got fg={:?}",
-            snap.cells[0].fg
+            snap.cells[0].foreground
         );
         assert!(
-            snap.cells[0].fg[1] < 0.1,
+            snap.cells[0].foreground[1] < 0.1,
             "256-color 196 should have no green, got fg={:?}",
-            snap.cells[0].fg
+            snap.cells[0].foreground
         );
         assert_invariants(&snap);
     }
@@ -1123,9 +1757,9 @@ mod tests {
         let snap = t.take_snapshot();
         // After erasing the line, all cells in row 1 should be empty
         let row: Vec<_> = snap.cells.iter().skip(80).take(80).collect();
-        let has_abc = row.iter().any(|c| {
-            c.codepoint == 'A' as u32 || c.codepoint == 'B' as u32 || c.codepoint == 'C' as u32
-        });
+        let has_abc = row
+            .iter()
+            .any(|c| c.codepoint == 'A' as u32 || c.codepoint == 'B' as u32 || c.codepoint == 'C' as u32);
         assert!(!has_abc);
         assert_invariants(&snap);
     }
@@ -1134,11 +1768,11 @@ mod tests {
     fn write_newline_scrolls() {
         let mut t = GhosttyTerminal::new(3, 5, 100).expect("term");
         for i in 0..10 {
-            t.vt_write(format!("line {i}\n").as_bytes());
+            t.pty_write(format!("line {i}\n").as_bytes());
         }
         t.flush();
         // After many newlines, scrollback should have entries
-        assert!(t.scrollback_len() > 0);
+        assert!(t.scrollback_length() > 0);
     }
 
     #[test]
@@ -1239,10 +1873,7 @@ mod tests {
         t.vt_write(b"\x1b[2mA");
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(
-            snap.cells[0].codepoint, 'A' as u32,
-            "SGR dim should write 'A'"
-        );
+        assert_eq!(snap.cells[0].codepoint, 'A' as u32, "SGR dim should write 'A'");
         // dim is not exposed by Ghostty C API; verify no other SGR flags are set
         assert!(!snap.cells[0].bold, "dim should not set bold");
         assert!(!snap.cells[0].italic, "dim should not set italic");
@@ -1257,14 +1888,8 @@ mod tests {
         t.vt_write(b"\x1b[9mA");
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(
-            snap.cells[0].codepoint, 'A' as u32,
-            "SGR 9 should write 'A'"
-        );
-        assert!(
-            snap.cells[0].strikethrough,
-            "SGR 9 should set strikethrough"
-        );
+        assert_eq!(snap.cells[0].codepoint, 'A' as u32, "SGR 9 should write 'A'");
+        assert!(snap.cells[0].strikethrough, "SGR 9 should set strikethrough");
         assert!(!snap.cells[0].bold, "SGR 9 should not set bold");
         assert!(!snap.cells[0].italic, "SGR 9 should not set italic");
         assert_invariants(&snap);
@@ -1276,10 +1901,7 @@ mod tests {
         t.vt_write(b"\x1b[5mA");
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(
-            snap.cells[0].codepoint, 'A' as u32,
-            "SGR 5 should write 'A'"
-        );
+        assert_eq!(snap.cells[0].codepoint, 'A' as u32, "SGR 5 should write 'A'");
         assert!(snap.cells[0].blink, "SGR 5 should set blink");
         assert!(!snap.cells[0].bold, "SGR 5 should not set bold");
         assert!(!snap.cells[0].underline, "SGR 5 should not set underline");
@@ -1454,10 +2076,7 @@ mod tests {
         t.flush();
         let dumped = t.dump_grid();
         let has_h = dumped.visible.iter().any(|c| c.codepoint == 'h' as u32);
-        assert!(
-            has_h,
-            "dump_grid visible: 'h' from 'hello' should be present"
-        );
+        assert!(has_h, "dump_grid visible: 'h' from 'hello' should be present");
         let _snap = t.take_snapshot();
         assert_invariants(&_snap);
     }
@@ -1487,8 +2106,8 @@ mod tests {
     fn cell_snapshot_default() {
         let c = CellSnapshot::default();
         assert_eq!(c.codepoint, 0);
-        assert_eq!(c.fg, [0.0, 0.0, 0.0, 0.0]);
-        assert_eq!(c.bg, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(c.foreground, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(c.background, [0.0, 0.0, 0.0, 0.0]);
         assert!(!c.bold);
         assert!(!c.italic);
         assert!(c.uri.is_none());
@@ -1498,8 +2117,9 @@ mod tests {
     fn cell_snapshot_clone() {
         let c = CellSnapshot {
             codepoint: 65,
-            fg: [1.0, 0.0, 0.0, 1.0],
-            bg: [0.0, 0.0, 0.0, 1.0],
+            graphemes: Vec::new(),
+            foreground: [1.0, 0.0, 0.0, 1.0],
+            background: [0.0, 0.0, 0.0, 1.0],
             bold: true,
             dim: false,
             italic: false,
@@ -1511,11 +2131,12 @@ mod tests {
             uri: Some(String::from("https://test")),
             semantic: SemanticContent::Output,
             overline: false,
+            double_underline: false,
             width: 1,
         };
         let c2 = c.clone();
         assert_eq!(c.codepoint, c2.codepoint);
-        assert_eq!(c.fg, c2.fg);
+        assert_eq!(c.foreground, c2.foreground);
         assert_eq!(c.uri, c2.uri);
     }
 
@@ -1532,10 +2153,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let found = snap.cells.iter().any(|c| c.codepoint == 'P' as u32);
-        assert!(
-            found,
-            "Alt screen switch: 'P' from PostAlt should render after exit"
-        );
+        assert!(found, "Alt screen switch: 'P' from PostAlt should render after exit");
         assert_invariants(&snap);
     }
 
@@ -1548,10 +2166,7 @@ mod tests {
         assert!(t.cursor_visible(), "cursor should start visible");
         t.vt_write(b"\x1b[?25l");
         t.flush();
-        assert!(
-            !t.cursor_visible(),
-            "cursor should be hidden after DECSET 25l"
-        );
+        assert!(!t.cursor_visible(), "cursor should be hidden after DECSET 25l");
         t.vt_write(b"A");
         t.flush();
         let snap = t.take_snapshot();
@@ -1571,10 +2186,7 @@ mod tests {
         assert!(!t.cursor_visible(), "cursor should be hidden");
         t.vt_write(b"\x1b[?25h");
         t.flush();
-        assert!(
-            t.cursor_visible(),
-            "cursor should be visible after DECRST 25h"
-        );
+        assert!(t.cursor_visible(), "cursor should be visible after DECRST 25h");
         t.vt_write(b"B");
         t.flush();
         let snap = t.take_snapshot();
@@ -1589,10 +2201,7 @@ mod tests {
     #[test]
     fn decset_bracketed_paste_2004() {
         let mut t = term();
-        assert!(
-            !t.is_bracketed_paste_active(),
-            "bracketed paste should start off"
-        );
+        assert!(!t.is_bracketed_paste_active(), "bracketed paste should start off");
         t.vt_write(b"\x1b[?2004h");
         t.flush();
         assert!(
@@ -1650,10 +2259,7 @@ mod tests {
             .map(|c| c.codepoint as u8 as char)
             .collect();
         // When autowrap is off, "F" may be discarded or overwritten on the last column
-        assert!(
-            !text_chars.is_empty(),
-            "no-autowrap should still show some text"
-        );
+        assert!(!text_chars.is_empty(), "no-autowrap should still show some text");
         assert_invariants(&snap);
     }
 
@@ -1661,10 +2267,7 @@ mod tests {
     #[test]
     fn decset_mouse_tracking_1000() {
         let mut t = term();
-        assert!(
-            !t.is_mouse_tracking_active(),
-            "mouse tracking should start off"
-        );
+        assert!(!t.is_mouse_tracking_active(), "mouse tracking should start off");
         t.vt_write(b"\x1b[?1000h");
         t.flush();
         assert!(
@@ -1685,10 +2288,7 @@ mod tests {
     #[test]
     fn decset_application_cursor_keys() {
         let mut t = term();
-        assert!(
-            !t.mode_get(1, 0),
-            "application cursor keys should start off"
-        );
+        assert!(!t.mode_get(1, 0), "application cursor keys should start off");
         t.vt_write(b"\x1b[?1h");
         t.flush();
         assert!(
@@ -1831,7 +2431,7 @@ mod tests {
         assert!(found, "CJK resize: 'X' should render after resize");
         let has_wide = snap.cells.iter().any(|c| c.codepoint > 0x7f);
         if !has_wide {
-            eprintln!("CJK resize: no wide chars found (may be libghostty limitation)");
+            log::warn!("CJK resize: no wide chars found (may be libghostty limitation)");
         }
         assert_invariants(&snap);
     }
@@ -1845,9 +2445,9 @@ mod tests {
         let snap_before = t.take_snapshot();
         let first_cell = &snap_before.cells[0];
         assert!(
-            first_cell.fg[0] > 0.5,
+            first_cell.foreground[0] > 0.5,
             "before resize: SGR 31 should set red foreground, got fg={:?}",
-            first_cell.fg
+            first_cell.foreground
         );
         t.resize(5, 30);
         t.flush();
@@ -1857,15 +2457,12 @@ mod tests {
             .iter()
             .filter(|c| c.codepoint >= 0x20 && c.codepoint <= 0x7a)
             .collect();
-        assert!(
-            !red_cells.is_empty(),
-            "after resize: must have printable cells"
-        );
+        assert!(!red_cells.is_empty(), "after resize: must have printable cells");
         for cell in &red_cells {
             assert!(
-                cell.fg[0] > 0.5,
+                cell.foreground[0] > 0.5,
                 "after resize: red cell should remain red, got fg={:?} for '{}'",
-                cell.fg,
+                cell.foreground,
                 char::from_u32(cell.codepoint).unwrap_or('?')
             );
         }
@@ -1912,10 +2509,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let found = snap.cells.iter().any(|c| c.codepoint == 'A' as u32);
-        assert!(
-            found,
-            "CJK resize with history: 'A' in AfterResize should render"
-        );
+        assert!(found, "CJK resize with history: 'A' in AfterResize should render");
         assert_invariants(&snap);
     }
 
@@ -1950,7 +2544,7 @@ mod tests {
             "CJK+SGR: at least one wide char should be present"
         );
         assert!(wide_chars[0].bold, "CJK+bold: char should be bold");
-        assert!(wide_chars[0].fg[1] > 0.5, "CJK+green: g channel > 0.5");
+        assert!(wide_chars[0].foreground[1] > 0.5, "CJK+green: g channel > 0.5");
         assert_invariants(&snap);
     }
 
@@ -2022,10 +2616,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let found = snap.cells.iter().any(|c| c.codepoint == 'A' as u32);
-        assert!(
-            found,
-            "Scroll region: terminal should survive and render 'AfterScroll'"
-        );
+        assert!(found, "Scroll region: terminal should survive and render 'AfterScroll'");
         assert_invariants(&snap);
     }
 
@@ -2047,10 +2638,7 @@ mod tests {
         // AAAA row 0 — above region, should not be affected by scrolling
         let row0 = snap.cells.iter().take(5).collect::<Vec<_>>();
         let a_found = row0.iter().any(|c| c.codepoint == 'A' as u32);
-        assert!(
-            a_found,
-            "scroll region: row above region should preserve AAAA"
-        );
+        assert!(a_found, "scroll region: row above region should preserve AAAA");
         assert_invariants(&snap);
     }
 
@@ -2086,10 +2674,7 @@ mod tests {
         t.flush();
         let dumped = t.dump_grid();
         // With origin mode disabled, CUP 1;1 goes back to absolute top-left
-        assert_eq!(
-            dumped.visible[0].codepoint, 'Y' as u32,
-            "no origin mode: Y at (0,0)"
-        );
+        assert_eq!(dumped.visible[0].codepoint, 'Y' as u32, "no origin mode: Y at (0,0)");
         let _snap = t.take_snapshot();
         assert_invariants(&_snap);
     }
@@ -2156,10 +2741,7 @@ mod tests {
         // Row 1 should contain X — no panic
         let row1: Vec<_> = snap.cells.iter().skip(5).take(5).collect();
         let has_x = row1.iter().any(|c| c.codepoint == 'X' as u32);
-        assert!(
-            has_x,
-            "combining at col0 after CRLF: X should appear on row 1"
-        );
+        assert!(has_x, "combining at col0 after CRLF: X should appear on row 1");
         assert_invariants(&snap);
     }
 
@@ -2344,10 +2926,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let found = snap.cells.iter().any(|c| c.codepoint == 'S' as u32);
-        assert!(
-            found,
-            "resize stress: StressTest should render after 50 cycles"
-        );
+        assert!(found, "resize stress: StressTest should render after 50 cycles");
         assert_invariants(&snap);
     }
 
@@ -2389,15 +2968,8 @@ mod tests {
         t.vt_write(b"\x1b#8");
         t.flush();
         let snap = t.take_snapshot();
-        let e_count = snap
-            .cells
-            .iter()
-            .filter(|c| c.codepoint == 'E' as u32)
-            .count();
-        assert_eq!(
-            e_count, 12,
-            "DECALN (#8): all 12 cells should be 'E', got {e_count}"
-        );
+        let e_count = snap.cells.iter().filter(|c| c.codepoint == 'E' as u32).count();
+        assert_eq!(e_count, 12, "DECALN (#8): all 12 cells should be 'E', got {e_count}");
         assert_invariants(&snap);
     }
 
@@ -2431,10 +3003,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let found = snap.cells.iter().any(|c| c.codepoint == 'D' as u32);
-        assert!(
-            found,
-            "DECSET 1000 toggle: text should render after disable"
-        );
+        assert!(found, "DECSET 1000 toggle: text should render after disable");
         assert_invariants(&snap);
     }
 
@@ -2627,15 +3196,8 @@ mod tests {
         t.vt_write(b"A\x1b[b"); // REP: repeat A
         t.flush();
         let snap = t.take_snapshot();
-        let count = snap
-            .cells
-            .iter()
-            .filter(|c| c.codepoint == 'A' as u32)
-            .count();
-        assert!(
-            count >= 2,
-            "REP: should repeat 'A' at least twice, got {count}"
-        );
+        let count = snap.cells.iter().filter(|c| c.codepoint == 'A' as u32).count();
+        assert!(count >= 2, "REP: should repeat 'A' at least twice, got {count}");
         assert_invariants(&snap);
     }
 
@@ -2646,15 +3208,8 @@ mod tests {
         t.vt_write(b"B\x1b[5b"); // REP: repeat B 5 times
         t.flush();
         let snap = t.take_snapshot();
-        let count = snap
-            .cells
-            .iter()
-            .filter(|c| c.codepoint == 'B' as u32)
-            .count();
-        assert!(
-            count >= 5,
-            "REP 5: should repeat 'B' at least 5 times, got {count}"
-        );
+        let count = snap.cells.iter().filter(|c| c.codepoint == 'B' as u32).count();
+        assert!(count >= 5, "REP 5: should repeat 'B' at least 5 times, got {count}");
         assert_invariants(&snap);
     }
 
@@ -2744,10 +3299,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let found = snap.cells.iter().any(|c| c.codepoint == 'X' as u32);
-        assert!(
-            found,
-            "SGR overflow: >31 params should be consumed silently"
-        );
+        assert!(found, "SGR overflow: >31 params should be consumed silently");
         assert_invariants(&snap);
     }
 
@@ -2826,10 +3378,7 @@ mod tests {
         t.vt_write(b"X");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "Save/restore style: X should render"
-        );
+        assert!(snap.cells[0].codepoint > 0, "Save/restore style: X should render");
         assert_invariants(&snap);
     }
 
@@ -3105,11 +3654,7 @@ mod tests {
         let snap = t.take_snapshot();
         let x_pos = snap.cells.iter().position(|c| c.codepoint == 'X' as u32);
         let col = x_pos.map(|p| p % 5);
-        assert_eq!(
-            col,
-            Some(4),
-            "CUF clamped: 'X' should be at last column (col 4)"
-        );
+        assert_eq!(col, Some(4), "CUF clamped: 'X' should be at last column (col 4)");
         assert_invariants(&snap);
     }
 
@@ -3154,11 +3699,7 @@ mod tests {
         let snap = t.take_snapshot();
         let x_pos = snap.cells.iter().position(|c| c.codepoint == 'X' as u32);
         let row = x_pos.map(|p| p / 5);
-        assert_eq!(
-            row,
-            Some(2),
-            "CUD clamped: 'X' should be at row 2 (last row)"
-        );
+        assert_eq!(row, Some(2), "CUD clamped: 'X' should be at row 2 (last row)");
         assert_invariants(&snap);
     }
 
@@ -3588,7 +4129,7 @@ mod tests {
         t.vt_write(b"\x1b[L"); // IL=1
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.rows == 5, "DL+IL: rows unchanged, got {}", snap.rows);
+        assert_eq!(snap.rows, 5, "DL+IL: rows unchanged, got {}", snap.rows);
         assert_invariants(&snap);
     }
 
@@ -3859,7 +4400,7 @@ mod tests {
         if !found {
             let count = snap.cells.iter().filter(|c| c.codepoint > 0).count();
             assert!(count > 0, "skin-tone emoji: at least some visible cells");
-            eprintln!("skin-tone emoji: base codepoint 0x1F44D not found (may be decomposition)");
+            log::warn!("skin-tone emoji: base codepoint 0x1F44D not found (may be decomposition)");
         }
         assert_invariants(&snap);
     }
@@ -3875,7 +4416,7 @@ mod tests {
         if !found_j || !found_p {
             let count = snap.cells.iter().filter(|c| c.codepoint > 0).count();
             assert!(count > 0, "flag emoji: at least some visible cells");
-            eprintln!("flag emoji: regional indicators not found (may be library limitation)");
+            log::warn!("flag emoji: regional indicators not found (may be library limitation)");
         }
         assert_invariants(&snap);
     }
@@ -3886,14 +4427,11 @@ mod tests {
         t.vt_write("👨‍👩‍👧‍👦".as_bytes());
         t.flush();
         let snap = t.take_snapshot();
-        let found = snap
-            .cells
-            .iter()
-            .any(|c| matches!(c.codepoint, 0x1F466..=0x1F469));
+        let found = snap.cells.iter().any(|c| matches!(c.codepoint, 0x1F466..=0x1F469));
         if !found {
             let count = snap.cells.iter().filter(|c| c.codepoint > 0).count();
             assert!(count > 0, "ZWJ emoji: at least some visible cells");
-            eprintln!("ZWJ emoji: component codepoints not found (may be library limitation)");
+            log::warn!("ZWJ emoji: component codepoints not found (may be library limitation)");
         }
         assert_invariants(&snap);
     }
@@ -3909,7 +4447,7 @@ mod tests {
         if !found_digit && !found_keycap {
             let count = snap.cells.iter().filter(|c| c.codepoint > 0).count();
             assert!(count > 0, "keycap emoji: at least some visible cells");
-            eprintln!("keycap emoji: digit/keycap not found (may be library limitation)");
+            log::warn!("keycap emoji: digit/keycap not found (may be library limitation)");
         }
         assert_invariants(&snap);
     }
@@ -4288,22 +4826,16 @@ mod tests {
         let mut t = GhosttyTerminal::new(5, 10, 100).expect("term");
         t.flush();
         // Write "AB\nCD" — after LF→CR+LF conversion, CD should be at col 0 of row 1
-        t.vt_write(b"AB\nCD");
+        t.pty_write(b"AB\nCD");
         t.flush();
         t.flush();
         let dumped = t.dump_grid();
         let row1_col0 = dumped.visible[10].codepoint;
-        assert_eq!(
-            row1_col0, 'C' as u32,
-            "LF→CR+LF: 'C' should be at column 0 of row 1"
-        );
+        assert_eq!(row1_col0, 'C' as u32, "LF→CR+LF: 'C' should be at column 0 of row 1");
         // Row 0 should have 'A','B' then empty space
         assert_eq!(dumped.visible[0].codepoint, 'A' as u32, "row0 col0 = A");
         assert_eq!(dumped.visible[1].codepoint, 'B' as u32, "row0 col1 = B");
-        assert_eq!(
-            dumped.visible[2].codepoint, 0,
-            "row0 col2 = empty after LF implies CR"
-        );
+        assert_eq!(dumped.visible[2].codepoint, 0, "row0 col2 = empty after LF implies CR");
     }
 
     #[test]
@@ -4313,15 +4845,12 @@ mod tests {
         let mut t = GhosttyTerminal::new(5, 10, 100).expect("term");
         t.flush();
         // "ABCDEFGHIJ" is exactly 10 chars (full width), then \n, then "next"
-        t.vt_write(b"ABCDEFGHIJ\nnext");
+        t.pty_write(b"ABCDEFGHIJ\nnext");
         t.flush();
         t.flush();
         let dumped = t.dump_grid();
         // Row 0: A B C D E F G H I J
-        assert_eq!(
-            dumped.visible[9].codepoint, 'J' as u32,
-            "row0 col9 = J (full width)"
-        );
+        assert_eq!(dumped.visible[9].codepoint, 'J' as u32, "row0 col9 = J (full width)");
         // Row 1: n e x t at columns 0-3
         let row1_col0 = dumped.visible[10].codepoint;
         assert_eq!(
@@ -4357,10 +4886,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let non_zero = snap.cells.iter().filter(|c| c.codepoint > 0).count();
-        assert_eq!(
-            non_zero, 0,
-            "SC-005: all cells should be erased after ED 2J"
-        );
+        assert_eq!(non_zero, 0, "SC-005: all cells should be erased after ED 2J");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -4391,16 +4917,8 @@ mod tests {
         t.flush();
         // EL 1 erases from start to cursor (inclusive) → cols 0-1 erased, cols 2-4 remain
         let snap = t.take_snapshot();
-        assert_eq!(
-            cell_at(&snap, 0, 0).unwrap().codepoint,
-            0,
-            "SC-007: col 0 erased"
-        );
-        assert_eq!(
-            cell_at(&snap, 0, 1).unwrap().codepoint,
-            0,
-            "SC-007: col 1 erased"
-        );
+        assert_eq!(cell_at(&snap, 0, 0).unwrap().codepoint, 0, "SC-007: col 0 erased");
+        assert_eq!(cell_at(&snap, 0, 1).unwrap().codepoint, 0, "SC-007: col 1 erased");
         assert_eq!(
             cell_at(&snap, 0, 2).unwrap().codepoint,
             0,
@@ -4533,10 +5051,7 @@ mod tests {
         // DCH removes first char "n", "ice" shifts left
         let snap = t.take_snapshot();
         let cells_0: Vec<_> = snap.cells.iter().take(5).collect();
-        assert_eq!(
-            cells_0[0].codepoint, 'i' as u32,
-            "SC-014: col 0 = 'i' after DCH"
-        );
+        assert_eq!(cells_0[0].codepoint, 'i' as u32, "SC-014: col 0 = 'i' after DCH");
         assert_eq!(cells_0[1].codepoint, 'c' as u32, "SC-014: col 1 = 'c'");
         assert_eq!(cells_0[2].codepoint, 'e' as u32, "SC-014: col 2 = 'e'");
         let snap = t.take_snapshot();
@@ -4565,10 +5080,7 @@ mod tests {
         let row0: Vec<_> = snap.cells.iter().take(10).collect();
         assert_eq!(row0[0].codepoint, 'A' as u32, "SC-015: col 0 = A");
         assert_eq!(row0[1].codepoint, 'B' as u32, "SC-015: col 1 = B");
-        assert_eq!(
-            row0[2].codepoint, 'X' as u32,
-            "SC-015: col 2 = X (inserted)"
-        );
+        assert_eq!(row0[2].codepoint, 'X' as u32, "SC-015: col 2 = X (inserted)");
         assert_eq!(row0[3].codepoint, 'D' as u32, "SC-015: col 3 = D");
         assert_eq!(row0[4].codepoint, 'E' as u32, "SC-015: col 4 = E");
         let snap = t.take_snapshot();
@@ -4584,10 +5096,7 @@ mod tests {
         t.flush();
         t.vt_write(b"\x1b[?25l");
         t.flush();
-        assert!(
-            !t.cursor_visible(),
-            "TM-001: cursor should be hidden after DECSET 25"
-        );
+        assert!(!t.cursor_visible(), "TM-001: cursor should be hidden after DECSET 25");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -4600,10 +5109,7 @@ mod tests {
         t.vt_write(b"\x1b[?25l"); // hide
         t.vt_write(b"\x1b[?25h"); // show
         t.flush();
-        assert!(
-            t.cursor_visible(),
-            "TM-002: cursor should be visible after DECRST 25"
-        );
+        assert!(t.cursor_visible(), "TM-002: cursor should be visible after DECRST 25");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -4616,10 +5122,7 @@ mod tests {
         t.vt_write(b"\x1b[?25l"); // hide
         t.vt_write(b"\x1bc"); // RIS
         t.flush();
-        assert!(
-            t.cursor_visible(),
-            "TM-003: cursor should be visible after RIS"
-        );
+        assert!(t.cursor_visible(), "TM-003: cursor should be visible after RIS");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -4685,20 +5188,10 @@ mod tests {
         t.flush();
         // In origin mode, CUP 1;1 maps to scroll region's top (row 1, 0-based)
         let snap = t.take_snapshot();
-        let x_row1 = cell_at(&snap, 1, 0)
-            .map(|c| c.codepoint == 'X' as u32)
-            .unwrap_or(false);
-        let x_row0 = cell_at(&snap, 0, 0)
-            .map(|c| c.codepoint == 'X' as u32)
-            .unwrap_or(false);
-        assert!(
-            x_row1,
-            "TM-007: X should be at row 1 (region top), not row 0"
-        );
-        assert!(
-            !x_row0,
-            "TM-007: X should NOT be at row 0 (absolute origin)"
-        );
+        let x_row1 = cell_at(&snap, 1, 0).map(|c| c.codepoint == 'X' as u32).unwrap_or(false);
+        let x_row0 = cell_at(&snap, 0, 0).map(|c| c.codepoint == 'X' as u32).unwrap_or(false);
+        assert!(x_row1, "TM-007: X should be at row 1 (region top), not row 0");
+        assert!(!x_row0, "TM-007: X should NOT be at row 0 (absolute origin)");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -4733,12 +5226,8 @@ mod tests {
         t.flush();
         // Should wrap: "ABCD" on row 0, "E" on row 1
         let snap = t.take_snapshot();
-        let row0_has_d = cell_at(&snap, 0, 3)
-            .map(|c| c.codepoint == 'D' as u32)
-            .unwrap_or(false);
-        let row1_has_e = cell_at(&snap, 1, 0)
-            .map(|c| c.codepoint == 'E' as u32)
-            .unwrap_or(false);
+        let row0_has_d = cell_at(&snap, 0, 3).map(|c| c.codepoint == 'D' as u32).unwrap_or(false);
+        let row1_has_e = cell_at(&snap, 1, 0).map(|c| c.codepoint == 'E' as u32).unwrap_or(false);
         assert!(row0_has_d, "TM-009: D at col 3 on row 0");
         assert!(row1_has_e, "TM-009: E should wrap to row 1");
         let snap = t.take_snapshot();
@@ -4828,11 +5317,7 @@ mod tests {
         t.vt_write(b"\x1b[?1049h");
         t.flush();
         // Alt buffer should have no scrollback
-        assert_eq!(
-            t.scrollback_len(),
-            0,
-            "IV-002: alt buffer should have no scrollback"
-        );
+        assert_eq!(t.scrollback_length(), 0, "IV-002: alt buffer should have no scrollback");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -4845,11 +5330,7 @@ mod tests {
         t.vt_write(b"\x1b[?1049h");
         t.flush();
         assert_eq!(t.rows(), 5, "IV-003: alt buffer rows should match terminal");
-        assert_eq!(
-            t.cols(),
-            10,
-            "IV-003: alt buffer cols should match terminal"
-        );
+        assert_eq!(t.cols(), 10, "IV-003: alt buffer cols should match terminal");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5183,10 +5664,7 @@ mod tests {
         t.vt_write(b"\x1b[31mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "CV-001: cell with X should exist"
-        );
+        assert!(snap.cells[0].codepoint > 0, "CV-001: cell with X should exist");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5199,10 +5677,7 @@ mod tests {
         t.vt_write(b"\x1b[43mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "CV-002: cell with X should exist"
-        );
+        assert!(snap.cells[0].codepoint > 0, "CV-002: cell with X should exist");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5216,10 +5691,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         // Y at col 1 (after X at col 0)
-        assert!(
-            snap.cells.len() > 1,
-            "CV-003: grid should have enough cells"
-        );
+        assert!(snap.cells.len() > 1, "CV-003: grid should have enough cells");
         assert!(snap.cells[1].codepoint > 0, "CV-003: Y should render");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
@@ -5233,10 +5705,7 @@ mod tests {
         t.vt_write(b"\x1b[38;5;196mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "CV-004: 256-color fg cell exists"
-        );
+        assert!(snap.cells[0].codepoint > 0, "CV-004: 256-color fg cell exists");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5249,10 +5718,7 @@ mod tests {
         t.vt_write(b"\x1b[48;5;129mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "CV-005: 256-color bg cell exists"
-        );
+        assert!(snap.cells[0].codepoint > 0, "CV-005: 256-color bg cell exists");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5266,9 +5732,9 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let cell = &snap.cells[0];
-        assert!(cell.fg[0] > 0.9, "CV-006: red ~1.0 for rgb(255,100,50)");
+        assert!(cell.foreground[0] > 0.9, "CV-006: red ~1.0 for rgb(255,100,50)");
         assert!(
-            (cell.fg[1] - 100.0 / 255.0).abs() < 0.1,
+            (cell.foreground[1] - 100.0 / 255.0).abs() < 0.1,
             "CV-006: green ~100/255"
         );
         let snap = t.take_snapshot();
@@ -5284,10 +5750,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let cell = &snap.cells[0];
-        assert!(
-            cell.bg[2] > 0.7,
-            "CV-007: blue dominant for rgb(50,100,200)"
-        );
+        assert!(cell.background[2] > 0.7, "CV-007: blue dominant for rgb(50,100,200)");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5300,10 +5763,7 @@ mod tests {
         t.vt_write(b"\x1b]4;5;#00FF00\x07\x1b[38;5;5mX");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "CV-008: cell after OSC 4 color set"
-        );
+        assert!(snap.cells[0].codepoint > 0, "CV-008: cell after OSC 4 color set");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5354,7 +5814,7 @@ mod tests {
         let red_cells: Vec<_> = snap
             .cells
             .iter()
-            .filter(|c| c.fg[0] > 0.5 && c.codepoint > 0)
+            .filter(|c| c.foreground[0] > 0.5 && c.codepoint > 0)
             .collect();
         assert!(
             !red_cells.is_empty(),
@@ -5377,7 +5837,7 @@ mod tests {
         let green_cells: Vec<_> = snap
             .cells
             .iter()
-            .filter(|c| c.fg[1] > 0.5 && c.codepoint > 0)
+            .filter(|c| c.foreground[1] > 0.5 && c.codepoint > 0)
             .collect();
         assert!(
             !green_cells.is_empty(),
@@ -5443,11 +5903,7 @@ mod tests {
         }
         for col in 2..4 {
             let cell = cell_at(&snap, 0, col).unwrap();
-            assert!(
-                !cell.underline,
-                "AG-003: col {} should NOT be underline",
-                col
-            );
+            assert!(!cell.underline, "AG-003: col {} should NOT be underline", col);
         }
         let snap = t.take_snapshot();
         assert_invariants(&snap);
@@ -5534,9 +5990,9 @@ mod tests {
         t.vt_write(b"\x1b[L"); // IL 1
         t.flush();
         let snap = t.take_snapshot();
-        let red = snap.cells.iter().any(|c| c.fg[0] > 0.5 && c.codepoint > 0);
-        assert!(
-            snap.rows == 5,
+        let red = snap.cells.iter().any(|c| c.foreground[0] > 0.5 && c.codepoint > 0);
+        assert_eq!(
+            snap.rows, 5,
             "AG-008: terminal grid dimensions should survive IL/DL, got {} rows",
             snap.rows
         );
@@ -5569,10 +6025,7 @@ mod tests {
         t.vt_write(b"\x1b[5mAB");
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "AG-010: 'A' with blink should render"
-        );
+        assert!(snap.cells[0].codepoint > 0, "AG-010: 'A' with blink should render");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5871,10 +6324,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let has_content = snap.cells.iter().any(|c| c.codepoint > 0);
-        assert!(
-            has_content,
-            "RB-001: snapshot should have content after write"
-        );
+        assert!(has_content, "RB-001: snapshot should have content after write");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -5922,10 +6372,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         let found = snap.cells.iter().any(|c| c.codepoint == 'A' as u32);
-        assert!(
-            found,
-            "RB-009: text should render after DECSET 7 restore wrap"
-        );
+        assert!(found, "RB-009: text should render after DECSET 7 restore wrap");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -6071,16 +6518,8 @@ mod tests {
         let y_before = t.cursor_y();
         t.resize(5, 10); // same size, simulate pause/resume
         t.flush();
-        assert_eq!(
-            t.cursor_x(),
-            x_before,
-            "AL-005: cursor_x preserved after resize"
-        );
-        assert_eq!(
-            t.cursor_y(),
-            y_before,
-            "AL-005: cursor_y preserved after resize"
-        );
+        assert_eq!(t.cursor_x(), x_before, "AL-005: cursor_x preserved after resize");
+        assert_eq!(t.cursor_y(), y_before, "AL-005: cursor_y preserved after resize");
         let snap = t.take_snapshot();
         assert_invariants(&snap);
     }
@@ -6112,22 +6551,26 @@ mod tests {
         // through read_visible_text. CJK double-width cells map 2:1 to
         // codepoints, so a text-based roundtrip shifts subsequent cells.
         let mut t = GhosttyTerminal::new(10, 40, 100).expect("term");
-        t.vt_write(b"Hello, World!\nLine two\nLine three with text\n");
+        t.pty_write(b"Hello, World!\nLine two\nLine three with text\n");
         t.flush();
         let snap1 = t.take_snapshot();
 
         // Serialize to temp file.
         let dir = std::env::temp_dir().join("torvox_lifecycle_test");
-        let _ = std::fs::create_dir_all(&dir);
+        if let Err(error) = std::fs::create_dir_all(&dir) {
+            log::error!("ghostty_terminal test: create_dir_all failed: {error}");
+        }
         let path = dir.join("test_session.rkyv");
-        let _ = std::fs::remove_file(&path);
+        if let Err(error) = std::fs::remove_file(&path) {
+            log::warn!("ghostty_terminal test: remove_file failed: {error}");
+        }
 
         // Simulate save: serialize snapshot grid as text, write to file.
         let text_before = t.read_visible_text();
 
         // Simulate restore: create fresh terminal and feed the text.
         let mut t2 = GhosttyTerminal::new(10, 40, 100).expect("term");
-        t2.vt_write(text_before.as_bytes());
+        t2.pty_write(text_before.as_bytes());
         t2.flush();
         let snap2 = t2.take_snapshot();
 
@@ -6142,7 +6585,9 @@ mod tests {
             );
         }
 
-        let _ = std::fs::remove_file(&path);
+        if let Err(error) = std::fs::remove_file(&path) {
+            log::warn!("ghostty_terminal test: remove_file failed: {error}");
+        }
     }
 
     // ── 13.6: Pause / resume (simulated via resize) ────────────────
@@ -6229,8 +6674,8 @@ mod tests {
 
     // ── Phase 0: Zero-Infrastructure Tests ──────────────────────────
     mod tests_phase0 {
-        use super::test_helpers::tc;
         use super::*;
+        use crate::test_helpers::tc;
 
         // ── B4 Regressions ──────────────────────────────────────────
 
@@ -6245,9 +6690,7 @@ mod tests {
             // Remaining "nvalid" = 6 printable chars rendered on screen.
             // After \r\n$ , cursor ends at (1, 2).
             // The B4 error-offset bug needs a trigger that ghostty genuinely cannot parse.
-            tc(&mut t)
-                .write(b"\x1b[?invalid\r\n$ ")
-                .assert_cursor_at(1, 2);
+            tc(&mut t).write(b"\x1b[?invalid\r\n$ ").assert_cursor_at(1, 2);
         }
 
         /// RB_011a: Malformed sequence with printable text.
@@ -6279,9 +6722,7 @@ mod tests {
         fn rb_011c_malformed_osc_then_write() {
             let mut t = term();
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b]invalid\x07OK")
-                .assert_row_text(0, "OK");
+            tc(&mut t).write(b"\x1b]invalid\x07OK").assert_row_text(0, "OK");
         }
 
         /// RB_011d: Malformed CSI sequence with extra parameters.
@@ -6289,9 +6730,7 @@ mod tests {
         fn rb_011d_malformed_csi_extra_params() {
             let mut t = term();
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[1;2;3;4;5;6qX")
-                .assert_row_text(0, "X");
+            tc(&mut t).write(b"\x1b[1;2;3;4;5;6qX").assert_row_text(0, "X");
         }
 
         /// RB_012: Rapid malformed sequences do not crash.
@@ -6328,9 +6767,7 @@ mod tests {
         fn iv_002_invariants_after_crlf() {
             let mut t = GhosttyTerminal::new(3, 10, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"line1\nline2\nline3\nline4\n")
-                .take_and_invariants();
+            tc(&mut t).write(b"line1\nline2\nline3\nline4\n").take_and_invariants();
         }
 
         /// IV_003: Invariants pass after resize.
@@ -6351,10 +6788,7 @@ mod tests {
         fn iv_004_invariants_alt_screen() {
             let mut t = term();
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[?1049h")
-                .write(b"AltText")
-                .take_and_invariants();
+            tc(&mut t).write(b"\x1b[?1049h").write(b"AltText").take_and_invariants();
         }
 
         /// IV_005: Invariants pass after DECSTR.
@@ -6362,10 +6796,7 @@ mod tests {
         fn iv_005_invariants_after_decstr() {
             let mut t = term();
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[!p")
-                .write(b"AfterReset")
-                .take_and_invariants();
+            tc(&mut t).write(b"\x1b[!p").write(b"AfterReset").take_and_invariants();
         }
 
         /// IV_006: Invariants pass after erase display.
@@ -6373,10 +6804,7 @@ mod tests {
         fn iv_006_invariants_after_erase_display() {
             let mut t = small_term();
             t.flush();
-            tc(&mut t)
-                .write(b"ABC\r\nDEF")
-                .write(b"\x1b[2J")
-                .take_and_invariants();
+            tc(&mut t).write(b"ABC\r\nDEF").write(b"\x1b[2J").take_and_invariants();
         }
 
         // ── Basic I/O ───────────────────────────────────────────────
@@ -6386,10 +6814,7 @@ mod tests {
         fn io_001_write_text_row0() {
             let mut t = term();
             t.flush();
-            tc(&mut t)
-                .write(b"AB")
-                .assert_row_text(0, "AB")
-                .assert_cursor_at(0, 2);
+            tc(&mut t).write(b"AB").assert_row_text(0, "AB").assert_cursor_at(0, 2);
         }
 
         /// IO_002: LF advances cursor to next row and resets to column 0
@@ -6398,10 +6823,7 @@ mod tests {
         fn io_002_lf_advances_row() {
             let mut t = term();
             t.flush();
-            tc(&mut t)
-                .write(b"A\nB")
-                .assert_row_text(0, "A")
-                .assert_cursor_at(1, 1);
+            tc(&mut t).write(b"A\nB").assert_row_text(0, "A").assert_cursor_at(1, 1);
         }
 
         /// IO_003: CR returns cursor to column 0.
@@ -6573,9 +6995,7 @@ mod tests {
         fn cp_005_cuf_clamp_right() {
             let mut t = GhosttyTerminal::new(3, 3, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[1;1H\x1b[100CX")
-                .assert_cursor_at(0, 2); // CUF clamped at last col (2), X written at last col
+            tc(&mut t).write(b"\x1b[1;1H\x1b[100CX").assert_cursor_at(0, 2); // CUF clamped at last col (2), X written at last col
         }
 
         /// CP_006: CUB (cursor back) moves left.
@@ -6583,9 +7003,7 @@ mod tests {
         fn cp_006_cub_back() {
             let mut t = GhosttyTerminal::new(3, 5, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[1;6H\x1b[1DX")
-                .assert_cursor_at(0, 4); // X at col 3, cursor advances to 4
+            tc(&mut t).write(b"\x1b[1;6H\x1b[1DX").assert_cursor_at(0, 4); // X at col 3, cursor advances to 4
         }
 
         /// CP_007: CUB clamping at left margin.
@@ -6593,9 +7011,7 @@ mod tests {
         fn cp_007_cub_clamp_left() {
             let mut t = GhosttyTerminal::new(3, 5, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[1;1H\x1b[100DX")
-                .assert_cursor_at(0, 1); // X at col 0, cursor advances to 1
+            tc(&mut t).write(b"\x1b[1;1H\x1b[100DX").assert_cursor_at(0, 1); // X at col 0, cursor advances to 1
         }
 
         /// CP_008: CUU (cursor up) moves up.
@@ -6603,9 +7019,7 @@ mod tests {
         fn cp_008_cuu_up() {
             let mut t = GhosttyTerminal::new(5, 5, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[3;1H\x1b[1AX")
-                .assert_cursor_at(1, 1); // CUU 1 from row 2 → row 1, X advances col
+            tc(&mut t).write(b"\x1b[3;1H\x1b[1AX").assert_cursor_at(1, 1); // CUU 1 from row 2 → row 1, X advances col
         }
 
         /// CP_009: CUU clamping at top margin.
@@ -6613,9 +7027,7 @@ mod tests {
         fn cp_009_cuu_clamp_top() {
             let mut t = GhosttyTerminal::new(5, 5, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[1;1H\x1b[100AX")
-                .assert_cursor_at(0, 1); // CUU clamps to 0, X advances col
+            tc(&mut t).write(b"\x1b[1;1H\x1b[100AX").assert_cursor_at(0, 1); // CUU clamps to 0, X advances col
         }
 
         /// CP_010: CUD (cursor down) moves down.
@@ -6623,9 +7035,7 @@ mod tests {
         fn cp_010_cud_down() {
             let mut t = GhosttyTerminal::new(5, 5, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[1;1H\x1b[2BX")
-                .assert_cursor_at(2, 1); // CUD 2 from row 0 → row 2, X advances col
+            tc(&mut t).write(b"\x1b[1;1H\x1b[2BX").assert_cursor_at(2, 1); // CUD 2 from row 0 → row 2, X advances col
         }
 
         /// CP_011: CUD clamping at bottom margin.
@@ -6633,9 +7043,7 @@ mod tests {
         fn cp_011_cud_clamp_bottom() {
             let mut t = GhosttyTerminal::new(3, 3, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"\x1b[1;1H\x1b[100BX")
-                .assert_cursor_at(2, 1); // CUD clamps to row 2, X advances col
+            tc(&mut t).write(b"\x1b[1;1H\x1b[100BX").assert_cursor_at(2, 1); // CUD clamps to row 2, X advances col
         }
 
         /// CP_012: HVP same as CUP.
@@ -6694,10 +7102,7 @@ mod tests {
         fn tm_001_write_overwrites() {
             let mut t = GhosttyTerminal::new(3, 10, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"AAAAA\n")
-                .write(b"BBB")
-                .assert_row_text(1, "BBB");
+            tc(&mut t).write(b"AAAAA\n").write(b"BBB").assert_row_text(1, "BBB");
         }
 
         /// TM_002: EL 0 erases from cursor to end of line.
@@ -6727,10 +7132,7 @@ mod tests {
         fn tm_004_el_2_erase_line() {
             let mut t = GhosttyTerminal::new(3, 5, 100).expect("term");
             t.flush();
-            tc(&mut t)
-                .write(b"ABCDE")
-                .write(b"\x1b[2K")
-                .assert_row_text(0, "");
+            tc(&mut t).write(b"ABCDE").write(b"\x1b[2K").assert_row_text(0, "");
         }
 
         /// TM_005: ED 0 erases from cursor to end of display.
@@ -6895,11 +7297,9 @@ mod tests {
         fn tm_018_sgr_bold_italic() {
             let mut t = term();
             t.flush();
-            tc(&mut t).write(b"\x1b[1;3mBoldItalic").assert_effects(
-                0,
-                0,
-                &[EffectFlag::Bold, EffectFlag::Italic],
-            );
+            tc(&mut t)
+                .write(b"\x1b[1;3mBoldItalic")
+                .assert_effects(0, 0, &[EffectFlag::Bold, EffectFlag::Italic]);
         }
 
         // ── Alt Screen Buffer ───────────────────────────────────────
@@ -6942,11 +7342,7 @@ mod tests {
             }
             t.flush();
             t.flush();
-            assert_eq!(
-                t.scrollback_len(),
-                0,
-                "alt screen should have no scrollback"
-            );
+            assert_eq!(t.scrollback_length(), 0, "alt screen should have no scrollback");
         }
 
         /// AB_004: Alt screen text is isolated from normal.
@@ -7054,7 +7450,7 @@ mod tests {
             }
             t.flush();
             assert!(
-                t.scrollback_len() > 0,
+                t.scrollback_length() > 0,
                 "scrollback should have content after scrolling"
             );
         }
@@ -7084,10 +7480,7 @@ mod tests {
             }
             t.flush();
             let dumped = t.dump_grid();
-            assert!(
-                !dumped.scrollback.is_empty(),
-                "dump should contain scrollback"
-            );
+            assert!(!dumped.scrollback.is_empty(), "dump should contain scrollback");
         }
 
         /// HI_004: Multiple scrollback lines preserved in order.
@@ -7104,10 +7497,7 @@ mod tests {
                 .scrollback
                 .iter()
                 .any(|row| row.iter().any(|c| c.codepoint == 'f' as u32));
-            assert!(
-                has_first || t.scrollback_len() > 0,
-                "scrollback should exist"
-            );
+            assert!(has_first || t.scrollback_length() > 0, "scrollback should exist");
         }
 
         /// HI_005: Scrollback is empty for fresh terminal.
@@ -7115,7 +7505,7 @@ mod tests {
         fn hi_005_scrollback_empty_fresh() {
             let t = GhosttyTerminal::new(5, 10, 100).expect("term");
             t.flush();
-            assert_eq!(t.scrollback_len(), 0);
+            assert_eq!(t.scrollback_length(), 0);
         }
 
         /// HI_006: Single line scroll creates scrollback.
@@ -7129,7 +7519,7 @@ mod tests {
             }
             t.flush();
             assert!(
-                t.scrollback_len() > 0,
+                t.scrollback_length() > 0,
                 "scrollback should have content after many lines"
             );
         }
@@ -7143,11 +7533,11 @@ mod tests {
                 t.vt_write(format!("n{i}\n").as_bytes());
             }
             t.flush();
-            let normal_scrollback = t.scrollback_len();
+            let normal_scrollback = t.scrollback_length();
             t.vt_write(b"\x1b[?1049h");
             t.flush();
             assert_eq!(
-                t.scrollback_len(),
+                t.scrollback_length(),
                 0,
                 "alt screen scrollback should be 0; normal had {normal_scrollback}"
             );
@@ -7217,7 +7607,7 @@ mod tests {
             t.flush();
             // After alt exit, normal buffer scrollback should be restored
             assert!(
-                t.scrollback_len() > 0,
+                t.scrollback_length() > 0,
                 "scrollback should exist after alt exit (normal buffer restored)"
             );
         }
@@ -7360,9 +7750,7 @@ mod tests {
             t.vt_write(b"\x1b[1;1HX"); // should go to region top (row 1)
             t.flush();
             let snap = t.take_snapshot();
-            let x_row1 = cell_at(&snap, 1, 0)
-                .map(|c| c.codepoint == 'X' as u32)
-                .unwrap_or(false);
+            let x_row1 = cell_at(&snap, 1, 0).map(|c| c.codepoint == 'X' as u32).unwrap_or(false);
             assert!(x_row1, "SR-004: X should be at row 1 (region top)");
         }
 
@@ -7421,10 +7809,7 @@ mod tests {
             t.vt_write(b"\x1b[?25l"); // hide
             t.vt_write(b"\x1bc"); // RIS (hard reset)
             t.flush();
-            assert!(
-                t.cursor_visible(),
-                "RR-005: cursor should be visible after RIS"
-            );
+            assert!(t.cursor_visible(), "RR-005: cursor should be visible after RIS");
         }
 
         /// RR_006: DECSTR resets origin mode.
@@ -7439,9 +7824,7 @@ mod tests {
             t.vt_write(b"\x1b[1;1HX");
             t.flush();
             let snap = t.take_snapshot();
-            let x_row0 = cell_at(&snap, 0, 0)
-                .map(|c| c.codepoint == 'X' as u32)
-                .unwrap_or(false);
+            let x_row0 = cell_at(&snap, 0, 0).map(|c| c.codepoint == 'X' as u32).unwrap_or(false);
             assert!(x_row0, "RR-006: X should be at absolute (0,0) after DECSTR");
         }
 
@@ -7626,12 +8009,9 @@ mod tests {
             let red_cells: Vec<_> = snap
                 .cells
                 .iter()
-                .filter(|c| c.codepoint > 0 && c.fg[0] > 0.5)
+                .filter(|c| c.codepoint > 0 && c.foreground[0] > 0.5)
                 .collect();
-            assert!(
-                !red_cells.is_empty(),
-                "RS-013: red text should survive resize"
-            );
+            assert!(!red_cells.is_empty(), "RS-013: red text should survive resize");
         }
 
         /// RS_014: Resize with scrollback survives.
@@ -7675,7 +8055,7 @@ mod tests {
         }
 
         /// MD_003: origin_mode() reflects DECOM state.
-        // NOTE: Uses Phase 1 infra (origin_mode() getter).
+        // Uses ghostty's origin_mode() getter to query DECOM state.
         #[test]
         fn md_003_origin_mode_query() {
             let mut t = GhosttyTerminal::new(5, 10, 100).expect("term");
@@ -7693,7 +8073,7 @@ mod tests {
         }
 
         /// MD_004: autowrap() reflects DECAWM state.
-        // NOTE: Uses Phase 1 infra (autowrap() getter).
+        // Uses ghostty's autowrap() getter to query DECAWM state.
         #[test]
         fn md_004_autowrap_query() {
             let mut t = GhosttyTerminal::new(5, 10, 100).expect("term");
@@ -7711,7 +8091,7 @@ mod tests {
         }
 
         /// MD_005: alt_screen() reflects active screen.
-        // NOTE: Uses Phase 1 infra (alt_screen() getter).
+        // Uses ghostty's alt_screen() getter to query screen state.
         #[test]
         fn md_005_alt_screen_query() {
             let mut t = GhosttyTerminal::new(5, 10, 100).expect("term");
@@ -7729,7 +8109,7 @@ mod tests {
         }
 
         /// MD_006: title() returns empty string by default.
-        // NOTE: Uses Phase 1 infra (title() getter).
+        // Uses ghostty's title() getter to verify default title.
         #[test]
         fn md_006_title_default_empty() {
             let t = term();
@@ -7738,7 +8118,7 @@ mod tests {
         }
 
         /// MD_007: title() returns set title.
-        // NOTE: Uses Phase 1 infra (title() getter).
+        // Uses ghostty's title() getter to verify set title.
         #[test]
         fn md_007_title_set_and_read() {
             let mut t = term();
@@ -7770,10 +8150,7 @@ mod tests {
         #[test]
         fn b4_trigger_search() {
             let candidates: Vec<(&str, &[u8])> = vec![
-                (
-                    "OSC with embedded ESC",
-                    &b"\x1b]0;hello \x1b[31mworld\x07"[..],
-                ),
+                ("OSC with embedded ESC", &b"\x1b]0;hello \x1b[31mworld\x07"[..]),
                 ("ESC inside CSI", &b"\x1b[3\x1bmX"[..]),
                 ("DEL mid-CSI", &b"\x1b[3\x7fmX"[..]),
                 ("NUL mid-CSI", &b"\x1b[3\x00mX"[..]),
@@ -7813,12 +8190,12 @@ mod tests {
                 let actual_row = t.cursor_y();
                 let actual_col = t.cursor_x();
                 if actual_row != expected_row || actual_col != expected_col {
-                    eprintln!(
+                    log::warn!(
                         "B4: MISMATCH '{name}' -> cursor at ({actual_row}, {actual_col}) expected ({expected_row}, {expected_col})"
                     );
                     mismatches.push(format!("'{name}': cursor at ({actual_row}, {actual_col})"));
                 } else {
-                    eprintln!("B4: OK '{name}'");
+                    log::debug!("B4: OK '{name}'");
                 }
             }
 
@@ -7862,11 +8239,7 @@ mod tests {
             t.vt_write(b"\x1b]2;Second\x07");
             t.flush();
             t.flush();
-            assert_eq!(
-                t.title(),
-                "Second",
-                "last-wins: OSC 2 should override OSC 0"
-            );
+            assert_eq!(t.title(), "Second", "last-wins: OSC 2 should override OSC 0");
         }
 
         #[test]
@@ -7930,9 +8303,9 @@ mod tests {
         let cell = &snap.cells[0];
         // 255/127/2 in f32
         assert!(
-            colors_approx_eq(&cell.fg, &[1.0, 127.0 / 255.0, 2.0 / 255.0, 1.0]),
+            colors_approx_eq(&cell.foreground, &[1.0, 127.0 / 255.0, 2.0 / 255.0, 1.0]),
             "Expected fg ~ [1.0, 0.498, 0.008, 1.0], got {:?}",
-            cell.fg
+            cell.foreground
         );
     }
 
@@ -7946,9 +8319,9 @@ mod tests {
         let snap = t.take_snapshot();
         let cell = &snap.cells[0];
         assert!(
-            colors_approx_eq(&cell.bg, &[1.0 / 255.0, 2.0 / 255.0, 254.0 / 255.0, 1.0]),
+            colors_approx_eq(&cell.background, &[1.0 / 255.0, 2.0 / 255.0, 254.0 / 255.0, 1.0]),
             "Expected bg ~ [0.004, 0.008, 0.996, 1.0], got {:?}",
-            cell.bg
+            cell.background
         );
     }
 
@@ -7963,7 +8336,7 @@ mod tests {
         let cell = &snap.cells[0];
         // 119 is an ANSI palette color — just verify fg is non-zero
         assert!(
-            cell.fg[0] > 0.0 || cell.fg[1] > 0.0 || cell.fg[2] > 0.0,
+            cell.foreground[0] > 0.0 || cell.foreground[1] > 0.0 || cell.foreground[2] > 0.0,
             "fg should be non-zero for 256-color"
         );
     }
@@ -7978,11 +8351,11 @@ mod tests {
         let snap = t.take_snapshot();
         let cell = &snap.cells[0];
         assert!(
-            cell.fg[0] > 0.0 || cell.fg[1] > 0.0 || cell.fg[2] > 0.0,
+            cell.foreground[0] > 0.0 || cell.foreground[1] > 0.0 || cell.foreground[2] > 0.0,
             "fg non-zero"
         );
         assert!(
-            cell.bg[0] > 0.0 || cell.bg[1] > 0.0 || cell.bg[2] > 0.0,
+            cell.background[0] > 0.0 || cell.background[1] > 0.0 || cell.background[2] > 0.0,
             "bg non-zero"
         );
     }
@@ -8000,9 +8373,9 @@ mod tests {
         let expected_default = [205.0 / 255.0, 214.0 / 255.0, 244.0 / 255.0, 1.0];
         let cell = &snap.cells[3];
         assert!(
-            colors_approx_eq(&cell.fg, &expected_default),
+            colors_approx_eq(&cell.foreground, &expected_default),
             "After SGR 0, fg should revert to default, got {:?}",
-            cell.fg
+            cell.foreground
         );
     }
 
@@ -8020,7 +8393,7 @@ mod tests {
         // Cells should have the background color from SGR
         let cell = snap.cells.first().unwrap();
         assert!(
-            cell.bg[2] > 0.0 || cell.bg[1] > 0.0 || cell.bg[0] > 0.0,
+            cell.background[2] > 0.0 || cell.background[1] > 0.0 || cell.background[0] > 0.0,
             "bg should be non-zero after erase with color set"
         );
     }
@@ -8033,10 +8406,7 @@ mod tests {
         t.vt_write(b"\x1b[38;5;196m\x1b[48;5;129mX");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(
-            cell.codepoint as u8 as char == 'X',
-            "fg+bg merge should render 'X'"
-        );
+        assert_eq!(cell.codepoint as u8 as char, 'X', "fg+bg merge should render 'X'");
     }
 
     #[test]
@@ -8046,12 +8416,10 @@ mod tests {
         t.vt_write(b"\x1b[1;38;5;196mX");
         t.vt_write(b"\x1b[22mX"); // unset bold, keep color
         let snap = t.take_snapshot();
-        let cells: Vec<_> = (0..snap.cols.min(2))
-            .filter_map(|c| cell_at(&snap, 0, c))
-            .collect();
+        let cells: Vec<_> = (0..snap.cols.min(2)).filter_map(|c| cell_at(&snap, 0, c)).collect();
         assert_eq!(cells.len(), 2);
         assert!(
-            cells[1].fg[0] > 0.0 || cells[1].fg[1] > 0.0 || cells[1].fg[2] > 0.0,
+            cells[1].foreground[0] > 0.0 || cells[1].foreground[1] > 0.0 || cells[1].foreground[2] > 0.0,
             "fg should survive bold-unset (SGR 22)"
         );
     }
@@ -8063,8 +8431,8 @@ mod tests {
         t.vt_write(b"\x1b[1;3;4;38;5;196mX");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(
-            cell.codepoint as u8 as char == 'X',
+        assert_eq!(
+            cell.codepoint as u8 as char, 'X',
             "bold+italic+underline+color should render 'X'"
         );
     }
@@ -8075,10 +8443,9 @@ mod tests {
         t.vt_write(b"\x1b[2;5;38;5;82mX");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(
-            cell.codepoint as u8 as char == 'X',
-            "dim+blink+color should render 'X'"
-        );
+        assert_eq!(cell.codepoint as u8 as char, 'X', "dim+blink+color should render 'X'");
+        assert!(cell.dim, "dim+blink: dim must be true");
+        assert!(cell.blink, "dim+blink: blink must be true");
     }
 
     #[test]
@@ -8087,8 +8454,8 @@ mod tests {
         t.vt_write(b"\x1b[7mX");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(
-            cell.codepoint as u8 as char == 'X',
+        assert_eq!(
+            cell.codepoint as u8 as char, 'X',
             "reverse video (SGR 7) should render 'X'"
         );
     }
@@ -8099,10 +8466,7 @@ mod tests {
         t.vt_write(b"\x1b[8mX");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(
-            cell.codepoint as u8 as char == 'X',
-            "conceal (SGR 8) should render 'X'"
-        );
+        assert_eq!(cell.codepoint as u8 as char, 'X', "conceal (SGR 8) should render 'X'");
     }
 
     #[test]
@@ -8111,8 +8475,8 @@ mod tests {
         t.vt_write(b"\x1b[9mX");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(
-            cell.codepoint as u8 as char == 'X',
+        assert_eq!(
+            cell.codepoint as u8 as char, 'X',
             "crossed-out (SGR 9) should render 'X'"
         );
     }
@@ -8123,9 +8487,34 @@ mod tests {
         t.vt_write(b"\x1b[21mX");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(
-            cell.codepoint as u8 as char == 'X',
+        assert_eq!(
+            cell.codepoint as u8 as char, 'X',
             "double underline (SGR 21) should render 'X'"
+        );
+        assert!(cell.underline, "double underline: underline must be true");
+        assert!(cell.double_underline, "double underline: double_underline must be true");
+    }
+
+    #[test]
+    fn sgr_double_underline_24_resets() {
+        let mut t = term();
+        t.vt_write(b"\x1b[21m\x1b[24mX");
+        let snap = t.take_snapshot();
+        let cell = cell_at(&snap, 0, 0).expect("cell at origin");
+        assert!(!cell.underline, "SGR 24: underline must be false");
+        assert!(!cell.double_underline, "SGR 24: double_underline must be false");
+    }
+
+    #[test]
+    fn sgr_single_underline_does_not_set_double() {
+        let mut t = term();
+        t.vt_write(b"\x1b[4mX");
+        let snap = t.take_snapshot();
+        let cell = cell_at(&snap, 0, 0).expect("cell at origin");
+        assert!(cell.underline, "single underline: underline must be true");
+        assert!(
+            !cell.double_underline,
+            "single underline: double_underline must be false"
         );
     }
 
@@ -8288,7 +8677,7 @@ mod tests {
         // Y should be at column 1 (after replacement char and nothing for overlong)
         // Ghostty might handle this differently — just verify no crash and Y is present
         let cells: Vec<_> = snap.cells.iter().take(5).collect();
-        assert!(cells.len() == 5, "snapshot should have cells");
+        assert_eq!(cells.len(), 5, "snapshot should have cells");
         // At least check the operation doesn't panic
     }
 
@@ -8535,10 +8924,7 @@ mod tests {
         let snap_after = t.take_snapshot();
         // The screen should still have cells visible
         assert!(num_cells_before > 0, "CSI 3J before: should have content");
-        assert!(
-            !snap_after.cells.is_empty(),
-            "CSI 3J after: screen should not be empty"
-        );
+        assert!(!snap_after.cells.is_empty(), "CSI 3J after: screen should not be empty");
         assert_invariants(&snap_after);
     }
 
@@ -8626,7 +9012,7 @@ mod tests {
         t.vt_write(b"X");
         let snap = t.take_snapshot();
         let cell = cell_at(&snap, 0, 0).expect("cell at origin");
-        assert!(cell.codepoint == 'X' as u32);
+        assert_eq!(cell.codepoint, 'X' as u32);
     }
 
     /// CSI X (ECH) erase multiple characters
@@ -8759,9 +9145,7 @@ mod tests {
         let mut found_input = false;
         for cell in snap.cells.iter() {
             match cell.codepoint as u8 as char {
-                'p' | 'r' | 'o' | 'm' | 't' | '>' | ' '
-                    if cell.semantic == SemanticContent::Prompt =>
-                {
+                'p' | 'r' | 'o' | 'm' | 't' | '>' | ' ' if cell.semantic == SemanticContent::Prompt => {
                     found_prompt = true;
                 }
                 'l' | 's' if cell.semantic == SemanticContent::Input => {
@@ -8824,7 +9208,239 @@ mod tests {
     }
 }
 
+// ── S2 fix-coverage tests (R3, R7, RK1–RK4) ────────────────────
 #[cfg(test)]
-#[allow(clippy::duplicate_mod)]
-#[path = "test_helpers.rs"]
-mod test_helpers;
+mod tests_s2_fixes {
+    use super::*;
+    use crate::test_helpers::assert_invariants;
+    use libghostty_vt::key::{self};
+
+    /// Enable the Kitty keyboard protocol so the encoder reports
+    /// explicit mods (required to observe SHIFT stripping, RK2).
+    fn enable_kitty(t: &mut GhosttyTerminal) {
+        t.vt_write(b"\x1b[?u"); // query supported flags
+        t.flush();
+        t.vt_write(b"\x1b[>1u"); // enable progressive enhancement (level 1+)
+        t.flush();
+    }
+
+    // ── R3: pty_write LF→CRLF idempotency ──────────────────
+
+    /// `pty_write` converts a bare LF to CRLF, but must NOT insert a
+    /// second CR when the LF is already preceded by a CR. Both
+    /// `a\nb` and `a\r\nb` must reach the same cell layout.
+    #[test]
+    fn pty_write_lf_crlf_idempotent() {
+        let mut lf = GhosttyTerminal::new(5, 10, 100).expect("term lf");
+        lf.flush();
+        lf.pty_write(b"a\nb");
+        lf.flush();
+
+        let mut crlf = GhosttyTerminal::new(5, 10, 100).expect("term crlf");
+        crlf.flush();
+        crlf.pty_write(b"a\r\nb");
+        crlf.flush();
+
+        // 'b' must land at row 1, column 0 in BOTH terminals — proving
+        // the already-present CR was not doubled into an extra line break.
+        let lf_snap = lf.take_snapshot();
+        let crlf_snap = crlf.take_snapshot();
+        let lf_b = lf_snap.cells.get((1 * lf_snap.cols + 0) as usize);
+        let crlf_b = crlf_snap.cells.get((1 * crlf_snap.cols + 0) as usize);
+        assert_eq!(
+            lf_b.map(|c| c.codepoint),
+            Some('b' as u32),
+            "a\\nb: 'b' must be at row1 col0"
+        );
+        assert_eq!(
+            crlf_b.map(|c| c.codepoint),
+            Some('b' as u32),
+            "a\\r\\nb: 'b' must be at row1 col0 (no double CR)"
+        );
+        assert_eq!(
+            lf_snap.cells[(1 * lf_snap.cols + 1) as usize].codepoint,
+            0,
+            "a\\nb: row1 col1 must stay empty (cursor advanced past 'b')"
+        );
+        assert_eq!(
+            crlf_snap.cells[(1 * crlf_snap.cols + 1) as usize].codepoint,
+            0,
+            "a\\r\\nb: row1 col1 must stay empty (no spurious CR)"
+        );
+        assert_invariants(&lf_snap);
+        assert_invariants(&crlf_snap);
+    }
+
+    /// A bare LF must still be promoted to CRLF (regression: the
+    /// transform must fire for `a\nb`, placing 'b' on row 1).
+    #[test]
+    fn pty_write_lf_is_promoted_to_crlf() {
+        let mut t = GhosttyTerminal::new(5, 10, 100).expect("term");
+        t.flush();
+        t.pty_write(b"a\nb");
+        t.flush();
+        let snap = t.take_snapshot();
+        assert_eq!(
+            snap.cells[(1 * snap.cols + 0) as usize].codepoint,
+            'b' as u32,
+            "LF must advance to next row (CRLF); 'b' at row1 col0"
+        );
+        assert_invariants(&snap);
+    }
+
+    // ── R7: take_snapshot_with_scroll routes through recv_or_fallback ─
+
+    /// `recv_or_fallback` returns the channel value when the terminal thread
+    /// is alive and responds (the normal path used by
+    /// `take_snapshot_with_scroll`).
+    #[test]
+    fn recv_or_fallback_returns_value_when_present() {
+        let (tx, rx) = bounded(1);
+        tx.send(99u32).expect("send");
+        let result = GhosttyTerminal::recv_or_fallback(rx, 7u32, "unit");
+        assert_eq!(result, 99, "recv_or_fallback must return the sent value");
+    }
+
+    /// `recv_or_fallback` returns the fallback when the channel is
+    /// disconnected (terminal thread dead — the "no surface" path
+    /// `take_snapshot_with_scroll` must take when the surface is gone).
+    #[test]
+    fn recv_or_fallback_returns_fallback_when_disconnected() {
+        let (tx, rx) = bounded::<u32>(1);
+        drop(tx); // simulate a dead terminal thread
+        let result = GhosttyTerminal::recv_or_fallback(rx, 42u32, "unit");
+        assert_eq!(
+            result, 42,
+            "recv_or_fallback must return the fallback when disconnected"
+        );
+    }
+
+    /// With a live terminal, `take_snapshot_with_scroll` returns a
+    /// sensible snapshot whose dimensions match the terminal.
+    #[test]
+    fn take_snapshot_with_scroll_returns_dims_when_alive() {
+        let t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        t.flush();
+        let snap = t.take_snapshot_with_scroll(0);
+        assert_eq!(snap.rows, 24, "snapshot rows must match terminal");
+        assert_eq!(snap.cols, 80, "snapshot cols must match terminal");
+        assert!(snap.cells.len() >= (24 * 80) as usize, "snapshot must carry cells");
+        assert_invariants(&snap);
+    }
+
+    // ── RK1–RK4: keyboard encoder correctness ─────────────────────
+
+    /// RK1: `utf8` is the produced char ('A'), distinct from the
+    /// unshifted codepoint ('a'). With SHIFT stripped (shift changed
+    /// the char), the encoder emits the bare printable 'A'.
+    #[test]
+    fn key_encode_shift_a_uses_utf8_char() {
+        let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        enable_kitty(&mut t);
+        let shift = key::Mods::SHIFT.bits();
+        let out = t.key_encode(29, shift, 0, 0x41, 0x61).expect("encode");
+        assert!(out.contains(&0x41), "output must contain 'A' (utf8): {out:?}");
+        assert!(!out.contains(&0x61), "output must NOT contain 'a' (unshifted): {out:?}");
+        assert_eq!(out, vec![0x41], "Shift+A with stripped shift emits bare 'A': {out:?}");
+    }
+
+    /// RK2: SHIFT is only stripped when it changed the printed char.
+    /// For Enter, the shifted and unshifted char are both 0x0d, so
+    /// SHIFT is RETAINED and the Kitty encoder emits a CSI sequence
+    /// (proving the strip is conditional, not blanket).
+    #[test]
+    fn key_encode_shift_enter_keeps_shift() {
+        let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        enable_kitty(&mut t);
+        let shift = key::Mods::SHIFT.bits();
+        let out = t.key_encode(66, shift, 0, 0x0d, 0x0d).expect("encode");
+        assert!(
+            out.starts_with(b"\x1b["),
+            "Shift+Enter must emit a CSI sequence (shift retained): {out:?}"
+        );
+    }
+
+    /// RK3: pure control keys must pass `utf8 = NULL` so the encoder
+    /// uses the logical key. The base behaviour (Kitty progressive
+    /// enhancement intentionally NOT enabled here) is that Ctrl+A still
+    /// reaches the PTY as the control byte 0x01 — the encoder must NOT
+    /// silently drop the key, and must NOT embed the C0 byte as a utf8
+    /// codepoint (the malformed `1;5u` form).
+    #[test]
+    fn key_encode_ctrl_a_passes_null_utf8() {
+        let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        let ctrl = key::Mods::CTRL.bits();
+        let out = t.key_encode(29, ctrl, 0, 0x01, 0).expect("encode");
+        assert!(
+            !out.is_empty(),
+            "Ctrl+A must produce output (control byte 0x01), not be dropped: {out:?}"
+        );
+        assert!(out.contains(&0x01), "Ctrl+A must emit the control byte 0x01: {out:?}");
+        let rendered = String::from_utf8_lossy(&out);
+        assert!(
+            !rendered.contains("1;5u"),
+            "Ctrl+A must NOT pass the C0 byte (1) as a utf8 codepoint: {out:?}"
+        );
+    }
+
+    /// RK4: the encoder/event are stored once on `GhosttyTerminal`
+    /// and reused. Repeated encodes of the same key must produce
+    /// identical output (no per-call state loss from re-allocation).
+    #[test]
+    fn key_encode_encoder_reused_stable() {
+        let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        enable_kitty(&mut t);
+        let shift = key::Mods::SHIFT.bits();
+        let first = t.key_encode(29, shift, 0, 0x41, 0x61).expect("encode");
+        let second = t.key_encode(29, shift, 0, 0x41, 0x61).expect("encode");
+        let third = t.key_encode(29, shift, 0, 0x41, 0x61).expect("encode");
+        assert_eq!(first, second, "encoder reuse must be stable (1st vs 2nd)");
+        assert_eq!(second, third, "encoder reuse must be stable (2nd vs 3rd)");
+    }
+
+    /// P1-S3: search_all_in_scrollback returns all occurrences of a query
+    #[test]
+    fn search_all_in_scrollback_finds_all_matches() {
+        let mut t = GhosttyTerminal::new(3, 80, 100).expect("term");
+        t.vt_write(b"hello world\n");
+        t.vt_write(b"hello again\n");
+        t.vt_write(b"goodbye\n");
+        t.flush();
+        let results = t.search_all_in_scrollback("hello", true);
+        assert!(!results.is_empty(), "must find 'hello'");
+        assert_eq!(results.len(), 2, "must find 'hello' in both lines");
+        for m in &results {
+            assert!(m.row < 3, "match row must be valid");
+            assert!(m.start_col < m.end_col, "start_col must precede end_col");
+        }
+    }
+
+    /// P1-S3: search_all_in_scrollback with case-insensitive matching
+    #[test]
+    fn search_all_in_scrollback_case_insensitive() {
+        let mut t = GhosttyTerminal::new(3, 80, 100).expect("term");
+        t.vt_write(b"HELLO world\n");
+        t.vt_write(b"hello again\n");
+        t.flush();
+        let results = t.search_all_in_scrollback("hello", false);
+        assert_eq!(results.len(), 2, "must find 'hello' case-insensitively");
+    }
+
+    /// P1-S3: search_all_in_scrollback empty query returns nothing
+    #[test]
+    fn search_all_in_scrollback_empty_query() {
+        let t = GhosttyTerminal::new(3, 80, 100).expect("term");
+        let results = t.search_all_in_scrollback("", true);
+        assert!(results.is_empty(), "empty query must return no matches");
+    }
+
+    /// P1-S3: search_all_in_scrollback no matches returns empty
+    #[test]
+    fn search_all_in_scrollback_no_matches() {
+        let mut t = GhosttyTerminal::new(3, 80, 100).expect("term");
+        t.vt_write(b"abc def\n");
+        t.flush();
+        let results = t.search_all_in_scrollback("xyz", true);
+        assert!(results.is_empty(), "no-match query must return empty vec");
+    }
+}

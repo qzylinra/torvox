@@ -33,8 +33,8 @@ impl SgrEffects {
             hidden: cell.hidden,
             strikethrough: cell.strikethrough,
             overline: cell.overline,
-            fg_set: cell.fg[0] > 0.0 || cell.fg[1] > 0.0 || cell.fg[2] > 0.0,
-            bg_set: cell.bg[0] > 0.0 || cell.bg[1] > 0.0 || cell.bg[2] > 0.0,
+            fg_set: cell.foreground[0] > 0.0 || cell.foreground[1] > 0.0 || cell.foreground[2] > 0.0,
+            bg_set: cell.background[0] > 0.0 || cell.background[1] > 0.0 || cell.background[2] > 0.0,
             underline_set: cell.underline,
         }
     }
@@ -84,11 +84,7 @@ pub fn assert_sgr0_clears_all(t: &mut GhosttyTerminal) {
 pub fn assert_sgr_idempotent(t: &mut GhosttyTerminal, params: &[u8]) {
     let first = apply_sgr_and_read(t, params);
     let second = apply_sgr_and_read(t, params);
-    assert_eq!(
-        first.bold, second.bold,
-        "SGR {:?} bold not idempotent",
-        params
-    );
+    assert_eq!(first.bold, second.bold, "SGR {:?} bold not idempotent", params);
     assert_eq!(
         first.underline, second.underline,
         "SGR {:?} underline not idempotent",
@@ -101,7 +97,7 @@ pub fn assert_sgr_idempotent(t: &mut GhosttyTerminal, params: &[u8]) {
 /// BUG DETECTED: SGR 21 should clear bold (per ECMA-48 5th ed), but Ghostty
 /// treats it as double-underline.  Returns `true` if the bug is present.
 ///
-/// Reference: https://vt100.net/emu/dec_ansi_parser (SGR 21 = Bold off)
+/// Reference: <https://vt100.net/emu/dec_ansi_parser> (SGR 21 = Bold off)
 pub fn detect_sgr_21_bold_off_bug(t: &mut GhosttyTerminal) -> bool {
     t.vt_write(b"\x1b[1m\x1b[21mX");
     t.flush();

@@ -1,5 +1,5 @@
-// @Shell environment setup, IMPL_TERM_005, impl, [REQ_TERM_005]
-// @need-ids: REQ_TERM_005
+// @REQ_TERM_007
+#[derive(Debug, Clone)]
 pub struct ShellEnv {
     pub home: String,
     pub user: String,
@@ -40,5 +40,53 @@ mod tests {
         assert!(!env.path.is_empty());
         assert!(!env.working_directory.is_empty());
         assert!(env.extra.is_empty());
+    }
+
+    #[test]
+    fn shell_env_default_working_directory_is_home() {
+        let env = ShellEnv::default();
+        assert_eq!(env.working_directory, env.home);
+    }
+
+    #[test]
+    fn shell_env_prefix_is_optional() {
+        let mut env = ShellEnv::default();
+        assert!(env.prefix.is_none());
+        env.prefix = Some("/data/data/com.termux/files/usr".to_string());
+        assert_eq!(env.prefix.as_deref(), Some("/data/data/com.termux/files/usr"));
+    }
+
+    #[test]
+    fn shell_env_extra_variables_roundtrip() {
+        let mut env = ShellEnv::default();
+        env.extra.push(("CUSTOM_VAR".to_string(), "custom_value".to_string()));
+        env.extra.push(("ANOTHER_VAR".to_string(), "another_value".to_string()));
+        assert_eq!(env.extra.len(), 2);
+        assert_eq!(env.extra[0], ("CUSTOM_VAR".to_string(), "custom_value".to_string()));
+    }
+
+    #[test]
+    fn shell_env_custom_construction() {
+        let env = ShellEnv {
+            home: "/custom/home".to_string(),
+            user: "testuser".to_string(),
+            path: "/custom/bin".to_string(),
+            working_directory: "/custom/work".to_string(),
+            prefix: Some("/custom/prefix".to_string()),
+            extra: vec![("KEY".to_string(), "VAL".to_string())],
+        };
+        assert_eq!(env.home, "/custom/home");
+        assert_eq!(env.user, "testuser");
+        assert_eq!(env.path, "/custom/bin");
+        assert_eq!(env.working_directory, "/custom/work");
+        assert_eq!(env.prefix, Some("/custom/prefix".to_string()));
+        assert_eq!(env.extra[0], ("KEY".to_string(), "VAL".to_string()));
+    }
+
+    #[test]
+    fn shell_env_default_does_not_panic() {
+        // Default construction should never panic regardless of env state
+        let env = ShellEnv::default();
+        assert!(!env.home.is_empty());
     }
 }

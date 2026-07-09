@@ -35,7 +35,7 @@ fn sc4_word_break_at_spaces() {
 #[test]
 fn sc5_block_selection() {
     let mut g = t();
-    g.vt_write(b"Row1\nRow2");
+    g.pty_write(b"Row1\nRow2");
     g.flush();
     let s = g.take_snapshot();
     assert_eq!(s.cells[80].codepoint, 'R' as u32);

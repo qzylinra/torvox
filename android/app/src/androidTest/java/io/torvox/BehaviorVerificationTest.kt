@@ -1,25 +1,24 @@
 package io.torvox
 
-import android.app.Activity
 import android.view.View
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.ext.junit.rules.ActivityScenarioRule
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import io.torvox.waitForSession
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-@org.junit.Ignore("Requires full TorvoxRuntime init + Compose rendering (SurfaceView/HW overlay)")
 class BehaviorVerificationTest {
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
@@ -39,11 +38,13 @@ class BehaviorVerificationTest {
 
     @Test
     fun terminal_view_displayed_on_launch() {
+        composeRule.waitForSession()
         composeRule.onNodeWithTag("TerminalScreen", useUnmergedTree = false).assertIsDisplayed()
     }
 
     @Test
     fun terminal_modifier_bar_displayed() {
+        composeRule.waitForSession()
         composeRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
     }
 
@@ -58,12 +59,14 @@ class BehaviorVerificationTest {
 
     @Test
     fun session_drawer_opens_and_shows_session_list() {
+        composeRule.waitForSession()
         openSessionDrawer()
         composeRule.onNodeWithTag("SessionDrawer").assertIsDisplayed()
     }
 
     @Test
     fun session_drawer_close_on_back_press() {
+        composeRule.waitForSession()
         openSessionDrawer()
         device.waitForIdle(1000)
         device.pressBack()
@@ -73,23 +76,28 @@ class BehaviorVerificationTest {
 
     @Test
     fun session_drawer_add_session_button_exists() {
+        composeRule.waitForSession()
         openSessionDrawer()
         composeRule.onNodeWithTag("AddSessionButton").assertIsDisplayed()
     }
 
     @Test
     fun settings_screen_sections_displayed() {
+        composeRule.waitForSession()
         openSessionDrawer()
         composeRule.onNodeWithText("Settings").performClick()
         device.waitForIdle(2000)
 
         composeRule.onNodeWithTag("AppThemeSelector", useUnmergedTree = false).assertIsDisplayed()
         composeRule.onNodeWithTag("FontSizeSlider", useUnmergedTree = false).assertIsDisplayed()
-        composeRule.onNodeWithTag("TerminalThemeModeSelector", useUnmergedTree = false).assertIsDisplayed()
+        composeRule
+            .onNodeWithTag("TerminalThemeModeSelector", useUnmergedTree = false)
+            .assertIsDisplayed()
     }
 
     @Test
     fun settings_back_navigates_to_terminal() {
+        composeRule.waitForSession()
         openSessionDrawer()
         composeRule.onNodeWithText("Settings").performClick()
         device.waitForIdle(2000)
@@ -104,6 +112,7 @@ class BehaviorVerificationTest {
 
     @Test
     fun settings_font_slider_exists() {
+        composeRule.waitForSession()
         openSessionDrawer()
         composeRule.onNodeWithText("Settings").performClick()
         device.waitForIdle(2000)
@@ -112,14 +121,19 @@ class BehaviorVerificationTest {
 
     @Test
     fun settings_theme_example_displays() {
+        composeRule.waitForSession()
         openSessionDrawer()
         composeRule.onNodeWithText("Settings").performClick()
         device.waitForIdle(2000)
+        composeRule
+            .onNodeWithTag("SettingsLazyColumn", useUnmergedTree = false)
+            .performScrollToNode(hasTestTag("ThemeSelector"))
         composeRule.onNodeWithTag("ThemeSelector", useUnmergedTree = false).assertIsDisplayed()
     }
 
     @Test
     fun app_theme_day_night_buttons_displayed() {
+        composeRule.waitForSession()
         openSessionDrawer()
         composeRule.onNodeWithText("Settings").performClick()
         device.waitForIdle(2000)
@@ -131,6 +145,7 @@ class BehaviorVerificationTest {
 
     @Test
     fun app_survives_pause_resume_cycle() {
+        composeRule.waitForSession()
         composeRule.activityRule.scenario.recreate()
         device.waitForIdle(2000)
         composeRule.onNodeWithTag("TerminalScreen", useUnmergedTree = false).assertIsDisplayed()
@@ -138,6 +153,7 @@ class BehaviorVerificationTest {
 
     @Test
     fun app_survives_multiple_pause_resume() {
+        composeRule.waitForSession()
         for (i in 1..3) {
             composeRule.activityRule.scenario.recreate()
             device.waitForIdle(1000)
@@ -148,12 +164,14 @@ class BehaviorVerificationTest {
 
     @Test
     fun keyboard_icon_displays_on_modifier_bar() {
+        composeRule.waitForSession()
         composeRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
         composeRule.onNodeWithText("ESC").assertIsDisplayed()
     }
 
     @Test
     fun ctrl_key_toggle_changes_appearance() {
+        composeRule.waitForSession()
         composeRule.onNodeWithText("CTRL").performClick()
         device.waitForIdle(1000)
         composeRule.onNodeWithText("CTRL").performClick()
@@ -161,6 +179,7 @@ class BehaviorVerificationTest {
 
     @Test
     fun all_modifier_bar_keys_displayed() {
+        composeRule.waitForSession()
         val expectedKeys = listOf("ESC", "TAB", "CTRL", "ALT", "HOME", "END", "PGUP", "PGDN")
         for (key in expectedKeys) {
             composeRule.onNodeWithText(key).assertIsDisplayed()

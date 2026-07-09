@@ -18,8 +18,8 @@ fn core_to_bridge_rows_and_cols() {
         backspace_mode: torvox_core::config::BackspaceMode::default(),
         right_alt_mode: torvox_core::config::RightAltMode::default(),
     };
-    let bridge: TerminalConfig = core.clone().into();
-    let back: CoreConfig = bridge.into();
+    let bridge: TerminalConfig = TerminalConfig::from_core_config(&core);
+    let back: CoreConfig = bridge.to_core_config();
     assert_eq!(back.rows, 36);
     assert_eq!(back.cols, 120);
     assert_eq!(back.scrollback_lines, 5000);
@@ -38,12 +38,9 @@ fn core_to_bridge_custom_shell() {
         backspace_mode: torvox_core::config::BackspaceMode::default(),
         right_alt_mode: torvox_core::config::RightAltMode::default(),
     };
-    let bridge: TerminalConfig = core.into();
-    let back: CoreConfig = bridge.into();
-    assert_eq!(
-        back.shell,
-        torvox_core::config::Shell::Custom("/bin/zsh".into())
-    );
+    let bridge: TerminalConfig = TerminalConfig::from_core_config(&core);
+    let back: CoreConfig = bridge.to_core_config();
+    assert_eq!(back.shell, torvox_core::config::Shell::Custom("/bin/zsh".into()));
 }
 
 /// Bridge-only fields (home/user/path/working_directory) are lost on
@@ -56,14 +53,14 @@ fn bridge_only_fields_lost_on_core_conversion() {
         cols: 100,
         scrollback_lines: 100_000,
         font_size_tenths: 160,
-        theme: BridgeTheme::from(torvox_core::config::Theme::catppuccin_mocha_named()),
+        theme: BridgeTheme::from(torvox_core::config::Theme::catppuccin_mocha()),
         home: "/data/data/com.torvox/files".into(),
         user: "torvox".into(),
         path: "/system/bin:/system/xbin".into(),
         working_directory: "/data/data/com.torvox/files".into(),
         prefix: String::new(),
     };
-    let core: CoreConfig = bridge.into();
+    let core: CoreConfig = bridge.to_core_config();
     assert_eq!(core.rows, 30);
     assert_eq!(core.cols, 100);
 }
@@ -75,15 +72,12 @@ fn bridge_theme_all_ansi_colors_round_trip() {
     let bridge = BridgeTheme::from(orig.clone());
     let back: torvox_core::config::Theme = bridge.into();
     assert_eq!(orig.name, back.name);
-    assert_eq!(orig.bg, back.bg);
-    assert_eq!(orig.fg, back.fg);
+    assert_eq!(orig.background, back.background);
+    assert_eq!(orig.foreground, back.foreground);
     assert_eq!(orig.ansi.len(), 16);
     assert_eq!(back.ansi.len(), 16);
     for i in 0..16 {
-        assert_eq!(
-            orig.ansi[i], back.ansi[i],
-            "ANSI color {i} does not round-trip"
-        );
+        assert_eq!(orig.ansi[i], back.ansi[i], "ANSI color {i} does not round-trip");
     }
 }
 
@@ -92,10 +86,7 @@ fn bridge_theme_all_ansi_colors_round_trip() {
 fn bridge_theme_has_name() {
     let orig = torvox_core::config::Theme::dracula_plus();
     let bridge = BridgeTheme::from(orig);
-    assert!(
-        !bridge.name.is_empty(),
-        "BridgeTheme name should not be empty"
-    );
+    assert!(!bridge.name.is_empty(), "BridgeTheme name should not be empty");
     assert_eq!(bridge.name, "Dracula Plus");
 }
 
@@ -107,18 +98,9 @@ fn bridge_theme_fg_rgb_u32_encoding() {
     let r = (bridge.fg >> 16) as u8;
     let g = (bridge.fg >> 8) as u8;
     let b = bridge.fg as u8;
-    assert_eq!(
-        r, 248,
-        "Dracula Plus foreground red component should be 248"
-    );
-    assert_eq!(
-        g, 248,
-        "Dracula Plus foreground green component should be 248"
-    );
-    assert_eq!(
-        b, 242,
-        "Dracula Plus foreground blue component should be 242"
-    );
+    assert_eq!(r, 248, "Dracula Plus foreground red component should be 248");
+    assert_eq!(g, 248, "Dracula Plus foreground green component should be 248");
+    assert_eq!(b, 242, "Dracula Plus foreground blue component should be 242");
 }
 
 // ═══════════════════════════════════════════════
@@ -132,18 +114,11 @@ fn wire_format_roundtrip_default() {
     let wire_size = boltffi::__private::wire::WireEncode::wire_size(&config);
     let mut buf = vec![0u8; wire_size];
     let written = boltffi::__private::wire::WireEncode::encode_to(&config, &mut buf);
-    assert_eq!(
-        written, wire_size,
-        "encode_to must write exact wire_size bytes"
-    );
-    let (decoded, consumed) =
-        <TerminalConfig as boltffi::__private::wire::WireDecode>::decode_from(&buf)
-            .expect("wire_decode of TerminalConfig must succeed");
+    assert_eq!(written, wire_size, "encode_to must write exact wire_size bytes");
+    let (decoded, consumed) = <TerminalConfig as boltffi::__private::wire::WireDecode>::decode_from(&buf)
+        .expect("wire_decode of TerminalConfig must succeed");
     assert_eq!(consumed, wire_size, "decode_from must consume all bytes");
-    assert_eq!(
-        decoded, config,
-        "wire roundtrip must preserve TerminalConfig"
-    );
+    assert_eq!(decoded, config, "wire roundtrip must preserve TerminalConfig");
 }
 
 /// Wire encode/decode roundtrip with custom shell and non-default values
@@ -157,7 +132,7 @@ fn wire_format_roundtrip_custom_config() {
         cols: 160,
         scrollback_lines: 50000,
         font_size_tenths: 180,
-        theme: BridgeTheme::from(torvox_core::config::Theme::catppuccin_mocha_named()),
+        theme: BridgeTheme::from(torvox_core::config::Theme::catppuccin_mocha()),
         home: "/data/data/com.torvox".to_string(),
         user: "testuser".to_string(),
         path: "/usr/bin:/bin".to_string(),
@@ -169,8 +144,7 @@ fn wire_format_roundtrip_custom_config() {
     let written = boltffi::__private::wire::WireEncode::encode_to(&config, &mut buf);
     assert_eq!(written, wire_size);
     let (decoded, consumed) =
-        <TerminalConfig as boltffi::__private::wire::WireDecode>::decode_from(&buf)
-            .expect("wire_decode must succeed");
+        <TerminalConfig as boltffi::__private::wire::WireDecode>::decode_from(&buf).expect("wire_decode must succeed");
     assert_eq!(consumed, wire_size);
     assert_eq!(decoded, config);
 }

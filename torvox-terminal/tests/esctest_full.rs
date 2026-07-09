@@ -183,10 +183,7 @@ fn es23_dsr_cpr() {
     let r = g.drain_pty_write_responses();
     let combined: Vec<u8> = r.into_iter().flatten().collect();
     let resp = String::from_utf8_lossy(&combined);
-    assert!(
-        resp.contains(';'),
-        "CPR should contain row;col, got: {resp}"
-    );
+    assert!(resp.contains(';'), "CPR should contain row;col, got: {resp}");
 }
 #[test]
 fn es24_da1() {
@@ -209,10 +206,7 @@ fn es25_da2() {
     let r = g.drain_pty_write_responses();
     let combined: Vec<u8> = r.into_iter().flatten().collect();
     let resp = String::from_utf8_lossy(&combined);
-    assert!(
-        !combined.is_empty(),
-        "DA2 should produce a response, got: {resp}"
-    );
+    assert!(!combined.is_empty(), "DA2 should produce a response, got: {resp}");
 }
 #[test]
 fn es26_decid() {
@@ -222,10 +216,7 @@ fn es26_decid() {
     let r = g.drain_pty_write_responses();
     let combined: Vec<u8> = r.into_iter().flatten().collect();
     let resp = String::from_utf8_lossy(&combined);
-    assert!(
-        !combined.is_empty(),
-        "DECID should produce a response, got: {resp}"
-    );
+    assert!(!combined.is_empty(), "DECID should produce a response, got: {resp}");
 }
 #[test]
 fn es27_ris() {

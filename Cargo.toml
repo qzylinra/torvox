@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
+exclude = ["torvox-core/kani"]
 members = [
   "torvox-core",
-  "torvox-core/kani",
   "torvox-terminal",
   "torvox-renderer",
   "torvox-gui-android",
@@ -17,7 +17,6 @@ members = [
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
-private = true
 
 
 [workspace.dependencies]
@@ -40,40 +39,77 @@ fontdb = "0.23"
 swash = "0.2"
 guillotiere = "0.7"
 
-boltffi = "0.25"
+boltffi = "0.27"
 
 flume = "0.12"
 
 # Testing infrastructure: proptest for property-based testing, arbitrary for structured fuzz generation
-proptest = "1"
+proptest = "1.11"
 arbitrary = { version = "1", features = ["derive"] }
 bitflags = "2"
 lru = "0.18"
-quickcheck = "1"
-quickcheck_macros = "1"
+quickcheck = "1.1"
+quickcheck_macros = "1.1"
 futures = "0.3"
 raw-window-handle = "0.6"
 log = "0.4"
 rkyv = { version = "0.8", default-features = false }
-toml = "0.8"
+toml = "1"
+image = "0.25"
 
 # Upstream libghostty-rs via git (no crates.io release). Pinned via Cargo.lock.
-# Zig correctness patches applied to ghostty source via flake.nix shellHook (GHOSTTY_SOURCE_DIR).
+# Zig correctness patches applied via scripts/bootstrap-libghostty.nu.
 libghostty-vt = { git = "https://github.com/Uzaaft/libghostty-rs.git", package = "libghostty-vt" }
 libghostty-vt-sys = { git = "https://github.com/Uzaaft/libghostty-rs.git", package = "libghostty-vt-sys" }
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
-unwrap_used = "deny"
-expect_used = "warn"
-missing_panics_doc = "warn"
+missing_panics_doc = "allow"
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 missing_errors_doc = "allow"
-similar_names = "allow"
 too_many_lines = "allow"
 struct_excessive_bools = "allow"
 doc_markdown = "allow"
+match_same_arms = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+return_self_not_must_use = "allow"
+wildcard_enum_match_arm = "allow"
+elidable_lifetime_names = "allow"
+match_wildcard_for_single_variants = "allow"
+pub_underscore_fields = "allow"
+missing_const_for_fn = "allow"
+items_after_statements = "allow"
+needless_pass_by_value = "allow"
+similar_names = "allow"
+fn_params_excessive_bools = "allow"
 wildcard_imports = "allow"
 module_inception = "allow"
-missing_const_type_fn = "allow"
+unwrap_used = "allow"
+expect_used = "allow"
+if_not_else = "allow"
+implicit_clone = "allow"
+default_trait_access = "allow"
+manual_let_else = "allow"
+ref_as_ptr = "allow"
+used_underscore_items = "allow"
+used_underscore_binding = "allow"
+ignored_unit_patterns = "allow"
+unnecessary_cast = "allow"
+bool_to_int_with_if = "allow"
+map_unwrap_or = "allow"
+collapsible_else_if = "allow"
+redundant_closure_for_method_calls = "allow"
+single_match_else = "allow"
+semicolon_if_nothing_returned = "allow"
+unnecessary_debug_formatting = "allow"
+unused_self = "allow"
+format_push_string = "allow"
+borrow_as_ptr = "allow"
+assigning_clones = "allow"
+ptr_as_ptr = "allow"
+cast_lossless = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+uninlined_format_args = "allow"

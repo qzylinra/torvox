@@ -7,7 +7,7 @@ srcdir = "."
 [needs]
 build_json = true
 id_required = true
-id_regex = "^(REQ|SPEC|IMPL|TEST|FEAT)_[A-Z0-9_]+$"
+id_regex = "^(REQ|SPEC|IMPL|TEST|FEAT|EXC)_[A-Z0-9_]+$"
 
 # ── Need Types ──
 
@@ -57,6 +57,21 @@ incoming = "implemented by"
 option = "refines"
 outgoing = "refines"
 incoming = "refined by"
+
+# ── ISO 29148 Structured Fields ──
+
+[[needs.extra_options]]
+option = "rationale"
+type = "string"
+
+[[needs.extra_options]]
+option = "acceptance"
+type = "string"
+
+[[needs.extra_links]]
+option = "exception_ids"
+outgoing = "exception_ids"
+incoming = "has_exception"
 
 # ── CodeLinks: torvox-core (Rust) ──
 [codelinks.projects.torvox_core]

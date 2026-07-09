@@ -20,7 +20,7 @@ class BootstrapCompatibilityTest {
         private const val HOME_DIR = "$PREFIX/home"
         private val BOOTSTRAP_URL by lazy {
             System.getProperty("torvox.test.bootstrapUrl")
-                ?: "https://sourceforge.net/projects/termux-packages.mirror/files/bootstrap-2026.06.14-r1+apt.android-7/bootstrap-x86_64.zip/download"
+                ?: "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.06.21-r1%2Bapt.android-7/bootstrap-x86_64.zip"
         }
         private const val TAG = "BootstrapTest"
 
@@ -35,10 +35,13 @@ class BootstrapCompatibilityTest {
             Log.i(TAG, "installing bootstrap from $BOOTSTRAP_URL")
             val result =
                 runBlocking {
+                    val prefixDir = java.io.File("/data/data/com.termux/files/usr")
+                    val homeDir = java.io.File("/data/data/com.termux/files/home")
+                    val stagingDir = java.io.File(ctx.cacheDir, "bootstrap-staging")
                     BootstrapOrchestrator(
                         BootstrapDownloader(ctx),
-                        BootstrapInstaller(),
-                        SecondStageRunner(),
+                        BootstrapInstaller(prefixDir, homeDir, stagingDir),
+                        SecondStageRunner(prefixDir, homeDir),
                     ).ensureBootstrap(BOOTSTRAP_URL)
                 }
             Log.i(TAG, "bootstrap result: $result")

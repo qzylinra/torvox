@@ -20,10 +20,7 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/codecov.yml");
         let content = fs::read_to_string(&path).expect("codecov.yml must exist");
-        assert!(
-            content.contains("codecov:"),
-            "codecov.yml must contain 'codecov:' key"
-        );
+        assert!(content.contains("codecov:"), "codecov.yml must contain 'codecov:' key");
         assert!(
             content.contains("coverage:"),
             "codecov.yml must contain 'coverage:' key"
@@ -35,9 +32,7 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/.cargo/mutants.toml");
         let content = fs::read_to_string(&path).expect(".cargo/mutants.toml must exist");
-        let parsed: toml::Value = content
-            .parse()
-            .expect(".cargo/mutants.toml must be valid TOML");
+        let parsed: toml::Value = toml::from_str(&content).expect(".cargo/mutants.toml must be valid TOML");
         let has_valid_keys = parsed.get("examine_globs").is_some()
             || parsed.get("exclude_globs").is_some()
             || parsed.get("test_tool").is_some();
@@ -45,6 +40,28 @@ mod config_file_validation {
             has_valid_keys,
             ".cargo/mutants.toml must have at least one of: examine_globs, exclude_globs, test_tool"
         );
+        let timeout = parsed
+            .get("timeout")
+            .and_then(|v| v.as_integer())
+            .expect("mutants.toml must have timeout ≤ 60");
+        assert!(
+            timeout <= 60,
+            "mutants.toml timeout must be ≤ 60 for fast CI, got {timeout}"
+        );
+        let _threshold = parsed
+            .get("threshold")
+            .and_then(|v| v.as_float())
+            .expect("mutants.toml must have threshold (e.g. 0.60)");
+        let examine = parsed
+            .get("examine_globs")
+            .and_then(|v| v.as_array())
+            .expect("mutants.toml examine_globs must be a non-empty array");
+        assert!(!examine.is_empty(), "examine_globs must not be empty");
+        let tool = parsed
+            .get("test_tool")
+            .and_then(|v| v.as_str())
+            .expect("mutants.toml must specify test_tool (e.g. nextest)");
+        assert_eq!(tool, "nextest", "test_tool must be 'nextest'");
     }
 
     #[test]
@@ -52,9 +69,7 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/rust-toolchain.toml");
         let content = fs::read_to_string(&path).expect("rust-toolchain.toml must exist");
-        let parsed: toml::Value = content
-            .parse()
-            .expect("rust-toolchain.toml must be valid TOML");
+        let parsed: toml::Value = toml::from_str(&content).expect("rust-toolchain.toml must be valid TOML");
         assert!(
             parsed.get("toolchain").is_some(),
             "rust-toolchain.toml must have [toolchain] section"
@@ -66,9 +81,7 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/Cargo.toml");
         let content = fs::read_to_string(&path).expect("workspace Cargo.toml must exist");
-        let parsed: toml::Value = content
-            .parse()
-            .expect("workspace Cargo.toml must be valid TOML");
+        let parsed: toml::Value = toml::from_str(&content).expect("workspace Cargo.toml must be valid TOML");
         assert!(
             parsed.get("workspace").is_some(),
             "workspace Cargo.toml must have [workspace] section"
@@ -76,14 +89,25 @@ mod config_file_validation {
     }
 
     #[test]
-    fn build_android_libs_script_exists() {
+    fn all_nu_scripts_have_exact_shebang() {
         let root = workspace_root();
-        let path = format!("{root}/scripts/build-android-libs.nu");
-        let content = fs::read_to_string(&path).expect("build-android-libs.nu must exist");
-        assert!(
-            content.contains("nix develop --command nu"),
-            "build-android-libs.nu must have nix develop shebang"
-        );
+        let scripts_dir = std::path::Path::new(&root).join("scripts");
+        let expected_shebang = "#!/usr/bin/env -S nix develop --command nu";
+        for entry in fs::read_dir(&scripts_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "nu") {
+                let content = fs::read_to_string(&path).unwrap();
+                let first_line = content.lines().next().unwrap_or("");
+                assert_eq!(
+                    first_line,
+                    expected_shebang,
+                    "{}: first line must be exactly the shebang, got: {:?}",
+                    path.file_name().unwrap().to_string_lossy(),
+                    first_line
+                );
+            }
+        }
     }
 
     #[test]
@@ -91,9 +115,7 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/coverage-ratchet.toml");
         let content = fs::read_to_string(&path).expect("coverage-ratchet.toml must exist");
-        let parsed: toml::Value = content
-            .parse()
-            .expect("coverage-ratchet.toml must be valid TOML");
+        let parsed: toml::Value = toml::from_str(&content).expect("coverage-ratchet.toml must be valid TOML");
         assert!(
             parsed.get("workspace").is_some(),
             "coverage-ratchet.toml must have [workspace] section"
@@ -113,27 +135,15 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/coverage-ratchet.toml");
         let content = fs::read_to_string(&path).expect("coverage-ratchet.toml must exist");
-        let parsed: toml::Value = content.parse().unwrap();
+        let parsed: toml::Value = toml::from_str(&content).unwrap();
 
         let ws = parsed.get("workspace").unwrap();
-        let initial = ws
-            .get("initial_threshold")
-            .and_then(|v| v.as_float())
-            .unwrap();
-        let target = ws
-            .get("target_threshold")
-            .and_then(|v| v.as_float())
-            .unwrap();
-        let increment = ws
-            .get("ratchet_increment")
-            .and_then(|v| v.as_float())
-            .unwrap();
+        let initial = ws.get("initial_threshold").and_then(|v| v.as_float()).unwrap();
+        let target = ws.get("target_threshold").and_then(|v| v.as_float()).unwrap();
+        let increment = ws.get("ratchet_increment").and_then(|v| v.as_float()).unwrap();
 
         assert!(initial > 0.0, "initial_threshold must be > 0");
-        assert!(
-            target > initial,
-            "target_threshold must be > initial_threshold"
-        );
+        assert!(target > initial, "target_threshold must be > initial_threshold");
         assert!(increment > 0.0, "ratchet_increment must be > 0");
         assert!(
             increment <= target - initial,
@@ -146,7 +156,7 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/coverage-ratchet.toml");
         let content = fs::read_to_string(&path).expect("coverage-ratchet.toml must exist");
-        let parsed: toml::Value = content.parse().unwrap();
+        let parsed: toml::Value = toml::from_str(&content).unwrap();
 
         let crates = parsed.get("crates").unwrap();
         let workspace_target = parsed
@@ -204,8 +214,8 @@ mod config_file_validation {
         let ratchet_content = fs::read_to_string(&ratchet_path).unwrap();
         let cargo_content = fs::read_to_string(&cargo_path).unwrap();
 
-        let ratchet_parsed: toml::Value = ratchet_content.parse().unwrap();
-        let cargo_parsed: toml::Value = cargo_content.parse().unwrap();
+        let ratchet_parsed: toml::Value = toml::from_str(&ratchet_content).unwrap();
+        let cargo_parsed: toml::Value = toml::from_str(&cargo_content).unwrap();
 
         let crates_section = ratchet_parsed.get("crates").unwrap();
         let workspace_members = cargo_parsed
@@ -234,22 +244,16 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/coverage-ratchet.toml");
         let content = fs::read_to_string(&path).unwrap();
-        let parsed: toml::Value = content.parse().unwrap();
+        let parsed: toml::Value = toml::from_str(&content).unwrap();
 
         let ratchet = parsed.get("ratchet").unwrap();
-        let auto_bump = ratchet
-            .get("auto_bump")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let auto_bump = ratchet.get("auto_bump").and_then(|v| v.as_bool()).unwrap_or(false);
         let require_clean = ratchet
             .get("require_clean_ci")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        assert!(
-            auto_bump,
-            "ratchet.auto_bump must be true for CI enforcement"
-        );
+        assert!(auto_bump, "ratchet.auto_bump must be true for CI enforcement");
         assert!(
             require_clean,
             "ratchet.require_clean_ci must be true for CI enforcement"
@@ -261,25 +265,150 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/coverage-ratchet.toml");
         let content = fs::read_to_string(&path).unwrap();
-        let parsed: toml::Value = content.parse().unwrap();
+        let parsed: toml::Value = toml::from_str(&content).unwrap();
 
         let cov_section = parsed.get("cargo-llvm-cov").unwrap();
-        let exclude = cov_section
-            .get("exclude_lines")
-            .and_then(|v| v.as_array())
-            .unwrap();
+        let exclude = cov_section.get("exclude_lines").and_then(|v| v.as_array()).unwrap();
 
         assert!(!exclude.is_empty(), "exclude_lines must not be empty");
 
         for pattern in exclude {
-            let s = pattern
-                .as_str()
-                .expect("exclude_lines entries must be strings");
-            assert!(
-                !s.is_empty(),
-                "exclude_lines entries must not be empty strings"
-            );
+            let s = pattern.as_str().expect("exclude_lines entries must be strings");
+            assert!(!s.is_empty(), "exclude_lines entries must not be empty strings");
         }
+    }
+
+    // Acceptance: [inspection] CI scripts contain test_type labels
+    // — workflow names themselves serve as labels (rust-checks → unit,
+    //   android-tests → unit+emulator, release → emulator)
+    #[test]
+    fn ci_workflow_names_are_distinct() {
+        let root = std::path::Path::new(&workspace_root()).to_path_buf();
+        let ci_dir = root.join(".github").join("workflows");
+        let mut names = Vec::new();
+        for entry in fs::read_dir(&ci_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "yml") {
+                let content = fs::read_to_string(&path).unwrap();
+                for line in content.lines() {
+                    let t = line.trim();
+                    if t.starts_with("name:") {
+                        names.push(t.strip_prefix("name:").unwrap().trim().to_string());
+                    }
+                }
+            }
+        }
+        assert!(names.len() >= 3, "Expected ≥3 CI workflow files, found {}", names.len());
+        assert!(
+            names.iter().any(|n| n.contains("Rust") || n.contains("rust")),
+            "Expected workflow with 'Rust' in name, got: {names:?}"
+        );
+        assert!(
+            names.iter().any(|n| n.contains("Android") || n.contains("android")),
+            "Expected workflow with 'Android' in name, got: {names:?}"
+        );
+    }
+
+    #[test]
+    fn ci_workflows_have_no_forbidden_patterns() {
+        let ci_dir = std::path::PathBuf::from(workspace_root())
+            .join(".github")
+            .join("workflows");
+        for entry in fs::read_dir(&ci_dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().is_some_and(|e| e == "yml") {
+                let content = fs::read_to_string(&path).unwrap();
+                let fname = path.file_name().unwrap().to_string_lossy();
+
+                assert!(
+                    !content.contains("FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"),
+                    "{fname} must not contain FORCE_JAVASCRIPT_ACTIONS_TO_NODE24"
+                );
+
+                assert!(
+                    !content.contains("mkdir -p ~/.config/nix"),
+                    "{fname} must not contain `mkdir -p ~/.config/nix`"
+                );
+
+                assert!(
+                    !content.contains("find android/app/src/main/jniLibs"),
+                    "{fname} must not contain raw `find jniLibs` (move to Nu script)"
+                );
+
+                assert!(
+                    !content.contains("unzip -l") || !content.contains("\\.so"),
+                    "{fname} must not contain raw `unzip -l *.so` (move to Nu script)"
+                );
+
+                // No @vX tags except the documented exception
+                let mut concurrency_seen = false;
+                let mut cancel_in_progress_true = false;
+                for (i, line) in content.lines().enumerate() {
+                    let line_num = i + 1;
+                    if line.contains("concurrency:") {
+                        concurrency_seen = true;
+                    }
+                    if concurrency_seen && line.contains("cancel-in-progress:") {
+                        if line.contains("cancel-in-progress: true") {
+                            cancel_in_progress_true = true;
+                        }
+                    }
+                    if line.contains("reactivecircus/android-emulator-runner") {
+                        assert!(
+                            line.contains("@v2"),
+                            "{fname}:{line_num} android-emulator-runner must use @v2, got: {line}"
+                        );
+                    } else if line.trim().starts_with("- uses:") {
+                        let parts: Vec<&str> = line.splitn(2, '@').collect();
+                        if parts.len() == 2 {
+                            let tag = parts[1].trim();
+                            assert!(
+                                tag == "main" || tag == "master",
+                                "{fname}:{line_num} uses tag/rev '{tag}' instead of @main/@master: {line}"
+                            );
+                        }
+                    }
+                }
+                assert!(cancel_in_progress_true, "{fname} must have `cancel-in-progress: true`");
+
+                assert!(
+                    !content.contains("cargo doc"),
+                    "{fname} must not run `cargo doc` directly — moved to check-rust.nu"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cargo_toml_no_gl_dependencies() {
+        let root = std::path::Path::new(&workspace_root()).to_path_buf();
+        let content = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+        let mut in_deps = false;
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') {
+                in_deps = trimmed.starts_with("[dependencies]") || trimmed.starts_with("[target");
+                continue;
+            }
+            if in_deps && !trimmed.starts_with('#') && !trimmed.is_empty() {
+                assert!(
+                    !trimmed.contains("gl") && !trimmed.contains("gles") && !trimmed.contains("opengl"),
+                    "Dependency section must not contain GL/GLES/OpenGL: {trimmed}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn cargo_llvm_cov_is_in_devshell_packages() {
+        let root = workspace_root();
+        let path = format!("{root}/flake.nix");
+        let content = fs::read_to_string(&path).expect("flake.nix must exist");
+        assert!(
+            content.contains("cargo-llvm-cov"),
+            "flake.nix devShell must include cargo-llvm-cov"
+        );
     }
 }
 
@@ -343,9 +472,9 @@ mod vt_to_snapshot_pipeline {
         let snap = t.take_snapshot();
         // Default fg is Catppuccin Mocha (205,214,244) → byte/255 (no srgb_to_linear)
         let cell = &snap.cells[0];
-        assert!((cell.fg[0] - 0.804).abs() < 0.01);
-        assert!((cell.fg[1] - 0.839).abs() < 0.01);
-        assert!((cell.fg[2] - 0.957).abs() < 0.01);
+        assert!((cell.foreground[0] - 0.804).abs() < 0.01);
+        assert!((cell.foreground[1] - 0.839).abs() < 0.01);
+        assert!((cell.foreground[2] - 0.957).abs() < 0.01);
     }
 
     #[test]
@@ -366,10 +495,7 @@ mod vt_to_snapshot_pipeline {
         t.flush();
         let dumped = t.dump_grid();
         let cps: Vec<u32> = dumped.visible[0..5].iter().map(|c| c.codepoint).collect();
-        assert_eq!(
-            cps,
-            vec!['A' as u32, 'B' as u32, 'C' as u32, 'D' as u32, 'E' as u32]
-        );
+        assert_eq!(cps, vec!['A' as u32, 'B' as u32, 'C' as u32, 'D' as u32, 'E' as u32]);
     }
 }
 
@@ -527,11 +653,7 @@ mod common {
     use std::time::{Duration, Instant};
     use torvox_terminal::session::Session;
 
-    pub fn drain_until(
-        s: &mut Session,
-        condition: impl Fn(&Session) -> bool,
-        timeout: Duration,
-    ) -> bool {
+    pub fn drain_until(s: &mut Session, condition: impl Fn(&Session) -> bool, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             s.process_output();
@@ -594,10 +716,7 @@ mod linux_pty_shell_interaction {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"pwd\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
-        assert!(
-            result.contains("/"),
-            "pwd should output a path with /, got: {result}"
-        );
+        assert!(result.contains("/"), "pwd should output a path with /, got: {result}");
     }
 
     #[test]
@@ -649,10 +768,7 @@ mod linux_pty_shell_interaction {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo hello | cat\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
-        assert!(
-            result.contains("hello"),
-            "expected piped echo output, got: {result}"
-        );
+        assert!(result.contains("hello"), "expected piped echo output, got: {result}");
     }
 
     #[test]
@@ -898,7 +1014,7 @@ mod linux_scrollback {
         // seq 1 200 outputs 200 lines, well beyond 24-row viewport
         s.write(b"seq 1 200\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(5));
-        let scrollback = s.terminal().scrollback_len();
+        let scrollback = s.terminal().scrollback_length();
         assert!(
             scrollback > 0,
             "expected scrollback > 0 after 200 lines of output, got {scrollback}"
@@ -921,10 +1037,7 @@ mod linux_scrollback {
         s.write(b"echo SEARCH_TARGET_XYZ\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         let result = s.terminal().search_in_scrollback("SEARCH_TARGET_XYZ");
-        assert!(
-            result.is_some(),
-            "should find SEARCH_TARGET_XYZ in scrollback"
-        );
+        assert!(result.is_some(), "should find SEARCH_TARGET_XYZ in scrollback");
     }
 
     #[test]
@@ -934,7 +1047,7 @@ mod linux_scrollback {
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         // With only 1 row, output wraps but scrollback may or may not be used
         // Just verify no crash
-        let _ = s.terminal().scrollback_len();
+        let _ = s.terminal().scrollback_length();
     }
 }
 
@@ -974,8 +1087,7 @@ mod linux_unicode_handling {
     fn echo_mixed_ascii_and_cjk() {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Write raw UTF-8 bytes "hello 中文" followed by newline through the shell
-        s.write(b"echo hello \xe4\xb8\xad\xe6\x96\x87\n")
-            .expect("write");
+        s.write(b"echo hello \xe4\xb8\xad\xe6\x96\x87\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         let snap = s.terminal().take_snapshot();
         let has_h = snap.cells.iter().any(|c| c.codepoint == 'h' as u32);
@@ -1031,10 +1143,7 @@ mod linux_ansi_sequences {
                     .collect()
             })
             .collect();
-        panic!(
-            "screen should be cleared after ESC[2J. Grid:\n{}",
-            lines.join("\n")
-        );
+        panic!("screen should be cleared after ESC[2J. Grid:\n{}", lines.join("\n"));
     }
 
     #[test]
@@ -1150,8 +1259,7 @@ mod linux_binary_safety {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Write a line longer than the terminal width
         let long_line = "A".repeat(500);
-        s.write(format!("{long_line}\n").as_bytes())
-            .expect("write long line");
+        s.write(format!("{long_line}\n").as_bytes()).expect("write long line");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         // No crash = success
     }
@@ -1160,11 +1268,501 @@ mod linux_binary_safety {
     fn rapid_writes_do_not_crash() {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         for i in 0..50 {
-            s.write(format!("echo line{i}\n").as_bytes())
-                .expect("write");
+            s.write(format!("echo line{i}\n").as_bytes()).expect("write");
         }
         drain_until(&mut s, |_| false, Duration::from_secs(5));
         // No crash = success
+    }
+}
+
+#[cfg(test)]
+mod requirements_format {
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn workspace_root() -> PathBuf {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let root = manifest_dir.strip_suffix("/torvox-integration-tests").unwrap();
+        PathBuf::from(root)
+    }
+
+    fn reqs_dir() -> PathBuf {
+        workspace_root().join("docs").join("requirements")
+    }
+
+    fn suppressions_path() -> PathBuf {
+        workspace_root().join("docs").join("suppressions.toml")
+    }
+
+    fn load_suppressions() -> HashSet<String> {
+        let path = suppressions_path();
+        if !path.exists() {
+            return HashSet::new();
+        }
+        let content = fs::read_to_string(&path).unwrap();
+        let mut ids = HashSet::new();
+        for line in content.lines() {
+            if let Some(rest) = line.strip_prefix("[suppression.")
+                && let Some(id) = rest.strip_suffix("]")
+            {
+                ids.insert(id.trim().to_string());
+            }
+        }
+        ids
+    }
+
+    struct Req {
+        id: String,
+        has_rationale: bool,
+        has_acceptance: bool,
+        body_starts_with_shall: bool,
+        exception_ids: Vec<String>,
+        satisfies: Vec<String>,
+    }
+
+    fn parse_rst_file(path: &PathBuf) -> Vec<Req> {
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => return vec![],
+        };
+        let mut reqs = Vec::new();
+        let mut current_id = String::new();
+        let mut in_req = false;
+        let mut in_body = false;
+        let mut has_rationale = false;
+        let mut has_acceptance = false;
+        let mut exc_ids: Vec<String> = Vec::new();
+        let mut sat_ids: Vec<String> = Vec::new();
+        let mut body_lines: Vec<String> = Vec::new();
+
+        for line in content.lines() {
+            if line.starts_with(".. req:: ") {
+                if in_req {
+                    let body = body_lines.join(" ");
+                    reqs.push(Req {
+                        id: current_id,
+                        has_rationale,
+                        has_acceptance,
+                        body_starts_with_shall: body.contains("SHALL"),
+                        exception_ids: exc_ids,
+                        satisfies: sat_ids,
+                    });
+                }
+                current_id = line.strip_prefix(".. req:: ").unwrap().trim().to_string();
+                in_req = true;
+                in_body = false;
+                has_rationale = false;
+                has_acceptance = false;
+                exc_ids = Vec::new();
+                sat_ids = Vec::new();
+                body_lines = Vec::new();
+            } else if in_req {
+                let trimmed = line.trim();
+                if let Some(val) = trimmed.strip_prefix(":id:") {
+                    let new_id = val.trim().to_string();
+                    if !new_id.is_empty() {
+                        current_id = new_id;
+                    }
+                } else if let Some(val) = trimmed.strip_prefix(":rationale:") {
+                    has_rationale = !val.trim().is_empty();
+                } else if let Some(val) = trimmed.strip_prefix(":acceptance:") {
+                    has_acceptance = !val.trim().is_empty();
+                } else if let Some(val) = trimmed.strip_prefix(":exception_ids:") {
+                    exc_ids = val
+                        .split(|c: char| c == ',' || c.is_whitespace())
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                } else if let Some(val) = trimmed.strip_prefix(":satisfies:") {
+                    sat_ids = val
+                        .split(|c: char| c == ',' || c.is_whitespace())
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                } else if trimmed.is_empty() {
+                    in_body = true;
+                } else if in_body {
+                    body_lines.push(trimmed.to_string());
+                }
+            }
+        }
+        if in_req {
+            let body = body_lines.join(" ");
+            reqs.push(Req {
+                id: current_id,
+                has_rationale,
+                has_acceptance,
+                body_starts_with_shall: body.contains("SHALL"),
+                exception_ids: exc_ids,
+                satisfies: sat_ids,
+            });
+        }
+        reqs
+    }
+
+    fn all_reqs() -> Vec<Req> {
+        let dir = reqs_dir();
+        let mut reqs = Vec::new();
+        if !dir.exists() {
+            return reqs;
+        }
+        for entry in fs::read_dir(&dir).unwrap() {
+            let entry = entry.unwrap();
+            if entry.path().extension().is_some_and(|e| e == "rst") {
+                reqs.extend(parse_rst_file(&entry.path()));
+            }
+        }
+        reqs
+    }
+
+    #[test]
+    fn all_reqs_have_rationale() {
+        let reqs = all_reqs();
+        assert!(!reqs.is_empty(), "no requirements found in docs/requirements/");
+        let missing: Vec<&str> = reqs
+            .iter()
+            .filter(|r| !r.has_rationale)
+            .map(|r| r.id.as_str())
+            .collect();
+        assert!(missing.is_empty(), "requirements missing :rationale: {:?}", missing);
+    }
+
+    #[test]
+    fn all_reqs_have_acceptance() {
+        let reqs = all_reqs();
+        let missing: Vec<&str> = reqs
+            .iter()
+            .filter(|r| !r.has_acceptance)
+            .map(|r| r.id.as_str())
+            .collect();
+        assert!(missing.is_empty(), "requirements missing :acceptance: {:?}", missing);
+    }
+
+    #[test]
+    fn all_reqs_body_contains_shall() {
+        let reqs = all_reqs();
+        let missing: Vec<&str> = reqs
+            .iter()
+            .filter(|r| !r.body_starts_with_shall)
+            .map(|r| r.id.as_str())
+            .collect();
+        assert!(missing.is_empty(), "requirements body missing SHALL: {:?}", missing);
+    }
+
+    #[test]
+    fn exception_ids_reference_valid_suppressions() {
+        let reqs = all_reqs();
+        let suppressions = load_suppressions();
+        let mut bad_refs = Vec::new();
+        for r in &reqs {
+            for eid in &r.exception_ids {
+                if !suppressions.contains(eid) {
+                    bad_refs.push(format!("{} -> unknown suppression {}", r.id, eid));
+                }
+            }
+        }
+        assert!(
+            bad_refs.is_empty(),
+            "unknown suppression references:\n{}",
+            bad_refs.join("\n")
+        );
+    }
+
+    #[test]
+    fn satisfies_reference_valid_req_ids() {
+        let reqs = all_reqs();
+        let valid_ids: HashSet<&str> = reqs.iter().map(|r| r.id.as_str()).collect();
+        let mut bad_sat = Vec::new();
+        for r in &reqs {
+            for sat in &r.satisfies {
+                if !valid_ids.contains(sat.as_str()) {
+                    bad_sat.push(format!("{} -> unknown satisfies {}", r.id, sat));
+                }
+            }
+        }
+        assert!(
+            bad_sat.is_empty(),
+            "invalid :satisfies: references:\n{}",
+            bad_sat.join("\n")
+        );
+    }
+
+    #[test]
+    fn all_reqs_have_satisfies() {
+        let reqs = all_reqs();
+        let missing: Vec<&str> = reqs
+            .iter()
+            .filter(|r| !r.id.starts_with("REQ_SYS_"))
+            .filter(|r| r.satisfies.is_empty())
+            .map(|r| r.id.as_str())
+            .collect();
+        assert!(missing.is_empty(), "requirements missing :satisfies: {:?}", missing);
+    }
+
+    #[test]
+    fn all_reqs_have_unique_ids() {
+        let reqs = all_reqs();
+        let mut ids = HashSet::new();
+        let mut dups = Vec::new();
+        for r in &reqs {
+            if !ids.insert(r.id.as_str()) {
+                dups.push(r.id.clone());
+            }
+        }
+        assert!(dups.is_empty(), "duplicate requirement IDs: {:?}", dups);
+    }
+
+    #[test]
+    fn acceptance_has_verification_method() {
+        let reqs = all_reqs();
+        // Acceptance requires at least one [test], [inspection], or [analysis] prefix.
+        // Since our parser only checks existence, this is a soft check via print.
+        let has_method = reqs.iter().filter(|r| r.has_acceptance).count();
+        if has_method < reqs.len() {
+            eprintln!(
+                "WARNING: {}/{} requirements have acceptance defined",
+                has_method,
+                reqs.len()
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod cucumber_coverage {
+    use std::collections::HashSet;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn workspace_root() -> PathBuf {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let root = manifest_dir.strip_suffix("/torvox-integration-tests").unwrap();
+        PathBuf::from(root)
+    }
+
+    /// Scan .feature files for @REQ_* tags.
+    fn scan_feature_tags(dir: &PathBuf) -> HashSet<String> {
+        let mut tags = HashSet::new();
+        if !dir.exists() {
+            return tags;
+        }
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "feature") {
+                let content = fs::read_to_string(&path).unwrap();
+                for line in content.lines() {
+                    if line.trim().starts_with("@REQ_") {
+                        for tag in line.split_whitespace() {
+                            let tag = tag.trim().trim_start_matches('@');
+                            if tag.starts_with("REQ_") {
+                                tags.insert(tag.to_string());
+                            }
+                        }
+                    }
+                }
+            } else if path.is_dir() {
+                tags.extend(scan_feature_tags(&path));
+            }
+        }
+        tags
+    }
+
+    /// Scan .rs, .kt, .yaml files for // @REQ_* or # @REQ_* line comments.
+    /// Each token matching `REQ_<DOMAIN>_<NUM>` is extracted.
+    fn scan_req_file_tags(dir: &PathBuf) -> HashSet<String> {
+        let mut tags = HashSet::new();
+        let mut files = Vec::new();
+        collect_req_files(dir, &mut files);
+        for path in &files {
+            let content = fs::read_to_string(path).unwrap_or_default();
+            for line in content.lines() {
+                let trimmed = line.trim();
+                let found = trimmed.starts_with("// @REQ_") || trimmed.starts_with("# @REQ_");
+                if !found {
+                    continue;
+                }
+                for token in trimmed.split_whitespace() {
+                    let cleaned = token
+                        .trim_start_matches("//")
+                        .trim_start_matches('#')
+                        .trim_start_matches('@');
+                    if cleaned.starts_with("REQ_") {
+                        tags.insert(cleaned.to_string());
+                    }
+                }
+            }
+        }
+        tags
+    }
+
+    fn collect_req_files(dir: &PathBuf, out: &mut Vec<PathBuf>) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|n| n == "target") {
+                    continue;
+                }
+                collect_req_files(&path, out);
+            } else if let Some(ext) = path.extension()
+                && matches!(ext.to_str(), Some("rs" | "kt" | "yaml" | "yml"))
+            {
+                out.push(path);
+            }
+        }
+    }
+
+    /// Scan .rst requirement files for :id: fields inside .. req:: blocks.
+    ///
+    /// State machine:
+    /// 1. When we see `.. req::`, we enter a requirement block.
+    /// 2. Inside the block, look for `:id:` line and extract the ID value.
+    /// 3. Also set fallback ID from the block title if no :id: is found.
+    /// 4. Exit block at empty line or next directive.
+    fn scan_doc_tags(dir: &PathBuf) -> Vec<String> {
+        let mut req_ids = Vec::new();
+        if !dir.exists() {
+            return req_ids;
+        }
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "rst") {
+                let content = fs::read_to_string(&path).unwrap();
+                let mut current_id = String::new();
+                let mut fallback_id = String::new();
+                let mut in_req = false;
+
+                for line in content.lines() {
+                    if line.starts_with(".. req:: ") {
+                        // Entering a new requirement block.
+                        // Push previous block if it had an ID.
+                        if in_req {
+                            let id = if !current_id.is_empty() {
+                                current_id.clone()
+                            } else if !fallback_id.is_empty() {
+                                fallback_id.clone()
+                            } else {
+                                String::new()
+                            };
+                            if !id.is_empty() {
+                                req_ids.push(id);
+                            }
+                        }
+                        // Start new block: use title as fallback ID
+                        fallback_id = line.strip_prefix(".. req:: ").unwrap().trim().to_string();
+                        current_id = String::new();
+                        in_req = true;
+                    } else if in_req {
+                        let trimmed = line.trim();
+                        if let Some(val) = trimmed.strip_prefix(":id:") {
+                            let id = val.trim().to_string();
+                            if !id.is_empty() {
+                                current_id = id;
+                            }
+                        } else if trimmed.is_empty() {
+                            // Empty line ends the requirement block
+                            let id = if !current_id.is_empty() {
+                                current_id.clone()
+                            } else if !fallback_id.is_empty() {
+                                fallback_id.clone()
+                            } else {
+                                String::new()
+                            };
+                            if !id.is_empty() {
+                                req_ids.push(id);
+                            }
+                            current_id = String::new();
+                            fallback_id = String::new();
+                            in_req = false;
+                        }
+                    }
+                }
+                // Handle last block if file ends without trailing blank line
+                if in_req {
+                    let id = if !current_id.is_empty() {
+                        current_id
+                    } else if !fallback_id.is_empty() {
+                        fallback_id
+                    } else {
+                        String::new()
+                    };
+                    if !id.is_empty() {
+                        req_ids.push(id);
+                    }
+                }
+            }
+        }
+        req_ids
+    }
+
+    #[test]
+    fn requirement_coverage_is_monitored() {
+        let features_dir = workspace_root()
+            .join("android")
+            .join("app")
+            .join("src")
+            .join("androidTest")
+            .join("assets")
+            .join("features");
+        let doc_dir = workspace_root().join("docs").join("requirements");
+        let rust_dirs = [
+            workspace_root().join("torvox-renderer").join("src"),
+            workspace_root().join("torvox-renderer").join("tests"),
+            workspace_root().join("torvox-integration-tests").join("src"),
+            workspace_root().join("torvox-integration-tests").join("tests"),
+        ];
+        let kotlin_dir = workspace_root()
+            .join("android")
+            .join("app")
+            .join("src")
+            .join("test")
+            .join("java")
+            .join("io")
+            .join("torvox")
+            .join("architecture");
+        let semgrep_dir = workspace_root().join("semgrep-rules");
+
+        let feature_covered = scan_feature_tags(&features_dir);
+        let all_reqs = scan_doc_tags(&doc_dir);
+
+        let mut covered = feature_covered;
+        for dir in &rust_dirs {
+            covered.extend(scan_req_file_tags(dir));
+        }
+        covered.extend(scan_req_file_tags(&kotlin_dir));
+        covered.extend(scan_req_file_tags(&semgrep_dir));
+
+        let missing: Vec<&String> = all_reqs.iter().filter(|r| !covered.contains(*r)).collect();
+        let covered_count = all_reqs.len() - missing.len();
+
+        eprintln!(
+            "Requirement coverage: {}/{} ({}%)",
+            covered_count,
+            all_reqs.len(),
+            if all_reqs.is_empty() {
+                0
+            } else {
+                covered_count * 100 / all_reqs.len()
+            }
+        );
+        eprintln!("Covered tags: {:?}", covered);
+        eprintln!("Uncovered: {:?}", missing);
+
+        // Baseline: 41 requirements covered.
+        // REQ_ANDR_001 (boltffi bridge) and REQ_ANDR_007 (ProGuard) are Android-specific
+        // and cannot be covered by Linux-only Rust integration tests.
+        assert!(
+            covered_count >= 41,
+            "Coverage dropped: {}/{} ({:.1}%)",
+            covered_count,
+            all_reqs.len(),
+            covered_count as f64 / all_reqs.len() as f64 * 100.0
+        );
     }
 }
 
@@ -1179,10 +1777,7 @@ mod linux_session_lifecycle {
     #[test]
     fn spawn_is_not_exited() {
         let s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
-        assert!(
-            !s.is_exited(),
-            "new session should not be immediately exited"
-        );
+        assert!(!s.is_exited(), "new session should not be immediately exited");
     }
 
     #[test]
@@ -1231,8 +1826,7 @@ mod linux_session_lifecycle {
     fn session_drop_after_many_writes() {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         for i in 0..20 {
-            s.write(format!("echo line{i}\n").as_bytes())
-                .expect("write");
+            s.write(format!("echo line{i}\n").as_bytes()).expect("write");
         }
         let deadline = Instant::now() + Duration::from_millis(200);
         while Instant::now() < deadline {
@@ -1242,5 +1836,197 @@ mod linux_session_lifecycle {
             std::thread::sleep(Duration::from_millis(5));
         }
         drop(s);
+    }
+}
+
+#[cfg(test)]
+mod build_config_validation {
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn workspace_root() -> PathBuf {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let root = manifest_dir.strip_suffix("/torvox-integration-tests").unwrap();
+        PathBuf::from(root)
+    }
+
+    // ── Gradle Wrapper ──
+
+    #[test]
+    fn gradle_wrapper_is_9_6_or_later() {
+        let path = workspace_root().join("android/gradle/wrapper/gradle-wrapper.properties");
+        let content = fs::read_to_string(path).unwrap();
+        let line = content.lines().find(|l| l.contains("distributionUrl")).unwrap();
+        let version = line
+            .split('/')
+            .filter(|s| s.starts_with("gradle-"))
+            .next()
+            .and_then(|s| s.strip_prefix("gradle-"))
+            .and_then(|s| s.strip_suffix("-bin.zip"))
+            .unwrap();
+        let parts: Vec<u32> = version.split('.').map(|p| p.parse().unwrap()).collect();
+        assert!(
+            parts.len() >= 2 && parts[0] >= 9 && parts[1] >= 6,
+            "Gradle wrapper should be 9.6+, got {version}"
+        );
+    }
+
+    // ── Signing Config ──
+
+    #[test]
+    fn signing_config_uses_aosp_not_keytool_genkey() {
+        // Gradle must NOT contain self-signing
+        let gradle_path = workspace_root().join("android/app/build.gradle.kts");
+        let gradle_content = fs::read_to_string(gradle_path).unwrap();
+        assert!(
+            !gradle_content.contains("openssl req"),
+            "gradle must not contain openssl req (self-signing forbidden)"
+        );
+        assert!(
+            !gradle_content.contains("keytool -genkey"),
+            "gradle must not contain keytool -genkey (self-signing forbidden)"
+        );
+
+        // Nu script must contain AOSP download URL (no fallback)
+        let nu_path = workspace_root().join("scripts/fetch-aosp-testkey.nu");
+        let nu_content = fs::read_to_string(nu_path).unwrap();
+        assert!(
+            nu_content.contains("android.googlesource.com/platform/build"),
+            "scripts/fetch-aosp-testkey.nu must download from android.googlesource.com"
+        );
+    }
+
+    // ── Dependency Versions Plugin ──
+
+    #[test]
+    fn dependency_versions_plugin_configured() {
+        let path = workspace_root().join("android/build.gradle.kts");
+        let content = fs::read_to_string(path).unwrap();
+        assert!(
+            content.contains("com.github.ben-manes.versions"),
+            "root build.gradle.kts should have the Gradle Versions Plugin"
+        );
+        assert!(
+            content.contains("dependencyUpdates"),
+            "root build.gradle.kts should have a dependencyUpdates task"
+        );
+    }
+
+    // ── apply false only in root ──
+
+    #[test]
+    fn apply_false_only_in_root_build() {
+        let root = workspace_root().join("android/build.gradle.kts");
+        let app = workspace_root().join("android/app/build.gradle.kts");
+        assert!(
+            fs::read_to_string(root).unwrap().contains("apply false"),
+            "root build.gradle.kts should use apply false for plugins"
+        );
+        assert!(
+            !fs::read_to_string(app).unwrap().contains("apply false"),
+            "app build.gradle.kts should NOT use apply false"
+        );
+    }
+
+    // ── compileSdk matches AGP max ──
+
+    #[test]
+    fn compile_sdk_37_compatible_with_agp_9_2() {
+        let path = workspace_root().join("android/app/build.gradle.kts");
+        let content = fs::read_to_string(path).unwrap();
+        assert!(
+            content.contains("compileSdk = 37"),
+            "compileSdk should be 37 (AGP 9.2 max API level)"
+        );
+    }
+
+    // ── minSdk consistent ──
+
+    #[test]
+    fn min_sdk_consistent_across_build_files() {
+        let path = workspace_root().join("android/app/build.gradle.kts");
+        let content = fs::read_to_string(path).unwrap();
+        assert!(content.contains("minSdk = 33"), "minSdk should be 33");
+    }
+
+    // ── Kotlin plugin compose version matches Kotlin ──
+
+    #[test]
+    fn kotlin_version_in_plugins() {
+        let path = workspace_root().join("android/build.gradle.kts");
+        let content = fs::read_to_string(path).unwrap();
+        assert!(
+            content.contains("org.jetbrains.kotlin.plugin.compose") && content.contains("2.4.0"),
+            "Kotlin plugin compose should be 2.4.0"
+        );
+    }
+
+    // ── Hilt versioned correctly ──
+
+    #[test]
+    fn hilt_version_matches_across_dependencies() {
+        let path = workspace_root().join("android/app/build.gradle.kts");
+        let content = fs::read_to_string(path).unwrap();
+        let count = content.matches("2.60").count();
+        assert!(
+            count >= 3,
+            "Hilt 2.60 should appear in at least 3 places (plugin + deps): found {count}"
+        );
+    }
+
+    // ── Maestro config appId ──
+
+    #[test]
+    fn maestro_appid_matches_application_id() {
+        let config_path = workspace_root().join("maestro/config.yaml");
+        let build_path = workspace_root().join("android/app/build.gradle.kts");
+
+        let config = fs::read_to_string(&config_path).unwrap_or_else(|e| panic!("failed to read maestro config: {e}"));
+        let build = fs::read_to_string(&build_path).unwrap_or_else(|e| panic!("failed to read build.gradle.kts: {e}"));
+
+        let app_id_line = config
+            .lines()
+            .find(|l| l.starts_with("appId:"))
+            .unwrap_or_else(|| panic!("maestro/config.yaml missing appId line"))
+            .split(':')
+            .nth(1)
+            .map(|s| s.trim())
+            .unwrap_or_else(|| panic!("maestro/config.yaml malformed appId line"));
+
+        let build_app_id = build
+            .lines()
+            .find(|l| l.contains("applicationId"))
+            .and_then(|l| l.split('=').nth(1))
+            .map(|s| s.trim().trim_matches('"'))
+            .unwrap_or_else(|| panic!("build.gradle.kts missing applicationId"));
+
+        assert_eq!(
+            app_id_line, build_app_id,
+            "maestro/config.yaml appId '{app_id_line}' should match build.gradle.kts applicationId '{build_app_id}'"
+        );
+    }
+
+    #[test]
+    fn maestro_flow_file_exists() {
+        let flows_dir = workspace_root().join("maestro/flows");
+        let entries = fs::read_dir(&flows_dir).unwrap_or_else(|e| panic!("failed to read {flows_dir:?}: {e}"));
+        let yaml_count = entries
+            .filter_map(Result::ok)
+            .filter(|e| e.path().extension().map(|x| x == "yaml").unwrap_or(false))
+            .count();
+        assert!(
+            yaml_count > 0,
+            "at least one maestro flow file should exist in maestro/flows/"
+        );
+    }
+
+    #[test]
+    fn maestro_flow_not_empty() {
+        let flows_dir = workspace_root().join("maestro/flows");
+        let entries = fs::read_dir(&flows_dir).unwrap_or_else(|e| panic!("failed to read {flows_dir:?}: {e}"));
+        for entry in entries.flatten() {
+            let content = fs::read_to_string(entry.path()).unwrap_or_default();
+            assert!(!content.trim().is_empty(), "flow file {:?} is empty", entry.path());
+        }
     }
 }

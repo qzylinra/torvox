@@ -36,8 +36,13 @@
     <string name="bootstrap_preset_custom_desc">Start with an empty root filesystem</string>
     <string name="install">Install</string>
     <string name="bootstrap">Bootstrap</string>
+    <string name="bootstrap_install">Install Bootstrap</string>
+    <string name="bootstrap_installing">Installing\u2026</string>
     <string name="session_restore">Restore sessions</string>
     <string name="session_restore_desc">Reopen previous sessions on app start</string>
+    <string name="session_restore_off_desc">Sessions will not be restored on app start</string>
+    <string name="on">On</string>
+    <string name="off">Off</string>
     <string name="select_all_action">Select All</string>
     <string name="keyboard_mode">Keyboard Mode</string>
     <string name="keyboard_secure">Secure</string>
@@ -128,4 +133,13 @@
     <string name="clear_app_data_desc" translatable="false">Reset all settings, sessions, and logs. This will not delete bootstrap files or home directory.</string>
     <string name="clear_app_data_confirm" translatable="false">Are you sure you want to clear all app data? This action cannot be undone. Settings, session history, and logs will be permanently deleted. Bootstrap files and home directory will not be affected.</string>
     <string name="clear_app_data_action" translatable="false">Clear</string>
+
+    <!-- Font CJK Warning -->
+    <string name="cjk_fallback_missing_warning">No CJK fallback font detected. East Asian characters may not render correctly.</string>
+
+    <!-- Cursor Settings -->
+    <string name="cursor_blink">Cursor Blink</string>
+    <string name="cursor_blink_desc">Toggle cursor blinking animation</string>
+    <string name="cursor_speed">Blink Speed</string>
+    <string name="cursor_style_label">Cursor Style</string>
 </resources>

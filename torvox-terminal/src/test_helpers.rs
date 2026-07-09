@@ -1,7 +1,6 @@
-use crate::ghostty_terminal::{CellSnapshot, GhosttyTerminal, GridSnapshot};
+use crate::ghostty_terminal::{GhosttyTerminal, GridSnapshot};
 
 /// Convenience shorthand: `tc(&mut term).write(b"X").assert_row_text(0, "X")`.
-#[allow(dead_code)]
 pub fn tc<'a>(term: &'a mut GhosttyTerminal) -> TermTestCase<'a> {
     TermTestCase::new(term)
 }
@@ -12,7 +11,6 @@ pub const COLOR_TOLERANCE: f32 = 5.0 / 255.0;
 
 /// Individual terminal effects/attributes that can be asserted.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum EffectFlag {
     Bold,
     Dim,
@@ -27,13 +25,11 @@ pub enum EffectFlag {
 
 /// Compare two `[f32; 4]` colors channel-by-channel with tolerance.
 pub fn colors_approx_eq(a: &[f32; 4], b: &[f32; 4]) -> bool {
-    a.iter()
-        .zip(b.iter())
-        .all(|(x, y)| (x - y).abs() <= COLOR_TOLERANCE)
+    a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= COLOR_TOLERANCE)
 }
 
 /// Get a cell from a snapshot by row/col.
-fn cell_at(snap: &GridSnapshot, row: u32, col: u32) -> Option<&CellSnapshot> {
+fn cell_at(snap: &GridSnapshot, row: u32, col: u32) -> Option<&crate::ghostty_terminal::CellSnapshot> {
     if row >= snap.rows || col >= snap.cols {
         return None;
     }
@@ -41,33 +37,33 @@ fn cell_at(snap: &GridSnapshot, row: u32, col: u32) -> Option<&CellSnapshot> {
     snap.cells.get(idx)
 }
 
-/// Row text with trailing nulls/spaces trimmed (matching existing `row_text`).
+/// Row text with trailing nulls/spaces trimmed.
 fn row_text(snap: &GridSnapshot, row: u32) -> String {
-    let mut s = String::new();
+    let mut text = String::new();
     for col in 0..snap.cols {
-        if let Some(c) = cell_at(snap, row, col)
-            && c.codepoint != 0
-            && let Some(ch) = char::from_u32(c.codepoint)
+        if let Some(cell) = cell_at(snap, row, col)
+            && cell.codepoint != 0
+            && let Some(character) = char::from_u32(cell.codepoint)
         {
-            s.push(ch);
+            text.push(character);
         }
     }
-    s.trim_end().to_string()
+    text.trim_end().to_string()
 }
 
 /// Untrimmed row text — includes trailing spaces and null codepoints as `'\0'`.
 pub fn row_text_raw(snap: &GridSnapshot, row: u32) -> String {
-    let mut s = String::new();
+    let mut text = String::new();
     for col in 0..snap.cols {
-        if let Some(c) = cell_at(snap, row, col) {
-            if c.codepoint == 0 {
-                s.push('\0');
-            } else if let Some(ch) = char::from_u32(c.codepoint) {
-                s.push(ch);
+        if let Some(cell) = cell_at(snap, row, col) {
+            if cell.codepoint == 0 {
+                text.push('\0');
+            } else if let Some(character) = char::from_u32(cell.codepoint) {
+                text.push(character);
             }
         }
     }
-    s
+    text
 }
 
 /// Structural invariants every snapshot must satisfy.
@@ -89,13 +85,13 @@ pub fn assert_invariants(snap: &GridSnapshot) {
                 cell.codepoint
             );
         }
-        for ch in &cell.fg {
+        for ch in &cell.foreground {
             assert!(
                 *ch >= 0.0 && *ch <= 1.0,
                 "fg channel {ch} out of range [0,1] at ({row},{col})"
             );
         }
-        for ch in &cell.bg {
+        for ch in &cell.background {
             assert!(
                 *ch >= 0.0 && *ch <= 1.0,
                 "bg channel {ch} out of range [0,1] at ({row},{col})"
@@ -114,15 +110,16 @@ pub struct TermTestCase<'a> {
 }
 
 impl<'a> TermTestCase<'a> {
-    /// Create a new test case wrapping a mutable terminal reference.
     pub fn new(term: &'a mut GhosttyTerminal) -> Self {
         Self { term, before: None }
     }
 
-    /// Write raw bytes to the terminal, flush synchronously,
-    /// and verify structural invariants.
+    /// Write bytes to the terminal (typically PTY/test text output),
+    /// flush synchronously, and verify structural invariants.
+    /// Uses `pty_write` which converts LF to CR+LF for correct
+    /// terminal text behavior.
     pub fn write(self, data: &[u8]) -> Self {
-        self.term.vt_write(data);
+        self.term.pty_write(data);
         self.term.flush();
         let snap = self.term.take_snapshot();
         assert_invariants(&snap);
@@ -133,7 +130,7 @@ impl<'a> TermTestCase<'a> {
     pub fn writeln(self, data: &[u8]) -> Self {
         let mut buf = data.to_vec();
         buf.push(b'\n');
-        self.term.vt_write(&buf);
+        self.term.pty_write(&buf);
         self.term.flush();
         let snap = self.term.take_snapshot();
         assert_invariants(&snap);
@@ -162,10 +159,7 @@ impl<'a> TermTestCase<'a> {
         let snap = self.term.take_snapshot();
         for (i, &exp) in expected.iter().enumerate() {
             let actual = row_text(&snap, i as u32);
-            assert_eq!(
-                actual, exp,
-                "row {i} mismatch (expected={exp:?}, actual={actual:?})"
-            );
+            assert_eq!(actual, exp, "row {i} mismatch (expected={exp:?}, actual={actual:?})");
         }
         self
     }
@@ -191,9 +185,9 @@ impl<'a> TermTestCase<'a> {
         let snap = self.term.take_snapshot();
         let cell = cell_at(&snap, row, col).unwrap_or_else(|| panic!("no cell at ({row}, {col})"));
         assert!(
-            colors_approx_eq(&cell.fg, &expected),
+            colors_approx_eq(&cell.foreground, &expected),
             "fg at ({row},{col}) expected {expected:?}, got {:?}",
-            cell.fg
+            cell.foreground
         );
         self
     }
@@ -204,7 +198,7 @@ impl<'a> TermTestCase<'a> {
         self.assert_fg(row, col, expected)
     }
 
-    /// Assert background color of the cell at (row, col) using exact u8 RGB values.
+    // Required: shared test helper — not all test binaries call every method.
     #[allow(dead_code)]
     pub fn assert_bg_exact(self, row: u32, col: u32, r: u8, g: u8, b: u8) -> Self {
         let expected = [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0];
@@ -212,14 +206,13 @@ impl<'a> TermTestCase<'a> {
     }
 
     /// Assert background color of the cell at (row, col) approximates `expected`.
-    #[allow(dead_code)]
     pub fn assert_bg(self, row: u32, col: u32, expected: [f32; 4]) -> Self {
         let snap = self.term.take_snapshot();
         let cell = cell_at(&snap, row, col).unwrap_or_else(|| panic!("no cell at ({row}, {col})"));
         assert!(
-            colors_approx_eq(&cell.bg, &expected),
+            colors_approx_eq(&cell.background, &expected),
             "bg at ({row},{col}) expected {expected:?}, got {:?}",
-            cell.bg
+            cell.background
         );
         self
     }
@@ -238,10 +231,7 @@ impl<'a> TermTestCase<'a> {
                 }
                 EffectFlag::Reverse => assert!(cell.reverse, "expected Reverse at ({row},{col})"),
                 EffectFlag::Strikethrough => {
-                    assert!(
-                        cell.strikethrough,
-                        "expected Strikethrough at ({row},{col})"
-                    )
+                    assert!(cell.strikethrough, "expected Strikethrough at ({row},{col})")
                 }
                 EffectFlag::Blink => assert!(cell.blink, "expected Blink at ({row},{col})"),
                 EffectFlag::Hidden => assert!(cell.hidden, "expected Hidden at ({row},{col})"),
@@ -254,19 +244,14 @@ impl<'a> TermTestCase<'a> {
     }
 
     /// Assert strikethrough is set at (row, col).
-    #[allow(dead_code)]
     pub fn assert_strikethrough(self, row: u32, col: u32) -> Self {
         let snap = self.term.take_snapshot();
         let cell = cell_at(&snap, row, col).unwrap_or_else(|| panic!("no cell at ({row}, {col})"));
-        assert!(
-            cell.strikethrough,
-            "expected strikethrough at ({row},{col})"
-        );
+        assert!(cell.strikethrough, "expected strikethrough at ({row},{col})");
         self
     }
 
     /// Assert blink is set at (row, col).
-    #[allow(dead_code)]
     pub fn assert_blink(self, row: u32, col: u32) -> Self {
         let snap = self.term.take_snapshot();
         let cell = cell_at(&snap, row, col).unwrap_or_else(|| panic!("no cell at ({row}, {col})"));
@@ -275,7 +260,6 @@ impl<'a> TermTestCase<'a> {
     }
 
     /// Assert hidden (concealed) at (row, col).
-    #[allow(dead_code)]
     pub fn assert_hidden(self, row: u32, col: u32) -> Self {
         let snap = self.term.take_snapshot();
         let cell = cell_at(&snap, row, col).unwrap_or_else(|| panic!("no cell at ({row}, {col})"));
@@ -284,7 +268,6 @@ impl<'a> TermTestCase<'a> {
     }
 
     /// Assert the terminal's current title matches `expected`.
-    #[allow(dead_code)]
     pub fn assert_title(self, expected: &str) -> Self {
         let title = self.term.title();
         assert!(
@@ -295,7 +278,6 @@ impl<'a> TermTestCase<'a> {
     }
 
     /// Assert that DEC private mode N is in the expected state.
-    #[allow(dead_code)]
     pub fn assert_mode(self, mode_num: u16, expected: bool) -> Self {
         let actual = self.term.mode_get(mode_num, 0);
         assert_eq!(
@@ -321,10 +303,7 @@ impl<'a> TermTestCase<'a> {
                     assert!(!cell.reverse, "unexpected Reverse at ({row},{col})")
                 }
                 EffectFlag::Strikethrough => {
-                    assert!(
-                        !cell.strikethrough,
-                        "unexpected Strikethrough at ({row},{col})"
-                    )
+                    assert!(!cell.strikethrough, "unexpected Strikethrough at ({row},{col})")
                 }
                 EffectFlag::Blink => {
                     assert!(!cell.blink, "unexpected Blink at ({row},{col})")
@@ -342,7 +321,6 @@ impl<'a> TermTestCase<'a> {
 
     /// Assert the terminal has produced a specific output response (DSR, CPR, DA, etc.).
     /// Drains all pending responses and checks the last one matches `expected`.
-    #[allow(dead_code)]
     pub fn assert_output_response(self, expected: &[u8]) -> Self {
         let responses = self.term.drain_pty_write_responses();
         assert!(
@@ -350,11 +328,7 @@ impl<'a> TermTestCase<'a> {
             "expected terminal output response, but none were captured"
         );
         let last = responses.last().expect("non-empty responses");
-        assert_eq!(
-            last.as_slice(),
-            expected,
-            "terminal output response mismatch"
-        );
+        assert_eq!(last.as_slice(), expected, "terminal output response mismatch");
         self
     }
 
@@ -366,14 +340,8 @@ impl<'a> TermTestCase<'a> {
             .as_ref()
             .expect("assert_content_preserved requires a prior capture_before() call");
         let after = self.term.take_snapshot();
-        assert_eq!(
-            before.rows, after.rows,
-            "row count changed between snapshots"
-        );
-        assert_eq!(
-            before.cols, after.cols,
-            "col count changed between snapshots"
-        );
+        assert_eq!(before.rows, after.rows, "row count changed between snapshots");
+        assert_eq!(before.cols, after.cols, "col count changed between snapshots");
         for (i, (b, a)) in before.cells.iter().zip(after.cells.iter()).enumerate() {
             assert_eq!(
                 b.codepoint,
@@ -391,13 +359,7 @@ impl<'a> TermTestCase<'a> {
     /// Assert that a sequence leaves the terminal in a clean state.
     /// Writes `sequence`, flushes, writes a known token, then asserts
     /// the token appears at the expected cursor position.
-    pub fn assert_sequence_clean(
-        self,
-        sequence: &[u8],
-        token: &[u8],
-        expected_row: u32,
-        expected_col: u32,
-    ) -> Self {
+    pub fn assert_sequence_clean(self, sequence: &[u8], token: &[u8], expected_row: u32, expected_col: u32) -> Self {
         let token_str = std::str::from_utf8(token).unwrap_or("");
         let tc = self
             .write(sequence)
@@ -413,7 +375,6 @@ impl<'a> TermTestCase<'a> {
     }
 
     /// Snapshot and check structural invariants at end of a chain.
-    #[allow(dead_code)]
     pub fn take_and_invariants(self) -> Self {
         let snap = self.term.take_snapshot();
         assert_invariants(&snap);
@@ -454,9 +415,7 @@ mod tests {
     #[test]
     fn test_case_cursor_movement() {
         let mut t = term();
-        TermTestCase::new(&mut t)
-            .write(b"\x1b[5;10HX")
-            .assert_cursor_at(4, 10);
+        TermTestCase::new(&mut t).write(b"\x1b[5;10HX").assert_cursor_at(4, 10);
     }
 
     #[test]
@@ -465,15 +424,7 @@ mod tests {
         TermTestCase::new(&mut t)
             .write(b"\x1b[1mB")
             .assert_effects(0, 0, &[EffectFlag::Bold])
-            .assert_no_effects(
-                0,
-                0,
-                &[
-                    EffectFlag::Italic,
-                    EffectFlag::Underline,
-                    EffectFlag::Reverse,
-                ],
-            );
+            .assert_no_effects(0, 0, &[EffectFlag::Italic, EffectFlag::Underline, EffectFlag::Reverse]);
     }
 
     #[test]
@@ -546,7 +497,7 @@ mod tests {
         t.flush();
         let snap = t.take_snapshot();
         assert_invariants(&snap);
-        assert!(t.scrollback_len() > 0);
+        assert!(t.scrollback_length() > 0);
     }
 
     #[test]
@@ -581,10 +532,7 @@ mod tests {
         if !responses.is_empty() {
             let last = responses.last().expect("non-empty");
             let text = String::from_utf8_lossy(last);
-            assert!(
-                text.contains("\x1b[0n"),
-                "DSR should respond with status, got: {text}"
-            );
+            assert!(text.contains("\x1b[0n"), "DSR should respond with status, got: {text}");
         }
         // DSR may not be supported by all backends — skip assertion if no response
     }
@@ -714,25 +662,19 @@ mod tests {
     #[test]
     fn test_assert_strikethrough() {
         let mut t = term();
-        TermTestCase::new(&mut t)
-            .write(b"\x1b[9mX")
-            .assert_strikethrough(0, 0);
+        TermTestCase::new(&mut t).write(b"\x1b[9mX").assert_strikethrough(0, 0);
     }
 
     #[test]
     fn test_assert_blink() {
         let mut t = term();
-        TermTestCase::new(&mut t)
-            .write(b"\x1b[5mX")
-            .assert_blink(0, 0);
+        TermTestCase::new(&mut t).write(b"\x1b[5mX").assert_blink(0, 0);
     }
 
     #[test]
     fn test_assert_hidden() {
         let mut t = term();
-        TermTestCase::new(&mut t)
-            .write(b"\x1b[8mX")
-            .assert_hidden(0, 0);
+        TermTestCase::new(&mut t).write(b"\x1b[8mX").assert_hidden(0, 0);
     }
 
     #[test]

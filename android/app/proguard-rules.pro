@@ -1,9 +1,10 @@
 -dontoptimize
+-dontobfuscate
 -keep class io.torvox.** { *; }
 -keepclassmembers class * {
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
 }
--keepattributes *Annotation*
+-keepattributes *Annotation*, RuntimeVisibleAnnotations, RuntimeInvisibleAnnotations, RuntimeVisibleParameterAnnotations, RuntimeInvisibleParameterAnnotations, DefaultAnnotation, AnnotationDefault, Retention
 -keepattributes Signature
 -keepattributes InnerClasses
 -keepattributes EnclosingMethod
@@ -15,3 +16,6 @@
     <methods>;
 }
 -keep class com.sun.jna.**$* { *; }
+
+-keep class io.cucumber.** { *; }
+-keep class io.torvox.cucumber.** { *; }

@@ -32,11 +32,7 @@ fn vt_write_10k_lines_rss_bounded() {
     let rss_after = current_rss_kb();
     let growth = rss_after.saturating_sub(rss_before);
     // 10K lines of 64 bytes each should not cause > 512MB RSS growth
-    assert!(
-        growth < 512_000,
-        "RSS growth {} KB exceeds 512 MB limit",
-        growth
-    );
+    assert!(growth < 512_000, "RSS growth {} KB exceeds 512 MB limit", growth);
 }
 
 #[test]
@@ -54,11 +50,7 @@ fn vt_write_scrollback_full_rss_bounded() {
     let rss_after = current_rss_kb();
     let growth = rss_after.saturating_sub(rss_before);
     // 25K lines with 100K scrollback capacity should not cause > 256MB RSS growth
-    assert!(
-        growth < 256_000,
-        "RSS growth {} KB exceeds 256 MB limit",
-        growth
-    );
+    assert!(growth < 256_000, "RSS growth {} KB exceeds 256 MB limit", growth);
 }
 
 #[test]
@@ -78,11 +70,7 @@ fn vt_write_large_sgr_sequence_rss_bounded() {
 
     let rss_after = current_rss_kb();
     let growth = rss_after.saturating_sub(rss_before);
-    assert!(
-        growth < 256_000,
-        "SGR RSS growth {} KB exceeds 256 MB limit",
-        growth
-    );
+    assert!(growth < 256_000, "SGR RSS growth {} KB exceeds 256 MB limit", growth);
 }
 
 /// Deterministic pseudo-random for test data generation (LCG with fixed seed 42).
@@ -93,9 +81,7 @@ fn fast_rand() -> u64 {
     }
     STATE.with(|s| {
         let x = s.get();
-        let next = x
-            .wrapping_mul(6364136223846793005)
-            .wrapping_add(1442695040888963407);
+        let next = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
         s.set(next);
         next
     })

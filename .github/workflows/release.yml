@@ -7,13 +7,17 @@ on:
     - cron: '0 6 * * *'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      NIXPKGS_ALLOW_UNFREE: "1"
+      NIXPKGS_ALLOW_INSECURE: "1"
+      NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
     steps:
       - uses: actions/checkout@main
       - uses: actions/checkout@main
@@ -27,27 +31,16 @@ jobs:
           name: ${{ secrets.CACHIX_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - run: |
-          rm -f ~/.config/nix/nix.conf
           scripts/build-android-libs.nu --profile release
-        env:
-          NIXPKGS_ALLOW_UNFREE: "1"
-          NIXPKGS_ALLOW_INSECURE: "1"
-          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
-      - run: scripts/build-apk.nu --release
-        env:
-          NIXPKGS_ALLOW_UNFREE: "1"
-          NIXPKGS_ALLOW_INSECURE: "1"
-          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
+          scripts/build-apk.nu --release
       - uses: actions/upload-artifact@main
         with:
           name: torvox-release-apk
           path: android/app/build/outputs/apk/release/*.apk
-      - run: scripts/build-apk.nu --debug
-        env:
-          NIXPKGS_ALLOW_UNFREE: "1"
-          NIXPKGS_ALLOW_INSECURE: "1"
-          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
+      - run: |
+          scripts/build-apk.nu --debug
       - uses: actions/upload-artifact@main
+        continue-on-error: true
         with:
           name: torvox-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
@@ -56,37 +49,27 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - uses: reactivecircus/android-emulator-runner@v2
-        env:
-          NIXPKGS_ALLOW_UNFREE: "1"
-          NIXPKGS_ALLOW_INSECURE: "1"
-          NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
         with:
           api-level: 35
-          target: default
+          target: aosp_atd
           arch: x86_64
-          profile: pixel_7_pro
-          ram-size: 2048M
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          ram-size: 1536M
+          emulator-boot-timeout: 600
+          cores: 2
           disable-animations: true
-          pre-emulator-launch-script: |
-            adb kill-server || true
-            fuser -k 5037/tcp 5554/tcp 5555/tcp 2>/dev/null || true
-            sleep 2
-            adb start-server
-            sleep 2
-            adb get-state 2>/dev/null || true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: |
             set -e
             nix develop --command nu ${{ github.workspace }}/scripts/test-emulator.nu
       - uses: actions/upload-artifact@main
-        if: always()
+        continue-on-error: true
         with:
           name: emulator-results
           path: |
-            /tmp/torvox-emu-results/
-            ~/.maestro/reports/
-      - uses: softprops/action-gh-release@master
-        if: startsWith(github.ref, 'refs/tags/v')
+            emulator-results/
+            build/compare-results/
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@master
         with:
           generate_release_notes: false
           files: android/app/build/outputs/apk/release/*.apk

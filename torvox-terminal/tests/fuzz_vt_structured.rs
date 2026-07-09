@@ -92,10 +92,7 @@ impl VtSegment {
                 b.extend_from_slice(&[0x1B, b'\\']);
                 b
             }
-            VtSegment::Sixel(data)
-            | VtSegment::ApC(data)
-            | VtSegment::Sos(data)
-            | VtSegment::Pm(data) => {
+            VtSegment::Sixel(data) | VtSegment::ApC(data) | VtSegment::Sos(data) | VtSegment::Pm(data) => {
                 let mut b = vec![0x1B, b'P'];
                 b.extend_from_slice(data);
                 b.extend_from_slice(&[0x1B, b'\\']);
@@ -109,19 +106,13 @@ impl VtSegment {
             proptest::collection::vec(arb_printable_byte(), 0..100).prop_map(VtSegment::Text),
             (any::<u8>(), arb_params(4)).prop_map(|(i, p)| VtSegment::Csi(i, p)),
             any::<u8>().prop_map(VtSegment::Esc),
-            (
-                any::<u8>(),
-                proptest::collection::vec(arb_printable_byte(), 0..20)
-            )
+            (any::<u8>(), proptest::collection::vec(arb_printable_byte(), 0..20))
                 .prop_map(|(c, d)| VtSegment::Osc(c, d)),
             (0x00u8..0x1Bu8).prop_map(VtSegment::Control),
             arb_params(4).prop_map(VtSegment::PrivateCsi),
             (any::<u8>(), any::<u8>()).prop_map(|(i, c)| VtSegment::DecPrivate(i, c)),
             proptest::collection::vec(any::<u8>(), 0..4).prop_map(VtSegment::Sgr),
-            (
-                any::<u8>(),
-                proptest::collection::vec(arb_printable_byte(), 0..20)
-            )
+            (any::<u8>(), proptest::collection::vec(arb_printable_byte(), 0..20))
                 .prop_map(|(c, d)| VtSegment::Dcs(c, d)),
             proptest::collection::vec(arb_printable_byte(), 0..20).prop_map(VtSegment::Sixel),
             proptest::collection::vec(arb_printable_byte(), 0..20).prop_map(VtSegment::ApC),
@@ -184,8 +175,8 @@ fn vt_parser_take_snapshot_no_panic() {
         terminal.vt_write(&segment.to_bytes());
     }
     let snap = terminal.take_snapshot();
-    assert!(snap.rows == 24, "rows should be 24, got {}", snap.rows);
-    assert!(snap.cols == 80, "cols should be 80, got {}", snap.cols);
+    assert_eq!(snap.rows, 24, "rows should be 24, got {}", snap.rows);
+    assert_eq!(snap.cols, 80, "cols should be 80, got {}", snap.cols);
 }
 
 #[test]
@@ -229,8 +220,7 @@ fn vt_parser_osc_does_not_panic() {
         },
         vec![0x1B, b']', b'1', b'0', b';', b'?', 0x07],
         vec![
-            0x1B, b']', b'5', b'2', b';', b'c', b'l', b'i', b'p', b'b', b'o', b'a', b'r', b'd',
-            0x07,
+            0x1B, b']', b'5', b'2', b';', b'c', b'l', b'i', b'p', b'b', b'o', b'a', b'r', b'd', 0x07,
         ],
     ];
     for seq in osc_sequences {

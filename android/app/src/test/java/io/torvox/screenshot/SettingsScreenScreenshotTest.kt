@@ -18,11 +18,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.github.takahirom.roborazzi.RoborazziOptions
+import com.github.takahirom.roborazzi.RoborazziRule
 import com.github.takahirom.roborazzi.captureRoboImage
 import io.torvox.RobolectricActivityRule
 import io.torvox.TestActivity
@@ -33,19 +37,35 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.coroutines.EmptyCoroutineContext
 
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [33], application = android.app.Application::class)
 class SettingsScreenScreenshotTest {
     @get:Rule
+    val roborazziRule =
+        RoborazziRule(
+            options =
+            RoborazziRule.Options(
+                roborazziOptions =
+                RoborazziOptions(
+                    compareOptions =
+                    RoborazziOptions.CompareOptions(
+                        changeThreshold = 0.01f,
+                    ),
+                ),
+            ),
+        )
+
+    @Suppress("DEPRECATION")
+    @get:Rule
     val composeTestRule: AndroidComposeTestRule<RobolectricActivityRule<TestActivity>, TestActivity> =
         AndroidComposeTestRule(
             RobolectricActivityRule(TestActivity::class.java),
-            EmptyCoroutineContext,
-        ) { it.activity }
+            activityProvider = { it.activity },
+        )
 
+    @Suppress("LongMethod")
     @Test
     fun settingsScreen_rendered() {
         composeTestRule.setContent {
@@ -119,6 +139,10 @@ class SettingsScreenScreenshotTest {
                 }
             }
         }
+        composeTestRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Appearance").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Font Size: 14 sp").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Theme").assertIsDisplayed()
         composeTestRule
             .onNodeWithTag("screenshot_settings")
             .captureRoboImage()

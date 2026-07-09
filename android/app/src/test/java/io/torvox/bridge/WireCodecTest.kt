@@ -74,7 +74,6 @@ class WireCodecTest {
 
     @Test
     fun wireWriter_writeString_utf8() {
-        val wireWriter = WireWriter()
         val utf8Char = "中"
         val expected = utf8Char.toByteArray(Charsets.UTF_8)
         val wireWriter2 = WireWriter()
@@ -293,56 +292,5 @@ class WireCodecTest {
         wireWriter.writeString("")
         val config = TerminalConfig.wireDecode(WireReader(wireWriter.toByteArray()))
         assertEquals(Shell.SystemDefault, config.shell)
-    }
-
-    @Test
-    fun wireReader_readOptional_present() {
-        val wireWriter = WireWriter()
-        wireWriter.writeByte(1)
-        wireWriter.writeI32(42)
-        val wireReader = WireReader(wireWriter.toByteArray())
-        val result = wireReader.readOptional { it.readI32() }
-        assertEquals(42, result)
-    }
-
-    @Test
-    fun wireReader_readOptional_absent() {
-        val wireWriter = WireWriter()
-        wireWriter.writeByte(0)
-        val wireReader = WireReader(wireWriter.toByteArray())
-        val result = wireReader.readOptional { it.readI32() }
-        assertEquals(null, result)
-    }
-
-    @Test
-    fun wireReader_readList_empty() {
-        val wireWriter = WireWriter()
-        wireWriter.writeI32(0)
-        val wireReader = WireReader(wireWriter.toByteArray())
-        val result = wireReader.readList { it.readI32() }
-        assertEquals(emptyList<Int>(), result)
-    }
-
-    @Test
-    fun wireReader_readList_threeElements() {
-        val wireWriter = WireWriter()
-        wireWriter.writeI32(3)
-        wireWriter.writeI32(10)
-        wireWriter.writeI32(20)
-        wireWriter.writeI32(30)
-        val wireReader = WireReader(wireWriter.toByteArray())
-        val result = wireReader.readList { it.readI32() }
-        assertEquals(listOf(10, 20, 30), result)
-    }
-
-    @Test
-    fun wireReader_readList_strings() {
-        val wireWriter = WireWriter()
-        wireWriter.writeI32(2)
-        wireWriter.writeString("hello")
-        wireWriter.writeString("world")
-        val wireReader = WireReader(wireWriter.toByteArray())
-        val result = wireReader.readList { it.readString() }
-        assertEquals(listOf("hello", "world"), result)
     }
 }

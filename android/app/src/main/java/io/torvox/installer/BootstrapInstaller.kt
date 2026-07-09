@@ -7,18 +7,23 @@ import java.io.File
 import java.io.FileInputStream
 import java.util.zip.ZipInputStream
 
-class BootstrapInstaller {
+class BootstrapInstaller(
+    private val prefixDir: File,
+    private val homeDir: File,
+    private val stagingDir: File,
+) {
+    // SYMLINKS.txt format: "target <LEFT_ARROW> linkpath"
+    private val symlinksDelimiter = "\u2190"
+
     companion object {
-        const val TERMUX_FILES_DIR = "/data/data/com.termux/files"
-        const val PREFIX_DIR = "$TERMUX_FILES_DIR/usr"
-        const val STAGING_DIR = "$TERMUX_FILES_DIR/usr-staging"
-        const val HOME_DIR = "$TERMUX_FILES_DIR/home"
+        const val COPY_BUFFER_SIZE = 8096
+        const val EXECUTABLE_FILE_MODE = 0x1ED // rwxr-xr-x
         val EXEC_PREFIXES = listOf("bin/", "libexec/", "lib/apt/apt-helper", "lib/apt/methods/")
-
-        fun needsInstall(): Boolean = !File("$PREFIX_DIR/bin/bash").exists()
-
-        fun isInstalled(): Boolean = File("$PREFIX_DIR/bin/bash").exists()
     }
+
+    fun needsInstall(): Boolean = !File(prefixDir, "bin/bash").exists()
+
+    fun isInstalled(): Boolean = File(prefixDir, "bin/bash").exists()
 
     suspend fun install(zipFile: File): Result<Unit> = withContext(Dispatchers.IO) {
         try {
@@ -38,15 +43,15 @@ class BootstrapInstaller {
     }
 
     private fun cleanupOld() {
-        delete(File(STAGING_DIR))
-        if (File(PREFIX_DIR).exists()) {
-            delete(File(PREFIX_DIR))
+        delete(stagingDir)
+        if (prefixDir.exists()) {
+            delete(prefixDir)
         }
     }
 
     private fun createDirectories() {
-        File(STAGING_DIR).mkdirs()
-        File(PREFIX_DIR).mkdirs()
+        stagingDir.mkdirs()
+        prefixDir.mkdirs()
     }
 
     private fun extractZip(zipFile: File): List<Pair<String, String>> {
@@ -69,13 +74,13 @@ class BootstrapInstaller {
             if (name == "SYMLINKS.txt") {
                 symlinks.addAll(parseSymlinks(zis.readBytes().decodeToString()))
             } else if (entry.isDirectory) {
-                File(STAGING_DIR, name).mkdirs()
+                File(stagingDir, name).mkdirs()
             } else {
-                val targetFile = File(STAGING_DIR, name)
+                val targetFile = File(stagingDir, name)
                 targetFile.parentFile?.mkdirs()
-                targetFile.outputStream().use { out -> zis.copyTo(out, 8096) }
+                targetFile.outputStream().use { out -> zis.copyTo(out, COPY_BUFFER_SIZE) }
                 if (isExecutable(name)) {
-                    Os.chmod(targetFile.absolutePath, 0x1ED) // 0700
+                    Os.chmod(targetFile.absolutePath, EXECUTABLE_FILE_MODE) // rwxr-xr-x
                 }
             }
             entry = zis.nextEntry
@@ -83,7 +88,7 @@ class BootstrapInstaller {
     }
 
     private fun parseSymlinks(content: String): List<Pair<String, String>> = content.lines().filter { it.isNotBlank() }.mapNotNull { line ->
-        val parts = line.split("\u2190")
+        val parts = line.split(symlinksDelimiter)
         if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
     }
 
@@ -92,26 +97,26 @@ class BootstrapInstaller {
 
     private fun createSymlinks(symlinks: List<Pair<String, String>>) {
         for ((target, linkPath) in symlinks) {
-            val linkFile = File(STAGING_DIR, linkPath)
+            val linkFile = File(stagingDir, linkPath)
             linkFile.parentFile?.mkdirs()
             Os.symlink(target, linkFile.absolutePath)
         }
     }
 
     private fun atomicRename() {
-        val staging = File(STAGING_DIR)
-        val prefix = File(PREFIX_DIR)
+        val staging = stagingDir
+        val prefix = prefixDir
         if (prefix.exists()) {
             delete(prefix)
         }
         if (!staging.renameTo(prefix)) {
-            throw Exception("Atomic rename failed: $STAGING_DIR -> $PREFIX_DIR")
+            throw Exception("Atomic rename failed: ${staging.path} -> ${prefix.path}")
         }
     }
 
     private fun ensureHomeAndTmp() {
-        File(HOME_DIR).mkdirs()
-        File("$PREFIX_DIR/tmp").mkdirs()
+        homeDir.mkdirs()
+        File(prefixDir, "tmp").mkdirs()
     }
 
     private fun delete(file: File) {

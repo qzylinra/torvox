@@ -63,7 +63,7 @@ fn snapshot_preserves_sgr_attributes() {
         let cell = grid.cell_mut(0, 0).unwrap();
         cell.char = 'B';
         cell.attrs.bold = true;
-        cell.fg = torvox_core::cell::Color {
+        cell.foreground = torvox_core::cell::Color {
             r: 255,
             g: 0,
             b: 0,
@@ -74,8 +74,8 @@ fn snapshot_preserves_sgr_attributes() {
     let cell = snap.visible_lines[0].cells().first().unwrap();
     assert_eq!(cell.char, 'B');
     assert!(cell.attrs.bold, "bold attribute should be preserved");
-    assert_eq!(cell.fg.r, 255, "foreground red should be preserved");
-    assert_eq!(cell.fg.g, 0, "foreground green should be 0");
+    assert_eq!(cell.foreground.r, 255, "foreground red should be preserved");
+    assert_eq!(cell.foreground.g, 0, "foreground green should be 0");
 }
 
 #[test]
@@ -88,15 +88,12 @@ fn snapshot_preserves_scrollback_content() {
     grid.fill_cells(0, 'C', 0, 10);
 
     let snap = SessionSnapshot::from_grid(&grid);
-    assert!(
-        snap.scrollback_lines.len() >= 2,
-        "should have scrollback lines"
-    );
+    assert!(snap.scrollback_lines.len() >= 2, "should have scrollback lines");
 
     let mut restored_grid = Grid::new(2, 10);
     snap.apply_to_scrollback(&mut restored_grid, 1000);
     assert!(
-        restored_grid.scrollback_len() >= 2,
+        restored_grid.scrollback_length() >= 2,
         "restored grid should have scrollback"
     );
 }
@@ -121,18 +118,13 @@ fn snapshot_serde_roundtrip_preserves_content() {
     assert_eq!(back.visible_lines.len(), snap.visible_lines.len());
     assert_eq!(back.scrollback_lines.len(), snap.scrollback_lines.len());
 
-    for (i, (orig, restored)) in snap
-        .visible_lines
-        .iter()
-        .zip(back.visible_lines.iter())
-        .enumerate()
-    {
+    for (i, (orig, restored)) in snap.visible_lines.iter().zip(back.visible_lines.iter()).enumerate() {
         for j in 0..snap.cols as usize {
             let o = orig.cells().get(j).unwrap();
             let r = restored.cells().get(j).unwrap();
             assert_eq!(o.char, r.char, "cell [{i},{j}] char mismatch");
-            assert_eq!(o.fg, r.fg, "cell [{i},{j}] fg mismatch");
-            assert_eq!(o.bg, r.bg, "cell [{i},{j}] bg mismatch");
+            assert_eq!(o.foreground, r.foreground, "cell [{i},{j}] fg mismatch");
+            assert_eq!(o.background, r.background, "cell [{i},{j}] bg mismatch");
             assert_eq!(o.attrs, r.attrs, "cell [{i},{j}] attrs mismatch");
         }
     }
@@ -146,7 +138,7 @@ fn snapshot_cell_by_cell_equality() {
             if let Some(cell) = grid.cell_mut(row, col) {
                 *cell = Cell {
                     char: (b'A' + (row * 10 + col) as u8 % 26) as char,
-                    fg: torvox_core::cell::Color {
+                    foreground: torvox_core::cell::Color {
                         r: (row * 80) as u8,
                         g: (col * 25) as u8,
                         b: 128,
@@ -170,15 +162,12 @@ fn snapshot_cell_by_cell_equality() {
     for row in 0..3 {
         for col in 0..10 {
             let orig = grid.cell(row, col).unwrap();
-            let restored_cell = back.visible_lines[row as usize]
-                .cells()
-                .get(col as usize)
-                .unwrap();
+            let restored_cell = back.visible_lines[row as usize].cells().get(col as usize).unwrap();
+            assert_eq!(orig.char, restored_cell.char, "char mismatch at [{row},{col}]");
             assert_eq!(
-                orig.char, restored_cell.char,
-                "char mismatch at [{row},{col}]"
+                orig.foreground, restored_cell.foreground,
+                "fg mismatch at [{row},{col}]"
             );
-            assert_eq!(orig.fg, restored_cell.fg, "fg mismatch at [{row},{col}]");
             assert_eq!(
                 orig.attrs.bold, restored_cell.attrs.bold,
                 "bold mismatch at [{row},{col}]"
@@ -235,10 +224,7 @@ fn snapshot_preserves_strikethrough() {
     }
     let snap = SessionSnapshot::from_grid(&grid);
     let cell = snap.visible_lines[0].cells().first().unwrap();
-    assert!(
-        cell.attrs.strikethrough,
-        "strikethrough should be preserved"
-    );
+    assert!(cell.attrs.strikethrough, "strikethrough should be preserved");
 }
 
 #[test]
@@ -249,7 +235,7 @@ fn snapshot_large_grid_content_equality() {
             if let Some(cell) = grid.cell_mut(row, col) {
                 *cell = Cell {
                     char: ((row * 120 + col) % 94 + 33) as u8 as char,
-                    fg: torvox_core::cell::Color {
+                    foreground: torvox_core::cell::Color {
                         r: (row * 5) as u8,
                         g: (col * 2) as u8,
                         b: 64,
@@ -272,12 +258,12 @@ fn snapshot_large_grid_content_equality() {
     for row in 0..50 {
         for col in 0..120 {
             let orig = grid.cell(row, col).unwrap();
-            let restored = back.visible_lines[row as usize]
-                .cells()
-                .get(col as usize)
-                .unwrap();
+            let restored = back.visible_lines[row as usize].cells().get(col as usize).unwrap();
             assert_eq!(orig.char, restored.char, "char mismatch at [{row},{col}]");
-            assert_eq!(orig.fg.r, restored.fg.r, "fg.r mismatch at [{row},{col}]");
+            assert_eq!(
+                orig.foreground.r, restored.foreground.r,
+                "fg.r mismatch at [{row},{col}]"
+            );
         }
     }
 }

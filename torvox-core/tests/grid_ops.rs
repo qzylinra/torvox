@@ -81,10 +81,7 @@ fn scroll_up_inserts_blank_row_at_bottom() {
     let before = fill_grid(&mut g, rows, cols);
     g.scroll_up(0, rows, cols);
     let after = get_text(&g, rows, cols);
-    assert_eq!(
-        after[0], before[1],
-        "row 0 after scroll_up should match original row 1"
-    );
+    assert_eq!(after[0], before[1], "row 0 after scroll_up should match original row 1");
     assert_row_blank(&g, rows - 1, cols);
 }
 
@@ -102,10 +99,7 @@ fn scroll_region_respected_scroll_up() {
         assert_eq!(after[r], before[r], "row {} should be unchanged", r);
     }
     // Row 4 should now have original row 5's content
-    assert_eq!(
-        after[4], before[5],
-        "row 4 after scroll_up(4,7) should have been row 5"
-    );
+    assert_eq!(after[4], before[5], "row 4 after scroll_up(4,7) should have been row 5");
     // Row 6 should now be blank (bottom of region)
     assert_row_blank(&g, 6, cols);
     // Row 7+ should be unchanged
@@ -163,14 +157,8 @@ fn copy_rect_copies_content() {
     // Copy rows 0-1 to rows 4-5
     g.copy_rect(0, 0, 4, 0, cols, 2);
     let after = get_text(&g, rows, cols);
-    assert_eq!(
-        after[4], before[0],
-        "copied row 4 should match original row 0"
-    );
-    assert_eq!(
-        after[5], before[1],
-        "copied row 5 should match original row 1"
-    );
+    assert_eq!(after[4], before[0], "copied row 4 should match original row 0");
+    assert_eq!(after[5], before[1], "copied row 5 should match original row 1");
 }
 
 #[test]
@@ -206,8 +194,8 @@ fn erase_rect_resets_all_cell_fields() {
     // Fill a single cell with non-default values
     let cell = g.cell_mut(2, 3).unwrap();
     cell.char = 'X';
-    cell.fg = torvox_core::cell::Color::new(100, 150, 200);
-    cell.bg = torvox_core::cell::Color::new(10, 20, 30);
+    cell.foreground = torvox_core::cell::Color::new(100, 150, 200);
+    cell.background = torvox_core::cell::Color::new(10, 20, 30);
     cell.attrs.bold = true;
     cell.attrs.italic = true;
     cell.width = 2;
@@ -218,12 +206,12 @@ fn erase_rect_resets_all_cell_fields() {
     let erased = g.cell(2, 3).unwrap();
     assert!(is_blank(erased.char), "char should be blank after erase");
     assert_eq!(
-        erased.fg,
+        erased.foreground,
         torvox_core::cell::Color::default(),
         "fg should reset to default"
     );
     assert_eq!(
-        erased.bg,
+        erased.background,
         torvox_core::cell::Color::default(),
         "bg should reset to default"
     );
@@ -266,11 +254,11 @@ fn scroll_up_moves_top_line_to_scrollback() {
     let rows = 24;
     let cols = 80;
     fill_grid(&mut g, 1, cols); // Fill just row 0
-    let scrollback_len_before = g.scrollback_len();
+    let scrollback_length_before = g.scrollback_length();
     g.scroll_up(0, rows, cols);
     assert_eq!(
-        g.scrollback_len(),
-        scrollback_len_before + 1,
+        g.scrollback_length(),
+        scrollback_length_before + 1,
         "scroll_up should add 1 line to scrollback"
     );
 }

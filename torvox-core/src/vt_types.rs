@@ -1,3 +1,4 @@
+//! VT sequence types — CSI, OSC, ESC definitions.
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -12,6 +13,16 @@ pub struct CsiSequence {
 }
 
 impl CsiSequence {
+    /// Create a new CSI sequence with the given final byte and no parameters.
+    ///
+    /// ```
+    /// use torvox_core::vt_types::CsiSequence;
+    ///
+    /// let seq = CsiSequence::new('m' as u8);
+    /// assert!(seq.params.is_empty());
+    /// assert_eq!(seq.final_byte, 'm' as u8);
+    /// assert!(seq.intermediate.is_none());
+    /// ```
     pub fn new(final_byte: u8) -> Self {
         Self {
             params: Vec::new(),
@@ -28,22 +39,40 @@ impl CsiSequence {
         }
     }
 
+    /// Return the first parameter, or the default if no parameter is present
+    /// or the first parameter is zero (VT convention: 0 means default).
+    ///
+    /// ```
+    /// use torvox_core::vt_types::CsiSequence;
+    ///
+    /// // No params — returns default (clamped to at least 1)
+    /// let seq = CsiSequence::new('A' as u8);
+    /// assert_eq!(seq.first_param_or(1), 1);
+    ///
+    /// // Explicit param — returns the param value
+    /// let seq = CsiSequence::with_params(vec![5], 'A' as u8);
+    /// assert_eq!(seq.first_param_or(1), 5);
+    ///
+    /// // Zero param — treated as default per VT spec
+    /// let seq = CsiSequence::with_params(vec![0], 'A' as u8);
+    /// assert_eq!(seq.first_param_or(1), 1);
+    /// ```
     pub fn first_param_or(&self, default: u16) -> u16 {
         match self.params.first() {
-            Some(&0) | None => default.max(1),
+            Some(&0) | None => default,
             Some(&param) => param,
         }
     }
 
     pub fn second_param_or(&self, default: u16) -> u16 {
         match self.params.get(1) {
-            Some(&0) | None => default.max(1),
+            Some(&0) | None => default,
             Some(&param) => param,
         }
     }
 }
 
-/// OSC sequence parsed from input
+/// Parsed OSC (Operating System Command) sequence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OscSequence {
     pub params: Vec<String>,
@@ -61,7 +90,7 @@ impl Default for OscSequence {
     }
 }
 
-/// ESC sequence parsed from input
+/// Parsed ESC (Escape) sequence with optional intermediate byte.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EscSequence {
     pub intermediate: Option<u8>,
@@ -84,7 +113,7 @@ impl EscSequence {
     }
 }
 
-/// All parsed VT sequence types
+/// Any parsed VT sequence — CSI, OSC, ESC, SGR, or control code.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VtSequence {
     Csi(CsiSequence),
@@ -142,16 +171,16 @@ pub mod dec_mode {
     pub const LNM: u16 = 20; // Line feed / newline mode
     pub const DECTCEM: u16 = 25; // Text cursor enable
     pub const DECCOLM_ALLOW: u16 = 40; // Allow 132 columns
-    pub const DECCOLM_SET: u16 = 40; // Set 132 columns
-    pub const DECSAVED: u16 = 47; // Alternate screen buffer (no saved cursor)
-    pub const DECSAVED_SAVE: u16 = 1047; // Alternate screen buffer
+    pub const DECCOLM_SET: u16 = 40; // Allow 80→132 column switching
+    pub const DEC_ALT_47: u16 = 47; // Use alternate screen buffer
+    pub const DEC_ALT_1047: u16 = 1047; // Use alternate screen buffer (no saved cursor)
     pub const DECSCOSC: u16 = 1048; // Save/restore cursor
-    pub const DEC_ALT: u16 = 1049; // Alternate screen + save cursor
+    pub const DEC_ALT_1049: u16 = 1049; // Use alternate screen + save cursor
     pub const BRACKETED_PASTE: u16 = 2004; // Bracketed paste mode
     pub const MOUSE_X10: u16 = 9; // X10 mouse
-    pub const MOUSE_BTN: u16 = 1000; // Button-event mouse
-    pub const MOUSE_DRAG: u16 = 1002; // Any-event mouse
-    pub const MOUSE_ANY: u16 = 1003; // Any-event mouse
+    pub const MOUSE_BTN: u16 = 1000; // Button-event mouse tracking
+    pub const MOUSE_DRAG: u16 = 1002; // Drag-event mouse tracking
+    pub const MOUSE_ANY: u16 = 1003; // Any-event mouse tracking
     pub const MOUSE_FOCUS: u16 = 1004; // Focus event mouse
     pub const MOUSE_SGR: u16 = 1006; // SGR mouse encoding
 }
@@ -207,11 +236,7 @@ mod tests {
     fn csi_first_param_zero_means_use_default() {
         let seq = CsiSequence::with_params(vec![0], b'A');
         assert_eq!(seq.first_param_or(1), 1, "param 0 should trigger default");
-        assert_eq!(
-            seq.first_param_or(5),
-            5,
-            "param 0 should use caller's default"
-        );
+        assert_eq!(seq.first_param_or(5), 5, "param 0 should use caller's default");
     }
 
     #[test]
@@ -220,6 +245,19 @@ mod tests {
         assert_eq!(seq.params.len(), 5);
         assert_eq!(seq.first_param_or(0), 1);
         assert_eq!(seq.second_param_or(0), 2);
+    }
+
+    #[test]
+    fn csi_first_param_zero_default_is_honored() {
+        // ED/EL use `first_param_or(0)`: a zero param must yield the default 0,
+        // not be coerced to 1 (VT erase mode 0 is a distinct, valid mode).
+        let seq = CsiSequence::with_params(vec![0], b'J');
+        assert_eq!(seq.first_param_or(0), 0);
+        let seq = CsiSequence::with_params(vec![0], b'K');
+        assert_eq!(seq.first_param_or(0), 0);
+        // A present nonzero param is returned as-is regardless of default.
+        let seq = CsiSequence::with_params(vec![2], b'J');
+        assert_eq!(seq.first_param_or(0), 2);
     }
 
     #[test]
@@ -264,11 +302,7 @@ mod tests {
             dec_mode::BRACKETED_PASTE,
         ];
         assert!(modes.iter().all(|&m| m > 0), "all modes should be positive");
-        assert_eq!(
-            dec_mode::BRACKETED_PASTE,
-            2004,
-            "bracketed paste is DEC mode 2004"
-        );
+        assert_eq!(dec_mode::BRACKETED_PASTE, 2004, "bracketed paste is DEC mode 2004");
     }
 
     #[test]

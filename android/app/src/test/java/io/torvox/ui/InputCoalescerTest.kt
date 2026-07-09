@@ -1,48 +1,128 @@
 package io.torvox.ui
 
+import android.app.Application
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class)
 class InputCoalescerTest {
     private lateinit var coalescer: InputCoalescer
+    private val sink = mutableListOf<Byte>()
+    private var pendingFlush: Runnable? = null
 
     @Before
     fun setUp() {
-        coalescer = InputCoalescer(deduplicateWindowNanos = 50_000_000L)
+        sink.clear()
+        pendingFlush = null
+        // Capture the flush runnable instead of posting it, so the test controls
+        // the message boundary explicitly (simulates the batch accumulating
+        // within a single input message before the looper turn runs it).
+        coalescer =
+            InputCoalescer(
+                sink = { data -> sink.addAll(data.toList()) },
+                scheduler = { runnable -> pendingFlush = runnable },
+            )
+    }
+
+    private fun byte(value: Char) = value.code.toByte()
+
+    private fun runFlush() {
+        pendingFlush?.run()
+        pendingFlush = null
     }
 
     @Test
-    fun firstCommitIsNeverDuplicate() {
-        assertTrue(coalescer.shouldCommit("a", 1000L))
+    fun singleByteIsBufferedUntilFlush() {
+        coalescer.send(byteArrayOf(byte('a')))
+        assertTrue("not sent before flush", sink.isEmpty())
+        runFlush()
+        assertArrayEquals(byteArrayOf(byte('a')), sink.toByteArray())
     }
 
     @Test
-    fun identicalTextWithinWindowIsDuplicate() {
-        assertTrue(coalescer.shouldCommit("a", 1000L))
-        assertFalse(coalescer.shouldCommit("a", 1000L + 10_000_000L))
+    fun identicalDoubleFireInOneBatchIsDeduped() {
+        coalescer.send(byteArrayOf(byte('a')))
+        coalescer.send(byteArrayOf(byte('a')))
+        runFlush()
+        assertArrayEquals("IME double-fire collapses to one byte", byteArrayOf(byte('a')), sink.toByteArray())
     }
 
     @Test
-    fun identicalTextOutsideWindowIsNotDuplicate() {
-        assertTrue(coalescer.shouldCommit("a", 1000L))
-        assertTrue(coalescer.shouldCommit("a", 1000L + 60_000_000L))
+    fun tripleIdenticalIsPreserved() {
+        coalescer.send(byteArrayOf(byte('a')))
+        coalescer.send(byteArrayOf(byte('a')))
+        coalescer.send(byteArrayOf(byte('a')))
+        runFlush()
+        assertArrayEquals("three identical bytes preserved", byteArrayOf(byte('a'), byte('a'), byte('a')), sink.toByteArray())
     }
 
     @Test
-    fun differentTextWithinWindowIsNotDuplicate() {
-        assertTrue(coalescer.shouldCommit("a", 1000L))
-        assertTrue(coalescer.shouldCommit("b", 1000L + 10_000_000L))
+    fun differentBytesInOneBatchArePreserved() {
+        coalescer.send(byteArrayOf(byte('a')))
+        coalescer.send(byteArrayOf(byte('b')))
+        runFlush()
+        assertArrayEquals(byteArrayOf(byte('a'), byte('b')), sink.toByteArray())
     }
 
     @Test
-    fun tripleFireSecondIsDuplicateThirdIsNot() {
-        assertTrue(coalescer.shouldCommit("x", 1000L))
-        assertFalse(coalescer.shouldCommit("x", 1000L + 5_000_000L))
-        assertTrue(coalescer.shouldCommit("x", 1000L + 60_000_000L))
+    fun twoDifferentBatchesDoNotDedup() {
+        coalescer.send(byteArrayOf(byte('a')))
+        runFlush()
+        coalescer.send(byteArrayOf(byte('a')))
+        runFlush()
+        assertArrayEquals("separate batches keep both", byteArrayOf(byte('a'), byte('a')), sink.toByteArray())
+    }
+
+    @Test
+    fun legitFastTypingTwoIdenticalCharsInSeparateBatchesIsPreserved() {
+        // I3: genuine IME double-fire is exactly TWO identical bytes within ONE
+        // input message (one batch). Two identical characters typed quickly by a
+        // real user arrive as separate input messages (separate batches), so they
+        // must both be kept. This is the precise distinction the new batch model
+        // makes: dedup only happens inside a single batch.
+        coalescer.send(byteArrayOf(byte('x')))
+        runFlush()
+        coalescer.send(byteArrayOf(byte('x')))
+        runFlush()
+        assertArrayEquals(
+            "fast-typed identical chars in distinct batches are preserved",
+            byteArrayOf(byte('x'), byte('x')),
+            sink.toByteArray(),
+        )
+    }
+
+    @Test
+    fun multiByteInputBypassesCoalescingAndSendsImmediately() {
+        val cjk = "你好".toByteArray(Charsets.UTF_8)
+        coalescer.send(cjk)
+        // Sent immediately, before any flush.
+        assertArrayEquals(cjk, sink.toByteArray())
+        runFlush()
+        assertArrayEquals("flush did not duplicate", cjk, sink.toByteArray())
+    }
+
+    @Test
+    fun pendingSingleByteFlushedBeforeMultiByte() {
+        coalescer.send(byteArrayOf(byte('a')))
+        val cjk = "你".toByteArray(Charsets.UTF_8)
+        coalescer.send(cjk)
+        val expected = byteArrayOf(byte('a')) + cjk
+        assertArrayEquals(expected, sink.toByteArray())
+    }
+
+    @Test
+    fun emptyArrayIsSentImmediately() {
+        coalescer.send(byteArrayOf())
+        assertArrayEquals(byteArrayOf(), sink.toByteArray())
     }
 
     @Test
@@ -70,45 +150,14 @@ class InputCoalescerTest {
 
     @Test
     fun resetClearsAllState() {
-        coalescer.shouldCommit("a", 1000L)
+        coalescer.send(byteArrayOf(byte('a')))
         coalescer.updateComposingText("hello")
 
         coalescer.reset()
 
         assertFalse(coalescer.isComposing())
         assertNull(coalescer.getComposingText())
-        assertTrue(coalescer.shouldCommit("a", 2000L))
-    }
-
-    @Test
-    fun dedupHandlesEmptyString() {
-        assertTrue(coalescer.shouldCommit("", 1000L))
-        assertFalse(coalescer.shouldCommit("", 1000L + 10_000_000L))
-    }
-
-    @Test
-    fun dedupHandlesMultiByteCharacters() {
-        assertTrue(coalescer.shouldCommit("你好", 1000L))
-        assertFalse(coalescer.shouldCommit("你好", 1000L + 5_000_000L))
-        assertTrue(coalescer.shouldCommit("你", 1000L + 5_000_000L))
-    }
-
-    @Test
-    fun dedupHandlesLongStrings() {
-        val longText = "a".repeat(1000)
-        assertTrue(coalescer.shouldCommit(longText, 1000L))
-        assertFalse(coalescer.shouldCommit(longText, 1000L + 10_000_000L))
-    }
-
-    @Test
-    fun boundaryExactWindowTime() {
-        assertTrue(coalescer.shouldCommit("a", 1000L))
-        assertTrue(coalescer.shouldCommit("a", 1000L + 50_000_000L))
-    }
-
-    @Test
-    fun boundaryOneNanosBeforeWindow() {
-        assertTrue(coalescer.shouldCommit("a", 1000L))
-        assertFalse(coalescer.shouldCommit("a", 1000L + 49_999_999L))
+        runFlush()
+        assertTrue("no bytes flushed after reset", sink.isEmpty())
     }
 }

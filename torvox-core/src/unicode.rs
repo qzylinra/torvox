@@ -1,3 +1,4 @@
+//! Unicode width classification for terminal cell layout.
 use serde::{Deserialize, Serialize};
 use unicode_width::UnicodeWidthChar;
 
@@ -8,6 +9,25 @@ pub enum UnicodeWidth {
     Double,
 }
 
+/// Returns the display width category of a character.
+///
+/// Uses Unicode width classification:
+/// - Control characters and combining marks have `UnicodeWidth::Zero`
+/// - ASCII and most Latin characters have `UnicodeWidth::Single`
+/// - CJK ideographs, fullwidth forms, and emoji have `UnicodeWidth::Double`
+///
+/// ```
+/// use torvox_core::unicode::{width, UnicodeWidth};
+///
+/// // ASCII character — single width
+/// assert_eq!(width('A'), UnicodeWidth::Single);
+///
+/// // CJK ideograph — double width
+/// assert_eq!(width('中'), UnicodeWidth::Double);
+///
+/// // Control character — zero width
+/// assert_eq!(width('\0'), UnicodeWidth::Zero);
+/// ```
 pub fn width(character: char) -> UnicodeWidth {
     let character_width = character.width().unwrap_or(0);
     match character_width {
@@ -17,16 +37,25 @@ pub fn width(character: char) -> UnicodeWidth {
     }
 }
 
+/// Returns the numeric display width of a character.
+///
+/// Returns 0 for control/combining characters, 1 for single-width characters,
+/// and 2 for double-width (CJK, emoji, fullwidth) characters.
 pub fn width_value(character: char) -> u8 {
     character.width().unwrap_or(0) as u8
 }
 
+/// Returns the total display width of a string.
+///
+/// Sums the `width_value` of each character in the string.
+/// Useful for calculating cursor position after rendering text.
 pub fn string_width(text: &str) -> u32 {
-    text.chars()
-        .map(|character| width_value(character) as u32)
-        .sum()
+    text.chars().map(|character| u32::from(width_value(character))).sum()
 }
 
+/// Returns true if the character occupies two columns on screen.
+///
+/// This includes CJK ideographs, fullwidth forms, and most emoji.
 pub fn is_wide(character: char) -> bool {
     width_value(character) == 2
 }

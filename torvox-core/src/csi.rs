@@ -1,3 +1,4 @@
+//! CSI (Control Sequence Introducer) handlers.
 use crate::{sgr::parse_sgr, terminal::TerminalState};
 
 /// CSI (Control Sequence Introducer) sequence handler
@@ -5,12 +6,7 @@ pub struct CsiHandler;
 
 impl CsiHandler {
     /// Process a CSI sequence
-    pub fn process_csi(
-        sequence: &crate::vt_types::CsiSequence,
-        terminal: &mut TerminalState,
-        rows: u16,
-        cols: u16,
-    ) {
+    pub fn process_csi(sequence: &crate::vt_types::CsiSequence, terminal: &mut TerminalState, rows: u16, cols: u16) {
         let final_byte = sequence.final_byte;
         let params = &sequence.params;
 
@@ -23,12 +19,7 @@ impl CsiHandler {
             b'E' => terminal.cursor_next_line(sequence.first_param_or(1), rows),
             b'F' => terminal.cursor_prev_line(sequence.first_param_or(1)),
             b'G' => terminal.cursor_horizontal_absolute(sequence.first_param_or(1), cols),
-            b'H' => terminal.cursor_position(
-                sequence.first_param_or(1),
-                sequence.second_param_or(1),
-                rows,
-                cols,
-            ),
+            b'H' => terminal.cursor_position(sequence.first_param_or(1), sequence.second_param_or(1), rows, cols),
             b'I' => terminal.cursor_horizontal_tab(cols),
             b'J' => terminal.erase_in_display(sequence.first_param_or(0) as u8, rows, cols),
             b'K' => terminal.erase_in_line(sequence.first_param_or(0) as u8),
@@ -46,12 +37,7 @@ impl CsiHandler {
                 // In a real implementation, this would send a response
             }
             b'd' => terminal.cursor_vertical_absolute(sequence.first_param_or(1), rows),
-            b'f' => terminal.cursor_position(
-                sequence.first_param_or(1),
-                sequence.second_param_or(1),
-                rows,
-                cols,
-            ),
+            b'f' => terminal.cursor_position(sequence.first_param_or(1), sequence.second_param_or(1), rows, cols),
             b'h' => {
                 if let Some(param) = params.first() {
                     CsiHandler::process_dec_mode(*param, true, terminal);
@@ -104,7 +90,7 @@ impl CsiHandler {
             25u16 => terminal.set_cursor_visible(enabled),
             40u16 => terminal.set_dec_mode(mode, enabled),
             47u16 => terminal.set_alternate_screen(enabled),
-            1004u16 => terminal.set_bracketed_paste(enabled),
+            2004u16 => terminal.set_bracketed_paste(enabled),
             1007u16 => terminal.set_dec_mode(mode, enabled),
             1008u16 => terminal.set_dec_mode(mode, enabled),
             1009u16 => terminal.set_dec_mode(mode, enabled),
@@ -166,12 +152,7 @@ impl EscHandler {
 }
 
 /// Complete VT sequence processing
-pub fn process_vt_sequence(
-    sequence: &crate::vt_types::VtSequence,
-    terminal: &mut TerminalState,
-    rows: u16,
-    cols: u16,
-) {
+pub fn process_vt_sequence(sequence: &crate::vt_types::VtSequence, terminal: &mut TerminalState, rows: u16, cols: u16) {
     match sequence {
         crate::vt_types::VtSequence::Csi(csi) => {
             CsiHandler::process_csi(csi, terminal, rows, cols);
@@ -186,20 +167,20 @@ pub fn process_vt_sequence(
             terminal.apply_sgr(attrs);
         }
         crate::vt_types::VtSequence::Control(byte) => match byte {
-            0x05 => {}
-            0x07 => {}
-            0x08 => {}
-            0x09 => {}
-            0x0A => {}
-            0x0B => {}
-            0x0C => {}
-            0x0D => {}
-            0x0E => {}
-            0x0F => {}
-            0x11 => {}
-            0x13 => {}
-            0x1B => {}
-            _ => {}
+            0x05 => {}     // ENQ — handled by caller
+            0x07 => {}     // BEL — handled by caller
+            0x08 => {}     // BS — handled by caller
+            0x09 => {}     // TAB — handled by caller
+            0x0A => {}     // LF — handled by caller
+            0x0B => {}     // VT — handled by caller
+            0x0C => {}     // FF — handled by caller
+            0x0D => {}     // CR — handled by caller
+            0x0E => {}     // SO — handled by caller
+            0x0F => {}     // SI — handled by caller
+            0x11 => {}     // XON — handled by caller
+            0x13 => {}     // XOFF — handled by caller
+            0x1B => {}     // ESC — handled by caller
+            _unknown => {} // Handled by caller
         },
     }
 }
@@ -312,19 +293,11 @@ mod tests {
         let mut terminal = TerminalState::new(24, 80);
         let sequence = csi(b'm', vec![1]);
         CsiHandler::process_csi(&sequence, &mut terminal, 24, 80);
-        assert!(
-            terminal
-                .sgr_attributes
-                .contains(&crate::sgr::SgrAttribute::Bold(true))
-        );
+        assert!(terminal.sgr_attributes.contains(&crate::sgr::SgrAttribute::Bold(true)));
 
         let reset_sequence = csi(b'm', vec![0]);
         CsiHandler::process_csi(&reset_sequence, &mut terminal, 24, 80);
-        assert!(
-            !terminal
-                .sgr_attributes
-                .contains(&crate::sgr::SgrAttribute::Bold(true))
-        );
+        assert!(!terminal.sgr_attributes.contains(&crate::sgr::SgrAttribute::Bold(true)));
     }
 
     #[test]
@@ -342,11 +315,11 @@ mod tests {
     #[test]
     fn dec_mode_bracketed_paste() {
         let mut terminal = TerminalState::new(24, 80);
-        let sequence = csi(b'h', vec![1004]);
+        let sequence = csi(b'h', vec![2004]);
         CsiHandler::process_csi(&sequence, &mut terminal, 24, 80);
         assert!(terminal.bracketed_paste);
 
-        let reset_sequence = csi(b'l', vec![1004]);
+        let reset_sequence = csi(b'l', vec![2004]);
         CsiHandler::process_csi(&reset_sequence, &mut terminal, 24, 80);
         assert!(!terminal.bracketed_paste);
     }

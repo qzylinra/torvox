@@ -1,13 +1,17 @@
 package io.torvox.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import io.torvox.MainActivity
+import io.torvox.openSettings
+import io.torvox.waitForSession
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -18,10 +22,8 @@ class SettingsScreenTest {
 
     @Before
     fun setUp() {
-        composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("SettingsButton").performClick()
-        composeTestRule.waitForIdle()
+        composeTestRule.waitForSession()
+        composeTestRule.openSettings()
     }
 
     @Test
@@ -57,5 +59,26 @@ class SettingsScreenTest {
     @Test
     fun settings_screen_displays_font_list() {
         composeTestRule.onNodeWithTag("FontSizeSlider").assertExists()
+    }
+
+    @Test
+    fun theme_switch_changes_terminal_appearance() {
+        composeTestRule.waitForSession()
+        composeTestRule.openSettings()
+        composeTestRule
+            .onNodeWithTag("SettingsLazyColumn")
+            .performScrollToNode(hasTestTag("ThemeSelector"))
+        composeTestRule.onNodeWithTag("ThemeSelector").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Dracula Plus").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("SettingsBackButton").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.waitUntil(timeoutMillis = 5_000) {
+            composeTestRule
+                .onAllNodes(hasTestTag("TerminalScreen"), useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeTestRule.onNodeWithTag("TerminalScreen").assertIsDisplayed()
     }
 }

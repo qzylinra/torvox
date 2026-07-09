@@ -2,7 +2,7 @@ use proptest::prelude::*;
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 use torvox_terminal::test_helpers::assert_invariants;
 
-#[allow(dead_code)]
+#[allow(dead_code, clippy::many_single_char_names)]
 fn term() -> GhosttyTerminal {
     GhosttyTerminal::new(24, 80, 1000).expect("terminal create")
 }
@@ -179,7 +179,7 @@ proptest! {
         assert_invariants(&snap);
     }
 
-    // P1.4-XIII: CSI EL — erase in line never crashes
+    // P1.4-XIII: CSI EL — erase in line clears content
     #[test]
     fn el_erase_type_param(param in 0u32..3u32, col in 0u32..80u32) {
         let mut t = sized(24, 80);
@@ -188,18 +188,73 @@ proptest! {
         t.vt_write(format!("\x1b[{}G\x1b[{}K", col + 1, param).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
+        match param {
+            0 => {
+                for c in col..80u32 {
+                    assert_eq!(snap.cells[c as usize].codepoint, 0, "EL 0: col {c} erased");
+                }
+            }
+            1 => {
+                for c in 0..col {
+                    assert_eq!(snap.cells[c as usize].codepoint, 0, "EL 1: col {c} erased");
+                }
+            }
+            2 => {
+                for c in 0..80u32 {
+                    assert_eq!(snap.cells[c as usize].codepoint, 0, "EL 2: col {c} erased");
+                }
+            }
+            _ => {}
+        }
         assert_invariants(&snap);
     }
 
-    // P1.4-XIV: CSI ED — erase display never crashes
+    // P1.4-XIV: CSI ED — erase display clears content
     #[test]
     fn ed_erase_type_param(param in 0u32..3u32) {
         let mut t = sized(24, 80);
-        t.vt_write(b"Some content on each\nline of the\nterminal screen!");
+        // Write distinct content to each visible line
+        for i in 0..24u32 {
+            t.vt_write(format!("Line {} content here", i).as_bytes());
+            if i < 23 {
+                t.vt_write(b"\r\n");
+            }
+        }
         t.flush();
-        t.vt_write(format!("\x1b[J\x1b[{}J", param).as_bytes());
+        // Position cursor at row 12, col 0 (middle of display)
+        t.vt_write(b"\x1b[13;1H");
+        t.flush();
+        t.vt_write(format!("\x1b[{}J", param).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
+        let cols = 80u32;
+        match param {
+            0 => {
+                // Erase from cursor to end: rows 12-23 should be empty
+                for r in 12..24u32 {
+                    let offset = (r * cols) as usize;
+                    let any_content = snap.cells[offset..offset + cols as usize].iter().any(|c| c.codepoint != 0);
+                    assert!(!any_content, "ED 0: row {r} should be erased");
+                }
+            }
+            1 => {
+                // Erase from start to cursor: rows 0-11 should be empty
+                for r in 0..12u32 {
+                    let offset = (r * cols) as usize;
+                    let any_content = snap.cells[offset..offset + cols as usize].iter().any(|c| c.codepoint != 0);
+                    assert!(!any_content, "ED 1: row {r} should be erased");
+                }
+            }
+            2 => {
+                // Erase entire display: all rows empty
+                for r in 0..24u32 {
+                    let offset = (r * cols) as usize;
+                    let any_content = snap.cells[offset..offset + cols as usize].iter().any(|c| c.codepoint != 0);
+                    assert!(!any_content, "ED 2: row {r} should be erased");
+                }
+            }
+            _ => {}
+        }
         assert_invariants(&snap);
     }
 
@@ -219,27 +274,62 @@ proptest! {
         assert_invariants(&snap);
     }
 
-    // P1.4-XVI: CSI ICH — insert chars preserves invariants
+    // P1.4-XVI: CSI ICH — insert chars shifts content right
     #[test]
-    fn ich_bounds(col in 0u32..70u32, n in 0u32..10u32) {
+    fn ich_bounds(col in 0u32..70u32, n in 1u32..10u32) {
         let mut t = sized(24, 80);
-        t.vt_write(b"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        let text = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        t.vt_write(text);
         t.flush();
+        let insert_count = n.min(80 - col);
         t.vt_write(format!("\x1b[{}G\x1b[{}@", col + 1, n).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
+        // Verify inserted cells are empty
+        for i in 0..insert_count {
+            assert_eq!(
+                snap.cells[(col + i) as usize].codepoint, 0,
+                "ICH {n} at col {col}: inserted cell at {} should be empty", col + i
+            );
+        }
+        // Verify original content shifted right by insert_count
+        for i in 0..(26u32.saturating_sub(col)) {
+            let dst_idx = (col + insert_count + i) as usize;
+            if dst_idx >= 80 { break; }
+            let src_idx = (col + i) as usize;
+            assert_eq!(
+                snap.cells[dst_idx].codepoint,
+                text[src_idx] as u32,
+                "ICH {n} at col {col}: text[{src_idx}] should be at cell {dst_idx}"
+            );
+        }
         assert_invariants(&snap);
     }
 
-    // P1.4-XVII: CSI DCH — delete chars preserves invariants
+    // P1.4-XVII: CSI DCH — delete chars shifts content left
     #[test]
-    fn dch_bounds(col in 0u32..70u32, n in 0u32..10u32) {
+    fn dch_bounds(col in 0u32..70u32, n in 1u32..10u32) {
         let mut t = sized(24, 80);
-        t.vt_write(b"ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+        let text = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop";
+        t.vt_write(text);
         t.flush();
+        let delete_count = n.min(80 - col);
         t.vt_write(format!("\x1b[{}G\x1b[{}P", col + 1, n).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
+        // Verify content shifted left: cell[col+i] should have text[col+i+delete_count]
+        // as long as the source is within text bounds and within display width
+        for i in 0..(42u32.saturating_sub(col + delete_count).min(80 - col)) {
+            let dst_idx = (col + i) as usize;
+            if dst_idx >= 42 { break; }
+            let src_idx = (col + i + delete_count) as usize;
+            if src_idx >= text.len() { break; }
+            assert_eq!(
+                snap.cells[dst_idx].codepoint,
+                text[src_idx] as u32,
+                "DCH {n} at col {col}: text[{src_idx}] should be at cell {dst_idx}"
+            );
+        }
         assert_invariants(&snap);
     }
 
@@ -398,12 +488,23 @@ proptest! {
     fn csi_su_scroll(n in 0u32..12u32) {
         let mut t = sized(24, 80);
         for i in 0..24u32 {
-            t.vt_write(format!("Line{}\n", i).as_bytes());
+            t.pty_write(format!("Line{}\n", i).as_bytes());
         }
         t.flush();
         t.vt_write(format!("\x1b[{}S", n).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
+        if n > 0 && n < 24 {
+            let last_visible = 23u32;
+            let _first_scrolled_off = n.saturating_sub(1);
+            let bottom = last_visible;
+            let top_line_content = snap.cells[((n) * 80) as usize].codepoint;
+            assert_ne!(top_line_content, 0, "SU {n}: content scrolled up");
+            let bottom_row_start = (bottom * 80) as usize;
+            let bottom_empty = snap.cells[bottom_row_start..bottom_row_start + 80]
+                .iter().all(|c| c.codepoint == 0);
+            assert!(bottom_empty, "SU {n}: bottom row should be empty");
+        }
         assert_invariants(&snap);
     }
 
@@ -412,25 +513,43 @@ proptest! {
     fn csi_sd_scroll(n in 0u32..12u32) {
         let mut t = sized(24, 80);
         for i in 0..24u32 {
-            t.vt_write(format!("Line{}\n", i).as_bytes());
+            t.pty_write(format!("Line{}\n", i).as_bytes());
         }
         t.flush();
         t.vt_write(format!("\x1b[{}T", n).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
+        if n > 0 && n < 24 {
+            let top_row = 0u32;
+            let top_row_start = (top_row * 80) as usize;
+            let top_empty = snap.cells[top_row_start..top_row_start + 80]
+                .iter().all(|c| c.codepoint == 0);
+            assert!(top_empty, "SD {n}: top row should be empty");
+            let first_content_line = (n * 80) as usize;
+            let has_content = snap.cells[first_content_line..first_content_line + 80]
+                .iter().any(|c| c.codepoint != 0);
+            assert!(has_content, "SD {n}: content shifted down");
+        }
         assert_invariants(&snap);
     }
 
     // P1.4-XXXI: REP — repeat previous char
     #[test]
-    fn csi_rep_repeat_char(n in 0u32..20u32, ch in 0x41u32..0x5Bu32) {
+    fn csi_rep_repeat_char(n in 1u32..20u32, ch in 0x41u32..0x5Bu32) {
         let mut t = sized(24, 80);
         let c = char::from_u32(ch).unwrap();
         t.vt_write(format!("{}", c).as_bytes());
         t.flush();
+        let count = n.min(79) as usize;
         t.vt_write(format!("\x1b[{}b", n).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
+        for i in 1..=count {
+            assert_eq!(
+                snap.cells[i].codepoint, ch,
+                "REP {n} of '{c}': cell {i} should be '{c}'"
+            );
+        }
         assert_invariants(&snap);
     }
 

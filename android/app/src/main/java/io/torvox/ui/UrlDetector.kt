@@ -1,6 +1,5 @@
 package io.torvox.ui
 
-import java.net.URLDecoder
 import java.util.regex.Pattern
 
 object UrlDetector {
@@ -15,7 +14,7 @@ object UrlDetector {
         while (matcher.find()) {
             var url = matcher.group(1) ?: continue
             url = trimTrailingPunctuation(url)
-            url = decodeIfNeeded(url)
+            url = percentDecode(url)
             if (url.isNotBlank()) {
                 urls.add(url)
             }
@@ -33,12 +32,32 @@ object UrlDetector {
         return url.substring(0, end)
     }
 
-    private fun decodeIfNeeded(url: String): String {
+    private fun percentDecode(url: String): String {
         if (!url.contains('%')) return url
-        return try {
-            URLDecoder.decode(url, "UTF-8")
-        } catch (_: Exception) {
-            url
+        val bytes = mutableListOf<Byte>()
+        val sb = StringBuilder(url.length)
+        var i = 0
+        while (i < url.length) {
+            val ch = url[i]
+            if (ch == '%' && i + 2 < url.length) {
+                val hex = url.substring(i + 1, i + 3)
+                val decoded = hex.toIntOrNull(16)
+                if (decoded != null) {
+                    bytes.add(decoded.toByte())
+                    i += 3
+                    continue
+                }
+            }
+            if (bytes.isNotEmpty()) {
+                sb.append(String(bytes.toByteArray(), Charsets.UTF_8))
+                bytes.clear()
+            }
+            sb.append(ch)
+            i++
         }
+        if (bytes.isNotEmpty()) {
+            sb.append(String(bytes.toByteArray(), Charsets.UTF_8))
+        }
+        return sb.toString()
     }
 }

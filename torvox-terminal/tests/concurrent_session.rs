@@ -7,9 +7,7 @@ use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 
 #[test]
 fn concurrent_vt_write_and_snapshot() {
-    let terminal = Arc::new(Mutex::new(
-        GhosttyTerminal::new(24, 80, 10_000).expect("terminal"),
-    ));
+    let terminal = Arc::new(Mutex::new(GhosttyTerminal::new(24, 80, 10_000).expect("terminal")));
 
     let t1 = Arc::clone(&terminal);
     let t2 = Arc::clone(&terminal);
@@ -33,9 +31,7 @@ fn concurrent_vt_write_and_snapshot() {
 
 #[test]
 fn concurrent_resize_and_write() {
-    let terminal = Arc::new(Mutex::new(
-        GhosttyTerminal::new(24, 80, 10_000).expect("terminal"),
-    ));
+    let terminal = Arc::new(Mutex::new(GhosttyTerminal::new(24, 80, 10_000).expect("terminal")));
 
     let t1 = Arc::clone(&terminal);
     let t2 = Arc::clone(&terminal);

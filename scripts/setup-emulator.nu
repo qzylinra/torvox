@@ -1,146 +1,61 @@
 #!/usr/bin/env -S nix develop --command nu
-# Set up and boot Android emulator for Torvox CI testing.
-# Pipeline: run first, then test-emulator.nu.
-# Usage: nu scripts/setup-emulator.nu [--api 35] [--arch x86_64] [--timeout 300]
+# Usage: scripts/setup-emulator.nu [--boot_timeout 360]
+# Starts the emulator and exits after boot. Emulator survives script exit.
+# Uses setsid --fork to detach the emulator process from the script.
 
-def main [
-    --api: int = 35,
-    --arch: string = "x86_64",
-    --timeout: int = 300,
-] {
-    if (which nix | length) > 0 and ("IN_NIX_SHELL" not-in $env) {
-        exec nix develop --command nu $env.CURRENT_FILE --api $api --arch $arch --timeout $timeout
+let sdk_root = "/usr/local/lib/android/sdk"
+
+def wait-for-boot [--boot_timeout: int = 360] {
+    let start = (date now)
+    loop {
+        let boot = (try { ^adb shell getprop sys.boot_completed } catch { "" } | str trim)
+        if $boot == "1" {
+            print "Emulator booted"
+            return
+        }
+        if ((date now) - $start) > ($boot_timeout * 1sec) {
+            let log_path = ($env.HOME | path join ".android" "avd" "torvox_test.avd" "emulator.log")
+            if ($log_path | path exists) {
+                print "=== EMULATOR LOG (last 30 lines) ==="
+                open $log_path | lines | last 30 | each { print $in }
+            }
+            error make { msg: $"Emulator did not boot within ($boot_timeout)s" }
+        }
+        sleep 5sec
+    }
+}
+
+def main [--boot_timeout: int = 360] {
+    $env.ANDROID_AVD_HOME = ($env.HOME | path join ".android")
+
+    let boot = (try { ^adb shell getprop sys.boot_completed } catch { "" } | str trim)
+    if $boot == "1" {
+        print "Emulator already running and booted"
+        ^adb shell echo "ready"
+        return
     }
 
-    let sdk = $env.ANDROID_HOME
-    let sm = $"($sdk)/cmdline-tools/latest/bin/sdkmanager"
-    let am = $"($sdk)/cmdline-tools/latest/bin/avdmanager"
-    let adb = $"($sdk)/platform-tools/adb"
-    let emu = $"($sdk)/emulator/emulator"
-    let img = $"system-images;android-($api);default;($arch)"
-    let name = $"torvox_api($api)"
-    let avd = $"($env.HOME)/.android/avd/($name).avd"
-    let ini = $"($env.HOME)/.android/avd/($name).ini"
-    let ready = "/tmp/torvox-emulator-ready.txt"
-    let pidf = "/tmp/torvox-emulator-pid.txt"
-    let logf = "/tmp/torvox-emulator-boot.log"
-    let launch = "/tmp/torvox-launch-emulator.sh"
-    $env.ANDROID_AVD_HOME = $"($env.HOME)/.android/avd"
+    let avdmanager_path = ($sdk_root | path join "cmdline-tools" "latest" "bin" "avdmanager")
+    let avd_ini = ($env.ANDROID_AVD_HOME | path join "avd" "torvox_test.ini")
+    let avd_dir = ($env.ANDROID_AVD_HOME | path join "avd")
+    mkdir $avd_dir
 
-    rm -f $ready $pidf $logf $launch
-
-    print "=== Prerequisites ==="
-    for t in [$sm $am] {
-        if not ($t | path exists) { print $"MISSING: ($t)"; exit 1 }
+    if not ($avd_ini | path exists) {
+        let system_image = "system-images;android-35;google_apis;x86_64"
+        let sdkmanager_path = ($sdk_root | path join "cmdline-tools" "latest" "bin" "sdkmanager")
+        let images_dir = ($sdk_root | path join "system-images")
+        if not ($images_dir | path exists) {
+            ^($sdkmanager_path) "--install" $system_image
+        }
+        ^($avdmanager_path) create avd --name torvox_test --package $system_image --device "pixel_6" --force
     }
-    print "OK"
 
-    print "=== Emulator ==="
-    if not ($emu | path exists) {
-        print "Installing..."; ^yes | ^$sm "emulator" $"--sdk_root=($sdk)"
-        if $env.LAST_EXIT_CODE != 0 { print "FAILED"; exit 1 }
+    let emulator_path = ($sdk_root | path join "emulator" "emulator")
+    ^setsid --fork ($emulator_path) -avd torvox_test -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -port 5554 -no-snapshot -no-metrics -wipe-data -memory 2048
+    wait-for-boot --boot_timeout $boot_timeout
+    let sdk = (^adb shell getprop ro.build.version.sdk | str trim)
+    if $sdk != "35" {
+        error make { msg: $"Expected SDK 35, got: ($sdk)" }
     }
-    print "OK"
-
-    print "=== System image ==="
-    if not ($"($sdk)/system-images/android-($api)/default/($arch)" | path exists) {
-        print "Installing..."; ^yes | ^$sm $img $"--sdk_root=($sdk)"
-        if $env.LAST_EXIT_CODE != 0 { print "FAILED"; exit 1 }
-    }
-    print "OK"
-
-    print "=== AVD ==="
-    let listed = ((^$am list avd | lines | find $name | length) > 0)
-    let exists = ($listed and ($avd | path exists))
-    if not $exists {
-        if $listed { ^echo no | ^$am delete avd -n $name | ignore; rm -f $ini }
-        rm -rf $avd $ini
-        print "Creating AVD..."
-        ^echo no | ^$am create avd -n $name -k $img -d pixel_7_pro --force
-        if $env.LAST_EXIT_CODE != 0 { print "FAILED"; exit 1 }
-        if not ($avd | path exists) { print "AVD not created"; exit 1 }
-
-        # Write minimal tuning to config.ini (append to preserve system image path)
-        print "Tuning config.ini..."
-        ^sed -i "/^hw.cpu.arch=/d" $"($avd)/config.ini"
-        ^sed -i "/^hw.keyboard=/d" $"($avd)/config.ini"
-        ^sed -i "/^fastboot.forceColdBoot=/d" $"($avd)/config.ini"
-                $"hw.cpu.arch=x86_64\nhw.keyboard=yes\nfastboot.forceColdBoot=yes" | save --append $"($avd)/config.ini"
-    }
-    print "OK"
-
-    print "=== Kill stale emulator ==="
-    ^pkill -9 -f "qemu-system" | ignore
-    sleep 2sec
-
-    print "=== Start emulator ==="
-    # Launch emulator in background, capture PID
-    let pid_s = (^bash -c $"export ANDROID_AVD_HOME='($env.HOME)/.android/avd'; nohup '($emu)' -avd '($name)' -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -port 5554 -no-snapshot -no-metrics -wipe-data > '($logf)' 2>&1 & echo \$!" | str trim)
-    if ($pid_s | str length) == 0 { print "ERROR: no PID"; exit 1 }
-    $pid_s | save --force $pidf
-    print $"PID: ($pid_s)"
-    sleep 5sec
-
-    print "=== Wait for device ==="
-    mut w = 0
-    while $w < 120 {
-        let d = (^$adb devices | lines | skip 1 | where ($it | str contains "emulator") and ($it | str contains "device") | length)
-        if $d > 0 { print "Detected"; break }
-        $w += 1; sleep 1sec
-    }
-    if $w >= 120 { print "TIMEOUT"; ^tail -20 $logf; exit 1 }
-    ^$adb wait-for-device
-    sleep 3sec
-
-    print "=== Wait for boot ==="
-    mut booted = false
-    mut a = 0
-    let maxa = ($timeout * 1000) / 2000
-    while not $booted and $a < $maxa {
-        let bc = (^$adb shell "getprop sys.boot_completed" | complete)
-        if $bc.exit_code == 0 and ($bc.stdout | str trim) == "1" { $booted = true; break }
-        $a += 1
-        if $a mod 15 == 0 { print $"  ($a * 2)s" }
-        sleep 2sec
-    }
-    if not $booted { print "BOOT TIMEOUT"; ^tail -20 $logf; exit 1 }
-    print "Boot OK"
-
-    print "=== Package manager ==="
-    mut pm = false
-    mut pa = 0
-    while not $pm and $pa < 30 {
-        let r = (^$adb shell "pm path android" | complete)
-        if $r.exit_code == 0 and ($r.stdout | str length) > 10 { $pm = true; break }
-        $pa += 1; sleep 2sec
-    }
-    if $pm { print "OK" } else { print "WARNING: timeout" }
-
-    print "=== Disable animations ==="
-    ^$adb shell "settings put global window_animation_scale 0.0"
-    ^$adb shell "settings put global transition_animation_scale 0.0"
-    ^$adb shell "settings put global animator_duration_scale 0.0"
-    ^$adb shell "svc power stayon true"
-    print "Done"
-
-    print "=== Unlock ==="
-    ^$adb shell "wm dismiss-keyguard"
-    sleep 2sec
-    ^$adb shell "input keyevent 82"
-    sleep 1sec
-    ^$adb shell "input keyevent 224"
-    sleep 1sec
-    ^$adb shell "input touchscreen swipe 540 1800 540 800 300"
-    sleep 2sec
-    let pw = (^$adb shell "dumpsys power | grep mWakefulness" | complete)
-    if $pw.exit_code == 0 and ($pw.stdout | str length) > 0 { print ($pw.stdout | str trim) }
-
-    print "=== Create home dir ==="
-    ^$adb shell "mkdir -p /data/data/com.termux/files/home"
-    print "Done"
-
-    print ""
-    print "=== EMULATOR READY ==="
-    "EMULATOR_READY" | save --force $ready
-    print "Next: nu scripts/test-emulator.nu"
+    print $"Emulator ready, SDK: ($sdk)"
 }

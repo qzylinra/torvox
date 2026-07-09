@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +30,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -66,11 +69,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.torvox.R
 import io.torvox.TerminalViewModel
+import io.torvox.ui.KeyboardMode
 import io.torvox.ui.theme.TerminalTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val SMALL_SCREEN_WIDTH_DP = 400
+private const val FONT_SIZE_RANGE_MIN = 8f
+private const val FONT_SIZE_RANGE_MAX = 48f
+private const val FONT_SIZE_RANGE_STEPS = 23
+private const val SCROLLBACK_RANGE_MIN = 1000f
+private const val SCROLLBACK_RANGE_MAX = 100_000f
+private const val SCROLLBACK_RANGE_STEPS = 98
+private val WARNING_ORANGE = Color(0xFFFF9800)
+
+@OptIn(ExperimentalMaterial3Api::class) // Material3 experimental API used intentionally
 @Composable
 fun SettingsScreen(
     viewModel: TerminalViewModel,
@@ -88,27 +101,31 @@ fun SettingsScreen(
     val useNerdFontGlyphs by viewModel.useNerdFontGlyphs.collectAsState()
     val useSemanticSelection by viewModel.useSemanticSelection.collectAsState()
     val sessionRestore by viewModel.sessionRestore.collectAsState()
+    val cursorBlinkEnabled by viewModel.cursorBlink.collectAsState()
+    val cursorSpeedMs by viewModel.cursorSpeed.collectAsState()
+    val cursorStyleValue by viewModel.cursorStyle.collectAsState()
 
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmallScreen = screenWidthDp < 400
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     val horizontalPadding = if (isSmallScreen) 8.dp else 16.dp
 
-    val bgColor = MaterialTheme.colorScheme.surface
+    val backgroundColor = MaterialTheme.colorScheme.surface
     val textColor = MaterialTheme.colorScheme.onSurface
     val secondaryText = MaterialTheme.colorScheme.onSurfaceVariant
-    val cardBg = MaterialTheme.colorScheme.surfaceContainerLow
+    val cardBackground = MaterialTheme.colorScheme.surfaceContainerLow
     val accentColor = MaterialTheme.colorScheme.primary
     val sectionTitleColor = MaterialTheme.colorScheme.primary
 
     val availableFonts by viewModel.availableFonts.collectAsState()
+    val defaultFontName by viewModel.defaultFontName.collectAsState()
+    val fontInfo by viewModel.fontInfo.collectAsState()
 
     val customFontLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenDocument(),
         ) { uri: Uri? ->
             if (uri != null) {
-                val fileName = viewModel.getFileNameFromUri(uri) ?: uri.lastPathSegment ?: "custom"
-                viewModel.setFontFamily(fileName)
+                viewModel.installFontFile(uri)
             }
         }
 
@@ -117,8 +134,16 @@ fun SettingsScreen(
     }
 
     Surface(
-        modifier = Modifier.fillMaxSize().testTag("SettingsScreen"),
-        color = bgColor,
+        modifier =
+        Modifier
+            .fillMaxSize()
+            .testTag("SettingsScreen")
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = {},
+            ),
+        color = backgroundColor,
     ) {
         Column(
             modifier =
@@ -128,7 +153,7 @@ fun SettingsScreen(
                 .navigationBarsPadding(),
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = horizontalPadding),
+                modifier = Modifier.fillMaxSize().padding(horizontal = horizontalPadding).testTag("SettingsLazyColumn"),
                 verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 8.dp else 12.dp),
                 contentPadding =
                 androidx.compose.foundation.layout
@@ -159,7 +184,7 @@ fun SettingsScreen(
 
                 item {
                     SectionHeader(stringResource(R.string.appearance), sectionTitleColor)
-                    SettingsCard(cardBg, isSmallScreen) {
+                    SettingsCard(cardBackground, isSmallScreen) {
                         FontSizeSlider(
                             modifier = Modifier.testTag("FontSizeSlider"),
                             value = fontSize,
@@ -173,22 +198,61 @@ fun SettingsScreen(
                             selectedFamily = fontFamily,
                             onFamilySelected = { viewModel.setFontFamily(it) },
                             textColor = textColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                             accentColor = accentColor,
                             fonts = availableFonts,
+                            defaultFontName = defaultFontName,
+                            fontInfo = fontInfo,
                             onPickFontFile = { customFontLauncher.launch(arrayOf("font/*", "application/octet-stream")) },
+                        )
+                        if (fontInfo.isNotEmpty() || defaultFontName.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FontInfoSection(
+                                fontInfo =
+                                fontInfo.ifEmpty {
+                                    "Active: $defaultFontName\n(CJK fallback info available after session starts)\nFont size: ${fontSize.toInt()}"
+                                },
+                                textColor = textColor,
+                                secondaryText = secondaryText,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        CursorBlinkToggle(
+                            enabled = cursorBlinkEnabled,
+                            onToggle = { viewModel.setCursorBlink(it) },
+                            textColor = textColor,
+                            accentColor = accentColor,
+                            cardBackground = backgroundColor,
+                        )
+                        if (cursorBlinkEnabled) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            CursorSpeedSlider(
+                                value = cursorSpeedMs.toFloat(),
+                                onValueChange = { viewModel.setCursorSpeed(it.toInt()) },
+                                textColor = textColor,
+                                secondaryText = secondaryText,
+                                accentColor = accentColor,
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CursorStyleSelector(
+                            selectedStyle = cursorStyleValue,
+                            onStyleSelected = { viewModel.setCursorStyle(it) },
+                            textColor = textColor,
+                            accentColor = accentColor,
+                            cardBackground = backgroundColor,
                         )
                     }
                 }
 
                 item {
                     SectionHeader(stringResource(R.string.software_theme), sectionTitleColor)
-                    SettingsCard(cardBg, isSmallScreen) {
+                    SettingsCard(cardBackground, isSmallScreen) {
                         AppThemeSelector(
                             selectedMode = appThemeMode,
                             onModeSelected = { viewModel.setAppThemeMode(it) },
                             textColor = textColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                             accentColor = accentColor,
                         )
                     }
@@ -196,34 +260,38 @@ fun SettingsScreen(
 
                 item {
                     SectionHeader(stringResource(R.string.theme), sectionTitleColor)
-                    SettingsCard(cardBg, isSmallScreen) {
+                    SettingsCard(cardBackground, isSmallScreen) {
                         TerminalThemeModeSelector(
                             selectedMode = themeMode,
                             onModeSelected = { viewModel.setThemeMode(it) },
                             textColor = textColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                             accentColor = accentColor,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         when (themeMode) {
                             "follow_system", "day", "night" -> {
-                                ThemeSelector(
-                                    label = stringResource(R.string.day_theme),
-                                    selectedTheme = dayThemeName,
-                                    themes = io.torvox.ui.theme.BuiltInThemes.all,
-                                    onThemeSelected = { viewModel.setDayThemeName(it) },
-                                    textColor = textColor,
-                                    cardBg = bgColor,
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                ThemeSelector(
-                                    label = stringResource(R.string.night_theme),
-                                    selectedTheme = nightThemeName,
-                                    themes = io.torvox.ui.theme.BuiltInThemes.all,
-                                    onThemeSelected = { viewModel.setNightThemeName(it) },
-                                    textColor = textColor,
-                                    cardBg = bgColor,
-                                )
+                                Column(modifier = Modifier.testTag("DayNightThemeSection")) {
+                                    ThemeSelector(
+                                        label = stringResource(R.string.day_theme),
+                                        selectedTheme = dayThemeName,
+                                        themes = io.torvox.ui.theme.BuiltInThemes.all,
+                                        onThemeSelected = { viewModel.setDayThemeName(it) },
+                                        textColor = textColor,
+                                        secondaryText = secondaryText,
+                                        cardBackground = backgroundColor,
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    ThemeSelector(
+                                        label = stringResource(R.string.night_theme),
+                                        selectedTheme = nightThemeName,
+                                        themes = io.torvox.ui.theme.BuiltInThemes.all,
+                                        onThemeSelected = { viewModel.setNightThemeName(it) },
+                                        textColor = textColor,
+                                        secondaryText = secondaryText,
+                                        cardBackground = backgroundColor,
+                                    )
+                                }
                             }
 
                             "fixed" -> {
@@ -233,7 +301,8 @@ fun SettingsScreen(
                                     themes = io.torvox.ui.theme.BuiltInThemes.all,
                                     onThemeSelected = { viewModel.setThemeName(it) },
                                     textColor = textColor,
-                                    cardBg = bgColor,
+                                    secondaryText = secondaryText,
+                                    cardBackground = backgroundColor,
                                 )
                             }
                         }
@@ -241,8 +310,64 @@ fun SettingsScreen(
                 }
 
                 item {
+                    SectionHeader("Background", sectionTitleColor)
+                    SettingsCard(cardBackground, isSmallScreen) {
+                        val bgImagePath by viewModel.bgImagePath.collectAsState()
+                        val bgBlurRadius by viewModel.bgBlurRadius.collectAsState()
+                        val bgAlpha by viewModel.bgAlpha.collectAsState()
+
+                        val imagePickerLauncher =
+                            rememberLauncherForActivityResult(
+                                contract = ActivityResultContracts.GetContent(),
+                            ) { uri: Uri? ->
+                                uri?.let { viewModel.setBgImagePath(it.toString()) }
+                            }
+
+                        Text(
+                            text = if (bgImagePath.isNotEmpty()) "Background image set" else "No background image",
+                            color = textColor,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.testTag("BackgroundImageStatus"),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { imagePickerLauncher.launch("image/*") },
+                                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                                modifier = Modifier.testTag("ChooseImageButton"),
+                            ) {
+                                Text("Choose Image", color = MaterialTheme.colorScheme.onPrimary)
+                            }
+                            if (bgImagePath.isNotEmpty()) {
+                                TextButton(onClick = { viewModel.setBgImagePath("") }) {
+                                    Text("Clear", color = accentColor)
+                                }
+                            }
+                        }
+                        if (bgImagePath.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Blur: $bgBlurRadius", color = secondaryText, style = MaterialTheme.typography.bodySmall)
+                            Slider(
+                                value = bgBlurRadius.toFloat(),
+                                onValueChange = { viewModel.setBgBlurRadius(it.toInt()) },
+                                valueRange = 0f..20f,
+                                colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Opacity: ${(bgAlpha * 100).toInt()}%", color = secondaryText, style = MaterialTheme.typography.bodySmall)
+                            Slider(
+                                value = bgAlpha,
+                                onValueChange = { viewModel.setBgAlpha(it) },
+                                valueRange = 0.1f..1.0f,
+                                colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+                            )
+                        }
+                    }
+                }
+
+                item {
                     SectionHeader(stringResource(R.string.terminal), sectionTitleColor)
-                    SettingsCard(cardBg, isSmallScreen) {
+                    SettingsCard(cardBackground, isSmallScreen) {
                         ShellInput(
                             shellPath = selectedShell,
                             onShellChanged = { viewModel.setShell(it) },
@@ -263,7 +388,7 @@ fun SettingsScreen(
                             onToggle = { viewModel.setSessionRestore(it) },
                             textColor = textColor,
                             accentColor = accentColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         KeyboardModeSelector(
@@ -271,7 +396,7 @@ fun SettingsScreen(
                             onModeSelected = { viewModel.setKeyboardMode(it) },
                             textColor = textColor,
                             accentColor = accentColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         UsbSerialToggle(
@@ -279,7 +404,7 @@ fun SettingsScreen(
                             onToggle = { viewModel.setUsbSerialEnabled(it) },
                             textColor = textColor,
                             accentColor = accentColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         McpServerToggle(
@@ -287,7 +412,7 @@ fun SettingsScreen(
                             onToggle = { viewModel.setMcpServerEnabled(it) },
                             textColor = textColor,
                             accentColor = accentColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         VolumeKeyMapToggle(
@@ -295,17 +420,20 @@ fun SettingsScreen(
                             onToggle = { viewModel.setVolumeKeyMap(it) },
                             textColor = textColor,
                             accentColor = accentColor,
-                            cardBg = bgColor,
+                            cardBackground = backgroundColor,
                         )
                     }
                 }
 
                 item {
                     SectionHeader(stringResource(R.string.bootstrap), sectionTitleColor)
-                    SettingsCard(cardBg, isSmallScreen) {
+                    SettingsCard(cardBackground, isSmallScreen, Modifier.testTag("BootstrapSection")) {
                         BootstrapSection(
                             bootstrapUrl = viewModel.bootstrapUrl.collectAsState().value,
                             onUrlChanged = { viewModel.setBootstrapUrl(it) },
+                            onRunBootstrap = { viewModel.runBootstrap() },
+                            bootstrapRunning = viewModel.bootstrapRunning.collectAsState().value,
+                            bootstrapResult = viewModel.bootstrapResult.collectAsState().value,
                             textColor = textColor,
                             accentColor = accentColor,
                             secondaryText = secondaryText,
@@ -315,7 +443,7 @@ fun SettingsScreen(
 
                 item {
                     SectionHeader(stringResource(R.string.clear_app_data), sectionTitleColor)
-                    SettingsCard(cardBg, isSmallScreen) {
+                    SettingsCard(cardBackground, isSmallScreen) {
                         ClearAppDataSection(textColor = textColor)
                     }
                 }
@@ -330,16 +458,17 @@ fun SettingsScreen(
 
 @Composable
 private fun SettingsCard(
-    cardBg: Color,
+    cardBackground: Color,
     isSmallScreen: Boolean = false,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Column(
         modifier =
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(if (isSmallScreen) 8.dp else 12.dp))
-            .background(cardBg)
+            .background(cardBackground)
             .padding(if (isSmallScreen) 12.dp else 16.dp),
     ) {
         content()
@@ -352,7 +481,7 @@ private fun SectionHeader(
     textColor: Color,
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmallScreen = screenWidthDp < 400
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     Text(
         text = title,
         style = if (isSmallScreen) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
@@ -372,7 +501,7 @@ private fun FontSizeSlider(
     accentColor: Color,
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmallScreen = screenWidthDp < 400
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     val labelStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
     val valueStyle = if (isSmallScreen) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium
     Column(modifier = modifier) {
@@ -399,8 +528,8 @@ private fun FontSizeSlider(
         Slider(
             value = value,
             onValueChange = onValueChange,
-            valueRange = 8f..48f,
-            steps = 23,
+            valueRange = FONT_SIZE_RANGE_MIN..FONT_SIZE_RANGE_MAX,
+            steps = FONT_SIZE_RANGE_STEPS,
             colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
         )
     }
@@ -411,26 +540,18 @@ private fun SystemFontSelector(
     selectedFamily: String,
     onFamilySelected: (String) -> Unit,
     textColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
     accentColor: Color,
     fonts: List<String> = emptyList(),
+    defaultFontName: String = "",
+    fontInfo: String = "",
     onPickFontFile: (() -> Unit)? = null,
 ) {
     val systemFonts = remember(fonts) { fonts.distinct().sorted() }
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmallScreen = screenWidthDp < 400
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     val labelStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
-    val systemDefaultLabel = stringResource(R.string.system_default)
-    val defaultFontName =
-        remember(systemDefaultLabel) {
-            val tf = android.graphics.Typeface.DEFAULT
-            try {
-                val method = tf.javaClass.getMethod("getFamilyName")
-                (method.invoke(tf) as? String) ?: systemDefaultLabel
-            } catch (_: Exception) {
-                systemDefaultLabel
-            }
-        }
+    val displayName = if (defaultFontName.isEmpty()) "Noto Sans Mono" else defaultFontName
 
     Spacer(modifier = Modifier.height(4.dp))
     Text(stringResource(R.string.font_family), style = labelStyle, color = textColor, maxLines = 1)
@@ -441,21 +562,17 @@ private fun SystemFontSelector(
         Row(
             modifier =
             Modifier
+                .testTag("FontFamilySelector")
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(cardBg)
+                .background(cardBackground)
                 .clickable {
                     showFontPicker = true
                 }.padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text =
-                if (selectedFamily.isEmpty()) {
-                    defaultFontName
-                } else {
-                    selectedFamily
-                },
+                text = if (selectedFamily.isEmpty()) displayName else selectedFamily,
                 color = textColor,
                 modifier = Modifier.weight(1f),
                 maxLines = 1,
@@ -474,11 +591,34 @@ private fun SystemFontSelector(
                 },
                 onDismiss = { showFontPicker = false },
                 textColor = textColor,
-                cardBg = cardBg,
+                cardBackground = cardBackground,
                 accentColor = accentColor,
                 onPickFontFile = { onPickFontFile?.invoke() },
             )
         }
+    }
+
+    val cjkFallback =
+        fontInfo
+            .lines()
+            .find { it.startsWith("CJK fallback:") }
+            ?.substringAfter("CJK fallback:")
+            ?.trim()
+            ?: ""
+    if (cjkFallback.isNotEmpty() && cjkFallback != "none") {
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "CJK: $cjkFallback",
+            style = MaterialTheme.typography.bodySmall,
+            color = textColor.copy(alpha = 0.6f),
+        )
+    } else if (cjkFallback == "none" || fontInfo.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.cjk_fallback_missing_warning),
+            style = MaterialTheme.typography.bodySmall,
+            color = WARNING_ORANGE,
+        )
     }
 }
 
@@ -489,7 +629,7 @@ private fun FontPickerDialog(
     onFamilySelected: (String) -> Unit,
     onDismiss: () -> Unit,
     textColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
     accentColor: Color,
     onPickFontFile: (() -> Unit)? = null,
 ) {
@@ -498,25 +638,6 @@ private fun FontPickerDialog(
         title = { Text(stringResource(R.string.select_font_family), color = textColor) },
         text = {
             LazyColumn {
-                item {
-                    Row(
-                        modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable {
-                                onFamilySelected("")
-                                onDismiss()
-                            }.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.system_default),
-                            color = if (selectedFamily.isEmpty()) accentColor else textColor,
-                            fontWeight = if (selectedFamily.isEmpty()) FontWeight.Bold else FontWeight.Normal,
-                        )
-                    }
-                }
                 item {
                     Row(
                         modifier =
@@ -558,7 +679,7 @@ private fun FontPickerDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = textColor) } },
-        containerColor = cardBg,
+        containerColor = cardBackground,
     )
 }
 
@@ -567,11 +688,11 @@ internal fun AppThemeSelector(
     selectedMode: String,
     onModeSelected: (String) -> Unit,
     textColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
     accentColor: Color,
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmall = screenWidthDp < 400
+    val isSmall = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     Column(modifier = Modifier.testTag("AppThemeSelector")) {
         val buttons =
             listOf(
@@ -590,7 +711,7 @@ internal fun AppThemeSelector(
                             .testTag("AppTheme_$mode")
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) accentColor else cardBg)
+                            .background(if (isSelected) accentColor else cardBackground)
                             .clickable { onModeSelected(mode) }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center,
@@ -612,7 +733,7 @@ internal fun AppThemeSelector(
                             .testTag("AppTheme_$mode")
                             .weight(1f)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) accentColor else cardBg)
+                            .background(if (isSelected) accentColor else cardBackground)
                             .clickable { onModeSelected(mode) }
                             .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center,
@@ -630,7 +751,7 @@ internal fun TerminalThemeModeSelector(
     selectedMode: String,
     onModeSelected: (String) -> Unit,
     textColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
     accentColor: Color,
 ) {
     val isFollowSystem = selectedMode != "fixed"
@@ -655,7 +776,7 @@ internal fun TerminalThemeModeSelector(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = accentColor,
                 uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBg,
+                uncheckedTrackColor = cardBackground,
             ),
         )
     }
@@ -669,7 +790,7 @@ private fun ShellInput(
     accentColor: Color,
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmallScreen = screenWidthDp < 400
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     val labelStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
     Column {
         Text(stringResource(R.string.shell), style = labelStyle, color = textColor)
@@ -706,7 +827,7 @@ private fun ScrollbackSlider(
     accentColor: Color,
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmallScreen = screenWidthDp < 400
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     val labelStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
     val valueStyle = if (isSmallScreen) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium
     Column {
@@ -740,8 +861,8 @@ private fun ScrollbackSlider(
         Slider(
             value = value,
             onValueChange = onValueChange,
-            valueRange = 1000f..100000f,
-            steps = 98,
+            valueRange = SCROLLBACK_RANGE_MIN..SCROLLBACK_RANGE_MAX,
+            steps = SCROLLBACK_RANGE_STEPS,
             colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
         )
     }
@@ -754,10 +875,11 @@ internal fun ThemeSelector(
     themes: List<TerminalTheme>,
     onThemeSelected: (String) -> Unit,
     textColor: Color,
-    cardBg: Color,
+    secondaryText: Color,
+    cardBackground: Color,
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val isSmallScreen = screenWidthDp < 400
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     val labelStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
     Column(modifier = Modifier.testTag("ThemeSelector")) {
         if (label.isNotEmpty()) {
@@ -768,9 +890,15 @@ internal fun ThemeSelector(
             items(themes) { theme ->
                 ThemePreview(
                     theme = theme,
-                    isSelected = theme.name == selectedTheme,
+                    isSelected =
+                    theme.name == selectedTheme ||
+                        io.torvox.ui.theme.BuiltInThemes
+                            .byName(selectedTheme)
+                            .name == theme.name,
                     onClick = { onThemeSelected(theme.name) },
                     isSmallScreen = isSmallScreen,
+                    textColor = textColor,
+                    secondaryText = secondaryText,
                 )
             }
         }
@@ -783,6 +911,8 @@ private fun ThemePreview(
     isSelected: Boolean,
     onClick: () -> Unit,
     isSmallScreen: Boolean = false,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+    secondaryText: Color = MaterialTheme.colorScheme.onSurfaceVariant,
 ) {
     val previewWidth = if (isSmallScreen) 72.dp else 88.dp
     val dotSize = if (isSmallScreen) 6.dp else 8.dp
@@ -813,17 +943,21 @@ private fun ThemePreview(
         Text(
             text = theme.name,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = if (isSelected) textColor else textColor.copy(alpha = 0.7f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
+@Suppress("LongParameterList")
 @Composable
 private fun BootstrapSection(
     bootstrapUrl: String,
     onUrlChanged: (String) -> Unit,
+    onRunBootstrap: () -> Unit,
+    bootstrapRunning: Boolean,
+    bootstrapResult: String?,
     textColor: Color,
     accentColor: Color,
     secondaryText: Color,
@@ -863,18 +997,8 @@ private fun BootstrapSection(
     )
     Spacer(modifier = Modifier.height(4.dp))
 
-    val arch =
-        when (
-            android.os.Build.SUPPORTED_ABIS
-                .firstOrNull()
-        ) {
-            "arm64-v8a" -> "aarch64"
-            "armeabi-v7a" -> "arm"
-            "x86_64" -> "x86_64"
-            "x86" -> "i686"
-            else -> "aarch64"
-        }
-    val termuxUrl = "https://github.com/termux/termux-packages/releases/download/bootstrap/bootstrap-$arch.tar.xz"
+    val arch = io.torvox.detectArchFromAbi()
+    val termuxUrl = "https://github.com/termux/termux-packages/releases/download/bootstrap-2026.06.21-r1%2Bapt.android-7/bootstrap-$arch.zip"
 
     val presets =
         listOf(
@@ -892,6 +1016,51 @@ private fun BootstrapSection(
                 url = preset.second
                 onUrlChanged(preset.second)
             },
+        )
+    }
+
+    Spacer(modifier = Modifier.height(8.dp))
+    BootstrapInstallButton(onRunBootstrap, bootstrapRunning, bootstrapResult, accentColor, textColor)
+}
+
+@Composable
+private fun BootstrapInstallButton(
+    onRunBootstrap: () -> Unit,
+    bootstrapRunning: Boolean,
+    bootstrapResult: String?,
+    accentColor: Color,
+    textColor: Color,
+) {
+    Button(
+        onClick = onRunBootstrap,
+        enabled = !bootstrapRunning,
+        modifier = Modifier.fillMaxWidth(),
+        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+    ) {
+        if (bootstrapRunning) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = textColor,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text =
+            if (bootstrapRunning) {
+                stringResource(R.string.bootstrap_installing)
+            } else {
+                stringResource(R.string.bootstrap_install)
+            },
+            color = textColor,
+        )
+    }
+    if (!bootstrapResult.isNullOrEmpty()) {
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = bootstrapResult,
+            style = MaterialTheme.typography.bodySmall,
+            color = textColor.copy(alpha = 0.7f),
         )
     }
 }
@@ -938,22 +1107,52 @@ private fun BootstrapPresetItem(
 internal fun fallbackSystemFonts(): List<String> {
     val fonts = mutableListOf<String>()
     val seen = mutableSetOf<String>()
-    val dir = java.io.File("/system/fonts/")
-    if (dir.isDirectory) {
-        dir
-            .listFiles()
-            ?.filter { it.name.endsWith(".ttf", true) || it.name.endsWith(".otf", true) }
-            ?.forEach { file ->
-                val name =
-                    file.nameWithoutExtension
-                        .replace('_', ' ')
-                        .replace('-', ' ')
-                        .trim()
-                if (name.isNotEmpty() && seen.add(name.lowercase())) {
-                    fonts.add(name)
+
+    // Scan well-known system font directories
+    val fontDirectories =
+        listOf(
+            "/system/fonts/",
+            "/product/fonts/",
+            "/vendor/fonts/",
+        )
+    for (dirPath in fontDirectories) {
+        val directory = java.io.File(dirPath)
+        if (directory.isDirectory) {
+            directory
+                .listFiles()
+                ?.filter { it.name.endsWith(".ttf", true) || it.name.endsWith(".otf", true) }
+                ?.forEach { file ->
+                    val name =
+                        file.nameWithoutExtension
+                            .replace('_', ' ')
+                            .replace('-', ' ')
+                            .trim()
+                    if (name.isNotEmpty() && seen.add(name.lowercase())) {
+                        fonts.add(name)
+                    }
                 }
-            }
+        }
     }
+
+    // If no fonts found via directory scan, use Typeface to check known system families
+    if (fonts.isEmpty()) {
+        val knownFamilies =
+            listOf(
+                "sans-serif",
+                "serif",
+                "monospace",
+                "sans-serif-light",
+                "sans-serif-medium",
+                "sans-serif-condensed",
+            )
+        for (family in knownFamilies) {
+            val typeface = android.graphics.Typeface.create(family, android.graphics.Typeface.NORMAL)
+            if (typeface != null && seen.add(family.lowercase())) {
+                fonts.add(family)
+            }
+        }
+    }
+
     for (
     known in
     listOf(
@@ -982,76 +1181,12 @@ internal fun fallbackSystemFonts(): List<String> {
 }
 
 @Composable
-private fun NerdFontToggle(
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit,
-    textColor: Color,
-    accentColor: Color,
-    cardBg: Color,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.use_nerd_font_glyphs),
-            style = MaterialTheme.typography.bodyLarge,
-            color = textColor,
-        )
-        Switch(
-            checked = enabled,
-            onCheckedChange = onToggle,
-            colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = accentColor,
-                uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBg,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun SemanticSelectionToggle(
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit,
-    textColor: Color,
-    accentColor: Color,
-    cardBg: Color,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = stringResource(R.string.semantic_selection),
-            style = MaterialTheme.typography.bodyLarge,
-            color = textColor,
-        )
-        Switch(
-            checked = enabled,
-            onCheckedChange = onToggle,
-            colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = accentColor,
-                uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBg,
-            ),
-        )
-    }
-}
-
-@Composable
 private fun SessionRestoreToggle(
     enabled: Boolean,
     onToggle: (Boolean) -> Unit,
     textColor: Color,
     accentColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1065,39 +1200,46 @@ private fun SessionRestoreToggle(
                 color = textColor,
             )
             Text(
-                text = stringResource(R.string.session_restore_desc),
+                text =
+                if (enabled) {
+                    stringResource(R.string.session_restore_desc)
+                } else {
+                    stringResource(R.string.session_restore_off_desc)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = textColor.copy(alpha = 0.6f),
             )
         }
-        Switch(
-            checked = enabled,
-            onCheckedChange = onToggle,
-            colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = accentColor,
-                uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBg,
-            ),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (enabled) stringResource(R.string.on) else stringResource(R.string.off),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (enabled) accentColor else textColor.copy(alpha = 0.5f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = accentColor,
+                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                    uncheckedTrackColor = cardBackground,
+                ),
+            )
+        }
     }
 }
 
 @Composable
 private fun KeyboardModeSelector(
-    selectedMode: String,
-    onModeSelected: (String) -> Unit,
+    selectedMode: KeyboardMode,
+    onModeSelected: (KeyboardMode) -> Unit,
     textColor: Color,
     accentColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
 ) {
-    val modes =
-        listOf(
-            Triple("secure", stringResource(R.string.keyboard_secure), stringResource(R.string.keyboard_secure_desc)),
-            Triple("standard", stringResource(R.string.keyboard_standard), stringResource(R.string.keyboard_standard_desc)),
-            Triple("raw", stringResource(R.string.keyboard_raw), stringResource(R.string.keyboard_raw_desc)),
-        )
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = stringResource(R.string.keyboard_mode),
@@ -1105,38 +1247,75 @@ private fun KeyboardModeSelector(
             color = textColor,
         )
         Spacer(modifier = Modifier.height(4.dp))
-        modes.forEach { (key, label, desc) ->
-            Row(
-                modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { onModeSelected(key) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                RadioButton(
-                    selected = selectedMode == key,
-                    onClick = { onModeSelected(key) },
-                    colors =
-                    RadioButtonDefaults.colors(
-                        selectedColor = accentColor,
-                        unselectedColor = textColor.copy(alpha = 0.6f),
-                    ),
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = textColor,
-                    )
-                    Text(
-                        text = desc,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = textColor.copy(alpha = 0.6f),
-                    )
-                }
-            }
+        KeyboardModeSelectorItem(
+            KeyboardMode.Secure,
+            stringResource(R.string.keyboard_secure),
+            stringResource(R.string.keyboard_secure_desc),
+            selectedMode,
+            onModeSelected,
+            textColor,
+            accentColor,
+        )
+        KeyboardModeSelectorItem(
+            KeyboardMode.Standard,
+            stringResource(R.string.keyboard_standard),
+            stringResource(R.string.keyboard_standard_desc),
+            selectedMode,
+            onModeSelected,
+            textColor,
+            accentColor,
+        )
+        KeyboardModeSelectorItem(
+            KeyboardMode.Raw,
+            stringResource(R.string.keyboard_raw),
+            stringResource(R.string.keyboard_raw_desc),
+            selectedMode,
+            onModeSelected,
+            textColor,
+            accentColor,
+        )
+    }
+}
+
+@Composable
+private fun KeyboardModeSelectorItem(
+    mode: KeyboardMode,
+    label: String,
+    desc: String,
+    selectedMode: KeyboardMode,
+    onModeSelected: (KeyboardMode) -> Unit,
+    textColor: Color,
+    accentColor: Color,
+) {
+    Row(
+        modifier =
+        Modifier
+            .fillMaxWidth()
+            .clickable { onModeSelected(mode) }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selectedMode == mode,
+            onClick = { onModeSelected(mode) },
+            colors =
+            RadioButtonDefaults.colors(
+                selectedColor = accentColor,
+                unselectedColor = textColor.copy(alpha = 0.6f),
+            ),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = textColor,
+            )
+            Text(
+                text = desc,
+                style = MaterialTheme.typography.bodySmall,
+                color = textColor.copy(alpha = 0.6f),
+            )
         }
     }
 }
@@ -1147,7 +1326,7 @@ private fun UsbSerialToggle(
     onToggle: (Boolean) -> Unit,
     textColor: Color,
     accentColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1174,7 +1353,7 @@ private fun UsbSerialToggle(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = accentColor,
                 uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBg,
+                uncheckedTrackColor = cardBackground,
             ),
         )
     }
@@ -1186,7 +1365,7 @@ private fun McpServerToggle(
     onToggle: (Boolean) -> Unit,
     textColor: Color,
     accentColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1213,7 +1392,7 @@ private fun McpServerToggle(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = accentColor,
                 uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBg,
+                uncheckedTrackColor = cardBackground,
             ),
         )
     }
@@ -1225,7 +1404,7 @@ private fun VolumeKeyMapToggle(
     onToggle: (Boolean) -> Unit,
     textColor: Color,
     accentColor: Color,
-    cardBg: Color,
+    cardBackground: Color,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -1252,7 +1431,7 @@ private fun VolumeKeyMapToggle(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = accentColor,
                 uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBg,
+                uncheckedTrackColor = cardBackground,
             ),
         )
     }
@@ -1321,6 +1500,217 @@ private fun ClearAppDataSection(textColor: Color) {
                 text = stringResource(R.string.clear_app_data_action),
                 color = Color.Red,
             )
+        }
+    }
+}
+
+@Composable
+private fun FontInfoSection(
+    fontInfo: String,
+    textColor: Color,
+    secondaryText: Color,
+) {
+    if (fontInfo.isEmpty()) return
+
+    val lines = fontInfo.split("\n")
+    Column(modifier = Modifier.testTag("FontInfoSection")) {
+        for (line in lines) {
+            when {
+                line.startsWith("Active:") -> {
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = textColor,
+                    )
+                }
+
+                line.startsWith("CJK fallback:") -> {
+                    val hasCjk = line.substringAfter("CJK fallback:").trim().isNotEmpty()
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (hasCjk) secondaryText else WARNING_ORANGE,
+                    )
+                    if (!hasCjk) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.cjk_fallback_missing_warning),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = WARNING_ORANGE,
+                        )
+                    }
+                }
+
+                line.startsWith("Cell:") -> {
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = secondaryText,
+                    )
+                }
+
+                line.startsWith("Font size:") -> {
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = secondaryText,
+                    )
+                }
+
+                else -> {
+                    Text(
+                        text = line,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = secondaryText,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private const val CURSOR_SPEED_RANGE_MIN = 100f
+private const val CURSOR_SPEED_RANGE_MAX = 1000f
+private const val CURSOR_SPEED_RANGE_STEPS = 17
+
+@Composable
+private fun CursorBlinkToggle(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+    textColor: Color,
+    accentColor: Color,
+    cardBackground: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.cursor_blink),
+                style = MaterialTheme.typography.bodyLarge,
+                color = textColor,
+            )
+            Text(
+                text = stringResource(R.string.cursor_blink_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = textColor.copy(alpha = 0.6f),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (enabled) stringResource(R.string.on) else stringResource(R.string.off),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (enabled) accentColor else textColor.copy(alpha = 0.5f),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = onToggle,
+                colors =
+                SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = accentColor,
+                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                    uncheckedTrackColor = cardBackground,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun CursorSpeedSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    textColor: Color,
+    secondaryText: Color,
+    accentColor: Color,
+) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
+    val labelStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
+    val valueStyle = if (isSmallScreen) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                stringResource(R.string.cursor_speed),
+                style = labelStyle,
+                color = textColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "${value.toInt()}ms",
+                style = valueStyle,
+                color = secondaryText,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = CURSOR_SPEED_RANGE_MIN..CURSOR_SPEED_RANGE_MAX,
+            steps = CURSOR_SPEED_RANGE_STEPS,
+            colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+        )
+    }
+}
+
+@Composable
+private fun CursorStyleSelector(
+    selectedStyle: String,
+    onStyleSelected: (String) -> Unit,
+    textColor: Color,
+    accentColor: Color,
+    cardBackground: Color,
+) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
+    val labelStyle = if (isSmallScreen) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
+    val styles =
+        listOf(
+            "block" to "Block",
+            "bar" to "Bar",
+            "underline" to "Underline",
+        )
+    Column(modifier = Modifier.testTag("CursorStyleSelector")) {
+        Text(
+            text = stringResource(R.string.cursor_style_label),
+            style = labelStyle,
+            color = textColor,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            styles.forEach { (key, label) ->
+                val isSelected = selectedStyle == key
+                Box(
+                    modifier =
+                    Modifier
+                        .testTag("CursorStyle_$key")
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) accentColor else cardBackground)
+                        .clickable { onStyleSelected(key) }
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = label,
+                        color = if (isSelected) Color.White else textColor,
+                        style = if (isSmallScreen) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
         }
     }
 }

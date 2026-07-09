@@ -16,7 +16,7 @@ use torvox_mcp::{SessionInfo, SessionStore, serve_unix};
 )]
 struct Cli {
     /// Unix domain socket path to listen on
-    #[arg(short, long)]
+    #[arg(long)]
     socket: PathBuf,
 
     /// Allow send_input tool to write to terminal PTY (DANGEROUS)
@@ -39,12 +39,14 @@ impl SessionStore for NoOpStore {
 }
 
 fn main() -> std::process::ExitCode {
-    let cli = Cli::parse();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+
+    let command_line = Cli::parse();
 
     let store: Arc<dyn SessionStore> = Arc::new(NoOpStore);
 
-    if let Err(error) = serve_unix(cli.socket, store, cli.mcp_allow_write) {
-        eprintln!("mcp: serve failed: {error}");
+    if let Err(error) = serve_unix(&command_line.socket, store, command_line.mcp_allow_write) {
+        log::error!("mcp: serve failed: {error}");
         return std::process::ExitCode::from(1);
     }
     std::process::ExitCode::SUCCESS

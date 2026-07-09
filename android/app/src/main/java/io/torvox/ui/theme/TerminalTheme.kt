@@ -12,6 +12,7 @@ data class TerminalTheme(
     val background: Color,
     val foreground: Color,
     val cursor: Color,
+    val selectionBg: Color = Color(0xFF45475A),
     val ansi: List<Color>,
 ) {
     init {
@@ -26,6 +27,7 @@ object BuiltInThemes {
             background = Color(0xFF212121),
             foreground = Color(0xFFF8F8F2),
             cursor = Color(0xFFECEFF4),
+            selectionBg = Color(0xFF44475A),
             ansi =
             listOf(
                 Color(0xFF21222C),
@@ -53,6 +55,7 @@ object BuiltInThemes {
             background = Color(0xFF1E1E2E),
             foreground = Color(0xFFCDD6F4),
             cursor = Color(0xFFF5E0DC),
+            selectionBg = Color(0xFF45475A),
             ansi =
             listOf(
                 Color(0xFF45475A),
@@ -80,6 +83,7 @@ object BuiltInThemes {
             background = Color(0xFFEFF1F5),
             foreground = Color(0xFF4C4F69),
             cursor = Color(0xFFDC8A78),
+            selectionBg = Color(0xFFCCD0DA),
             ansi =
             listOf(
                 Color(0xFF5C5F77),
@@ -107,6 +111,7 @@ object BuiltInThemes {
             background = Color(0xFF2E3440),
             foreground = Color(0xFFD8DEE9),
             cursor = Color(0xFFD8DEE9),
+            selectionBg = Color(0xFF434C5E),
             ansi =
             listOf(
                 Color(0xFF3B4252),
@@ -134,6 +139,7 @@ object BuiltInThemes {
             background = Color(0xFF1A1B26),
             foreground = Color(0xFFA9B1D6),
             cursor = Color(0xFFA9B1D6),
+            selectionBg = Color(0xFF2F3B54),
             ansi =
             listOf(
                 Color(0xFF32344A),
@@ -161,6 +167,7 @@ object BuiltInThemes {
             background = Color(0xFF191724),
             foreground = Color(0xFFE0DEF4),
             cursor = Color(0xFF524F67),
+            selectionBg = Color(0xFF2A273F),
             ansi =
             listOf(
                 Color(0xFF26233A),
@@ -188,6 +195,7 @@ object BuiltInThemes {
             background = Color(0xFF282828),
             foreground = Color(0xFFEBDBB2),
             cursor = Color(0xFFEBDBB2),
+            selectionBg = Color(0xFF3C3836),
             ansi =
             listOf(
                 Color(0xFF282828),
@@ -215,6 +223,7 @@ object BuiltInThemes {
             background = Color(0xFFFBF1C7),
             foreground = Color(0xFF3C3836),
             cursor = Color(0xFF3C3836),
+            selectionBg = Color(0xFFEBDBB2),
             ansi =
             listOf(
                 Color(0xFFFBF1C7),
@@ -242,6 +251,7 @@ object BuiltInThemes {
             background = Color(0xFF2D353B),
             foreground = Color(0xFFD3C6AA),
             cursor = Color(0xFFD3C6AA),
+            selectionBg = Color(0xFF3D484D),
             ansi =
             listOf(
                 Color(0xFF475258),
@@ -269,6 +279,7 @@ object BuiltInThemes {
             background = Color(0xFF282C34),
             foreground = Color(0xFFABB2BF),
             cursor = Color(0xFFABB2BF),
+            selectionBg = Color(0xFF3E4451),
             ansi =
             listOf(
                 Color(0xFF1E2127),
@@ -296,6 +307,7 @@ object BuiltInThemes {
             background = Color(0xFFF8F8F8),
             foreground = Color(0xFF2A2B33),
             cursor = Color(0xFF2A2B33),
+            selectionBg = Color(0xFFE0E0E0),
             ansi =
             listOf(
                 Color(0xFF000000),
@@ -323,6 +335,7 @@ object BuiltInThemes {
             background = Color(0xFF272822),
             foreground = Color(0xFFF8F8F2),
             cursor = Color(0xFFF8F8F2),
+            selectionBg = Color(0xFF3E3D32),
             ansi =
             listOf(
                 Color(0xFF272822),
@@ -350,6 +363,7 @@ object BuiltInThemes {
             background = Color(0xFF0A0E14),
             foreground = Color(0xFFB3B1AD),
             cursor = Color(0xFFB3B1AD),
+            selectionBg = Color(0xFF1A1F29),
             ansi =
             listOf(
                 Color(0xFF01060E),
@@ -377,6 +391,7 @@ object BuiltInThemes {
             background = Color(0xFFFCFCFC),
             foreground = Color(0xFF5C6166),
             cursor = Color(0xFF5C6166),
+            selectionBg = Color(0xFFE8E8E8),
             ansi =
             listOf(
                 Color(0xFF010101),
@@ -404,6 +419,7 @@ object BuiltInThemes {
             background = Color(0xFF1F1F28),
             foreground = Color(0xFFDCD7BA),
             cursor = Color(0xFFDCD7BA),
+            selectionBg = Color(0xFF2D2D3F),
             ansi =
             listOf(
                 Color(0xFF090618),
@@ -431,6 +447,7 @@ object BuiltInThemes {
             background = Color(0xFF011627),
             foreground = Color(0xFFD6DEEB),
             cursor = Color(0xFFD6DEEB),
+            selectionBg = Color(0xFF0B2D4A),
             ansi =
             listOf(
                 Color(0xFF011627),
@@ -499,6 +516,7 @@ fun dynamicTerminalTheme(isDark: Boolean): TerminalTheme? {
         background = scheme.background,
         foreground = scheme.onBackground,
         cursor = scheme.primary,
+        selectionBg = scheme.surfaceVariant,
         ansi =
         listOf(
             scheme.errorContainer,

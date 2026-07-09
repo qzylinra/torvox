@@ -2,6 +2,7 @@ package io.torvox.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -59,11 +60,11 @@ sealed class ToolbarItem {
 class ToolbarPreferences(
     context: Context,
 ) {
-    private val prefs: SharedPreferences =
+    private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("toolbar_prefs", Context.MODE_PRIVATE)
 
     fun getLayout(): List<ToolbarItem> {
-        val json = prefs.getString("layout", null) ?: return defaultLayout()
+        val json = sharedPreferences.getString("layout", null) ?: return defaultLayout()
         return try {
             val arr = JSONArray(json)
             (0 until arr.length()).map { i ->
@@ -80,7 +81,8 @@ class ToolbarPreferences(
                     )
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.w("ToolbarPreferences", "loadLayout failed", e)
             defaultLayout()
         }
     }
@@ -102,7 +104,7 @@ class ToolbarPreferences(
             }
             arr.put(obj)
         }
-        prefs.edit().putString("layout", arr.toString()).apply()
+        sharedPreferences.edit().putString("layout", arr.toString()).apply()
     }
 
     private fun defaultLayout(): List<ToolbarItem> = listOf(

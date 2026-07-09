@@ -1,15 +1,12 @@
-// @rkyv snapshot serialization, IMPL_CORE_005, impl, [REQ_CORE_005]
-// @need-ids: REQ_CORE_005, REQ_CORE_006
+// @REQ_CORE_005
+//! Rkyv-serializable snapshot for the Android bridge.
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::grid::Grid;
 use crate::line::Line;
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionSnapshot {
     pub visible_lines: Vec<Line>,
@@ -23,15 +20,11 @@ impl SessionSnapshot {
     pub fn from_grid(grid: &Grid) -> Self {
         let mut visible_lines = Vec::with_capacity(grid.rows() as usize);
         for r in 0..grid.rows() {
-            visible_lines.push(
-                grid.get(r)
-                    .cloned()
-                    .unwrap_or_else(|| Line::new(grid.cols())),
-            );
+            visible_lines.push(grid.get(r).cloned().unwrap_or_else(|| Line::new(grid.cols())));
         }
-        let scrollback_len = grid.scrollback_len();
-        let mut scrollback_lines = Vec::with_capacity(scrollback_len);
-        for i in 0..scrollback_len {
+        let scrollback_length = grid.scrollback_length();
+        let mut scrollback_lines = Vec::with_capacity(scrollback_length);
+        for i in 0..scrollback_length {
             scrollback_lines.push(
                 grid.scrollback_line(i)
                     .cloned()
@@ -91,7 +84,7 @@ mod tests {
         let mut restored = Grid::new(24, 80);
         snapshot.apply_to_scrollback(&mut restored, 1000);
 
-        assert!(restored.scrollback_len() > 0);
+        assert!(restored.scrollback_length() > 0);
         let first = restored.scrollback_line(0).unwrap().get(0).unwrap();
         assert_eq!(first.char, 'Z');
     }
@@ -107,11 +100,9 @@ mod tests {
 
         let snapshot = SessionSnapshot::from_grid(&grid);
         let bytes = rkyv::to_bytes::<Error>(&snapshot).expect("rkyv serialize failed");
-        let archived = unsafe {
-            rkyv::access_unchecked::<<SessionSnapshot as rkyv::Archive>::Archived>(&bytes)
-        };
-        let restored =
-            rkyv::deserialize::<SessionSnapshot, Error>(archived).expect("rkyv deserialize failed");
+        let archived =
+            rkyv::access::<<SessionSnapshot as rkyv::Archive>::Archived, Error>(&bytes).expect("rkyv access failed");
+        let restored = rkyv::deserialize::<SessionSnapshot, Error>(archived).expect("rkyv deserialize failed");
         assert_eq!(restored, snapshot);
     }
 
@@ -168,12 +159,13 @@ mod tests {
         grid.scroll_up(0, 2, 3); // A goes into scrollback
         grid.get_mut(0).unwrap().get_mut(0).unwrap().char = 'B';
         grid.scroll_up(0, 2, 3); // B goes into scrollback
-        // Now the grid top has C (from previous line) but C isn't there. Rethink.
+        // The grid top is now empty (newly allocated row); the two prior rows are
+        // in scrollback as 'A' (oldest) and 'B' (newest).
         let snap = SessionSnapshot::from_grid(&grid);
         let mut restored = Grid::new(2, 3);
         snap.apply_to_scrollback(&mut restored, 1000);
         // 2 scrollback lines + 2 visible lines = 4 lines restored
-        assert_eq!(restored.scrollback_len(), 4);
+        assert_eq!(restored.scrollback_length(), 4);
     }
 
     #[test]
@@ -187,7 +179,7 @@ mod tests {
         let mut restored = Grid::with_scrollback(2, 3, 5);
         snap.apply_to_scrollback(&mut restored, 3);
         // Scrollback at most 3 lines
-        assert!(restored.scrollback_len() <= 3);
+        assert!(restored.scrollback_length() <= 3);
     }
 
     #[test]
@@ -197,7 +189,7 @@ mod tests {
         let snap = SessionSnapshot::from_grid(&grid);
         let mut restored = Grid::new(2, 3);
         snap.apply_to_scrollback(&mut restored, 0);
-        assert_eq!(restored.scrollback_len(), 0);
+        assert_eq!(restored.scrollback_length(), 0);
     }
 
     #[test]
@@ -213,7 +205,7 @@ mod tests {
         // Should keep the 3 most recent lines
         // Snapshot has 3 scrollback lines + 2 visible lines = 5 total lines
         // Applied with max=3, keeps the last 3 lines
-        assert_eq!(restored.scrollback_len(), 3);
+        assert_eq!(restored.scrollback_length(), 3);
     }
 
     #[test]
@@ -248,10 +240,7 @@ mod tests {
         );
 
         let snap3 = SessionSnapshot::from_grid(&grid1);
-        assert_eq!(
-            snap1, snap3,
-            "same grid state should produce equal snapshots"
-        );
+        assert_eq!(snap1, snap3, "same grid state should produce equal snapshots");
     }
 
     #[test]

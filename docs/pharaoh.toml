@@ -22,5 +22,10 @@ require_mece_on_release = false
 # Source 3 (no existing links): use strict forward direction
 required_links = ["spec -> req", "impl -> spec", "test -> impl"]
 
+[pharaoh.structured_fields]
+rationale = "required"
+acceptance = "required"
+exception_ids = "optional"
+
 [pharaoh.codelinks]
 enabled = true

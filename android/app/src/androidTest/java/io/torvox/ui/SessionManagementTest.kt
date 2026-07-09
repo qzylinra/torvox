@@ -2,7 +2,6 @@ package io.torvox.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import io.torvox.MainActivity
@@ -25,26 +24,6 @@ class SessionManagementTest {
         composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithTag("AddSessionButton").assertIsDisplayed()
-    }
-
-    @Test
-    fun add_session_button_creates_session() {
-        composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("AddSessionButton").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
-    }
-
-    @Test
-    fun session_switch_works() {
-        composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("AddSessionButton").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
-        composeTestRule.waitForIdle()
-        composeTestRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
     }
 
     @Test

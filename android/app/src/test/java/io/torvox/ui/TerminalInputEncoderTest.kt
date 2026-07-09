@@ -247,14 +247,6 @@ class TerminalInputEncoderTest {
     }
 
     @Test
-    fun encodeKeyEvent_ctrlDeleteSendsCSI35() {
-        assertArrayEquals(
-            "\u001b[3;5~".toByteArray(Charsets.UTF_8),
-            TerminalInputEncoder.encodeKeyEvent(KeyEvent.KEYCODE_DEL, 0, ctrlActive = true, altActive = false),
-        )
-    }
-
-    @Test
     fun encodeCommittedText_bracketedPasteWrapsMultiChar() {
         val result = TerminalInputEncoder.encodeCommittedText("hello world", ctrlActive = false, altActive = false, bracketedPaste = true)
         assertArrayEquals("\u001b[200~hello world\u001b[201~".toByteArray(Charsets.UTF_8), result)

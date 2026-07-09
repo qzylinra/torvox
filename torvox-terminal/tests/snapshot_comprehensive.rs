@@ -30,7 +30,7 @@ fn snapshot_roundtrip_cursor_position() {
 #[test]
 fn snapshot_roundtrip_newline_moves_cursor() {
     let mut t = make_terminal(2, 20);
-    t.vt_write(b"A\nB");
+    t.pty_write(b"A\nB");
     t.flush();
     let s = t.take_snapshot();
     assert_eq!(s.cells[0].codepoint, 'A' as u32);
@@ -60,21 +60,12 @@ fn snapshot_roundtrip_sgr_reset() {
 #[test]
 fn snapshot_roundtrip_scroll() {
     let mut t = make_terminal(3, 10);
-    t.vt_write(b"A\nB\nC\nD");
+    t.pty_write(b"A\nB\nC\nD");
     t.flush();
     let s = t.take_snapshot();
-    assert_eq!(
-        s.cells[0].codepoint, 'B' as u32,
-        "after scroll, row 0 should be B"
-    );
-    assert_eq!(
-        s.cells[10].codepoint, 'C' as u32,
-        "after scroll, row 1 should be C"
-    );
-    assert_eq!(
-        s.cells[20].codepoint, 'D' as u32,
-        "after scroll, row 2 should be D"
-    );
+    assert_eq!(s.cells[0].codepoint, 'B' as u32, "after scroll, row 0 should be B");
+    assert_eq!(s.cells[10].codepoint, 'C' as u32, "after scroll, row 1 should be C");
+    assert_eq!(s.cells[20].codepoint, 'D' as u32, "after scroll, row 2 should be D");
 }
 
 #[test]
@@ -86,10 +77,7 @@ fn snapshot_roundtrip_resize_preserves_content() {
     let s = t.take_snapshot();
     assert_eq!(s.rows, 2);
     assert_eq!(s.cols, 40);
-    assert_eq!(
-        s.cells[0].codepoint, 'P' as u32,
-        "content should survive resize"
-    );
+    assert_eq!(s.cells[0].codepoint, 'P' as u32, "content should survive resize");
 }
 
 #[test]
@@ -138,32 +126,26 @@ fn snapshot_roundtrip_erase_line() {
 #[test]
 fn snapshot_roundtrip_insert_line() {
     let mut t = make_terminal(3, 10);
-    t.vt_write(b"A\nB\nC");
+    t.pty_write(b"A\nB\nC");
     t.flush();
     t.vt_write(b"\x1b[2;1H\x1b[L");
     t.flush();
     let s = t.take_snapshot();
     assert_eq!(s.cells[0].codepoint, 'A' as u32, "row 0 should still be A");
     assert_eq!(s.cells[10].codepoint, 0, "row 1 should be empty (inserted)");
-    assert_eq!(
-        s.cells[20].codepoint, 'B' as u32,
-        "row 2 should be B (pushed down)"
-    );
+    assert_eq!(s.cells[20].codepoint, 'B' as u32, "row 2 should be B (pushed down)");
 }
 
 #[test]
 fn snapshot_roundtrip_delete_line() {
     let mut t = make_terminal(3, 10);
-    t.vt_write(b"A\nB\nC");
+    t.pty_write(b"A\nB\nC");
     t.flush();
     t.vt_write(b"\x1b[2;1H\x1b[M");
     t.flush();
     let s = t.take_snapshot();
     assert_eq!(s.cells[0].codepoint, 'A' as u32, "row 0 should still be A");
-    assert_eq!(
-        s.cells[10].codepoint, 'C' as u32,
-        "row 1 should be C (B deleted)"
-    );
+    assert_eq!(s.cells[10].codepoint, 'C' as u32, "row 1 should be C (B deleted)");
 }
 
 #[test]
@@ -186,10 +168,7 @@ fn snapshot_roundtrip_carriage_return() {
     t.vt_write(b"ABC\rXYZ");
     t.flush();
     let s = t.take_snapshot();
-    assert_eq!(
-        s.cells[0].codepoint, 'X' as u32,
-        "CR should return to col 0"
-    );
+    assert_eq!(s.cells[0].codepoint, 'X' as u32, "CR should return to col 0");
     assert_eq!(s.cells[1].codepoint, 'Y' as u32);
     assert_eq!(s.cells[2].codepoint, 'Z' as u32);
 }
@@ -228,9 +207,9 @@ fn snapshot_roundtrip_sgr_color_fg() {
     t.flush();
     let s = t.take_snapshot();
     assert!(
-        s.cells[0].fg[0] > 0.1,
+        s.cells[0].foreground[0] > 0.1,
         "red foreground should have red channel, got: {:?}",
-        s.cells[0].fg
+        s.cells[0].foreground
     );
 }
 
@@ -252,9 +231,9 @@ fn snapshot_roundtrip_256_color_fg() {
     t.flush();
     let s = t.take_snapshot();
     assert!(
-        s.cells[0].fg[0] > 0.9,
+        s.cells[0].foreground[0] > 0.9,
         "256-color 196 should be bright red, fg={:?}",
-        s.cells[0].fg
+        s.cells[0].foreground
     );
 }
 
@@ -264,9 +243,9 @@ fn snapshot_roundtrip_truecolor_fg() {
     t.vt_write(b"\x1b[38;2;100;200;50mG");
     t.flush();
     let s = t.take_snapshot();
-    let r = (s.cells[0].fg[0] * 255.0) as u8;
-    let g = (s.cells[0].fg[1] * 255.0) as u8;
-    let b = (s.cells[0].fg[2] * 255.0) as u8;
+    let r = (s.cells[0].foreground[0] * 255.0) as u8;
+    let g = (s.cells[0].foreground[1] * 255.0) as u8;
+    let b = (s.cells[0].foreground[2] * 255.0) as u8;
     assert_eq!(r, 100, "truecolor R channel should be 100");
     assert_eq!(g, 200, "truecolor G channel should be 200");
     assert_eq!(b, 50, "truecolor B channel should be 50");

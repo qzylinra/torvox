@@ -3,10 +3,7 @@ use torvox_core::config::{Shell, TerminalConfig, Theme};
 #[test]
 fn default_theme_config_not_empty() {
     let themes = Theme::all_built_in();
-    assert!(
-        !themes.is_empty(),
-        "there should be at least one built-in theme"
-    );
+    assert!(!themes.is_empty(), "there should be at least one built-in theme");
 }
 
 #[test]
@@ -21,7 +18,7 @@ fn all_built_in_themes_have_names() {
 fn all_built_in_themes_have_valid_foreground() {
     let themes = Theme::all_built_in();
     for theme in &themes {
-        let fg = theme.fg;
+        let fg = theme.foreground;
         assert!(
             fg[0] > 0 || fg[1] > 0 || fg[2] > 0,
             "theme '{}' foreground should not be zero",
@@ -34,14 +31,14 @@ fn all_built_in_themes_have_valid_foreground() {
 fn all_built_in_themes_have_valid_background() {
     let themes = Theme::all_built_in();
     for theme in &themes {
-        let bg = theme.bg;
+        let background = theme.background;
         assert!(
-            bg[0] > 0 || bg[1] > 0 || bg[2] > 0,
+            background[0] > 0 || background[1] > 0 || background[2] > 0,
             "theme '{}' background should not be all zero",
             theme.name
         );
         assert!(
-            bg[0] > 0 || bg[1] > 0,
+            background[0] > 0 || background[1] > 0,
             "at least 2 background channels should have some value"
         );
     }
@@ -69,17 +66,11 @@ fn shell_serde_round_trip() {
     for (shell, desc) in &cases {
         let json = serde_json::to_string(shell).expect("serialize {desc}");
         let decoded: Shell = serde_json::from_str(&json).expect("deserialize {desc}");
-        assert_eq!(
-            *shell, decoded,
-            "{desc} round-trip should preserve identity"
-        );
+        assert_eq!(*shell, decoded, "{desc} round-trip should preserve identity");
     }
     // Verify JSON representation
     let json = serde_json::to_string(&Shell::SystemDefault).unwrap();
-    assert_eq!(
-        json, "\"SystemDefault\"",
-        "SystemDefault serializes as JSON string"
-    );
+    assert_eq!(json, "\"SystemDefault\"", "SystemDefault serializes as JSON string");
     let json = serde_json::to_string(&Shell::Custom("/bin/bash".into())).unwrap();
     assert!(
         json.contains("Custom"),

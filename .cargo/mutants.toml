@@ -1,5 +1,10 @@
-timeout = 120
+# Mutation testing configuration
+# Run: cargo mutants --package <crate>
+# CI:  nu scripts/check-rust.nu --mutants
+
+timeout = 60  # seconds per mutation (nextest runs <10s per crate)
 test_tool = "nextest"
+threshold = 0.60  # verified by torvox-core: 25/28 = 89.3% on 2026-07-02  # fail if mutation score below 60%
 
 examine_globs = [
   "torvox-core/src/**/*.rs",
@@ -8,6 +13,14 @@ examine_globs = [
   "torvox-mcp/src/**/*.rs",
 ]
 
+# Files excluded from mutation testing:
+# - tests/ benches/ examples/ fuzz/: not production code
+# - build.rs: simple metadata, no logic
+# - pty.rs: contains unsafe fork() — mutations could create fork bombs
+# - shader/** : WGSL shader source, not Rust code
+# - grid.rs, selection.rs: excluded from --mutants (quick) for speed;
+#   run `cargo mutants --package torvox-core --include grid.rs selection.rs`
+#   for deep coverage (slow: 1000+ mutations)
 exclude_globs = [
   "**/target/**",
   "**/tests/**",

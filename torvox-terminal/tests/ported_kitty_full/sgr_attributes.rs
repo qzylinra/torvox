@@ -314,7 +314,7 @@ fn kitty_sgr_fg_colors_8() {
         t.vt_write(format!("\x1b[{}mX", color).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cell_at(0, 0).fg[0] >= 0.0 && snap.cell_at(0, 0).fg[0] <= 1.0);
+        assert!(snap.cell_at(0, 0).foreground[0] >= 0.0 && snap.cell_at(0, 0).foreground[0] <= 1.0);
         t.vt_write(b"\x1b[0m");
         t.flush();
     }
@@ -328,7 +328,7 @@ fn kitty_sgr_bg_colors_8() {
         t.vt_write(format!("\x1b[{}mX", color).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
-        assert!(snap.cell_at(0, 0).bg[0] >= 0.0 && snap.cell_at(0, 0).bg[0] <= 1.0);
+        assert!(snap.cell_at(0, 0).background[0] >= 0.0 && snap.cell_at(0, 0).background[0] <= 1.0);
         t.vt_write(b"\x1b[0m");
         t.flush();
     }

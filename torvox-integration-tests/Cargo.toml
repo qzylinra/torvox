@@ -7,9 +7,12 @@ description = "Integration tests for Torvox terminal emulator"
 [dependencies]
 torvox-core = { workspace = true }
 torvox-terminal = { workspace = true }
+torvox-renderer = { workspace = true }
 
 [dev-dependencies]
 toml = { workspace = true }
+wgpu = { workspace = true }
+futures = { workspace = true }
 
 [lints]
 workspace = true

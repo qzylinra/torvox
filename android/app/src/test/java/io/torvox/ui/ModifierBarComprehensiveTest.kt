@@ -26,12 +26,13 @@ import kotlin.coroutines.EmptyCoroutineContext
 @Config(sdk = [34], application = android.app.Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ModifierBarComprehensiveTest {
+    @Suppress("DEPRECATION")
     @get:Rule
     val composeTestRule: AndroidComposeTestRule<RobolectricActivityRule<TestActivity>, TestActivity> =
         AndroidComposeTestRule(
             RobolectricActivityRule(TestActivity::class.java),
-            EmptyCoroutineContext,
-        ) { it.activity }
+            activityProvider = { it.activity },
+        )
 
     @get:Rule
     val roborazziRule =

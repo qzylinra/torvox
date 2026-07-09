@@ -36,6 +36,8 @@
     <string name="bootstrap_preset_custom">カスタム / 空</string>
     <string name="bootstrap_preset_custom_desc">空のrootファイルシステムで開始</string>
     <string name="bootstrap">ブートストラップ</string>
+    <string name="bootstrap_install">ブートストラップをインストール</string>
+    <string name="bootstrap_installing">インストール中\u2026</string>
     <string name="session_restore">セッション復元</string>
     <string name="session_restore_desc">アプリ起動時に前回のセッションを再開する</string>
     <string name="keyboard_mode">キーボードモード</string>
@@ -123,4 +125,14 @@
     <string name="volume_key_map">音量キーマッピング</string>
     <string name="volume_key_map_desc">音量上げを Ctrl、音量下げを Fn に割り当て</string>
     <string name="install">インストール</string>
+
+    <!-- Cursor Settings -->
+    <string name="session_restore_off_desc">アプリ起動時にセッションは復元されません</string>
+    <string name="on">オン</string>
+    <string name="off">オフ</string>
+    <string name="cjk_fallback_missing_warning">CJK フォールバックフォントが見つかりません。東アジア文字が正しく表示されない可能性があります。</string>
+    <string name="cursor_blink">カーソル点滅</string>
+    <string name="cursor_blink_desc">カーソル点滅アニメーションの切り替え</string>
+    <string name="cursor_speed">点滅速度</string>
+    <string name="cursor_style_label">カーソルスタイル</string>
 </resources>

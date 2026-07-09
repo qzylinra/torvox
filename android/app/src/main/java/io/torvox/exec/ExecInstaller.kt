@@ -29,20 +29,28 @@ object ExecInstaller {
 
     fun binDir(context: Context): File = context.getDir("bin", Context.MODE_PRIVATE)
 
-    private fun detectAbi(context: Context): String = when (
-        android.os.Build.SUPPORTED_ABIS
-            .first()
-    ) {
-        "arm64-v8a" -> "arm64-v8a"
+    private fun detectAbi(context: Context): String {
+        val abi =
+            android.os.Build.SUPPORTED_ABIS
+                .firstOrNull()
+                ?: error("No supported ABIs found on device")
+        return when (abi) {
+            "arm64-v8a" -> {
+                "arm64-v8a"
+            }
 
-        "x86_64" -> "x86_64"
+            "x86_64" -> {
+                "x86_64"
+            }
 
-        else -> throw IllegalStateException(
-            context.getString(
-                R.string.unsupported_abi,
-                android.os.Build.SUPPORTED_ABIS
-                    .first(),
-            ),
-        )
+            else -> {
+                error(
+                    context.getString(
+                        R.string.unsupported_abi,
+                        abi,
+                    ),
+                )
+            }
+        }
     }
 }

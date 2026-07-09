@@ -1,6 +1,6 @@
 [package]
 name = "torvox-fuzz"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 
 publish = false
@@ -27,12 +27,6 @@ test = false
 bench = false
 
 [[bin]]
-name = "fuzz_keyboard_input"
-path = "fuzz_targets/fuzz_keyboard_input.rs"
-test = false
-bench = false
-
-[[bin]]
 name = "fuzz_grid_ops"
 path = "fuzz_targets/fuzz_grid_ops.rs"
 test = false
@@ -54,7 +48,6 @@ bench = false
 torvox-core = { path = "../torvox-core" }
 torvox-terminal = { path = "../torvox-terminal" }
 libfuzzer-sys = "0.4"
-serde = { workspace = true }
 serde_json = "1"
 
 [lints]

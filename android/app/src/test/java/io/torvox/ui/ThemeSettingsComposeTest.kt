@@ -15,18 +15,18 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
-import kotlin.coroutines.EmptyCoroutineContext
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], application = android.app.Application::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class ThemeSettingsComposeTest {
+    @Suppress("DEPRECATION")
     @get:Rule
     val composeTestRule: AndroidComposeTestRule<RobolectricActivityRule<TestActivity>, TestActivity> =
         AndroidComposeTestRule(
             RobolectricActivityRule(TestActivity::class.java),
-            EmptyCoroutineContext,
-        ) { it.activity }
+            activityProvider = { it.activity },
+        )
 
     @get:Rule
     val roborazziRule =
@@ -45,7 +45,7 @@ class ThemeSettingsComposeTest {
                     selectedMode = selectedMode.value,
                     onModeSelected = { selectedMode.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                     accentColor = androidx.compose.ui.graphics.Color.Blue,
                 )
             }
@@ -64,7 +64,7 @@ class ThemeSettingsComposeTest {
                     selectedMode = selectedMode.value,
                     onModeSelected = { selectedMode.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                     accentColor = androidx.compose.ui.graphics.Color.Blue,
                 )
             }
@@ -82,7 +82,7 @@ class ThemeSettingsComposeTest {
                     selectedMode = selectedMode.value,
                     onModeSelected = { selectedMode.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                     accentColor = androidx.compose.ui.graphics.Color.Blue,
                 )
             }
@@ -100,7 +100,7 @@ class ThemeSettingsComposeTest {
                     selectedMode = selectedMode.value,
                     onModeSelected = { selectedMode.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                     accentColor = androidx.compose.ui.graphics.Color.Blue,
                 )
             }
@@ -118,7 +118,7 @@ class ThemeSettingsComposeTest {
                     selectedMode = selectedMode.value,
                     onModeSelected = { selectedMode.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                     accentColor = androidx.compose.ui.graphics.Color.Blue,
                 )
             }
@@ -136,7 +136,7 @@ class ThemeSettingsComposeTest {
                     selectedMode = selectedMode.value,
                     onModeSelected = { selectedMode.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                     accentColor = androidx.compose.ui.graphics.Color.Blue,
                 )
             }
@@ -154,7 +154,7 @@ class ThemeSettingsComposeTest {
                     selectedMode = selectedMode.value,
                     onModeSelected = { selectedMode.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                     accentColor = androidx.compose.ui.graphics.Color.Blue,
                 )
             }
@@ -174,7 +174,8 @@ class ThemeSettingsComposeTest {
                     selectedTheme = selectedTheme.value,
                     onThemeSelected = { selectedTheme.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    secondaryText = androidx.compose.ui.graphics.Color.Gray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                 )
             }
         }
@@ -193,7 +194,8 @@ class ThemeSettingsComposeTest {
                     selectedTheme = selectedTheme.value,
                     onThemeSelected = { selectedTheme.value = it },
                     textColor = androidx.compose.ui.graphics.Color.Black,
-                    cardBg = androidx.compose.ui.graphics.Color.LightGray,
+                    secondaryText = androidx.compose.ui.graphics.Color.Gray,
+                    cardBackground = androidx.compose.ui.graphics.Color.LightGray,
                 )
             }
         }

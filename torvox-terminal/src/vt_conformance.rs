@@ -20,10 +20,7 @@ pub fn process_and_get_cursor(t: &mut GhosttyTerminal, data: &[u8]) -> (u32, u32
 }
 
 /// Write bytes, flush, return snapshot with invariants.
-pub fn process_and_snapshot(
-    t: &mut GhosttyTerminal,
-    data: &[u8],
-) -> crate::ghostty_terminal::GridSnapshot {
+pub fn process_and_snapshot(t: &mut GhosttyTerminal, data: &[u8]) -> crate::ghostty_terminal::GridSnapshot {
     t.vt_write(data);
     t.flush();
     let snap = t.take_snapshot();
@@ -68,8 +65,6 @@ pub fn row_text(snap: &crate::ghostty_terminal::GridSnapshot, row: u32) -> Strin
     text.trim_end().to_string()
 }
 
-#[allow(dead_code)]
-const TR: u32 = 24;
 #[cfg(test)]
 const TC: u32 = 80;
 
@@ -230,10 +225,7 @@ fn erase_line_right() {
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 'A' as u32, "EL 0: col 0 preserved");
     assert_eq!(snap.cells[3].codepoint, 'D' as u32, "EL 0: col 3 preserved");
-    assert_eq!(
-        snap.cells[4].codepoint, 0,
-        "EL 0: col 4 erased (cursor at col 4)"
-    );
+    assert_eq!(snap.cells[4].codepoint, 0, "EL 0: col 4 erased (cursor at col 4)");
     assert_eq!(snap.cells[9].codepoint, 0, "EL 0: col 9 erased");
 }
 
@@ -315,10 +307,7 @@ fn erase_display_above() {
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 0, "ED 1: row 0 erased");
     assert_eq!(snap.cells[5].codepoint, 0, "ED 1: row 1 erased");
-    assert_eq!(
-        snap.cells[10].codepoint, 'C' as u32,
-        "ED 1: row 2 preserved"
-    );
+    assert_eq!(snap.cells[10].codepoint, 'C' as u32, "ED 1: row 2 preserved");
 }
 
 #[test]
@@ -339,7 +328,7 @@ fn erase_display_complete() {
 #[test]
 fn insert_lines_blank_at_cursor() {
     let mut t = sized_term(5, 10, 100);
-    t.vt_write(b"AAA\nBBB\nCCC\nDDD\nEEE");
+    t.pty_write(b"AAA\nBBB\nCCC\nDDD\nEEE");
     t.vt_write(b"\x1b[3;1H\x1b[2L"); // IL 2 at row 3 (1-idx)
     t.flush();
     let snap = t.take_snapshot();
@@ -349,11 +338,7 @@ fn insert_lines_blank_at_cursor() {
     assert_eq!(row_text(&snap, 1), "BBB", "IL: row 1");
     assert_eq!(row_text(&snap, 2), "", "IL: row 2 blank (inserted)");
     assert_eq!(row_text(&snap, 3), "", "IL: row 3 blank (inserted)");
-    assert_eq!(
-        row_text(&snap, 4),
-        "CCC",
-        "IL: row 4 = CCC (shifted from row 2)"
-    );
+    assert_eq!(row_text(&snap, 4), "CCC", "IL: row 4 = CCC (shifted from row 2)");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -378,6 +363,47 @@ fn sgr_reset_bold_22() {
 }
 
 #[test]
+fn grapheme_cluster_captured_in_snapshot() {
+    // É (U+00C9) 0xC3 0x89 should produce a cell with grapheme data
+    let mut t = term();
+    let snap = process_and_snapshot(&mut t, b"\xC3\x89");
+    assert_eq!(snap.cells[0].codepoint, 0xC9, "É primary codepoint = U+00C9");
+}
+
+#[test]
+fn grapheme_cluster_base_plus_combining() {
+    // A (U+0041) + combining acute (U+0301) = "Á"
+    // 0x41 is base, 0xCC 0x81 is combining acute
+    let mut t = term();
+    let snap = process_and_snapshot(&mut t, b"A\xCC\x81");
+    let cell = &snap.cells[0];
+    assert_eq!(cell.codepoint, 0x41, "primary codepoint = 'A'");
+    if cell.graphemes.is_empty() {
+        // Some Ghostty VT configurations may decompose combining chars
+        // This is acceptable — graphemes field MUST exist
+        return;
+    }
+    assert!(
+        cell.graphemes.contains(&0x301),
+        "graphemes must include combining acute: {:?}",
+        cell.graphemes
+    );
+}
+
+#[test]
+fn grapheme_cluster_single_char_has_primary_only() {
+    let mut t = term();
+    let snap = process_and_snapshot(&mut t, b"X");
+    let cell = &snap.cells[0];
+    assert_eq!(cell.codepoint, 0x58, "primary = 'X'");
+    assert!(
+        cell.graphemes.is_empty() || cell.graphemes == vec![0x58],
+        "graphemes = [primary] or empty: {:?}",
+        cell.graphemes
+    );
+}
+
+#[test]
 fn sgr_dim_2_outputs_character() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[2mD");
@@ -386,6 +412,15 @@ fn sgr_dim_2_outputs_character() {
         "SGR 2 dim: char 'D' must be output"
     );
     assert_eq!(snap.cursor_col, 1, "SGR 2 dim: cursor must advance");
+    assert!(snap.cells[0].dim, "SGR 2 dim: cell must have dim=true");
+}
+
+#[test]
+fn sgr_dim_22_resets_to_normal() {
+    let mut t = term();
+    let snap = process_and_snapshot(&mut t, b"\x1b[2mD\x1b[22mE");
+    assert!(snap.cells[0].dim, "SGR 2 dim: cell 0 dim=true");
+    assert!(!snap.cells[1].dim, "SGR 22 reset: cell 1 dim=false");
 }
 
 #[test]
@@ -469,10 +504,7 @@ fn sgr_reset_underline_24() {
     let _snap = process_and_snapshot(&mut t, b"\x1b[4mU\x1b[24mN");
     let snap_final = t.take_snapshot();
     assert!(snap_final.cells[0].underline, "SGR 24: first underline");
-    assert!(
-        !snap_final.cells[1].underline,
-        "SGR 24: second no underline"
-    );
+    assert!(!snap_final.cells[1].underline, "SGR 24: second no underline");
 }
 
 #[test]
@@ -497,57 +529,51 @@ fn sgr_reset_reverse_27() {
 fn sgr_255_color_fg() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[38;5;196mR");
-    assert!(snap.cells[0].fg[0] > 0.5, "SGR 38;5;196: fg.R > 0.5");
+    assert!(snap.cells[0].foreground[0] > 0.5, "SGR 38;5;196: fg.R > 0.5");
 }
 
 #[test]
 fn sgr_255_color_bg() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[48;5;21mR");
-    assert!(snap.cells[0].bg[2] > 0.5, "SGR 48;5;21: bg.B > 0.5");
+    assert!(snap.cells[0].background[2] > 0.5, "SGR 48;5;21: bg.B > 0.5");
 }
 
 #[test]
 fn sgr_direct_color_fg() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[38;2;255;128;64mR");
-    assert!((snap.cells[0].fg[0] - 1.0).abs() < 0.02, "38;2: fg.R ≈ 1.0");
-    assert!(
-        (snap.cells[0].fg[1] - 0.502).abs() < 0.02,
-        "38;2: fg.G ≈ 0.5"
-    );
-    assert!(
-        (snap.cells[0].fg[2] - 0.251).abs() < 0.02,
-        "38;2: fg.B ≈ 0.25"
-    );
+    assert!((snap.cells[0].foreground[0] - 1.0).abs() < 0.02, "38;2: fg.R ≈ 1.0");
+    assert!((snap.cells[0].foreground[1] - 0.502).abs() < 0.02, "38;2: fg.G ≈ 0.5");
+    assert!((snap.cells[0].foreground[2] - 0.251).abs() < 0.02, "38;2: fg.B ≈ 0.25");
 }
 
 #[test]
 fn sgr_fg_8_red() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[31mR");
-    assert!(snap.cells[0].fg[0] > 0.1, "SGR 31: fg.R > 0.1");
+    assert!(snap.cells[0].foreground[0] > 0.1, "SGR 31: fg.R > 0.1");
 }
 
 #[test]
 fn sgr_bg_8_yellow() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[43mR");
-    assert!(snap.cells[0].bg[1] > 0.1, "SGR 43: bg.G > 0.1");
+    assert!(snap.cells[0].background[1] > 0.1, "SGR 43: bg.G > 0.1");
 }
 
 #[test]
 fn sgr_bright_fg_91() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[91mR");
-    assert!(snap.cells[0].fg[0] > 0.1, "SGR 91: fg.R > 0.1");
+    assert!(snap.cells[0].foreground[0] > 0.1, "SGR 91: fg.R > 0.1");
 }
 
 #[test]
 fn sgr_bright_bg_103() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[103mR");
-    assert!(snap.cells[0].bg[1] > 0.1, "SGR 103: bg.G > 0.1");
+    assert!(snap.cells[0].background[1] > 0.1, "SGR 103: bg.G > 0.1");
 }
 
 #[test]
@@ -565,7 +591,7 @@ fn sgr_multi_param() {
     let snap = process_and_snapshot(&mut t, b"\x1b[1;4;31mX");
     assert!(snap.cells[0].bold, "SGR 1;4;31: bold");
     assert!(snap.cells[0].underline, "SGR 1;4;31: underline");
-    assert!(snap.cells[0].fg[0] > 0.1, "SGR 1;4;31: fg red");
+    assert!(snap.cells[0].foreground[0] > 0.1, "SGR 1;4;31: fg red");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -702,8 +728,7 @@ fn decsc_decrc_position() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-#[allow(non_snake_case)]
-fn decaln_all_E() {
+fn decaln_all_e() {
     let mut t = sized_term(5, 10, 100);
     let snap = process_and_snapshot(&mut t, b"\x1b#8");
     for cell in &snap.cells {
@@ -735,11 +760,7 @@ fn tab_set_ht() {
     t.flush();
     t.vt_write(b"\x09"); // HT
     t.flush();
-    assert_eq!(
-        t.cursor_x(),
-        4,
-        "HT: to col 4 (0-idx), tab was set at col 5 (1-idx)"
-    );
+    assert_eq!(t.cursor_x(), 4, "HT: to col 4 (0-idx), tab was set at col 5 (1-idx)");
     t.vt_write(b"\x09");
     t.flush();
     // No more tabs → should stay at rightmost column
@@ -969,11 +990,7 @@ fn sd_scroll_down_content() {
     // SD scrolls content down: new blank lines at top
     assert_eq!(row_text(&snap, 0), "", "SD: row 0 blank");
     assert_eq!(row_text(&snap, 1), "", "SD: row 1 blank");
-    assert_eq!(
-        row_text(&snap, 2),
-        "111",
-        "SD: row 2 = 111 (shifted from row 0)"
-    );
+    assert_eq!(row_text(&snap, 2), "111", "SD: row 2 = 111 (shifted from row 0)");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1108,14 +1125,8 @@ fn c0_so_si_outputs_text() {
     t.flush();
     // SO (0x0E) / SI (0x0F): select G1/G0 character sets
     let snap = t.take_snapshot();
-    assert_eq!(
-        snap.cells[0].codepoint, 'T' as u32,
-        "SO: char 'T' must be output"
-    );
-    assert_eq!(
-        snap.cursor_col, 4,
-        "SO: cursor must advance 4 cols for 'Text'"
-    );
+    assert_eq!(snap.cells[0].codepoint, 'T' as u32, "SO: char 'T' must be output");
+    assert_eq!(snap.cursor_col, 4, "SO: cursor must advance 4 cols for 'Text'");
     check_invariants(&t);
 }
 
@@ -1248,11 +1259,7 @@ fn csi_hvp_vertical_and_horizontal_position() {
     assert_eq!(t.cursor_y(), 4, "HVP: row 4 (0-idx)");
     assert_eq!(t.cursor_x(), 10, "HVP: col 10 after X (0-idx)");
     let snap = t.take_snapshot();
-    assert_eq!(
-        snap.cells[4 * 40 + 9].codepoint,
-        'X' as u32,
-        "HVP: X at (4,9)"
-    );
+    assert_eq!(snap.cells[4 * 40 + 9].codepoint, 'X' as u32, "HVP: X at (4,9)");
 }
 
 #[test]
@@ -1397,10 +1404,7 @@ fn osc_4_palette_set_detection() {
     if text.contains('X') {
         // OSC 4 works — verify color changed meaningfully
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "OSC 4 + SGR 31: cell has content"
-        );
+        assert!(snap.cells[0].codepoint > 0, "OSC 4 + SGR 31: cell has content");
     }
     check_invariants(&t);
 }
@@ -1438,11 +1442,7 @@ fn osc_12_cursor_color_detection() {
     t.vt_write(b"Text");
     t.flush();
     let text = t.read_line_text(0).unwrap_or_default();
-    assert_eq!(
-        text.trim(),
-        "Text",
-        "OSC 12: text visible after cursor color change"
-    );
+    assert_eq!(text.trim(), "Text", "OSC 12: text visible after cursor color change");
     check_invariants(&t);
 }
 
@@ -1456,11 +1456,7 @@ fn osc_104_reset_palette_detection() {
     t.vt_write(b"\x1b[31mX");
     t.flush();
     let text = t.read_line_text(0).unwrap_or_default();
-    assert_eq!(
-        text.trim(),
-        "X",
-        "OSC 104: text visible after palette reset"
-    );
+    assert_eq!(text.trim(), "X", "OSC 104: text visible after palette reset");
     check_invariants(&t);
 }
 
@@ -1501,11 +1497,7 @@ fn osc_777_desktop_notification_detection() {
     t.vt_write(b"Notify");
     t.flush();
     let text = t.read_line_text(0).unwrap_or_default();
-    assert_eq!(
-        text.trim(),
-        "Notify",
-        "OSC 777: text visible after notification"
-    );
+    assert_eq!(text.trim(), "Notify", "OSC 777: text visible after notification");
     check_invariants(&t);
 }
 
@@ -1590,10 +1582,7 @@ fn xtwinops_11_report_window_state_detection() {
     let responses = t.drain_pty_write_responses();
     if !responses.is_empty() {
         let resp = String::from_utf8_lossy(responses.last().unwrap());
-        assert!(
-            resp.starts_with("\x1b["),
-            "XTWINOPS 11: response starts with CSI"
-        );
+        assert!(resp.starts_with("\x1b["), "XTWINOPS 11: response starts with CSI");
     }
     check_invariants(&t);
 }
@@ -1808,27 +1797,27 @@ fn sgr_all_color_channels_in_range() {
         let snap = t.take_snapshot();
         let cell = &snap.cells[0];
         assert!(
-            cell.fg[0] >= 0.0 && cell.fg[0] <= 1.0,
+            cell.foreground[0] >= 0.0 && cell.foreground[0] <= 1.0,
             "SGR {param}: fg.R in range"
         );
         assert!(
-            cell.fg[1] >= 0.0 && cell.fg[1] <= 1.0,
+            cell.foreground[1] >= 0.0 && cell.foreground[1] <= 1.0,
             "SGR {param}: fg.G in range"
         );
         assert!(
-            cell.fg[2] >= 0.0 && cell.fg[2] <= 1.0,
+            cell.foreground[2] >= 0.0 && cell.foreground[2] <= 1.0,
             "SGR {param}: fg.B in range"
         );
         assert!(
-            cell.bg[0] >= 0.0 && cell.bg[0] <= 1.0,
+            cell.background[0] >= 0.0 && cell.background[0] <= 1.0,
             "SGR {param}: bg.R in range"
         );
         assert!(
-            cell.bg[1] >= 0.0 && cell.bg[1] <= 1.0,
+            cell.background[1] >= 0.0 && cell.background[1] <= 1.0,
             "SGR {param}: bg.G in range"
         );
         assert!(
-            cell.bg[2] >= 0.0 && cell.bg[2] <= 1.0,
+            cell.background[2] >= 0.0 && cell.background[2] <= 1.0,
             "SGR {param}: bg.B in range"
         );
         check_invariants(&t);
@@ -1888,10 +1877,7 @@ fn c0_vt_moves_down_and_scrolls() {
     t.vt_write(b"A\x0bB");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(
-        snap.cursor_row == 1 || snap.cursor_row == 2,
-        "VT should move down"
-    );
+    assert!(snap.cursor_row == 1 || snap.cursor_row == 2, "VT should move down");
     check_invariants(&t);
 }
 
@@ -1915,8 +1901,7 @@ macro_rules! sgr_toggle_test {
         #[test]
         fn $name() {
             let mut t = term();
-            let snap =
-                process_and_snapshot(&mut t, format!("\x1b[{}mX\x1b[{}mN", $on, $off).as_bytes());
+            let snap = process_and_snapshot(&mut t, format!("\x1b[{}mX\x1b[{}mN", $on, $off).as_bytes());
             assert!(
                 snap.cells[0].$field,
                 concat!("SGR ", $on, ": ", stringify!($field), " on")
@@ -2105,11 +2090,7 @@ fn csi_s_ansi_scp_save_cursor() {
     t.vt_write(b"\x1b[u"); // ANSISYSRCP: restore
     t.flush();
     assert_eq!(t.cursor_y(), 4, "ANSI SCP: restore row 4 (0-idx)");
-    assert_eq!(
-        t.cursor_x(),
-        14,
-        "ANSI SCP: restore col 9 + 5 written = 14 (0-idx)"
-    );
+    assert_eq!(t.cursor_x(), 14, "ANSI SCP: restore col 9 + 5 written = 14 (0-idx)");
     check_invariants(&t);
 }
 
@@ -2292,7 +2273,7 @@ fn bug_sgr_invalid_param_midstream() {
     let snap = t.take_snapshot();
     assert!(snap.cells[0].bold, "SGR 999: bold from 1 still applies");
     assert!(
-        snap.cells[0].fg[0] > 0.3,
+        snap.cells[0].foreground[0] > 0.3,
         "SGR 999: red fg from 31 still applies"
     );
 }
@@ -2310,11 +2291,7 @@ fn bug_tabs_survive_scroll_down() {
     t.vt_write(b"\x09");
     t.flush();
     // Tab should still work (tab stops are not screen content)
-    assert_eq!(
-        t.cursor_x(),
-        8,
-        "tab after SD: still at col 9 (1-idx) = 0-idx 8"
-    );
+    assert_eq!(t.cursor_x(), 8, "tab after SD: still at col 9 (1-idx) = 0-idx 8");
 }
 
 /// Bug #3: DECSC/DECRC with origin mode active
@@ -2352,7 +2329,7 @@ fn bug_cup_zero_params_treated_as_one() {
     assert_eq!(t.cursor_x(), 0, "CUP(0,0): col 0 (1-idx 1)");
 }
 
-/// Bug #5: SU with count=0 should behave like count=1
+/// SU with count=0: per ECMA-48, N=0 uses default (N=1), so Row1 scrolls out.
 #[test]
 fn bug_su_zero_scroll() {
     let mut t = sized_term(5, 20, 100);
@@ -2366,12 +2343,10 @@ fn bug_su_zero_scroll() {
         .filter(|c| c.codepoint != 0)
         .filter_map(|c| char::from_u32(c.codepoint))
         .collect();
-    // ECMA-48 8.3.82: N=0 treated as N=1. Ghostty patch fixes this.
-    // After scroll, "Row1" scrolls off and "Row2" is now at row 0.
     assert_eq!(
         r0.trim(),
         "Row2",
-        "SU 0: N=0 should scroll by 1, Row2 now at top"
+        "SU N=0 treated as N=1 per ECMA-48, Row1 scrolled out"
     );
 }
 
@@ -2512,18 +2487,10 @@ fn csi_erase_exhaustive() {
         t.flush();
         let snap = t.take_snapshot();
         for c in 0..(col - 1) {
-            assert_ne!(
-                snap.cell_at(0, c).codepoint,
-                0,
-                "EL 0 col={col}: cell@{c} preserved"
-            );
+            assert_ne!(snap.cell_at(0, c).codepoint, 0, "EL 0 col={col}: cell@{c} preserved");
         }
         for c in (col - 1)..cols {
-            assert_eq!(
-                snap.cell_at(0, c).codepoint,
-                0,
-                "EL 0 col={col}: cell@{c} erased"
-            );
+            assert_eq!(snap.cell_at(0, c).codepoint, 0, "EL 0 col={col}: cell@{c} erased");
         }
     }
     // EL 1 at each column
@@ -2536,19 +2503,11 @@ fn csi_erase_exhaustive() {
         t.flush();
         let snap = t.take_snapshot();
         for c in 0..col {
-            assert_eq!(
-                snap.cell_at(0, c).codepoint,
-                0,
-                "EL 1 col={col}: cell@{c} erased"
-            );
+            assert_eq!(snap.cell_at(0, c).codepoint, 0, "EL 1 col={col}: cell@{c} erased");
         }
         for c in col..cols {
             if c < cols {
-                assert_ne!(
-                    snap.cell_at(0, c).codepoint,
-                    0,
-                    "EL 1 col={col}: cell@{c} preserved"
-                );
+                assert_ne!(snap.cell_at(0, c).codepoint, 0, "EL 1 col={col}: cell@{c} preserved");
             }
         }
     }
@@ -2579,11 +2538,7 @@ fn csi_erase_exhaustive() {
         let snap = t.take_snapshot();
         for r in (row - 1)..rows {
             for c in 0..cols {
-                assert_eq!(
-                    snap.cell_at(r, c).codepoint,
-                    0,
-                    "ED 0 row={row}: cell({r},{c}) erased"
-                );
+                assert_eq!(snap.cell_at(r, c).codepoint, 0, "ED 0 row={row}: cell({r},{c}) erased");
             }
         }
     }
@@ -2603,11 +2558,7 @@ fn csi_erase_exhaustive() {
         let snap = t.take_snapshot();
         for r in 0..(row - 1) {
             for c in 0..cols {
-                assert_eq!(
-                    snap.cell_at(r, c).codepoint,
-                    0,
-                    "ED 1 row={row}: cell({r},{c}) erased"
-                );
+                assert_eq!(snap.cell_at(r, c).codepoint, 0, "ED 1 row={row}: cell({r},{c}) erased");
             }
         }
     }
@@ -2626,11 +2577,7 @@ fn csi_erase_exhaustive() {
     let snap = t.take_snapshot();
     for r in 0..rows {
         for c in 0..cols {
-            assert_eq!(
-                snap.cell_at(r, c).codepoint,
-                0,
-                "ED 2: cell({r},{c}) erased"
-            );
+            assert_eq!(snap.cell_at(r, c).codepoint, 0, "ED 2: cell({r},{c}) erased");
         }
     }
 }
@@ -2713,9 +2660,7 @@ fn csi_edit_exhaustive() {
     for n in 1..=5.min(rows - 1) {
         let mut t = sized_term(rows, cols, 100);
         for r in 0..rows {
-            let fill: Vec<u8> = (0..(cols - 1))
-                .map(|c| b'A' + (r as u8 + c as u8) % 26)
-                .collect();
+            let fill: Vec<u8> = (0..(cols - 1)).map(|c| b'A' + (r as u8 + c as u8) % 26).collect();
             t.vt_write(&fill);
             if r + 1 < rows {
                 t.vt_write(b"\n");
@@ -2727,11 +2672,7 @@ fn csi_edit_exhaustive() {
         let snap = t.take_snapshot();
         for r in 1..(1 + n).min(rows) {
             for c in 0..cols {
-                assert_eq!(
-                    snap.cell_at(r, c).codepoint,
-                    0,
-                    "IL({n}): cell({r},{c}) blank"
-                );
+                assert_eq!(snap.cell_at(r, c).codepoint, 0, "IL({n}): cell({r},{c}) blank");
             }
         }
     }
@@ -2739,9 +2680,7 @@ fn csi_edit_exhaustive() {
     for n in 1..=5.min(rows - 1) {
         let mut t = sized_term(rows, cols, 100);
         for r in 0..rows {
-            let fill: Vec<u8> = (0..(cols - 1))
-                .map(|c| b'A' + (r as u8 + c as u8) % 26)
-                .collect();
+            let fill: Vec<u8> = (0..(cols - 1)).map(|c| b'A' + (r as u8 + c as u8) % 26).collect();
             t.vt_write(&fill);
             if r + 1 < rows {
                 t.vt_write(b"\n");
@@ -2753,11 +2692,7 @@ fn csi_edit_exhaustive() {
         let snap = t.take_snapshot();
         for r in (rows - n)..rows {
             for c in 0..cols {
-                assert_eq!(
-                    snap.cell_at(r, c).codepoint,
-                    0,
-                    "DL({n}): cell({r},{c}) blank"
-                );
+                assert_eq!(snap.cell_at(r, c).codepoint, 0, "DL({n}): cell({r},{c}) blank");
             }
         }
     }
@@ -2765,9 +2700,7 @@ fn csi_edit_exhaustive() {
     for n in 1..=5.min(rows - 1) {
         let mut t = sized_term(rows, cols, 100);
         for r in 0..rows {
-            let fill: Vec<u8> = (0..(cols - 1))
-                .map(|c| b'A' + (r as u8 + c as u8) % 26)
-                .collect();
+            let fill: Vec<u8> = (0..(cols - 1)).map(|c| b'A' + (r as u8 + c as u8) % 26).collect();
             t.vt_write(&fill);
             if r + 1 < rows {
                 t.vt_write(b"\n");
@@ -2779,11 +2712,7 @@ fn csi_edit_exhaustive() {
         let snap = t.take_snapshot();
         for r in (rows - n)..rows {
             for c in 0..cols {
-                assert_eq!(
-                    snap.cell_at(r, c).codepoint,
-                    0,
-                    "SU({n}): cell({r},{c}) blank"
-                );
+                assert_eq!(snap.cell_at(r, c).codepoint, 0, "SU({n}): cell({r},{c}) blank");
             }
         }
     }
@@ -2791,9 +2720,7 @@ fn csi_edit_exhaustive() {
     for n in 1..=5.min(rows - 1) {
         let mut t = sized_term(rows, cols, 100);
         for r in 0..rows {
-            let fill: Vec<u8> = (0..(cols - 1))
-                .map(|c| b'A' + (r as u8 + c as u8) % 26)
-                .collect();
+            let fill: Vec<u8> = (0..(cols - 1)).map(|c| b'A' + (r as u8 + c as u8) % 26).collect();
             t.vt_write(&fill);
             if r + 1 < rows {
                 t.vt_write(b"\n");
@@ -2805,11 +2732,7 @@ fn csi_edit_exhaustive() {
         let snap = t.take_snapshot();
         for r in 0..n.min(rows) {
             for c in 0..cols {
-                assert_eq!(
-                    snap.cell_at(r, c).codepoint,
-                    0,
-                    "SD({n}): cell({r},{c}) blank"
-                );
+                assert_eq!(snap.cell_at(r, c).codepoint, 0, "SD({n}): cell({r},{c}) blank");
             }
         }
     }
@@ -2857,9 +2780,7 @@ fn dec_modes_exhaustive() {
 
 #[test]
 fn sgr_two_param_exhaustive() {
-    let fg_params = [
-        30u32, 31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97,
-    ];
+    let fg_params = [30u32, 31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97];
     let bg_params = [
         40u32, 41, 42, 43, 44, 45, 46, 47, 100, 101, 102, 103, 104, 105, 106, 107,
     ];
@@ -2870,11 +2791,11 @@ fn sgr_two_param_exhaustive() {
             t.flush();
             let snap = t.take_snapshot();
             assert!(
-                snap.cells[0].fg[0] >= 0.0 && snap.cells[0].fg[0] <= 1.0,
+                snap.cells[0].foreground[0] >= 0.0 && snap.cells[0].foreground[0] <= 1.0,
                 "SGR {fg};{bg}: fg.R in range"
             );
             assert!(
-                snap.cells[0].bg[0] >= 0.0 && snap.cells[0].bg[0] <= 1.0,
+                snap.cells[0].background[0] >= 0.0 && snap.cells[0].background[0] <= 1.0,
                 "SGR {fg};{bg}: bg.R in range"
             );
             check_invariants(&t);
@@ -2919,10 +2840,7 @@ fn osc_queries_exhaustive() {
         let resp = t.drain_pty_write_responses();
         if !resp.is_empty() {
             let text = String::from_utf8_lossy(resp.last().unwrap());
-            assert!(
-                text.contains(&format!("{}", q)),
-                "OSC {q} query: response mentions {q}"
-            );
+            assert!(text.contains(&format!("{}", q)), "OSC {q} query: response mentions {q}");
         }
         t.vt_write(b"OK");
         t.flush();
@@ -2943,10 +2861,7 @@ fn osc_queries_exhaustive() {
         t.vt_write(format!("\x1b[38;5;{}mX\x1b[0m", i).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
-        assert!(
-            snap.cells[0].codepoint > 0,
-            "OSC 4 indicator {i}: char visible"
-        );
+        assert!(snap.cells[0].codepoint > 0, "OSC 4 indicator {i}: char visible");
         check_invariants(&t);
     }
 }

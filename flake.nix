@@ -27,7 +27,10 @@
           _module.args.pkgs = import inputs.nixpkgs {
             inherit system;
             config.allowUnfree = true;
-            overlays = [ inputs.fenix.overlays.default ];
+            overlays = [
+              inputs.fenix.overlays.default
+              inputs.fenix.overlays.default
+            ];
           };
           packages = {
             rust-toolchain = pkgs.fenix.stable.withComponents [
@@ -121,9 +124,9 @@
               ])
               cargo-nextest
               cargo-fuzz
+              cargo-llvm-cov
               cargo-geiger
               cargo-audit
-              cargo-ndk
               cargo-deny
               cargo-machete
               cargo-mutants
@@ -138,8 +141,10 @@
               taplo
               yamlfmt
               typos
+              vale
               markdownlint-cli2
               mesa
+              mold
               vulkan-loader
               vulkan-tools
               nixfmt-rs
@@ -148,14 +153,30 @@
               pkg-config
               openssl
               zig_0_15
+              cargo-ndk
               maestro
-              stdenv.cc.cc.lib
+              semgrep
+              systemd
+              imagemagick
+              fontconfig
+              noto-fonts-cjk-sans
+              libpulseaudio
+              (lib.getLib stdenv.cc.cc)
               (python3.withPackages (
                 ps: with ps; [
                   pyte
                   sphinx
                   sphinx-rtd-theme
                   pip
+                  (rapidocr.overridePythonAttrs (oldAttrs: {
+                    postPatch = (oldAttrs.postPatch or "") + ''
+                      substituteInPlace rapidocr/config.yaml \
+                        --replace-fail "model_root_dir: null" "model_root_dir: /tmp/.rapidocr-models"
+                      substituteInPlace rapidocr/utils/parse_parameters.py \
+                        --replace-fail "cfg = OmegaConf.load(file_path)" \
+                        "cfg = OmegaConf.load(file_path if file_path else str(Path(__file__).parent.parent / 'config.yaml'))"
+                    '';
+                  }))
                 ]
               ))
               git
@@ -165,19 +186,26 @@
               gzip
               patch
             ];
-            env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
-              with pkgs;
-              [
-                pkg-config
-                openssl
-                vulkan-loader
-                mesa
-                gcc.cc.lib
-              ]
-            );
+            env = {
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
+                with pkgs;
+                [
+                  pkg-config
+                  openssl
+                  vulkan-loader
+                  mesa
+                  stdenv.cc.cc
+                  libpulseaudio
+                ]
+              );
+              VK_ICD_FILENAMES = "${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.x86_64.json";
+            };
             shellHook = ''
+              set -e
+              export PATH="${pkgs.lib.makeBinPath [ pkgs.zig_0_15 ]}:$PATH"
               export GHOSTTY_SOURCE_DIR="$(nu scripts/bootstrap-libghostty.nu | tail -1)"
-              export VK_ICD_FILENAMES="${pkgs.mesa}/share/vulkan/icd.d/lvp_icd.x86_64.json"
+              nu scripts/fetch-aosp-testkey.nu
+              nu scripts/download-rapidocr-models.nu
             '';
           };
         };

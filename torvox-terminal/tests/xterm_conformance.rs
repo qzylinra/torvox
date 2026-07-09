@@ -9,11 +9,7 @@ fn term(rows: u32, cols: u32) -> GhosttyTerminal {
     GhosttyTerminal::new(rows, cols, 500).expect("terminal create")
 }
 
-fn cell(
-    t: &GhosttyTerminal,
-    row: u32,
-    col: u32,
-) -> torvox_terminal::ghostty_terminal::CellSnapshot {
+fn cell(t: &GhosttyTerminal, row: u32, col: u32) -> torvox_terminal::ghostty_terminal::CellSnapshot {
     let snap = t.take_snapshot();
     let idx = (row * snap.cols + col) as usize;
     snap.cells[idx].clone()
@@ -47,7 +43,7 @@ fn sgr_bold_red_fg() {
     t.flush();
     let c = cell(&t, 0, 0);
     assert!(c.bold, "SGR 1 should set bold");
-    let r = (c.fg[0] * 255.0).round() as u8;
+    let r = (c.foreground[0] * 255.0).round() as u8;
     assert!(r > 200, "SGR 31 red should be bright, got r={r}");
 }
 
@@ -58,7 +54,7 @@ fn sgr_italic_blue_fg() {
     t.flush();
     let c = cell(&t, 0, 0);
     assert!(c.italic, "SGR 3 should set italic");
-    let b = (c.fg[2] * 255.0).round() as u8;
+    let b = (c.foreground[2] * 255.0).round() as u8;
     assert!(b > 200, "SGR 34 blue should be bright, got b={b}");
 }
 
@@ -69,7 +65,7 @@ fn sgr_underline_green_bg() {
     t.flush();
     let c = cell(&t, 0, 0);
     assert!(c.underline, "SGR 4 should set underline");
-    let g = (c.bg[1] * 255.0).round() as u8;
+    let g = (c.background[1] * 255.0).round() as u8;
     assert!(g > 100, "SGR 42 green bg should be visible, got g={g}");
 }
 
@@ -83,23 +79,20 @@ fn sgr_bright_foreground_colors() {
     t.flush();
     // SGR 91 = bright red
     let c = cell(&t, 0, 1);
-    let r = (c.fg[0] * 255.0).round() as u8;
+    let r = (c.foreground[0] * 255.0).round() as u8;
     assert!(r > 200, "SGR 91 bright red should be >200, got {r}");
 }
 
 #[test]
 fn sgr_bright_background_colors() {
     let mut t = term(3, 40);
-    for (i, code) in [100u8, 101, 102, 103, 104, 105, 106, 107]
-        .iter()
-        .enumerate()
-    {
+    for (i, code) in [100u8, 101, 102, 103, 104, 105, 106, 107].iter().enumerate() {
         let seq = format!("\x1b[{}m{}\x1b[0m", code, (b'A' + i as u8) as char);
         t.vt_write(seq.as_bytes());
     }
     t.flush();
     let c = cell(&t, 0, 0);
-    let r = (c.bg[0] * 255.0).round() as u8;
+    let r = (c.background[0] * 255.0).round() as u8;
     assert!(r > 100, "SGR 100 bright bg should be visible, got r={r}");
 }
 
@@ -109,7 +102,7 @@ fn sgr_256_color_extended() {
     t.vt_write(b"\x1b[38;5;196mX\x1b[0m");
     t.flush();
     let c = cell(&t, 0, 0);
-    let r = (c.fg[0] * 255.0).round() as u8;
+    let r = (c.foreground[0] * 255.0).round() as u8;
     assert!(r > 200, "SGR 38;5;196 (red cube) should be bright, got {r}");
 }
 
@@ -119,7 +112,7 @@ fn sgr_256_color_grayscale() {
     t.vt_write(b"\x1b[38;5;232mX\x1b[0m");
     t.flush();
     let c = cell(&t, 0, 0);
-    let val = (c.fg[0] * 255.0).round() as u8;
+    let val = (c.foreground[0] * 255.0).round() as u8;
     assert!(
         val < 20,
         "SGR 38;5;232 (grayscale near black) should be dark, got {val}"
@@ -132,9 +125,9 @@ fn sgr_24bit_color() {
     t.vt_write(b"\x1b[38;2;255;128;0mX\x1b[0m");
     t.flush();
     let c = cell(&t, 0, 0);
-    let r = (c.fg[0] * 255.0).round() as u8;
-    let g = (c.fg[1] * 255.0).round() as u8;
-    let b = (c.fg[2] * 255.0).round() as u8;
+    let r = (c.foreground[0] * 255.0).round() as u8;
+    let g = (c.foreground[1] * 255.0).round() as u8;
+    let b = (c.foreground[2] * 255.0).round() as u8;
     assert_eq!(r, 255, "24-bit red channel");
     assert_eq!(g, 128, "24-bit green channel");
     assert_eq!(b, 0, "24-bit blue channel");
@@ -197,16 +190,13 @@ fn sgr_reset_all_attributes() {
 #[test]
 fn cuu_clamps_at_top() {
     let mut t = term(3, 20);
-    t.vt_write(b"1\n2\n3");
+    t.pty_write(b"1\n2\n3");
     t.flush();
     t.vt_write(b"\x1b[99A");
     t.vt_write(b"X");
     t.flush();
     let c = cell(&t, 0, 1);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "CUU 99 from row 2 should clamp to row 0"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "CUU 99 from row 2 should clamp to row 0");
 }
 
 #[test]
@@ -218,10 +208,7 @@ fn cud_clamps_at_bottom() {
     t.vt_write(b"X");
     t.flush();
     let c = cell(&t, 2, 1);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "CUD 99 from row 0 should clamp to row 2"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "CUD 99 from row 0 should clamp to row 2");
 }
 
 #[test]
@@ -249,10 +236,7 @@ fn cup_default_params() {
     t.vt_write(b"\x1b[HX");
     t.flush();
     let c = cell(&t, 0, 0);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "CUP with no params should go to (1,1) = (0,0)"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "CUP with no params should go to (1,1) = (0,0)");
 }
 
 #[test]
@@ -261,10 +245,7 @@ fn cup_row_only() {
     t.vt_write(b"\x1b[3HX");
     t.flush();
     let c = cell(&t, 2, 0);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "CUP row=3 should go to row 2, col 0"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "CUP row=3 should go to row 2, col 0");
 }
 
 #[test]
@@ -273,10 +254,7 @@ fn cup_col_only() {
     t.vt_write(b"\x1b[;10HX");
     t.flush();
     let c = cell(&t, 0, 9);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "CUP col=10 should go to col 9, row 0"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "CUP col=10 should go to col 9, row 0");
 }
 
 // ============================================================
@@ -292,10 +270,7 @@ fn decstbm_full_screen_region() {
     t.vt_write(b"\x1b[1;1HA");
     t.flush();
     let c = cell(&t, 0, 0);
-    assert_eq!(
-        c.codepoint, 'A' as u32,
-        "Full screen region should accept writes"
-    );
+    assert_eq!(c.codepoint, 'A' as u32, "Full screen region should accept writes");
 }
 
 #[test]
@@ -322,10 +297,7 @@ fn decstbm_top_half() {
     assert_eq!(c.codepoint, 'X' as u32, "Top half region should work");
     // Row 4 (outside region) should be unaffected
     let r4 = row_text(&t, 3);
-    assert!(
-        r4.contains('D'),
-        "Row 4 should still have 'D' outside region"
-    );
+    assert!(r4.contains('D'), "Row 4 should still have 'D' outside region");
 }
 
 #[test]
@@ -339,10 +311,7 @@ fn decstbm_bottom_half() {
     let c = cell(&t, 3, 0);
     assert_eq!(c.codepoint, 'X' as u32, "Bottom half region should work");
     let r1 = row_text(&t, 0);
-    assert!(
-        r1.contains('A'),
-        "Row 1 should still have 'A' outside region"
-    );
+    assert!(r1.contains('A'), "Row 1 should still have 'A' outside region");
 }
 
 #[test]
@@ -356,15 +325,9 @@ fn decstbm_middle_region() {
     let c = cell(&t, 2, 0);
     assert_eq!(c.codepoint, 'X' as u32, "Middle region should work");
     let r1 = row_text(&t, 0);
-    assert!(
-        r1.contains('A'),
-        "Row 1 should still have 'A' outside region"
-    );
+    assert!(r1.contains('A'), "Row 1 should still have 'A' outside region");
     let r7 = row_text(&t, 6);
-    assert!(
-        r7.contains('G'),
-        "Row 7 should still have 'G' outside region"
-    );
+    assert!(r7.contains('G'), "Row 7 should still have 'G' outside region");
 }
 
 #[test]
@@ -377,10 +340,7 @@ fn decstbm_scroll_within_region() {
     t.vt_write(b"\x1b[1L"); // Insert line → scroll down within region
     t.flush();
     let r2 = row_text(&t, 1);
-    assert!(
-        r2.contains('B'),
-        "Row 2 should still have 'B' (outside region)"
-    );
+    assert!(r2.contains('B'), "Row 2 should still have 'B' (outside region)");
 }
 
 #[test]
@@ -388,15 +348,12 @@ fn decstbm_reset_clears_region() {
     let mut t = term(5, 10);
     t.vt_write(b"\x1b[2;4r");
     t.vt_write(b"\x1b[r"); // Reset
-    t.vt_write(b"A\nB\nC\nD\nE");
+    t.pty_write(b"A\nB\nC\nD\nE");
     t.flush();
     // After reset, all rows should be usable
     for row in 0..5 {
         let c = cell(&t, row, 0);
-        assert!(
-            c.codepoint != 0,
-            "Row {row} should have content after reset"
-        );
+        assert!(c.codepoint != 0, "Row {row} should have content after reset");
     }
 }
 
@@ -439,10 +396,7 @@ fn decstbm_scroll_back_and_forth() {
     t.flush();
     // After insert+delete, content should be approximately back to original
     let r1 = row_text(&t, 0);
-    assert!(
-        r1.contains('A'),
-        "Row 1 should still have 'A' (outside region)"
-    );
+    assert!(r1.contains('A'), "Row 1 should still have 'A' (outside region)");
 }
 
 #[test]
@@ -532,10 +486,7 @@ fn decstbm_scroll_at_top_boundary() {
     t.vt_write(b"\x1b[1M"); // Delete line at top → scroll up within region
     t.flush();
     let r1 = row_text(&t, 0);
-    assert!(
-        r1.contains('A'),
-        "Row 1 should still have 'A' (outside region)"
-    );
+    assert!(r1.contains('A'), "Row 1 should still have 'A' (outside region)");
 }
 
 #[test]
@@ -548,10 +499,7 @@ fn decstbm_scroll_at_bottom_boundary() {
     t.vt_write(b"\x1b[1L"); // Insert line at bottom → scroll down within region
     t.flush();
     let r1 = row_text(&t, 0);
-    assert!(
-        r1.contains('A'),
-        "Row 1 should still have 'A' (outside region)"
-    );
+    assert!(r1.contains('A'), "Row 1 should still have 'A' (outside region)");
 }
 
 // ============================================================
@@ -695,8 +643,5 @@ fn vpa_positions_cursor_vertically() {
     t.vt_write(b"\x1b[3fX");
     t.flush();
     let c = cell(&t, 2, 0);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "VPA 3 should go to row 3 (index 2)"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "VPA 3 should go to row 3 (index 2)");
 }

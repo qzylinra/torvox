@@ -67,10 +67,7 @@ fn sgr_underline_affects_subsequent_cells() {
     let c5 = cell(&t, 0, 5);
     assert!(c0.underline, "cell 0 'u' should be underlined");
     assert!(c4.underline, "cell 4 'r' should be underlined");
-    assert!(
-        !c5.underline,
-        "cell 5 'p' should not be underlined after SGR 0"
-    );
+    assert!(!c5.underline, "cell 5 'p' should not be underlined after SGR 0");
 }
 
 /// SGR 7 (reverse) sets reverse video
@@ -97,25 +94,25 @@ fn sgr_foreground_color_codes() {
     t.flush();
     // Catppuccin Mocha palette: SGR 31 (red) = [243, 139, 168]
     let c_red = cell(&t, 0, 1);
-    let r = (c_red.fg[0] * 255.0).round() as u8;
-    let g = (c_red.fg[1] * 255.0).round() as u8;
-    let b = (c_red.fg[2] * 255.0).round() as u8;
+    let r = (c_red.foreground[0] * 255.0).round() as u8;
+    let g = (c_red.foreground[1] * 255.0).round() as u8;
+    let b = (c_red.foreground[2] * 255.0).round() as u8;
     assert_eq!(r, 243, "SGR 31 red channel (expected 243, got {r})");
     assert_eq!(g, 139, "SGR 31 green channel (expected 139, got {g})");
     assert_eq!(b, 168, "SGR 31 blue channel (expected 168, got {b})");
     // SGR 32 (green) = [166, 227, 161]
     let c_green = cell(&t, 0, 2);
-    let r = (c_green.fg[0] * 255.0).round() as u8;
-    let g = (c_green.fg[1] * 255.0).round() as u8;
-    let b = (c_green.fg[2] * 255.0).round() as u8;
+    let r = (c_green.foreground[0] * 255.0).round() as u8;
+    let g = (c_green.foreground[1] * 255.0).round() as u8;
+    let b = (c_green.foreground[2] * 255.0).round() as u8;
     assert_eq!(r, 166, "SGR 32 red channel (expected 166, got {r})");
     assert_eq!(g, 227, "SGR 32 green channel (expected 227, got {g})");
     assert_eq!(b, 161, "SGR 32 blue channel (expected 161, got {b})");
     // SGR 34 (blue) = [137, 180, 250]
     let c_blue = cell(&t, 0, 4);
-    let r = (c_blue.fg[0] * 255.0).round() as u8;
-    let g = (c_blue.fg[1] * 255.0).round() as u8;
-    let b = (c_blue.fg[2] * 255.0).round() as u8;
+    let r = (c_blue.foreground[0] * 255.0).round() as u8;
+    let g = (c_blue.foreground[1] * 255.0).round() as u8;
+    let b = (c_blue.foreground[2] * 255.0).round() as u8;
     assert_eq!(r, 137, "SGR 34 red channel (expected 137, got {r})");
     assert_eq!(g, 180, "SGR 34 green channel (expected 180, got {g})");
     assert_eq!(b, 250, "SGR 34 blue channel (expected 250, got {b})");
@@ -140,10 +137,7 @@ fn cup_out_of_range_row_clamps() {
     t.vt_write(b"\x1b[99;1HX");
     t.flush();
     let c = cell(&t, 4, 0);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "CUP row=99 should clamp to last row (4)"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "CUP row=99 should clamp to last row (4)");
 }
 
 #[test]
@@ -152,10 +146,7 @@ fn cup_out_of_range_col_clamps() {
     t.vt_write(b"\x1b[1;99HX");
     t.flush();
     let c = cell(&t, 0, 19);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "CUP col=99 should clamp to last col (19)"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "CUP col=99 should clamp to last col (19)");
 }
 
 // ============================================================
@@ -172,10 +163,7 @@ fn ed2_erases_entire_display() {
     for row in 0..3 {
         for col in 0..5 {
             let c = cell(&t, row, col);
-            assert_eq!(
-                c.codepoint, 0,
-                "cell({row},{col}) should be empty after ED 2"
-            );
+            assert_eq!(c.codepoint, 0, "cell({row},{col}) should be empty after ED 2");
         }
     }
 }
@@ -249,10 +237,7 @@ fn decsc_decrc_save_restore_cursor_position() {
     t.vt_write(b"X");
     t.flush();
     let c = cell(&t, 0, 5);
-    assert_eq!(
-        c.codepoint, 'X' as u32,
-        "DECRC should restore cursor to (0,5)"
-    );
+    assert_eq!(c.codepoint, 'X' as u32, "DECRC should restore cursor to (0,5)");
 }
 
 // ============================================================
@@ -299,7 +284,7 @@ fn scroll_region_restricts_scroll() {
 #[test]
 fn insert_line_shifts_content_down() {
     let mut t = term(5, 10);
-    t.vt_write(b"Row1\nRow2\nRow3\nRow4\nRow5");
+    t.pty_write(b"Row1\nRow2\nRow3\nRow4\nRow5");
     t.flush();
     t.vt_write(b"\x1b[3;1H");
     t.vt_write(b"\x1b[1L");
@@ -317,7 +302,7 @@ fn insert_line_shifts_content_down() {
 #[test]
 fn delete_line_shifts_content_up() {
     let mut t = term(5, 10);
-    t.vt_write(b"Row1\nRow2\nRow3\nRow4\nRow5");
+    t.pty_write(b"Row1\nRow2\nRow3\nRow4\nRow5");
     t.flush();
     t.vt_write(b"\x1b[2;1H");
     t.vt_write(b"\x1b[1M");
@@ -401,10 +386,7 @@ fn dch_deletes_characters_and_shifts_left() {
     let c2 = cell(&t, 0, 2);
     let c8 = cell(&t, 0, 8);
     assert_eq!(c2.codepoint, 'D' as u32, "DCH: col 2 should have D");
-    assert_eq!(
-        c8.codepoint, 'J' as u32,
-        "DCH: col 8 should have J (shifted)"
-    );
+    assert_eq!(c8.codepoint, 'J' as u32, "DCH: col 8 should have J (shifted)");
     let c9 = cell(&t, 0, 9);
     assert_eq!(c9.codepoint, 0, "DCH: col 9 should be empty after shift");
 }
@@ -421,27 +403,11 @@ fn ech_erases_n_characters() {
     t.vt_write(b"\x1b[3G");
     t.vt_write(b"\x1b[3X");
     t.flush();
-    assert_eq!(
-        cell(&t, 0, 0).codepoint,
-        'A' as u32,
-        "col 0 should survive ECH"
-    );
-    assert_eq!(
-        cell(&t, 0, 1).codepoint,
-        'B' as u32,
-        "col 1 should survive ECH"
-    );
-    assert_eq!(
-        cell(&t, 0, 2).codepoint,
-        0,
-        "col 2 (cursor) should be erased by ECH"
-    );
+    assert_eq!(cell(&t, 0, 0).codepoint, 'A' as u32, "col 0 should survive ECH");
+    assert_eq!(cell(&t, 0, 1).codepoint, 'B' as u32, "col 1 should survive ECH");
+    assert_eq!(cell(&t, 0, 2).codepoint, 0, "col 2 (cursor) should be erased by ECH");
     assert_eq!(cell(&t, 0, 4).codepoint, 0, "col 4 should be erased by ECH");
-    assert_eq!(
-        cell(&t, 0, 5).codepoint,
-        'F' as u32,
-        "col 5 should survive ECH"
-    );
+    assert_eq!(cell(&t, 0, 5).codepoint, 'F' as u32, "col 5 should survive ECH");
 }
 
 // ============================================================
@@ -459,7 +425,7 @@ fn ech_erases_n_characters() {
 #[test]
 fn cuu_moves_cursor_to_correct_row() {
     let mut t = term(5, 20);
-    t.vt_write(b"1\n2\n3\n4");
+    t.pty_write(b"1\n2\n3\n4");
     t.flush();
     t.vt_write(b"\x1b[2A");
     t.vt_write(b"X");
@@ -490,10 +456,7 @@ fn decawm_off_does_not_wrap() {
     let snap = t.take_snapshot();
     // Cursor stays at col 4 (right margin), chars overwrite it
     assert_eq!(snap.cells[0].codepoint, 'A' as u32, "col 0 = A (unchanged)");
-    assert_eq!(
-        snap.cells[4].codepoint, 'H' as u32,
-        "col 4 = H (overwritten by F,G,H)"
-    );
+    assert_eq!(snap.cells[4].codepoint, 'H' as u32, "col 4 = H (overwritten by F,G,H)");
 }
 
 /// DECRC restores SGR bold attribute.
@@ -512,10 +475,7 @@ fn decrc_restores_bold() {
     t.vt_write(b"\x1b8Y");
     t.flush();
     let cy = cell(&t, 0, 0);
-    assert!(
-        cy.bold,
-        "Y after DECRC should be bold (restored from DECSC)"
-    );
+    assert!(cy.bold, "Y after DECRC should be bold (restored from DECSC)");
 }
 
 /// SGR 3 sets italic attribute (verified: italic chain is correct in
@@ -537,9 +497,9 @@ fn sgr_combined_bold_red_sets_color() {
     t.flush();
     let c = cell(&t, 0, 0);
     assert!(c.bold, "SGR 1 should set bold");
-    let r = (c.fg[0] * 255.0).round() as u8;
-    let g = (c.fg[1] * 255.0).round() as u8;
-    let b = (c.fg[2] * 255.0).round() as u8;
+    let r = (c.foreground[0] * 255.0).round() as u8;
+    let g = (c.foreground[1] * 255.0).round() as u8;
+    let b = (c.foreground[2] * 255.0).round() as u8;
     assert_eq!(r, 243, "SGR 31 should set red=243");
     assert_eq!(g, 139, "SGR 31 should set green=139");
     assert_eq!(b, 168, "SGR 31 should set blue=168");

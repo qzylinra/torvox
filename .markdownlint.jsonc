@@ -15,5 +15,9 @@
   },
   "MD014": false,
   "MD046": false,
-  "no-inline-html": false
+  "no-inline-html": false,
+  "MD060": false,
+  "ignores": [
+    "ultragoal/**"
+  ]
 }

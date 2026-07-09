@@ -1,34 +1,37 @@
 @file:Suppress("ktlint:standard:function-naming")
 
-// @TorvoxBridge JNA binding, IMPL_ANDR_KT_001, impl, [REQ_ANDR_001]
-// @need-ids: REQ_ANDR_001, REQ_ANDR_003
-
 package io.torvox.bridge
 
+import android.util.Log
 import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+
+private const val LOW_32_MASK = 0xFFFFFFFFL
+private const val LOW_16_MASK = 0xFFFFL
+private const val JNA_POINTER_SIZE = 8L
+private const val JNA_INT_SIZE = 4L
 
 // ── Wire encoding helpers ──────────────────────────────────────────────
 
 internal class WireWriter {
     private val buffer = mutableListOf<Byte>()
 
-    fun writeByte(v: Byte) {
-        buffer.add(v)
+    fun writeByte(value: Byte) {
+        buffer.add(value)
     }
 
-    fun writeI32(v: Int) {
-        buffer.add((v and 0xFF).toByte())
-        buffer.add(((v shr 8) and 0xFF).toByte())
-        buffer.add(((v shr 16) and 0xFF).toByte())
-        buffer.add(((v shr 24) and 0xFF).toByte())
+    fun writeI32(value: Int) {
+        buffer.add((value and 0xFF).toByte())
+        buffer.add(((value shr 8) and 0xFF).toByte())
+        buffer.add(((value shr 16) and 0xFF).toByte())
+        buffer.add(((value shr 24) and 0xFF).toByte())
     }
 
-    fun writeU32(v: UInt) = writeI32(v.toInt())
+    fun writeU32(value: UInt) = writeI32(value.toInt())
 
-    fun writeString(v: String) {
-        val bytes = v.toByteArray(Charsets.UTF_8)
+    fun writeString(value: String) {
+        val bytes = value.toByteArray(Charsets.UTF_8)
         writeI32(bytes.size)
         buffer.addAll(bytes.toList())
     }
@@ -55,6 +58,10 @@ class WireReader(
     }
 
     fun readI32(): Int {
+        require(data.size - position >= Int.SIZE_BYTES) {
+            "WireReader.readI32: need ${Int.SIZE_BYTES} bytes at offset $position " +
+                "but only ${data.size - position} remain in buffer of size ${data.size}"
+        }
         val value =
             (data[position].toInt() and 0xFF) or ((data[position + 1].toInt() and 0xFF) shl 8) or
                 ((data[position + 2].toInt() and 0xFF) shl 16) or ((data[position + 3].toInt() and 0xFF) shl 24)
@@ -67,19 +74,16 @@ class WireReader(
     fun readString(): String {
         val length = readI32()
         if (length == 0) return ""
+        require(length > 0) {
+            "WireReader.readString: invalid negative length $length"
+        }
+        require(data.size - position >= length) {
+            "WireReader.readString: need $length bytes at offset $position " +
+                "but only ${data.size - position} remain in buffer of size ${data.size}"
+        }
         val bytes = data.copyOfRange(position, position + length)
         position += length
         return String(bytes, Charsets.UTF_8)
-    }
-
-    fun <T> readOptional(reader: (WireReader) -> T): T? {
-        val tag = readByte()
-        return if (tag != 0.toByte()) reader(this) else null
-    }
-
-    fun <T> readList(reader: (WireReader) -> T): List<T> {
-        val length = readI32()
-        return (0 until length).map { reader(this) }
     }
 }
 
@@ -161,38 +165,39 @@ data class BridgeTheme(
 
     companion object {
         @Suppress("FunctionNaming")
-        fun wireDecode(r: WireReader): BridgeTheme = BridgeTheme(
-            name = r.readString(),
-            bg = r.readI32(),
-            fg = r.readI32(),
-            cursor = r.readI32(),
-            selectionBg = r.readI32(),
-            ansi0 = r.readI32(),
-            ansi1 = r.readI32(),
-            ansi2 = r.readI32(),
-            ansi3 = r.readI32(),
-            ansi4 = r.readI32(),
-            ansi5 = r.readI32(),
-            ansi6 = r.readI32(),
-            ansi7 = r.readI32(),
-            ansi8 = r.readI32(),
-            ansi9 = r.readI32(),
-            ansi10 = r.readI32(),
-            ansi11 = r.readI32(),
-            ansi12 = r.readI32(),
-            ansi13 = r.readI32(),
-            ansi14 = r.readI32(),
-            ansi15 = r.readI32(),
-        )
+        fun wireDecode(reader: WireReader): BridgeTheme =
+            BridgeTheme(
+                name = reader.readString(),
+                bg = reader.readI32(),
+                fg = reader.readI32(),
+                cursor = reader.readI32(),
+                selectionBg = reader.readI32(),
+                ansi0 = reader.readI32(),
+                ansi1 = reader.readI32(),
+                ansi2 = reader.readI32(),
+                ansi3 = reader.readI32(),
+                ansi4 = reader.readI32(),
+                ansi5 = reader.readI32(),
+                ansi6 = reader.readI32(),
+                ansi7 = reader.readI32(),
+                ansi8 = reader.readI32(),
+                ansi9 = reader.readI32(),
+                ansi10 = reader.readI32(),
+                ansi11 = reader.readI32(),
+                ansi12 = reader.readI32(),
+                ansi13 = reader.readI32(),
+                ansi14 = reader.readI32(),
+                ansi15 = reader.readI32(),
+            )
     }
 }
 
 data class TerminalConfig(
     val shell: Shell = Shell.SystemDefault,
-    val rows: UInt = 24u,
-    val cols: UInt = 80u,
-    val scrollbackLines: UInt = 50000u,
-    val font_size_tenths: UInt = 140u,
+    val rows: UInt = DEFAULT_ROWS,
+    val cols: UInt = DEFAULT_COLS,
+    val scrollbackLines: UInt = DEFAULT_SCROLLBACK,
+    val font_size_tenths: UInt = DEFAULT_FONT_SIZE_TENTHS,
     val theme: BridgeTheme = BridgeTheme(),
     val home: String = "",
     val user: String = "",
@@ -217,25 +222,31 @@ data class TerminalConfig(
     }
 
     companion object {
+        private const val DEFAULT_ROWS = 24u
+        private const val DEFAULT_COLS = 80u
+        private const val DEFAULT_SCROLLBACK = 50_000u
+        private const val DEFAULT_FONT_SIZE_TENTHS = 140u
+
         @Suppress("FunctionNaming")
-        fun wireDecode(r: WireReader): TerminalConfig = TerminalConfig(
-            shell =
-            when (r.readI32()) {
-                0 -> Shell.SystemDefault
-                1 -> Shell.Custom(r.readString())
-                else -> Shell.SystemDefault
-            },
-            rows = r.readU32(),
-            cols = r.readU32(),
-            scrollbackLines = r.readU32(),
-            font_size_tenths = r.readU32(),
-            theme = BridgeTheme.wireDecode(r),
-            home = r.readString(),
-            user = r.readString(),
-            path = r.readString(),
-            workingDirectory = r.readString(),
-            prefix = r.readString(),
-        )
+        fun wireDecode(reader: WireReader): TerminalConfig =
+            TerminalConfig(
+                shell =
+                    when (reader.readI32()) {
+                        0 -> Shell.SystemDefault
+                        1 -> Shell.Custom(reader.readString())
+                        else -> Shell.SystemDefault
+                    },
+                rows = reader.readU32(),
+                cols = reader.readU32(),
+                scrollbackLines = reader.readU32(),
+                font_size_tenths = reader.readU32(),
+                theme = BridgeTheme.wireDecode(reader),
+                home = reader.readString(),
+                user = reader.readString(),
+                path = reader.readString(),
+                workingDirectory = reader.readString(),
+                prefix = reader.readString(),
+            )
     }
 }
 
@@ -273,6 +284,12 @@ private interface TorvoxNative : Library {
         height: Int,
     ): Int
 
+    fun torvox_bridge_set_surface_size(
+        handle: Long,
+        width: Int,
+        height: Int,
+    )
+
     fun torvox_bridge_update_native_window(
         handle: Long,
         window_ptr_low: Int,
@@ -297,6 +314,12 @@ private interface TorvoxNative : Library {
 
     fun boltffi_torvox_bridge_list_fonts(handle: Long): Pointer?
 
+    fun boltffi_torvox_bridge_load_font_file(
+        handle: Long,
+        path: ByteArray,
+        pathLen: Int,
+    ): Pointer?
+
     fun boltffi_torvox_bridge_get_theme(
         handle: Long,
         name: String?,
@@ -312,6 +335,17 @@ private interface TorvoxNative : Library {
         dataDir: Pointer,
     ): Int
 
+    fun torvox_bridge_save_test_frame_with_selection(
+        handle: Long,
+        dataDir: Pointer,
+        startRow: Int,
+        startCol: Int,
+        endRow: Int,
+        endCol: Int,
+        active: Int,
+        mode: Int,
+    ): Int
+
     fun torvox_bridge_poll_clipboard(handle: Long): Long
 
     fun torvox_bridge_poll_notification(handle: Long): Long
@@ -322,14 +356,14 @@ private interface TorvoxNative : Library {
 
     fun torvox_bridge_cwd(handle: Long): Pointer?
 
-    fun torvox_bridge_free_cstring(s: Pointer?)
+    fun torvox_bridge_free_cstring(pointer: Pointer?)
 
     fun torvox_bridge_focus_event(
         handle: Long,
         focused: Int,
     )
 
-    fun torvox_bridge_scrollback_len(handle: Long): Long
+    fun torvox_bridge_scrollback_len(handle: Long): Int
 
     // Raw C-ABI wrappers for string/byte-array/scalar methods
 
@@ -363,9 +397,30 @@ private interface TorvoxNative : Library {
         data_len: Int,
     ): Int
 
+    fun torvox_bridge_process_key_event(
+        handle: Long,
+        key_code: Int,
+        modifiers: Byte,
+        action: Byte,
+        unicode_char: Int,
+        unshifted_char: Int,
+    ): Int
+
     fun torvox_bridge_set_font_size(
         handle: Long,
         size_tenths: Int,
+    ): Int
+
+    fun torvox_bridge_set_font_size_in_place(
+        handle: Long,
+        size_tenths: Int,
+    ): Int
+
+    fun torvox_bridge_set_extra_font_paths(
+        handle: Long,
+        paths_ptr: com.sun.jna.Pointer?,
+        lens_ptr: com.sun.jna.Pointer?,
+        count: Int,
     ): Int
 
     @Suppress("LongParameterList", "FunctionParameterNaming")
@@ -376,6 +431,20 @@ private interface TorvoxNative : Library {
         end_row: Int,
         end_col: Int,
         active: Int,
+        mode: Int,
+    ): Int
+
+    fun torvox_bridge_expand_and_set_selection(
+        handle: Long,
+        row: Int,
+        col: Int,
+        mode: Int,
+    ): Long
+
+    fun torvox_bridge_set_search_highlights(
+        handle: Long,
+        data_ptr: ByteArray?,
+        data_len: Int,
     ): Int
 
     fun torvox_bridge_set_font_family(
@@ -403,7 +472,24 @@ private interface TorvoxNative : Library {
 
     fun torvox_bridge_get_grid_cols(handle: Long): Int
 
-    fun torvox_bridge_free_string(s: Long)
+    fun torvox_bridge_get_cell_width(handle: Long): Float
+
+    fun torvox_bridge_get_cell_height(handle: Long): Float
+
+    fun torvox_bridge_get_default_font_name(handle: Long): Long
+
+    fun torvox_bridge_get_font_info(handle: Long): Long
+
+    fun torvox_bridge_set_system_locale(
+        handle: Long,
+        locale: ByteArray,
+    )
+
+    fun torvox_bridge_list_font_families(handle: Long): Long
+
+    fun torvox_bridge_free_string(handle: Long)
+
+    fun torvox_bridge_free_notification(ptr: Long)
 
     fun torvox_bridge_search_in_scrollback(
         handle: Long,
@@ -411,14 +497,80 @@ private interface TorvoxNative : Library {
         query_len: Int,
     ): Long
 
+    fun torvox_bridge_search_all_in_scrollback(
+        handle: Long,
+        query_ptr: ByteArray?,
+        query_len: Int,
+        case_sensitive: Byte,
+    ): Long
+
+    fun torvox_bridge_set_scroll_offset(
+        handle: Long,
+        offset: Int,
+    )
+
+    fun torvox_bridge_wait_until_ready_for_render(handle: Long)
+
+    fun torvox_bridge_set_background_image(
+        handle: Long,
+        data: ByteArray?,
+        len: Int,
+        width: Int,
+        height: Int,
+    )
+
+    fun torvox_bridge_set_background_params(
+        handle: Long,
+        blur_radius: Int,
+        alpha_tenths: Int,
+    )
+
+    fun torvox_bridge_clear_background_image(handle: Long)
+
+    fun torvox_bridge_set_cursor_visible(
+        handle: Long,
+        visible: Int,
+    )
+
+    fun torvox_bridge_set_cursor_style(
+        handle: Long,
+        style_ptr: ByteArray?,
+        style_len: Int,
+    )
+
     fun boltffi_last_error_message(): ByteArray?
 }
 
+@Volatile
 private var nativeLib: TorvoxNative? = null
 private val libLock = Any()
 
-private fun ensureLib(): TorvoxNative = nativeLib ?: synchronized(libLock) {
-    nativeLib ?: Native.load("torvox_android", TorvoxNative::class.java).also { nativeLib = it }
+/** Force JNA into Android mode so it uses System.loadLibrary instead of dlopen. */
+fun initNativeProxy() {
+    if (nativeLib != null) return
+    // Tell JNA we're on Android so it uses System.loadLibrary (which works with the
+    // classloader namespace) instead of dlopen (which fails on Android 15+ linker
+    // namespaces). Must be set before any Native.load() call.
+    try {
+        System.setProperty("jna.platform", "android")
+    } catch (e: SecurityException) {
+        android.util.Log.w("TorvoxBridge", "Failed to set jna.platform", e)
+    }
+    System.loadLibrary("torvox_android")
+    nativeLib = Native.load("torvox_android", TorvoxNative::class.java)
+}
+
+private fun ensureLib(): TorvoxNative {
+    nativeLib?.let { return it }
+    synchronized(libLock) {
+        nativeLib?.let { return it }
+        initNativeProxy()
+        val lib = nativeLib
+        if (lib == null) {
+            Log.w("TorvoxBridge", "initNativeProxy() did not set nativeLib")
+        }
+        return nativeLib ?: error("nativeLib not initialized after initNativeProxy")
+    }
 }
 
 // ── FfiBuf reader ─────────────────────────────────────────────────────
@@ -449,8 +601,8 @@ class TorvoxBridge(
         functionPointer: (TorvoxNative) -> Pointer?,
         decode: (WireReader) -> T,
     ): T {
-        val lib = ensureLib()
-        val pointer = functionPointer(lib) ?: throw RuntimeException("Native call returned null")
+        val library = ensureLib()
+        val pointer = functionPointer(library) ?: throw RuntimeException("Native call returned null")
         val buffer = readFfiBuf(pointer)
         if (buffer.pointer == 0L) throw RuntimeException("Empty response from native call")
         val reader = WireReader(readWireBytes(buffer))
@@ -458,13 +610,9 @@ class TorvoxBridge(
         return if (tag == 0.toByte()) decode(reader) else throw RuntimeException(reader.readString())
     }
 
-    private fun callUnit(functionPointer: (TorvoxNative) -> Pointer?) {
-        callOk(functionPointer) { }
-    }
-
     fun ping(): String {
-        val lib = ensureLib()
-        val result = lib.torvox_bridge_ping(handle)
+        val library = ensureLib()
+        val result = library.torvox_bridge_ping(handle)
         return if (result == 0) "pong" else "error:$result"
     }
 
@@ -472,8 +620,8 @@ class TorvoxBridge(
         rows: UInt,
         cols: UInt,
     ): Int {
-        val lib = ensureLib()
-        return lib.torvox_bridge_spawn_terminal(handle, rows.toInt(), cols.toInt())
+        val library = ensureLib()
+        return library.torvox_bridge_spawn_terminal(handle, rows.toInt(), cols.toInt())
     }
 
     fun setNativeWindow(
@@ -481,11 +629,11 @@ class TorvoxBridge(
         width: Int,
         height: Int,
     ) {
-        val lib = ensureLib()
-        val low = (windowPointer and 0xFFFFFFFFL).toInt()
-        val high = ((windowPointer shr 32) and 0xFFFFFFFFL).toInt()
-        val ret = lib.torvox_bridge_set_native_window(handle, low, high, width, height)
-        if (ret != 0) throw RuntimeException("setNativeWindow failed with code $ret")
+        val library = ensureLib()
+        val low = (windowPointer and LOW_32_MASK).toInt()
+        val high = ((windowPointer shr 32) and LOW_32_MASK).toInt()
+        val result = library.torvox_bridge_set_native_window(handle, low, high, width, height)
+        if (result != 0) throw RuntimeException("setNativeWindow failed with code $result")
     }
 
     fun render(): Int = ensureLib().torvox_bridge_render(handle)
@@ -494,10 +642,39 @@ class TorvoxBridge(
         val cStr =
             com.sun.jna.Native
                 .toByteArray(dataDir)
-        val mem = com.sun.jna.Memory(cStr.size.toLong() + 1)
-        mem.write(0, cStr, 0, cStr.size)
-        mem.setByte(cStr.size.toLong(), 0)
-        return ensureLib().torvox_bridge_save_test_frame(handle, mem)
+        com.sun.jna.Memory(cStr.size.toLong() + 1).use { mem ->
+            mem.write(0, cStr, 0, cStr.size)
+            mem.setByte(cStr.size.toLong(), 0)
+            return ensureLib().torvox_bridge_save_test_frame(handle, mem)
+        }
+    }
+
+    fun saveTestFrameWithSelection(
+        dataDir: String,
+        startRow: Int,
+        startCol: Int,
+        endRow: Int,
+        endCol: Int,
+        active: Boolean,
+        mode: Int = 0,
+    ): Int {
+        val cStr =
+            com.sun.jna.Native
+                .toByteArray(dataDir)
+        com.sun.jna.Memory(cStr.size.toLong() + 1).use { mem ->
+            mem.write(0, cStr, 0, cStr.size)
+            mem.setByte(cStr.size.toLong(), 0)
+            return ensureLib().torvox_bridge_save_test_frame_with_selection(
+                handle,
+                mem,
+                startRow,
+                startCol,
+                endRow,
+                endCol,
+                if (active) 1 else 0,
+                mode,
+            )
+        }
     }
 
     fun pollBel(): Boolean = ensureLib().torvox_bridge_poll_bel(handle) != 0
@@ -517,10 +694,14 @@ class TorvoxBridge(
     fun pollNotification(): Pair<String, String>? {
         val pointer = ensureLib().torvox_bridge_poll_notification(handle)
         if (pointer == 0L) return null
-        val combined = Pointer(pointer).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(pointer)
-        val parts = combined.split("\u0000", limit = 2)
-        return if (parts.size == 2) parts[0] to parts[1] else null
+        // pointer points to [title_ptr, body_ptr] — two consecutive C string pointers
+        val buffer = Pointer(pointer)
+        val titlePtr = buffer.getPointer(0)
+        val bodyPtr = buffer.getPointer(8)
+        val title = titlePtr?.getString(0, "UTF-8") ?: ""
+        val body = bodyPtr?.getString(0, "UTF-8") ?: ""
+        ensureLib().torvox_bridge_free_notification(pointer)
+        return if (title.isNotEmpty() || body.isNotEmpty()) title to body else null
     }
 
     fun cwd(): String {
@@ -539,18 +720,25 @@ class TorvoxBridge(
         rows: UInt,
         cols: UInt,
     ) {
-        val lib = ensureLib()
-        val ret = lib.torvox_bridge_resize(handle, rows.toInt(), cols.toInt())
-        if (ret != 0) throw RuntimeException("resize failed with code $ret")
+        val library = ensureLib()
+        val result = library.torvox_bridge_resize(handle, rows.toInt(), cols.toInt())
+        if (result != 0) throw RuntimeException("resize failed with code $result")
     }
 
     fun recomputeGrid(
         width: UInt,
         height: UInt,
     ) {
-        val lib = ensureLib()
-        val ret = lib.torvox_bridge_recompute_grid(handle, width.toInt(), height.toInt())
-        if (ret != 0) throw RuntimeException("recomputeGrid failed with code $ret")
+        val library = ensureLib()
+        val result = library.torvox_bridge_recompute_grid(handle, width.toInt(), height.toInt())
+        if (result != 0) throw RuntimeException("recomputeGrid failed with code $result")
+    }
+
+    fun setSurfaceSize(
+        width: Int,
+        height: Int,
+    ) {
+        ensureLib().torvox_bridge_set_surface_size(handle, width, height)
     }
 
     fun updateNativeWindow(
@@ -558,21 +746,29 @@ class TorvoxBridge(
         width: Int,
         height: Int,
     ) {
-        val lib = ensureLib()
-        val low = (windowPointer and 0xFFFFFFFFL).toInt()
-        val high = ((windowPointer shr 32) and 0xFFFFFFFFL).toInt()
-        val ret = lib.torvox_bridge_update_native_window(handle, low, high, width, height)
-        if (ret != 0) throw RuntimeException("updateNativeWindow failed with code $ret")
+        val library = ensureLib()
+        val low = (windowPointer and LOW_32_MASK).toInt()
+        val high = ((windowPointer shr 32) and LOW_32_MASK).toInt()
+        val result = library.torvox_bridge_update_native_window(handle, low, high, width, height)
+        if (result != 0) throw RuntimeException("updateNativeWindow failed with code $result")
     }
 
     fun releaseSurface() {
-        val lib = ensureLib()
-        lib.torvox_bridge_release_surface(handle)
+        val library = ensureLib()
+        library.torvox_bridge_release_surface(handle)
     }
 
     fun releaseGpuSurface() {
-        val lib = ensureLib()
-        lib.torvox_bridge_release_gpu_surface(handle)
+        val library = ensureLib()
+        library.torvox_bridge_release_gpu_surface(handle)
+    }
+
+    fun setScrollOffset(offset: UInt) {
+        ensureLib().torvox_bridge_set_scroll_offset(handle, offset.toInt())
+    }
+
+    fun waitUntilReadyForRender() {
+        ensureLib().torvox_bridge_wait_until_ready_for_render(handle)
     }
 
     fun setSelection(
@@ -581,25 +777,110 @@ class TorvoxBridge(
         endRow: UInt,
         endCol: UInt,
         active: Boolean,
+        mode: Byte = 0,
     ) {
-        val lib = ensureLib()
-        lib.torvox_bridge_set_selection(handle, startRow.toInt(), startCol.toInt(), endRow.toInt(), endCol.toInt(), if (active) 1 else 0)
+        val library = ensureLib()
+        library.torvox_bridge_set_selection(
+            handle,
+            startRow.toInt(),
+            startCol.toInt(),
+            endRow.toInt(),
+            endCol.toInt(),
+            if (active) 1 else 0,
+            mode.toInt(),
+        )
+    }
+
+    fun expandAndSetSelection(
+        row: UInt,
+        col: UInt,
+        mode: Byte = 0,
+    ): Pair<Pair<UInt, UInt>, Pair<UInt, UInt>>? {
+        if (row > LOW_16_MASK.toUInt() || col > LOW_16_MASK.toUInt()) {
+            throw IllegalArgumentException(
+                "expandAndSetSelection: row/col exceed the 16-bit wire packing range " +
+                    "(row=$row, col=$col, max=${LOW_16_MASK})",
+            )
+        }
+        val result =
+            ensureLib().torvox_bridge_expand_and_set_selection(
+                handle,
+                row.toInt(),
+                col.toInt(),
+                mode.toInt(),
+            )
+        if (result < 0) return null
+        val startRow = (result and LOW_16_MASK).toUInt()
+        val startCol = ((result shr 16) and LOW_16_MASK).toUInt()
+        val endRow = ((result shr 32) and LOW_16_MASK).toUInt()
+        val endCol = ((result shr 48) and LOW_16_MASK).toUInt()
+        return Pair(Pair(startRow, startCol), Pair(endRow, endCol))
+    }
+
+    fun setSearchHighlights(serialized: ByteArray) {
+        ensureLib().torvox_bridge_set_search_highlights(handle, serialized, serialized.size)
+    }
+
+    fun clearSearchHighlights() {
+        ensureLib().torvox_bridge_set_search_highlights(handle, null, 0)
     }
 
     fun scrollbackLength(): UInt = ensureLib().torvox_bridge_scrollback_len(handle).toUInt()
 
-    fun writeToPty(data: ByteArray) {
-        ensureLib().torvox_bridge_write_to_pty(handle, data, data.size)
+    fun writeToPty(data: ByteArray): Boolean {
+        val result = ensureLib().torvox_bridge_write_to_pty(handle, data, data.size)
+        return result == 0
+    }
+
+    fun processKeyEvent(
+        keyCode: Int,
+        modifiers: Byte,
+        action: Byte,
+        unicodeChar: Int,
+        unshiftedChar: Int,
+    ): Boolean {
+        val result =
+            ensureLib().torvox_bridge_process_key_event(
+                handle,
+                keyCode,
+                modifiers,
+                action,
+                unicodeChar,
+                unshiftedChar,
+            )
+        return result == 0
     }
 
     fun setFontSize(sizeTenths: UInt) {
         ensureLib().torvox_bridge_set_font_size(handle, sizeTenths.toInt())
     }
 
+    fun setFontSizeInPlace(sizeTenths: UInt) {
+        val result = ensureLib().torvox_bridge_set_font_size_in_place(handle, sizeTenths.toInt())
+        if (result != 0) android.util.Log.w("TorvoxBridge", "setFontSizeInPlace failed with code $result")
+    }
+
+    fun setExtraFontPaths(paths: List<String>) {
+        if (paths.isEmpty()) return
+        val pathBytes = paths.map { it.toByteArray(Charsets.UTF_8) }
+        val count = pathBytes.size
+        val pathPtrsMem = com.sun.jna.Memory(JNA_POINTER_SIZE * count)
+        val lensMem = com.sun.jna.Memory(JNA_INT_SIZE * count)
+        for (i in 0 until count) {
+            val bytes = pathBytes[i]
+            val bytesMem = com.sun.jna.Memory(bytes.size.toLong())
+            bytesMem.write(0, bytes, 0, bytes.size)
+            pathPtrsMem.setPointer(i * JNA_POINTER_SIZE, bytesMem)
+            lensMem.setInt(i * JNA_INT_SIZE, bytes.size)
+        }
+        val result = ensureLib().torvox_bridge_set_extra_font_paths(handle, pathPtrsMem, lensMem, count)
+        if (result != 0) android.util.Log.w("TorvoxBridge", "setExtraFontPaths failed with code $result")
+    }
+
     fun setFontFamily(familyName: String) {
         val bytes = familyName.toByteArray(Charsets.UTF_8)
-        val ret = ensureLib().torvox_bridge_set_font_family(handle, bytes, bytes.size)
-        if (ret != 0) throw RuntimeException("setFontFamily failed with code $ret")
+        val result = ensureLib().torvox_bridge_set_font_family(handle, bytes, bytes.size)
+        if (result != 0) throw RuntimeException("setFontFamily failed with code $result")
     }
 
     fun setTheme(theme: BridgeTheme) {
@@ -616,24 +897,53 @@ class TorvoxBridge(
 
     fun getThemeNames(): List<String> {
         val pointer = ensureLib().boltffi_torvox_bridge_get_theme_names(handle) ?: return emptyList()
-        return WireReader(readWireBytes(readFfiBuf(pointer))).readList { it.readString() }
+        val result = WireReader(readWireBytes(readFfiBuf(pointer))).readString()
+        return result.split("\u001F").filter { it.isNotEmpty() }
     }
 
     fun listFonts(): List<String> {
         val pointer = ensureLib().boltffi_torvox_bridge_list_fonts(handle) ?: return emptyList()
-        return WireReader(readWireBytes(readFfiBuf(pointer))).readList { it.readString() }
+        val result = WireReader(readWireBytes(readFfiBuf(pointer))).readString()
+        return result.split("\u001F").filter { it.isNotEmpty() }
+    }
+
+    fun getDefaultFontName(): String {
+        val ptr = ensureLib().torvox_bridge_get_default_font_name(handle)
+        if (ptr == 0L) return "monospace"
+        val result = Pointer(ptr).getString(0)
+        ensureLib().torvox_bridge_free_string(ptr)
+        return result.ifEmpty { "monospace" }
+    }
+
+    fun getFontInfo(): String {
+        val ptr = ensureLib().torvox_bridge_get_font_info(handle)
+        if (ptr == 0L) return "No font loaded"
+        val result = Pointer(ptr).getString(0)
+        ensureLib().torvox_bridge_free_string(ptr)
+        return result.ifEmpty { "No font loaded" }
+    }
+
+    fun setSystemLocale(locale: String) {
+        val bytes = locale.toByteArray(Charsets.UTF_8) + 0.toByte()
+        ensureLib().torvox_bridge_set_system_locale(handle, bytes)
+    }
+
+    fun loadFontFile(path: String): String? {
+        val bytes = path.toByteArray(Charsets.UTF_8)
+        val pointer = ensureLib().boltffi_torvox_bridge_load_font_file(handle, bytes, bytes.size) ?: return null
+        return WireReader(readWireBytes(readFfiBuf(pointer))).readString()
     }
 
     fun saveSession(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        val ret = ensureLib().torvox_bridge_save_session(handle, bytes, bytes.size)
-        if (ret != 0) throw RuntimeException("saveSession failed with code $ret")
+        val result = ensureLib().torvox_bridge_save_session(handle, bytes, bytes.size)
+        if (result != 0) throw RuntimeException("saveSession failed with code $result")
     }
 
     fun restoreSession(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        val ret = ensureLib().torvox_bridge_restore_session(handle, bytes, bytes.size)
-        if (ret != 0) throw RuntimeException("restoreSession failed with code $ret")
+        val result = ensureLib().torvox_bridge_restore_session(handle, bytes, bytes.size)
+        if (result != 0) throw RuntimeException("restoreSession failed with code $result")
     }
 
     fun hasSavedSession(path: String): Boolean {
@@ -669,6 +979,46 @@ class TorvoxBridge(
 
     fun getGridCols(): Int = ensureLib().torvox_bridge_get_grid_cols(handle)
 
+    fun getCellWidth(): Float = ensureLib().torvox_bridge_get_cell_width(handle)
+
+    fun getCellHeight(): Float = ensureLib().torvox_bridge_get_cell_height(handle)
+
+    fun listFontFamilies(): List<String> {
+        val pointer = ensureLib().torvox_bridge_list_font_families(handle)
+        if (pointer == 0L) return emptyList()
+        val text = Pointer(pointer).getString(0, "UTF-8")
+        ensureLib().torvox_bridge_free_string(pointer)
+        return if (text.isNotEmpty()) text.split("\u001f") else emptyList()
+    }
+
+    fun setBackgroundImage(
+        rgbaData: ByteArray,
+        width: UInt,
+        height: UInt,
+    ) {
+        ensureLib().torvox_bridge_set_background_image(handle, rgbaData, rgbaData.size, width.toInt(), height.toInt())
+    }
+
+    fun setBackgroundParams(
+        blurRadius: UInt,
+        alphaTenths: UInt,
+    ) {
+        ensureLib().torvox_bridge_set_background_params(handle, blurRadius.toInt(), alphaTenths.toInt())
+    }
+
+    fun clearBackgroundImage() {
+        ensureLib().torvox_bridge_clear_background_image(handle)
+    }
+
+    fun setCursorVisible(visible: Boolean) {
+        ensureLib().torvox_bridge_set_cursor_visible(handle, if (visible) 1 else 0)
+    }
+
+    fun setCursorStyle(style: String) {
+        val bytes = style.toByteArray(Charsets.UTF_8)
+        ensureLib().torvox_bridge_set_cursor_style(handle, bytes, bytes.size)
+    }
+
     fun searchInScrollback(query: String): Pair<Int, Int>? {
         val queryBytes = query.toByteArray(Charsets.UTF_8)
         val pointer = ensureLib().torvox_bridge_search_in_scrollback(handle, queryBytes, queryBytes.size)
@@ -679,22 +1029,42 @@ class TorvoxBridge(
         return if (parts.size == 2) parts[0].toInt() to parts[1].toInt() else null
     }
 
+    fun searchAllInScrollback(
+        query: String,
+        caseSensitive: Boolean,
+    ): List<Triple<Int, Int, Int>>? {
+        val queryBytes = query.toByteArray(Charsets.UTF_8)
+        val ptr =
+            ensureLib().torvox_bridge_search_all_in_scrollback(
+                handle,
+                queryBytes,
+                queryBytes.size,
+                if (caseSensitive) 1 else 0,
+            )
+        if (ptr == 0L) return null
+        val text = Pointer(ptr).getString(0, "UTF-8")
+        ensureLib().torvox_bridge_free_string(ptr)
+        if (text.isEmpty()) return emptyList()
+        return text.split(";").map { part ->
+            val coords = part.split(",")
+            Triple(coords[0].toInt(), coords[1].toInt(), coords[2].toInt())
+        }
+    }
+
     override fun close() {
         if (!closed) {
             closed = true
             nativeLib?.boltffi_torvox_bridge_free(handle)
         }
     }
-
-    protected fun finalize() = close()
 }
 
 fun createBridge(config: TerminalConfig): TorvoxBridge {
-    val lib = ensureLib()
+    val library = ensureLib()
     val wireBytes = config.wireEncode()
-    val handle = lib.boltffi_torvox_bridge_new(wireBytes, wireBytes.size)
+    val handle = library.boltffi_torvox_bridge_new(wireBytes, wireBytes.size)
     if (handle == 0L) {
-        val errMsg = lib.boltffi_last_error_message()?.toString(Charsets.UTF_8) ?: "unknown"
+        val errMsg = library.boltffi_last_error_message()?.toString(Charsets.UTF_8) ?: "unknown"
         throw RuntimeException("Failed to create TorvoxBridge: $errMsg")
     }
     return TorvoxBridge(handle)

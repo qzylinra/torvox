@@ -17,7 +17,7 @@
 //! Grid::cell index bounds, Grid::resize cell access safety, Grid::scroll_up row bounds,
 //! Scrollback::push_line bounds, Line::resize cell bounds)
 //! are omitted because CBMC cannot handle the state explosion from nested
-//! Vec<Line(Vec<Cell>> allocation — even at 2×2 grid dimensions.
+//! allocation -- even at 2x2 grid dimensions.
 //! These are covered by quickcheck property tests with 10K+ random inputs.
 
 #[cfg(kani)]
@@ -231,8 +231,8 @@ mod cell_proofs {
         let c = Cell::default();
         assert!(c.char == ' ');
         assert!(c.width == 1);
-        assert!(c.fg == Color::default());
-        assert!(c.bg == Color::default());
+        assert!(c.foreground == Color::default());
+        assert!(c.background == Color::default());
         assert!(c.attrs == Attrs::default());
     }
 }
@@ -423,7 +423,7 @@ mod grid_proofs {
         let line = crate::line::Line::new(2);
         g.push_scrollback(line);
         // Scrollback should have at most max_scrollback entries
-        assert!(g.scrollback_len() <= g.max_scrollback());
+        assert!(g.scrollback_length() <= g.max_scrollback());
     }
 }
 

@@ -62,14 +62,8 @@ fn ported_alacritty_scroll() {
     }
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("line24")),
-        "last written line visible"
-    );
-    assert!(
-        !text.iter().any(|l| l.contains("line0")),
-        "first line scrolled off"
-    );
+    assert!(text.iter().any(|l| l.contains("line24")), "last written line visible");
+    assert!(!text.iter().any(|l| l.contains("line0")), "first line scrolled off");
 }
 
 #[test]
@@ -84,10 +78,7 @@ fn ported_alacritty_resize() {
         text.iter().any(|l| l.contains("resize")),
         "'resize test content' should still be visible after resize"
     );
-    assert!(
-        !text.is_empty(),
-        "after resize, at least one row should exist"
-    );
+    assert!(!text.is_empty(), "after resize, at least one row should exist");
 }
 
 #[test]
@@ -98,10 +89,7 @@ fn ported_alacritty_line_wrap() {
     t.flush();
     let text = get_text(&t);
     let all: String = text.join("");
-    assert!(
-        all.contains('K'),
-        "char K (col 10) should appear on wrapped line"
-    );
+    assert!(all.contains('K'), "char K (col 10) should appear on wrapped line");
 }
 
 #[test]
@@ -129,7 +117,7 @@ fn ported_alacritty_sgr_bold_and_color() {
     if let Some(cell) = snap.cells.first() {
         assert!(cell.bold, "bold attribute should be set");
         assert!(
-            cell.fg[0] > 0.0 || cell.fg[1] > 0.0 || cell.fg[2] > 0.0,
+            cell.foreground[0] > 0.0 || cell.foreground[1] > 0.0 || cell.foreground[2] > 0.0,
             "color should be non-zero"
         );
     }
@@ -190,7 +178,7 @@ fn ported_alacritty_cursor_position_cha() {
 #[test]
 fn ported_alacritty_cursor_position_vpa() {
     let mut t = term(5, 20);
-    t.vt_write(b"Row1\n\x1b[3dC");
+    t.pty_write(b"Row1\n\x1b[3dC");
     t.flush();
     assert_eq!(get_char(&t, 2, 0), 'C' as u32, "C at row 2 after VPA");
 }
@@ -203,10 +191,7 @@ fn ported_alacritty_scroll_region() {
     t.flush();
     let text = get_text(&t);
     // With scroll region rows 2-4, content outside should stay
-    assert!(
-        text.iter().any(|l| l.contains("1")),
-        "row 1 outside scroll region"
-    );
+    assert!(text.iter().any(|l| l.contains("1")), "row 1 outside scroll region");
 }
 
 #[test]
@@ -238,8 +223,7 @@ fn ported_alacritty_erase_display_end() {
     // ED 0 from row 1 (0-idx): row 0 preserved, rows 1-4 erased
     let row0_ok = (0..snap.cols as usize).any(|c| snap.cells[c].codepoint != 0);
     assert!(row0_ok, "ED 0: row 0 should have content preserved");
-    let row1_ok =
-        (0..snap.cols as usize).all(|c| snap.cells[snap.cols as usize + c].codepoint == 0);
+    let row1_ok = (0..snap.cols as usize).all(|c| snap.cells[snap.cols as usize + c].codepoint == 0);
     if !row1_ok {
         // ED 0 from row 1 may differ in some implementations
         // At minimum verify row 0 unchanged
@@ -253,8 +237,7 @@ fn ported_alacritty_erase_display_start() {
     t.flush();
     let snap = t.take_snapshot();
     // ED 1 from row 3 (0-idx): rows 0-3 erased, row 4 preserved
-    let row4_ok =
-        (0..snap.cols as usize).any(|c| snap.cells[4 * snap.cols as usize + c].codepoint != 0);
+    let row4_ok = (0..snap.cols as usize).any(|c| snap.cells[4 * snap.cols as usize + c].codepoint != 0);
     assert!(
         row4_ok || snap.cells.iter().all(|c| c.codepoint == 0),
         "ED 1: row 4 preserved or entire display empty"
@@ -310,11 +293,7 @@ fn ported_alacritty_save_restore_cursor() {
     t.flush();
     let text = get_text(&t);
     let all: String = text.join("");
-    assert_eq!(
-        &all[..3],
-        "ABX",
-        "DECSC/DECRC: cursor restored to AB position"
-    );
+    assert_eq!(&all[..3], "ABX", "DECSC/DECRC: cursor restored to AB position");
 }
 
 #[test]
@@ -323,10 +302,7 @@ fn ported_alacritty_reverse_index() {
     t.vt_write(b"\n\nLine3\x1bMAB");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("AB")),
-        "RI: AB written before Line3"
-    );
+    assert!(text.iter().any(|l| l.contains("AB")), "RI: AB written before Line3");
 }
 
 #[test]
@@ -339,10 +315,7 @@ fn ported_alacritty_index_bottom() {
     t.vt_write(b"Bottom\x1bD");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("Bottom")),
-        "IND at bottom scrolls"
-    );
+    assert!(text.iter().any(|l| l.contains("Bottom")), "IND at bottom scrolls");
 }
 
 // ── Cursor Movement ──────────────────────────────────────────────────────
@@ -350,7 +323,7 @@ fn ported_alacritty_index_bottom() {
 #[test]
 fn ar_cursor_cuu_multiple() {
     let mut t = term(6, 20);
-    t.vt_write(b"Line0\nLine1\nLine2\nLine3\x1b[3AXXX");
+    t.pty_write(b"Line0\nLine1\nLine2\nLine3\x1b[3AXXX");
     t.flush();
     let text = get_text(&t);
     assert!(
@@ -391,11 +364,7 @@ fn ar_cursor_cup_home() {
     let mut t = term(5, 20);
     t.vt_write(b"SomeText\x1b[HX");
     t.flush();
-    assert_eq!(
-        get_char(&t, 0, 0),
-        'X' as u32,
-        "CUP H: X overwrites first char"
-    );
+    assert_eq!(get_char(&t, 0, 0), 'X' as u32, "CUP H: X overwrites first char");
 }
 
 #[test]
@@ -403,11 +372,7 @@ fn ar_cursor_hvp() {
     let mut t = term(5, 20);
     t.vt_write(b"\x1b[5;15fY");
     t.flush();
-    assert_eq!(
-        get_char(&t, 4, 14),
-        'Y' as u32,
-        "HVP 5;15: Y at row 4 col 14"
-    );
+    assert_eq!(get_char(&t, 4, 14), 'Y' as u32, "HVP 5;15: Y at row 4 col 14");
 }
 
 #[test]
@@ -437,10 +402,7 @@ fn ar_cursor_cpl() {
     t.flush();
     assert_eq!(get_char(&t, 0, 0), 'X' as u32, "CPL: X overwrites at row 0");
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("X")),
-        "CPL: X visible after CPL"
-    );
+    assert!(text.iter().any(|l| l.contains("X")), "CPL: X visible after CPL");
 }
 
 #[test]
@@ -450,7 +412,7 @@ fn ar_cursor_cup_bounds() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(
-        get_char(&t, snap.rows - 1, snap.cols - 1) != 0 || true,
+        get_char(&t, snap.rows - 1, snap.cols - 1) != 0,
         "CUP out of bounds clamped"
     );
 }
@@ -505,11 +467,7 @@ fn ar_sgr_italic_color() {
     t.vt_write(b"\x1b[3;32mGreenItalic\x1b[0m");
     t.flush();
     let snap = t.take_snapshot();
-    let ok = snap
-        .cells
-        .iter()
-        .filter(|c| c.codepoint != 0)
-        .any(|c| c.italic);
+    let ok = snap.cells.iter().filter(|c| c.codepoint != 0).any(|c| c.italic);
     assert!(ok, "SGR 3;32: italic with green");
 }
 
@@ -533,11 +491,7 @@ fn ar_sgr_dim_blink() {
     t.vt_write(b"\x1b[2;5mDimBlink\x1b[0m");
     t.flush();
     let snap = t.take_snapshot();
-    let blink_ok = snap
-        .cells
-        .iter()
-        .filter(|c| c.codepoint != 0)
-        .any(|c| c.blink);
+    let blink_ok = snap.cells.iter().filter(|c| c.codepoint != 0).any(|c| c.blink);
     assert!(blink_ok, "SGR 2;5: blink stored (dim not in snapshot)");
 }
 
@@ -561,7 +515,7 @@ fn ar_sgr_fg_bg_256() {
         .cells
         .iter()
         .filter(|c| c.codepoint != 0)
-        .any(|c| c.fg[0] > 0.0 || c.fg[1] > 0.0 || c.fg[2] > 0.0);
+        .any(|c| c.foreground[0] > 0.0 || c.foreground[1] > 0.0 || c.foreground[2] > 0.0);
     assert!(ok, "SGR 256: fg/bg set");
 }
 
@@ -575,7 +529,7 @@ fn ar_sgr_truecolor() {
         .cells
         .iter()
         .filter(|c| c.codepoint != 0)
-        .any(|c| c.fg[0] > 0.9);
+        .any(|c| c.foreground[0] > 0.9);
     assert!(ok, "SGR truecolor: fg R channel near 1.0");
 }
 
@@ -616,10 +570,7 @@ fn ar_scroll_region_su_basic() {
     t.vt_write(b"\x1b[S");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| !l.is_empty()),
-        "SU in region: content present"
-    );
+    assert!(text.iter().any(|l| !l.is_empty()), "SU in region: content present");
 }
 
 #[test]
@@ -716,10 +667,7 @@ fn ar_tab_tbc_clear_all() {
     t.flush();
     // After clearing all tabs, \t should not advance or advance to last col
     let col_b = (0..30).position(|c| get_char(&t, 0, c as u32) == 'B' as u32);
-    assert!(
-        col_b.is_none() || col_b.unwrap() < 30,
-        "TBC all: no tab stop"
-    );
+    assert!(col_b.is_none() || col_b.unwrap() < 30, "TBC all: no tab stop");
 }
 
 #[test]
@@ -731,21 +679,9 @@ fn ar_tab_multiple_custom_stops() {
     t.flush();
     assert_eq!(get_char(&t, 0, 0), 'A' as u32, "Custom tabs: A at 0");
     // BUG: \x1b[nG is CHA not HTS; no tab stops actually set, tabs go to end of line
-    assert_eq!(
-        get_char(&t, 0, 39),
-        'B' as u32,
-        "Custom tabs: B at end (no stops set)"
-    );
-    assert_eq!(
-        get_char(&t, 1, 0),
-        'C' as u32,
-        "Custom tabs: C at row 1 col 0"
-    );
-    assert_eq!(
-        get_char(&t, 1, 39),
-        'D' as u32,
-        "Custom tabs: D at row 1 end"
-    );
+    assert_eq!(get_char(&t, 0, 39), 'B' as u32, "Custom tabs: B at end (no stops set)");
+    assert_eq!(get_char(&t, 1, 0), 'C' as u32, "Custom tabs: C at row 1 col 0");
+    assert_eq!(get_char(&t, 1, 39), 'D' as u32, "Custom tabs: D at row 1 end");
 }
 
 #[test]
@@ -754,10 +690,7 @@ fn ar_tab_ht_no_crash() {
     t.vt_write(b"A\x09\x09\x09B");
     t.flush();
     assert_eq!(get_char(&t, 0, 0), 'A' as u32, "HT: A at 0");
-    assert!(
-        get_char(&t, 0, 19) == 'B' as u32,
-        "HT: B at end of 20-col line"
-    );
+    assert_eq!(get_char(&t, 0, 19), 'B' as u32, "HT: B at end of 20-col line");
 }
 
 #[test]
@@ -769,11 +702,7 @@ fn ar_tab_tbc_clear_restores_default() {
     t.flush();
     // After clearing all tabs, \x1b[10GH writes H at col 9 (CHA, not HTS)
     // Tab with no stops goes to end of line
-    assert_eq!(
-        get_char(&t, 0, 9),
-        'H' as u32,
-        "TBC clear: H at col 9 (CHA)"
-    );
+    assert_eq!(get_char(&t, 0, 9), 'H' as u32, "TBC clear: H at col 9 (CHA)");
     assert_eq!(
         get_char(&t, 0, 39),
         'X' as u32,
@@ -792,10 +721,7 @@ fn ar_linedrawing_ls1_ls0() {
     t.flush();
     let text = get_text(&t);
     let all: String = text.join("");
-    assert!(
-        !all.is_empty(),
-        "Line drawing: characters present after SI/SO"
-    );
+    assert!(!all.is_empty(), "Line drawing: characters present after SI/SO");
 }
 
 #[test]
@@ -817,10 +743,7 @@ fn ar_linedrawing_si_so_toggle() {
     t.vt_write(b"ABC\x0eXXX\x0fYZ");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(
-        snap.cells.iter().any(|c| c.codepoint != 0),
-        "SI/SO toggle: cells exist"
-    );
+    assert!(snap.cells.iter().any(|c| c.codepoint != 0), "SI/SO toggle: cells exist");
 }
 
 // ── Save / Restore ───────────────────────────────────────────────────────
@@ -832,11 +755,7 @@ fn ar_save_restore_decs_decrc_attrs() {
     t.flush();
     assert_eq!(get_char(&t, 0, 0), 'A' as u32, "DECSC/DECRC: A at 0");
     assert_eq!(get_char(&t, 0, 1), 'B' as u32, "DECSC/DECRC: B at 1");
-    assert_eq!(
-        get_char(&t, 0, 2),
-        'Y' as u32,
-        "DECSC/DECRC: Y at 2 (overwrites X)"
-    );
+    assert_eq!(get_char(&t, 0, 2), 'Y' as u32, "DECSC/DECRC: Y at 2 (overwrites X)");
 }
 
 #[test]
@@ -856,11 +775,7 @@ fn ar_save_restore_ansi_scp_rcp() {
     let mut t = term(3, 20);
     t.vt_write(b"AB\x1b[s\x1b[5GX\x1b[uY");
     t.flush();
-    assert_eq!(
-        get_char(&t, 0, 2),
-        'Y' as u32,
-        "SCP/RCP: Y at col 2 after restore"
-    );
+    assert_eq!(get_char(&t, 0, 2), 'Y' as u32, "SCP/RCP: Y at col 2 after restore");
 }
 
 #[test]
@@ -872,12 +787,9 @@ fn ar_save_restore_with_origin_mode() {
     let snap = t.take_snapshot();
     // DECRC should restore cursor to origin-relative (1,1) = absolute (2,1)
     // Z should be written at restored position
-    let cell_ok = snap.cells.iter().any(|c| c.codepoint == 'Z' as u32)
-        || snap.cells.iter().any(|c| c.codepoint == 'X' as u32);
-    assert!(
-        cell_ok,
-        "DECSC/DECRC with origin mode: Z or X should be visible"
-    );
+    let cell_ok =
+        snap.cells.iter().any(|c| c.codepoint == 'Z' as u32) || snap.cells.iter().any(|c| c.codepoint == 'X' as u32);
+    assert!(cell_ok, "DECSC/DECRC with origin mode: Z or X should be visible");
 }
 
 #[test]
@@ -886,10 +798,7 @@ fn ar_save_restore_decs_after_delete_lines() {
     t.vt_write(b"Keep1\nKeep2\x1b7\x1bM\x1bM\x1b8X");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("X")),
-        "DECSC after DL: X visible"
-    );
+    assert!(text.iter().any(|l| l.contains("X")), "DECSC after DL: X visible");
 }
 
 // ── Insert / Delete Chars ────────────────────────────────────────────────
@@ -1019,14 +928,8 @@ fn ar_ri_reverse_index() {
     t.vt_write(b"\n\nLineA\x1bMLineB");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("LineA")),
-        "RI: LineA visible"
-    );
-    assert!(
-        text.iter().any(|l| l.contains("LineB")),
-        "RI: LineB visible"
-    );
+    assert!(text.iter().any(|l| l.contains("LineA")), "RI: LineA visible");
+    assert!(text.iter().any(|l| l.contains("LineB")), "RI: LineB visible");
 }
 
 #[test]
@@ -1035,10 +938,7 @@ fn ar_ri_at_top_scrolls_down() {
     t.vt_write(b"Top\x1bMTop2\x1bMTop3");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("Top3")),
-        "RI at top: new row inserted"
-    );
+    assert!(text.iter().any(|l| l.contains("Top3")), "RI at top: new row inserted");
 }
 
 #[test]
@@ -1047,10 +947,7 @@ fn ar_ri_multiple() {
     t.vt_write(b"R0\nR1\x1bM\x1bMInsert");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("Insert")),
-        "RI multiple: Insert visible"
-    );
+    assert!(text.iter().any(|l| l.contains("Insert")), "RI multiple: Insert visible");
 }
 
 #[test]
@@ -1097,11 +994,7 @@ fn ar_nel_from_middle() {
     let mut t = term(5, 20);
     t.vt_write(b"R0\nR1\nR2\x1bEX");
     t.flush();
-    assert_eq!(
-        get_char(&t, 3, 0),
-        'X' as u32,
-        "NEL from middle: X at row 3 col 0"
-    );
+    assert_eq!(get_char(&t, 3, 0), 'X' as u32, "NEL from middle: X at row 3 col 0");
 }
 
 #[test]
@@ -1110,10 +1003,7 @@ fn ar_nel_at_bottom_scrolls() {
     t.vt_write(b"R0\nR1\nR2\x1bEBottom");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("Bottom")),
-        "NEL at bottom: scrolls up"
-    );
+    assert!(text.iter().any(|l| l.contains("Bottom")), "NEL at bottom: scrolls up");
 }
 
 // ── DEC Private Modes ────────────────────────────────────────────────────
@@ -1135,10 +1025,7 @@ fn ar_dec_mode_decarm() {
     t.vt_write(b"AB");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("AB")),
-        "DECARM: output present"
-    );
+    assert!(text.iter().any(|l| l.contains("AB")), "DECARM: output present");
 }
 
 #[test]
@@ -1183,15 +1070,8 @@ fn ar_dec_mode_decawm_off() {
     t.flush();
     let snap = t.take_snapshot();
     // DECAWM off: cursor stays at right margin, chars overwrite last column
-    assert_eq!(
-        snap.cursor_col, 9,
-        "DECAWM off: cursor stays at right margin (col 9)"
-    );
-    assert_eq!(
-        get_char(&t, 0, 9),
-        'A' as u32,
-        "DECAWM off: A overwrites last col"
-    );
+    assert_eq!(snap.cursor_col, 9, "DECAWM off: cursor stays at right margin (col 9)");
+    assert_eq!(get_char(&t, 0, 9), 'A' as u32, "DECAWM off: A overwrites last col");
 }
 
 #[test]
@@ -1201,16 +1081,8 @@ fn ar_dec_mode_decawm_on() {
     t.flush();
     let _snap = t.take_snapshot();
     // With wrap on, 'A' wraps to next line
-    assert_eq!(
-        get_char(&t, 1, 0),
-        'A' as u32,
-        "DECAWM on: A wraps to next row"
-    );
-    assert_eq!(
-        get_char(&t, 1, 1),
-        'B' as u32,
-        "DECAWM on: B at col 1 of next row"
-    );
+    assert_eq!(get_char(&t, 1, 0), 'A' as u32, "DECAWM on: A wraps to next row");
+    assert_eq!(get_char(&t, 1, 1), 'B' as u32, "DECAWM on: B at col 1 of next row");
 }
 
 // ── OSC Sequences ────────────────────────────────────────────────────────
@@ -1244,7 +1116,7 @@ fn ar_osc_4_set_color() {
     assert!(
         snap.cells
             .iter()
-            .any(|c| c.codepoint != 0 || c.fg[0] > 0.0 || c.fg[1] > 0.0 || c.fg[2] > 0.0),
+            .any(|c| c.codepoint != 0 || c.foreground[0] > 0.0 || c.foreground[1] > 0.0 || c.foreground[2] > 0.0),
         "OSC 4: terminal functional after palette change"
     );
 }
@@ -1255,7 +1127,7 @@ fn ar_osc_10_fg() {
     t.vt_write(b"X\x1b]10;#00ff00\x07");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[0].codepoint == 'X' as u32, "OSC 10: X preserved");
+    assert_eq!(snap.cells[0].codepoint, 'X' as u32, "OSC 10: X preserved");
 }
 
 #[test]
@@ -1264,7 +1136,7 @@ fn ar_osc_11_bg() {
     t.vt_write(b"X\x1b]11;#0000ff\x07");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[0].codepoint == 'X' as u32, "OSC 11: X preserved");
+    assert_eq!(snap.cells[0].codepoint, 'X' as u32, "OSC 11: X preserved");
 }
 
 #[test]
@@ -1273,10 +1145,7 @@ fn ar_osc_104_reset_color() {
     t.vt_write(b"X\x1b]104;1\x07");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(
-        snap.cells[0].codepoint == 'X' as u32,
-        "OSC 104: X preserved"
-    );
+    assert_eq!(snap.cells[0].codepoint, 'X' as u32, "OSC 104: X preserved");
 }
 
 #[test]
@@ -1285,10 +1154,7 @@ fn ar_osc_110_reset_fg() {
     t.vt_write(b"X\x1b]110\x07");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(
-        snap.cells[0].codepoint == 'X' as u32,
-        "OSC 110: X preserved"
-    );
+    assert_eq!(snap.cells[0].codepoint, 'X' as u32, "OSC 110: X preserved");
 }
 
 #[test]
@@ -1297,10 +1163,7 @@ fn ar_osc_111_reset_bg() {
     t.vt_write(b"X\x1b]111\x07");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(
-        snap.cells[0].codepoint == 'X' as u32,
-        "OSC 111: X preserved"
-    );
+    assert_eq!(snap.cells[0].codepoint, 'X' as u32, "OSC 111: X preserved");
 }
 
 // ── Wrap On/Off Behavior ─────────────────────────────────────────────────
@@ -1308,38 +1171,41 @@ fn ar_osc_111_reset_bg() {
 #[test]
 fn ar_wrap_toggle_on_off() {
     let mut t = term(3, 10);
-    // "1234567890" fills row 0 (10 cols). DECAWM off: cursor stays at col 9.
-    // Then "AB" with DECAWM on: A at col 9 (overwrites '0'), then wraps.
-    t.vt_write(b"\x1b[?7l1234567890\x1b[?7hAB");
+    // DECAWM off: "1234567890" fills row 0 (10 cols). Cursor stays at col 9
+    // (does not advance past last column when wrap is disabled).
+    t.vt_write(b"\x1b[?7l1234567890");
     t.flush();
-    let _snap = t.take_snapshot();
-    // After toggle: A overwrites col 9, B wraps to row 1 col 0
+    let snap = t.take_snapshot();
+    assert_eq!(snap.cursor_col, 9, "Wrap toggle: cursor at col 9 after DECAWM off fill");
+    assert_eq!(get_char(&t, 0, 9), '0' as u32, "Wrap toggle: col 9 still has '0'");
+    // DECAWM on: "AB" — A at col 9 overwrites, B advances past end and wraps to row 1.
+    t.vt_write(b"\x1b[?7hAB");
+    t.flush();
+    let snap2 = t.take_snapshot();
+    assert_eq!(snap2.cursor_row, 1, "Wrap toggle: cursor on row 1 after wrap");
+    assert_eq!(snap2.cursor_col, 1, "Wrap toggle: cursor at col 1 after wrapping B");
     assert_eq!(
         get_char(&t, 0, 9),
         'A' as u32,
-        "Wrap toggle: A overwrites last col"
+        "Wrap toggle: A at col 9 (overwrote '0')"
     );
-    assert_eq!(get_char(&t, 1, 0), 'B' as u32, "Wrap toggle: B on next row");
+    assert_eq!(get_char(&t, 1, 0), 'B' as u32, "Wrap toggle: B wraps to next row");
 }
 
 #[test]
 fn ar_wrap_off_then_on() {
     let mut t = term(3, 10);
-    // DECAWM off: "1234567890A" → A overwrites col 9, cursor stays at col 9
-    // DECAWM on: "BC" → B overwrites col 9, C wraps to next row
+    // DECAWM off: "1234567890A" → A overwrites col 9 (cursor wraps to col 0)
+    // DECAWM on: "BC" → B at current cursor, C follows
     t.vt_write(b"\x1b[?7l1234567890A\x1b[?7hBC");
     t.flush();
     let _snap = t.take_snapshot();
     assert_eq!(
         get_char(&t, 0, 9),
         'B' as u32,
-        "Wrap off→on: B overwrites col 9"
+        "Wrap off→on: B overwrites col 9 after DECAWM re-enabled"
     );
-    assert_eq!(
-        get_char(&t, 1, 0),
-        'C' as u32,
-        "Wrap off→on: C wraps to row 1"
-    );
+    assert_eq!(get_char(&t, 1, 0), 'C' as u32, "Wrap off→on: C on row 1 after wrap");
 }
 
 #[test]
@@ -1348,16 +1214,8 @@ fn ar_wrap_long_line_wraps_correctly() {
     let line: String = "ABCDEFGHIJKLM".chars().collect();
     t.vt_write(line.as_bytes());
     t.flush();
-    assert_eq!(
-        get_char(&t, 0, 9),
-        'J' as u32,
-        "Wrap long: J at end of row 0"
-    );
-    assert_eq!(
-        get_char(&t, 1, 0),
-        'K' as u32,
-        "Wrap long: K at start of row 1"
-    );
+    assert_eq!(get_char(&t, 0, 9), 'J' as u32, "Wrap long: J at end of row 0");
+    assert_eq!(get_char(&t, 1, 0), 'K' as u32, "Wrap long: K at start of row 1");
     assert_eq!(
         get_char(&t, 1, 2),
         'M' as u32,
@@ -1385,10 +1243,7 @@ fn ar_scroll_margin_insert_lines() {
     t.vt_write(b"\x1b[2;1H\x1b[2L");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("OUT")),
-        "Margin IL: OUT preserved"
-    );
+    assert!(text.iter().any(|l| l.contains("OUT")), "Margin IL: OUT preserved");
 }
 
 #[test]
@@ -1399,10 +1254,7 @@ fn ar_scroll_margin_delete_lines() {
     t.vt_write(b"\x1b[2;1H\x1b[2M");
     t.flush();
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains("OUT")),
-        "Margin DL: OUT preserved"
-    );
+    assert!(text.iter().any(|l| l.contains("OUT")), "Margin DL: OUT preserved");
 }
 
 #[test]
@@ -1412,11 +1264,7 @@ fn ar_scroll_margin_il_outside() {
     t.vt_write(b"TOP\x1b[1;1H\x1b[1L");
     t.flush();
     // Insert outside margin: no-op, TOP preserved at row 0
-    assert_eq!(
-        get_char(&t, 0, 0),
-        'T' as u32,
-        "IL outside margin: T preserved"
-    );
+    assert_eq!(get_char(&t, 0, 0), 'T' as u32, "IL outside margin: T preserved");
 }
 
 #[test]
@@ -1426,11 +1274,7 @@ fn ar_scroll_margin_dl_outside() {
     t.vt_write(b"TOP\x1b[1;1H\x1b[1M");
     t.flush();
     // Delete outside margin: no-op
-    assert_eq!(
-        get_char(&t, 0, 0),
-        'T' as u32,
-        "Margin DL outside: TOP preserved"
-    );
+    assert_eq!(get_char(&t, 0, 0), 'T' as u32, "Margin DL outside: TOP preserved");
 }
 
 // ── Combined Sequences (complex screen) ──────────────────────────────────
@@ -1466,24 +1310,15 @@ fn ar_combined_sgr_cursor_movement() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(
-        snap.cells
-            .iter()
-            .filter(|c| c.codepoint != 0)
-            .any(|c| c.bold),
+        snap.cells.iter().filter(|c| c.codepoint != 0).any(|c| c.bold),
         "Combined SGR+cursor: bold"
     );
     assert!(
-        snap.cells
-            .iter()
-            .filter(|c| c.codepoint != 0)
-            .any(|c| c.italic),
+        snap.cells.iter().filter(|c| c.codepoint != 0).any(|c| c.italic),
         "Combined SGR+cursor: italic"
     );
     assert!(
-        snap.cells
-            .iter()
-            .filter(|c| c.codepoint != 0)
-            .any(|c| c.underline),
+        snap.cells.iter().filter(|c| c.codepoint != 0).any(|c| c.underline),
         "Combined SGR+cursor: underline"
     );
 }
@@ -1536,14 +1371,11 @@ fn ar_combined_color_reverse_wrap() {
         snap.cells
             .iter()
             .filter(|c| c.codepoint != 0)
-            .any(|c| c.fg[0] != 0.0 || c.fg[1] != 0.0 || c.fg[2] != 0.0),
+            .any(|c| c.foreground[0] != 0.0 || c.foreground[1] != 0.0 || c.foreground[2] != 0.0),
         "Combined color+wrap: fg color stored"
     );
     let text = get_text(&t);
-    assert!(
-        text.iter().any(|l| l.contains('A')),
-        "Combined color+wrap: A visible"
-    );
+    assert!(text.iter().any(|l| l.contains('A')), "Combined color+wrap: A visible");
 }
 
 #[test]
@@ -1555,7 +1387,7 @@ fn ar_combined_fill_screen() {
             t.vt_write(format!("{}", ch).as_bytes());
         }
         if r < 4 {
-            t.vt_write(b"\n");
+            t.vt_write(b"\r\n");
         }
     }
     t.flush();
@@ -1595,7 +1427,7 @@ fn ar_combined_wrap_reset_scroll() {
     t.vt_write(b"\x1b[?7l");
     let long: String = (0..15).map(|i| (b'A' + i) as char).collect();
     t.vt_write(long.as_bytes());
-    t.vt_write(b"\x1b[?7h\nNewLine");
+    t.pty_write(b"\x1b[?7h\nNewLine");
     t.flush();
     let text = get_text(&t);
     assert!(

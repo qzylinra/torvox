@@ -154,14 +154,13 @@ fn l3_sgr_fg_8color() {
         t.flush();
         let snap = t.take_snapshot();
         // Standard colors (30-37) should have non-zero fg
-        let rgb_sum = snap.cells[0].fg[0] + snap.cells[0].fg[1] + snap.cells[0].fg[2];
+        let rgb_sum = snap.cells[0].foreground[0] + snap.cells[0].foreground[1] + snap.cells[0].foreground[2];
         if rgb_sum < 0.01 {
             // 30 = black may have very low values
-            assert!(
-                *code == 30,
+            assert_eq!(
+                *code, 30,
                 "fg color {} should have non-zero fg sum {:.3}",
-                code,
-                rgb_sum
+                code, rgb_sum
             );
         }
         ci(&t);
@@ -175,13 +174,10 @@ fn l3_sgr_bg_8color() {
         t.vt_write(format!("\x1b[{}mX", code).as_bytes());
         t.flush();
         let snap = t.take_snapshot();
-        let rgb_sum = snap.cells[0].bg[0] + snap.cells[0].bg[1] + snap.cells[0].bg[2];
+        let rgb_sum = snap.cells[0].background[0] + snap.cells[0].background[1] + snap.cells[0].background[2];
         if rgb_sum < 0.01 && code != 40 {
             // Only black (40) may have zero bg
-            panic!(
-                "bg color {} should have non-zero bg sum {:.3}",
-                code, rgb_sum
-            );
+            panic!("bg color {} should have non-zero bg sum {:.3}", code, rgb_sum);
         }
     }
 }
@@ -193,7 +189,7 @@ fn l3_sgr_fg_256color_specific() {
     t.vt_write(b"\x1b[38;5;196mX"); // bright red
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[0].fg[0] > 0.5, "256 red index 196: fg R > 0.5");
+    assert!(snap.cells[0].foreground[0] > 0.5, "256 red index 196: fg R > 0.5");
 }
 
 #[test]
@@ -202,7 +198,7 @@ fn l3_sgr_bg_256color() {
     t.vt_write(b"\x1b[48;5;34mX"); // green
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[0].bg[1] > 0.3, "256 green index 34: bg G > 0.3");
+    assert!(snap.cells[0].background[1] > 0.3, "256 green index 34: bg G > 0.3");
 }
 
 #[test]
@@ -212,15 +208,15 @@ fn l3_sgr_truecolor_fg() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(
-        (snap.cells[0].fg[0] - 0.392).abs() < 0.05,
+        (snap.cells[0].foreground[0] - 0.392).abs() < 0.05,
         "truecolor fg R ~0.392"
     );
     assert!(
-        (snap.cells[0].fg[1] - 0.588).abs() < 0.05,
+        (snap.cells[0].foreground[1] - 0.588).abs() < 0.05,
         "truecolor fg G ~0.588"
     );
     assert!(
-        (snap.cells[0].fg[2] - 0.784).abs() < 0.05,
+        (snap.cells[0].foreground[2] - 0.784).abs() < 0.05,
         "truecolor fg B ~0.784"
     );
 }
@@ -232,15 +228,15 @@ fn l3_sgr_truecolor_bg() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(
-        (snap.cells[0].bg[0] - 0.039).abs() < 0.05,
+        (snap.cells[0].background[0] - 0.039).abs() < 0.05,
         "truecolor bg R ~0.039"
     );
     assert!(
-        (snap.cells[0].bg[1] - 0.078).abs() < 0.05,
+        (snap.cells[0].background[1] - 0.078).abs() < 0.05,
         "truecolor bg G ~0.078"
     );
     assert!(
-        (snap.cells[0].bg[2] - 0.118).abs() < 0.05,
+        (snap.cells[0].background[2] - 0.118).abs() < 0.05,
         "truecolor bg B ~0.118"
     );
 }
@@ -317,10 +313,7 @@ fn l3_sgr_21_known_ghostty_bug() {
     t2.vt_write(b"\x1b[1m\x1b[22mX");
     t2.flush();
     let fx2 = SgrEffects::read_from(&t2, 0);
-    assert!(
-        !fx2.bold,
-        "SGR 22 correctly clears bold (workaround for SGR 21 bug)"
-    );
+    assert!(!fx2.bold, "SGR 22 correctly clears bold (workaround for SGR 21 bug)");
 }
 
 // ── Font selectors ──────────────────────────────────────────────────

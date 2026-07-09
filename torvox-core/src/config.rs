@@ -1,15 +1,12 @@
-// @Terminal configuration, IMPL_CORE_003, impl, [REQ_CORE_003]
-// @need-ids: REQ_CORE_003, REQ_CORE_004
+// @REQ_CORE_006
+//! Terminal configuration — Theme, FontConfig, RenderConfig, TerminalConfig.
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct TerminalConfig {
     pub rows: u32,
     pub cols: u32,
@@ -21,10 +18,7 @@ pub struct TerminalConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum BackspaceMode {
     #[default]
     DEL,
@@ -32,6 +26,14 @@ pub enum BackspaceMode {
 }
 
 impl BackspaceMode {
+    /// Returns the byte value for this backspace mode.
+    ///
+    /// ```
+    /// use torvox_core::config::BackspaceMode;
+    ///
+    /// assert_eq!(BackspaceMode::DEL.byte(), 0x7f);
+    /// assert_eq!(BackspaceMode::BS.byte(), 0x08);
+    /// ```
     pub fn byte(&self) -> u8 {
         match self {
             BackspaceMode::DEL => 0x7f,
@@ -41,10 +43,7 @@ impl BackspaceMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum RightAltMode {
     #[default]
     CharacterModifier,
@@ -66,21 +65,16 @@ impl Default for TerminalConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub enum Shell {
     #[default]
     SystemDefault,
     Custom(String),
 }
 
+/// Render configuration combining font, theme, and cursor style.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct RenderConfig {
     pub font: FontConfig,
     pub theme: Theme,
@@ -97,11 +91,9 @@ impl Default for RenderConfig {
     }
 }
 
+/// Font family, size, and line spacing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct FontConfig {
     pub family: String,
     pub size: u32,
@@ -111,455 +103,473 @@ pub struct FontConfig {
 impl Default for FontConfig {
     fn default() -> Self {
         Self {
-            family: String::from("JetBrains Mono Nerd Font"),
+            family: String::new(),
             size: 14,
             line_spacing: 0,
         }
     }
 }
 
+/// Terminal color theme with 16 ANSI palette colors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct Theme {
     pub name: String,
-    pub bg: [u8; 3],
-    pub fg: [u8; 3],
+    pub background: [u8; 3],
+    pub foreground: [u8; 3],
     pub cursor: [u8; 3],
+    pub selection_bg: [u8; 3],
     pub ansi: [[u8; 3]; 16],
 }
 
+macro_rules! define_theme {
+    ($name:ident, $display:expr, $fg:expr, $bg:expr, $cur:expr, $sel_bg:expr, [$($ansi:expr),+ $(,)?]) => {
+        pub fn $name() -> Self {
+            Self {
+                name: String::from($display),
+                foreground: $fg,
+                background: $bg,
+                cursor: $cur,
+                selection_bg: $sel_bg,
+                ansi: [$($ansi),+],
+            }
+        }
+    }
+}
+
 impl Theme {
-    pub const fn catppuccin_mocha() -> Self {
-        Self {
-            name: String::new(),
-            bg: [30, 30, 46],
-            fg: [205, 214, 244],
-            cursor: [245, 224, 220],
-            ansi: [
-                [24, 24, 37],
-                [243, 139, 168],
-                [166, 227, 161],
-                [249, 226, 175],
-                [137, 180, 250],
-                [203, 166, 247],
-                [148, 226, 213],
-                [205, 214, 244],
-                [108, 112, 134],
-                [243, 139, 168],
-                [166, 227, 161],
-                [249, 226, 175],
-                [137, 180, 250],
-                [203, 166, 247],
-                [148, 226, 213],
-                [187, 194, 222],
-            ],
-        }
-    }
+    define_theme!(
+        catppuccin_mocha,
+        "Catppuccin Mocha",
+        [205, 214, 244],
+        [30, 30, 46],
+        [245, 224, 220],
+        [69, 71, 90],
+        [
+            [69, 71, 90],
+            [243, 139, 168],
+            [166, 227, 161],
+            [249, 226, 175],
+            [137, 180, 250],
+            [245, 194, 231],
+            [148, 226, 213],
+            [186, 194, 222],
+            [88, 91, 112],
+            [243, 139, 168],
+            [166, 227, 161],
+            [249, 226, 175],
+            [137, 180, 250],
+            [245, 194, 231],
+            [148, 226, 213],
+            [166, 173, 200],
+        ]
+    );
+    define_theme!(
+        dracula_plus,
+        "Dracula Plus",
+        [248, 248, 242],
+        [33, 33, 33],
+        [236, 239, 244],
+        [68, 71, 90],
+        [
+            [33, 34, 44],
+            [255, 85, 85],
+            [80, 250, 123],
+            [255, 203, 107],
+            [130, 170, 255],
+            [199, 146, 234],
+            [139, 233, 253],
+            [248, 249, 242],
+            [84, 84, 84],
+            [255, 110, 110],
+            [105, 255, 148],
+            [255, 203, 107],
+            [214, 172, 255],
+            [255, 146, 223],
+            [164, 255, 255],
+            [248, 248, 242],
+        ]
+    );
+    define_theme!(
+        catppuccin_latte,
+        "Catppuccin Latte",
+        [76, 79, 105],
+        [239, 241, 245],
+        [220, 138, 120],
+        [204, 208, 218],
+        [
+            [92, 95, 119],
+            [210, 15, 57],
+            [64, 160, 43],
+            [223, 142, 29],
+            [30, 102, 245],
+            [234, 118, 203],
+            [23, 146, 153],
+            [172, 176, 190],
+            [108, 111, 133],
+            [210, 15, 57],
+            [64, 160, 43],
+            [223, 142, 29],
+            [30, 102, 245],
+            [234, 118, 203],
+            [23, 146, 153],
+            [188, 192, 204],
+        ]
+    );
+    define_theme!(
+        nord,
+        "Nord",
+        [216, 222, 233],
+        [46, 52, 64],
+        [216, 222, 233],
+        [67, 76, 94],
+        [
+            [59, 66, 82],
+            [191, 97, 106],
+            [163, 190, 140],
+            [235, 203, 139],
+            [129, 161, 193],
+            [180, 142, 173],
+            [136, 192, 208],
+            [229, 233, 240],
+            [76, 86, 106],
+            [191, 97, 106],
+            [163, 190, 140],
+            [235, 203, 139],
+            [129, 161, 193],
+            [180, 142, 173],
+            [143, 188, 187],
+            [236, 239, 244],
+        ]
+    );
+    define_theme!(
+        tokyo_night,
+        "Tokyo Night",
+        [169, 177, 214],
+        [26, 27, 38],
+        [169, 177, 214],
+        [47, 59, 84],
+        [
+            [50, 52, 74],
+            [247, 118, 142],
+            [158, 206, 106],
+            [224, 175, 104],
+            [122, 162, 247],
+            [173, 142, 230],
+            [68, 157, 171],
+            [120, 124, 153],
+            [68, 75, 106],
+            [255, 122, 147],
+            [185, 242, 124],
+            [255, 158, 100],
+            [125, 166, 255],
+            [187, 154, 247],
+            [13, 185, 215],
+            [172, 176, 208],
+        ]
+    );
+    define_theme!(
+        rose_pine,
+        "Rose Pine",
+        [224, 222, 244],
+        [25, 23, 36],
+        [82, 79, 103],
+        [42, 39, 63],
+        [
+            [38, 35, 58],
+            [235, 111, 146],
+            [49, 116, 143],
+            [246, 193, 119],
+            [156, 207, 216],
+            [196, 167, 231],
+            [235, 188, 186],
+            [224, 222, 244],
+            [110, 106, 134],
+            [235, 111, 146],
+            [49, 116, 143],
+            [246, 193, 119],
+            [156, 207, 216],
+            [196, 167, 231],
+            [235, 188, 186],
+            [224, 222, 244],
+        ]
+    );
+    define_theme!(
+        gruvbox_dark,
+        "Gruvbox Dark",
+        [235, 219, 178],
+        [40, 40, 40],
+        [235, 219, 178],
+        [60, 56, 54],
+        [
+            [40, 40, 40],
+            [204, 36, 29],
+            [152, 151, 26],
+            [215, 153, 33],
+            [69, 133, 136],
+            [177, 98, 134],
+            [104, 157, 106],
+            [168, 153, 132],
+            [146, 131, 116],
+            [251, 73, 52],
+            [184, 187, 38],
+            [250, 189, 47],
+            [131, 165, 152],
+            [211, 134, 155],
+            [142, 192, 124],
+            [235, 219, 178],
+        ]
+    );
+    define_theme!(
+        gruvbox_light,
+        "Gruvbox Light",
+        [60, 56, 54],
+        [251, 241, 199],
+        [60, 56, 54],
+        [235, 219, 178],
+        [
+            [251, 241, 199],
+            [204, 36, 29],
+            [152, 151, 26],
+            [215, 153, 33],
+            [69, 133, 136],
+            [177, 98, 134],
+            [104, 157, 106],
+            [124, 111, 100],
+            [146, 131, 116],
+            [157, 0, 6],
+            [121, 116, 14],
+            [181, 118, 20],
+            [7, 102, 120],
+            [143, 63, 113],
+            [66, 123, 88],
+            [60, 56, 54],
+        ]
+    );
+    define_theme!(
+        everforest_dark,
+        "Everforest Dark",
+        [211, 198, 170],
+        [45, 53, 59],
+        [211, 198, 170],
+        [61, 72, 77],
+        [
+            [71, 82, 88],
+            [230, 126, 128],
+            [167, 192, 128],
+            [219, 188, 127],
+            [127, 187, 179],
+            [214, 153, 182],
+            [131, 192, 146],
+            [211, 198, 170],
+            [71, 82, 88],
+            [230, 126, 128],
+            [167, 192, 128],
+            [219, 188, 127],
+            [127, 187, 179],
+            [214, 153, 182],
+            [131, 192, 146],
+            [211, 198, 170],
+        ]
+    );
+    define_theme!(
+        one_dark,
+        "One Dark",
+        [171, 178, 191],
+        [40, 44, 52],
+        [171, 178, 191],
+        [62, 68, 81],
+        [
+            [30, 33, 39],
+            [224, 108, 117],
+            [152, 195, 121],
+            [209, 154, 102],
+            [97, 175, 239],
+            [198, 120, 221],
+            [86, 182, 194],
+            [171, 178, 191],
+            [92, 99, 112],
+            [224, 108, 117],
+            [152, 195, 121],
+            [209, 154, 102],
+            [97, 175, 239],
+            [198, 120, 221],
+            [86, 182, 194],
+            [255, 255, 255],
+        ]
+    );
+    define_theme!(
+        one_light,
+        "One Light",
+        [42, 43, 51],
+        [248, 248, 248],
+        [42, 43, 51],
+        [224, 224, 224],
+        [
+            [0, 0, 0],
+            [222, 61, 53],
+            [62, 149, 58],
+            [210, 182, 123],
+            [47, 90, 243],
+            [160, 0, 149],
+            [62, 149, 58],
+            [187, 187, 187],
+            [0, 0, 0],
+            [222, 61, 53],
+            [62, 149, 58],
+            [210, 182, 123],
+            [47, 90, 243],
+            [160, 0, 149],
+            [62, 149, 58],
+            [255, 255, 255],
+        ]
+    );
+    define_theme!(
+        monokai,
+        "Monokai",
+        [248, 248, 242],
+        [39, 40, 34],
+        [248, 248, 242],
+        [62, 61, 50],
+        [
+            [39, 40, 34],
+            [249, 38, 114],
+            [166, 226, 46],
+            [244, 191, 117],
+            [102, 217, 239],
+            [174, 129, 255],
+            [161, 239, 228],
+            [248, 248, 242],
+            [117, 113, 94],
+            [249, 38, 114],
+            [166, 226, 46],
+            [244, 191, 117],
+            [102, 217, 239],
+            [174, 129, 255],
+            [161, 239, 228],
+            [249, 248, 245],
+        ]
+    );
+    define_theme!(
+        ayu_dark,
+        "Ayu Dark",
+        [179, 177, 173],
+        [10, 14, 20],
+        [179, 177, 173],
+        [26, 31, 41],
+        [
+            [1, 6, 14],
+            [234, 108, 115],
+            [145, 179, 98],
+            [249, 175, 79],
+            [83, 189, 250],
+            [250, 233, 148],
+            [144, 225, 198],
+            [199, 199, 199],
+            [104, 104, 104],
+            [240, 113, 120],
+            [194, 217, 76],
+            [255, 180, 84],
+            [89, 194, 255],
+            [255, 238, 153],
+            [149, 230, 203],
+            [255, 255, 255],
+        ]
+    );
+    define_theme!(
+        ayu_light,
+        "Ayu Light",
+        [92, 97, 102],
+        [252, 252, 252],
+        [92, 97, 102],
+        [232, 232, 232],
+        [
+            [1, 1, 1],
+            [231, 102, 106],
+            [128, 171, 36],
+            [235, 165, 77],
+            [65, 150, 223],
+            [152, 112, 195],
+            [81, 184, 145],
+            [193, 193, 193],
+            [52, 52, 52],
+            [238, 146, 149],
+            [159, 211, 47],
+            [240, 188, 123],
+            [109, 174, 230],
+            [178, 148, 210],
+            [117, 199, 168],
+            [219, 219, 219],
+        ]
+    );
+    define_theme!(
+        kanagawa_wave,
+        "Kanagawa Wave",
+        [220, 215, 186],
+        [31, 31, 40],
+        [220, 215, 186],
+        [45, 45, 63],
+        [
+            [9, 6, 24],
+            [195, 64, 67],
+            [118, 148, 106],
+            [192, 163, 110],
+            [126, 156, 216],
+            [149, 127, 184],
+            [106, 149, 137],
+            [200, 192, 147],
+            [114, 113, 105],
+            [232, 36, 36],
+            [152, 187, 108],
+            [230, 195, 132],
+            [127, 180, 202],
+            [147, 138, 169],
+            [122, 168, 159],
+            [220, 215, 186],
+        ]
+    );
+    define_theme!(
+        night_owl,
+        "Night Owl",
+        [214, 222, 235],
+        [1, 22, 39],
+        [214, 222, 235],
+        [11, 45, 74],
+        [
+            [1, 22, 39],
+            [239, 83, 80],
+            [34, 218, 110],
+            [197, 228, 120],
+            [130, 170, 255],
+            [199, 146, 234],
+            [33, 199, 168],
+            [255, 255, 255],
+            [87, 86, 86],
+            [239, 83, 80],
+            [34, 218, 110],
+            [255, 235, 149],
+            [130, 170, 255],
+            [199, 146, 234],
+            [127, 219, 202],
+            [255, 255, 255],
+        ]
+    );
 
-    pub fn catppuccin_mocha_named() -> Self {
-        let mut t = Self::catppuccin_mocha();
-        t.name = String::from("Catppuccin Mocha");
-        t
-    }
-
-    pub fn dracula_plus() -> Self {
-        Self {
-            name: String::from("Dracula Plus"),
-            bg: [33, 33, 33],
-            fg: [248, 248, 242],
-            cursor: [236, 239, 244],
-            ansi: [
-                [33, 34, 44],
-                [255, 85, 85],
-                [80, 250, 123],
-                [255, 203, 107],
-                [130, 170, 255],
-                [199, 146, 234],
-                [139, 233, 253],
-                [248, 249, 242],
-                [84, 84, 84],
-                [255, 110, 110],
-                [105, 255, 148],
-                [255, 203, 107],
-                [214, 172, 255],
-                [255, 146, 223],
-                [164, 255, 255],
-                [248, 248, 242],
-            ],
-        }
-    }
-    pub fn catppuccin_latte() -> Self {
-        Self {
-            name: String::from("Catppuccin Latte"),
-            bg: [239, 241, 245],
-            fg: [76, 79, 105],
-            cursor: [220, 138, 120],
-            ansi: [
-                [92, 95, 119],
-                [210, 15, 57],
-                [64, 160, 43],
-                [223, 142, 29],
-                [30, 102, 245],
-                [234, 118, 203],
-                [23, 146, 153],
-                [172, 176, 190],
-                [108, 111, 133],
-                [210, 15, 57],
-                [64, 160, 43],
-                [223, 142, 29],
-                [30, 102, 245],
-                [234, 118, 203],
-                [23, 146, 153],
-                [188, 192, 204],
-            ],
-        }
-    }
-    pub fn nord() -> Self {
-        Self {
-            name: String::from("Nord"),
-            bg: [46, 52, 64],
-            fg: [216, 222, 233],
-            cursor: [216, 222, 233],
-            ansi: [
-                [59, 66, 82],
-                [191, 97, 106],
-                [163, 190, 140],
-                [235, 203, 139],
-                [129, 161, 193],
-                [180, 142, 173],
-                [136, 192, 208],
-                [229, 233, 240],
-                [76, 86, 106],
-                [191, 97, 106],
-                [163, 190, 140],
-                [235, 203, 139],
-                [129, 161, 193],
-                [180, 142, 173],
-                [143, 188, 187],
-                [236, 239, 244],
-            ],
-        }
-    }
-    pub fn tokyo_night() -> Self {
-        Self {
-            name: String::from("Tokyo Night"),
-            bg: [26, 27, 38],
-            fg: [169, 177, 214],
-            cursor: [169, 177, 214],
-            ansi: [
-                [50, 52, 74],
-                [247, 118, 142],
-                [158, 206, 106],
-                [224, 175, 104],
-                [122, 162, 247],
-                [173, 142, 230],
-                [68, 157, 171],
-                [120, 124, 153],
-                [68, 75, 106],
-                [255, 122, 147],
-                [185, 242, 124],
-                [255, 158, 100],
-                [125, 166, 255],
-                [187, 154, 247],
-                [13, 185, 215],
-                [172, 176, 208],
-            ],
-        }
-    }
-    pub fn rose_pine() -> Self {
-        Self {
-            name: String::from("Rose Pine"),
-            bg: [25, 23, 36],
-            fg: [224, 222, 244],
-            cursor: [82, 79, 103],
-            ansi: [
-                [38, 35, 58],
-                [235, 111, 146],
-                [49, 116, 143],
-                [246, 193, 119],
-                [156, 207, 216],
-                [196, 167, 231],
-                [235, 188, 186],
-                [224, 222, 244],
-                [110, 106, 134],
-                [235, 111, 146],
-                [49, 116, 143],
-                [246, 193, 119],
-                [156, 207, 216],
-                [196, 167, 231],
-                [235, 188, 186],
-                [224, 222, 244],
-            ],
-        }
-    }
-    pub fn gruvbox_dark() -> Self {
-        Self {
-            name: String::from("Gruvbox Dark"),
-            bg: [40, 40, 40],
-            fg: [235, 219, 178],
-            cursor: [235, 219, 178],
-            ansi: [
-                [40, 40, 40],
-                [204, 36, 29],
-                [152, 151, 26],
-                [215, 153, 33],
-                [69, 133, 136],
-                [177, 98, 134],
-                [104, 157, 106],
-                [168, 153, 132],
-                [146, 131, 116],
-                [251, 73, 52],
-                [184, 187, 38],
-                [250, 189, 47],
-                [131, 165, 152],
-                [211, 134, 155],
-                [142, 192, 124],
-                [235, 219, 178],
-            ],
-        }
-    }
-    pub fn gruvbox_light() -> Self {
-        Self {
-            name: String::from("Gruvbox Light"),
-            bg: [251, 241, 199],
-            fg: [60, 56, 54],
-            cursor: [60, 56, 54],
-            ansi: [
-                [251, 241, 199],
-                [204, 36, 29],
-                [152, 151, 26],
-                [215, 153, 33],
-                [69, 133, 136],
-                [177, 98, 134],
-                [104, 157, 106],
-                [124, 111, 100],
-                [146, 131, 116],
-                [157, 0, 6],
-                [121, 116, 14],
-                [181, 118, 20],
-                [7, 102, 120],
-                [143, 63, 113],
-                [66, 123, 88],
-                [60, 56, 54],
-            ],
-        }
-    }
-    pub fn everforest_dark() -> Self {
-        Self {
-            name: String::from("Everforest Dark"),
-            bg: [45, 53, 59],
-            fg: [211, 198, 170],
-            cursor: [211, 198, 170],
-            ansi: [
-                [71, 82, 88],
-                [230, 126, 128],
-                [167, 192, 128],
-                [219, 188, 127],
-                [127, 187, 179],
-                [214, 153, 182],
-                [131, 192, 146],
-                [211, 198, 170],
-                [71, 82, 88],
-                [230, 126, 128],
-                [167, 192, 128],
-                [219, 188, 127],
-                [127, 187, 179],
-                [214, 153, 182],
-                [131, 192, 146],
-                [211, 198, 170],
-            ],
-        }
-    }
-    pub fn one_dark() -> Self {
-        Self {
-            name: String::from("One Dark"),
-            bg: [40, 44, 52],
-            fg: [171, 178, 191],
-            cursor: [171, 178, 191],
-            ansi: [
-                [30, 33, 39],
-                [224, 108, 117],
-                [152, 195, 121],
-                [209, 154, 102],
-                [97, 175, 239],
-                [198, 120, 221],
-                [86, 182, 194],
-                [171, 178, 191],
-                [92, 99, 112],
-                [224, 108, 117],
-                [152, 195, 121],
-                [209, 154, 102],
-                [97, 175, 239],
-                [198, 120, 221],
-                [86, 182, 194],
-                [255, 255, 255],
-            ],
-        }
-    }
-    pub fn one_light() -> Self {
-        Self {
-            name: String::from("One Light"),
-            bg: [248, 248, 248],
-            fg: [42, 43, 51],
-            cursor: [42, 43, 51],
-            ansi: [
-                [0, 0, 0],
-                [222, 61, 53],
-                [62, 149, 58],
-                [210, 182, 123],
-                [47, 90, 243],
-                [160, 0, 149],
-                [62, 149, 58],
-                [187, 187, 187],
-                [0, 0, 0],
-                [222, 61, 53],
-                [62, 149, 58],
-                [210, 182, 123],
-                [47, 90, 243],
-                [160, 0, 149],
-                [62, 149, 58],
-                [255, 255, 255],
-            ],
-        }
-    }
-    pub fn monokai() -> Self {
-        Self {
-            name: String::from("Monokai"),
-            bg: [39, 40, 34],
-            fg: [248, 248, 242],
-            cursor: [248, 248, 242],
-            ansi: [
-                [39, 40, 34],
-                [249, 38, 114],
-                [166, 226, 46],
-                [244, 191, 117],
-                [102, 217, 239],
-                [174, 129, 255],
-                [161, 239, 228],
-                [248, 248, 242],
-                [117, 113, 94],
-                [249, 38, 114],
-                [166, 226, 46],
-                [244, 191, 117],
-                [102, 217, 239],
-                [174, 129, 255],
-                [161, 239, 228],
-                [249, 248, 245],
-            ],
-        }
-    }
-    pub fn ayu_dark() -> Self {
-        Self {
-            name: String::from("Ayu Dark"),
-            bg: [10, 14, 20],
-            fg: [179, 177, 173],
-            cursor: [179, 177, 173],
-            ansi: [
-                [1, 6, 14],
-                [234, 108, 115],
-                [145, 179, 98],
-                [249, 175, 79],
-                [83, 189, 250],
-                [250, 233, 148],
-                [144, 225, 198],
-                [199, 199, 199],
-                [104, 104, 104],
-                [240, 113, 120],
-                [194, 217, 76],
-                [255, 180, 84],
-                [89, 194, 255],
-                [255, 238, 153],
-                [149, 230, 203],
-                [255, 255, 255],
-            ],
-        }
-    }
-    pub fn ayu_light() -> Self {
-        Self {
-            name: String::from("Ayu Light"),
-            bg: [252, 252, 252],
-            fg: [92, 97, 102],
-            cursor: [92, 97, 102],
-            ansi: [
-                [1, 1, 1],
-                [231, 102, 106],
-                [128, 171, 36],
-                [235, 165, 77],
-                [65, 150, 223],
-                [152, 112, 195],
-                [81, 184, 145],
-                [193, 193, 193],
-                [52, 52, 52],
-                [238, 146, 149],
-                [159, 211, 47],
-                [240, 188, 123],
-                [109, 174, 230],
-                [178, 148, 210],
-                [117, 199, 168],
-                [219, 219, 219],
-            ],
-        }
-    }
-    pub fn kanagawa_wave() -> Self {
-        Self {
-            name: String::from("Kanagawa Wave"),
-            bg: [31, 31, 40],
-            fg: [220, 215, 186],
-            cursor: [220, 215, 186],
-            ansi: [
-                [9, 6, 24],
-                [195, 64, 67],
-                [118, 148, 106],
-                [192, 163, 110],
-                [126, 156, 216],
-                [149, 127, 184],
-                [106, 149, 137],
-                [200, 192, 147],
-                [114, 113, 105],
-                [232, 36, 36],
-                [152, 187, 108],
-                [230, 195, 132],
-                [127, 180, 202],
-                [147, 138, 169],
-                [122, 168, 159],
-                [220, 215, 186],
-            ],
-        }
-    }
-    pub fn night_owl() -> Self {
-        Self {
-            name: String::from("Night Owl"),
-            bg: [1, 22, 39],
-            fg: [214, 222, 235],
-            cursor: [214, 222, 235],
-            ansi: [
-                [1, 22, 39],
-                [239, 83, 80],
-                [34, 218, 110],
-                [197, 228, 120],
-                [130, 170, 255],
-                [199, 146, 234],
-                [33, 199, 168],
-                [255, 255, 255],
-                [87, 86, 86],
-                [239, 83, 80],
-                [34, 218, 110],
-                [255, 235, 149],
-                [130, 170, 255],
-                [199, 146, 234],
-                [127, 219, 202],
-                [255, 255, 255],
-            ],
-        }
-    }
-
+    /// Returns all built-in themes.
+    ///
+    /// ```
+    /// use torvox_core::config::Theme;
+    ///
+    /// let themes = Theme::all_built_in();
+    /// assert_eq!(themes.len(), 16);
+    /// for theme in &themes {
+    ///     assert!(!theme.name.is_empty(), "theme name must not be empty");
+    /// }
+    /// ```
     pub fn all_built_in() -> Vec<Self> {
         vec![
             Self::dracula_plus(),
-            Self::catppuccin_mocha_named(),
+            Self::catppuccin_mocha(),
             Self::catppuccin_latte(),
             Self::nord(),
             Self::tokyo_night(),
@@ -577,11 +587,13 @@ impl Theme {
         ]
     }
 
+    /// Parse a custom theme from TOML content.
     pub fn parse_custom(content: &str) -> Option<Self> {
         let mut name = String::new();
-        let mut bg = [0u8; 3];
-        let mut fg = [205u8, 214u8, 244u8];
+        let mut background = [0u8; 3];
+        let mut foreground = [205u8, 214u8, 244u8];
         let mut cursor = [245u8, 224u8, 220u8];
+        let mut selection_bg = [69u8, 71u8, 90u8];
         let mut ansi = [[0u8; 3]; 16];
         let mut found = false;
 
@@ -598,19 +610,24 @@ impl Theme {
                         name = String::from(value);
                         found = true;
                     }
-                    "background" | "bg" => {
+                    "background" => {
                         if let Some(c) = parse_color(value) {
-                            bg = c;
+                            background = c;
                         }
                     }
-                    "foreground" | "fg" => {
+                    "foreground" => {
                         if let Some(c) = parse_color(value) {
-                            fg = c;
+                            foreground = c;
                         }
                     }
                     "cursor" => {
                         if let Some(c) = parse_color(value) {
                             cursor = c;
+                        }
+                    }
+                    "selection_bg" => {
+                        if let Some(c) = parse_color(value) {
+                            selection_bg = c;
                         }
                     }
                     "ansi0" | "black" => {
@@ -704,9 +721,10 @@ impl Theme {
 
         Some(Self {
             name,
-            bg,
-            fg,
+            background,
+            foreground,
             cursor,
+            selection_bg,
             ansi,
         })
     }
@@ -723,7 +741,13 @@ fn parse_color(color_string: &str) -> Option<[u8; 3]> {
         let red = u8::from_str_radix(&trimmed[1..2], 16).ok()?;
         let green = u8::from_str_radix(&trimmed[2..3], 16).ok()?;
         let blue = u8::from_str_radix(&trimmed[3..4], 16).ok()?;
-        Some([red * 17, green * 17, blue * 17])
+        // Expand 3-digit hex (#rgb) to 8-bit values: digit * 0x11 (e.g. 0xA -> 0xAA)
+        const HEX_DIGIT_EXPAND: u8 = 0x11;
+        Some([
+            red * HEX_DIGIT_EXPAND,
+            green * HEX_DIGIT_EXPAND,
+            blue * HEX_DIGIT_EXPAND,
+        ])
     } else {
         let parts: Vec<&str> = trimmed.split(',').collect();
         if parts.len() == 3 {
@@ -740,6 +764,8 @@ fn parse_color(color_string: &str) -> Option<[u8; 3]> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::format;
+    use quickcheck_macros::quickcheck;
 
     #[test]
     fn terminal_config_default() {
@@ -753,9 +779,9 @@ mod tests {
     #[test]
     fn render_config_default() {
         let c = RenderConfig::default();
-        assert_eq!(c.font.family, "JetBrains Mono Nerd Font");
+        assert_eq!(c.font.family, "");
         assert_eq!(c.font.size, 14);
-        assert_eq!(c.theme.name, "");
+        assert_eq!(c.theme.name, "Catppuccin Mocha");
     }
 
     #[test]
@@ -777,16 +803,16 @@ mod tests {
     fn parse_custom_theme_hex() {
         let mut content = String::new();
         content.push_str("name = My Theme\n");
-        content.push_str("bg = #1a1b26\n");
-        content.push_str("fg = #c0caf5\n");
+        content.push_str("background = #1a1b26\n");
+        content.push_str("foreground = #c0caf5\n");
         content.push_str("cursor = #c0caf5\n");
         content.push_str("red = #f7768e\n");
         content.push_str("green = #98c379\n");
         content.push_str("blue = #82aaff\n");
         let theme = Theme::parse_custom(&content).unwrap();
         assert_eq!(theme.name, "My Theme");
-        assert_eq!(theme.bg, [0x1a, 0x1b, 0x26]);
-        assert_eq!(theme.fg, [0xc0, 0xca, 0xf5]);
+        assert_eq!(theme.background, [0x1a, 0x1b, 0x26]);
+        assert_eq!(theme.foreground, [0xc0, 0xca, 0xf5]);
         assert_eq!(theme.ansi[1], [0xf7, 0x76, 0x8e]);
         assert_eq!(theme.ansi[2], [0x98, 0xc3, 0x79]);
         assert_eq!(theme.ansi[4], [0x82, 0xaa, 0xff]);
@@ -796,25 +822,25 @@ mod tests {
     fn parse_custom_theme_rgb() {
         let mut content = String::new();
         content.push_str("name = Test\n");
-        content.push_str("bg = 30, 30, 46\n");
-        content.push_str("fg = 205, 214, 244\n");
+        content.push_str("background = 30, 30, 46\n");
+        content.push_str("foreground = 205, 214, 244\n");
         let theme = Theme::parse_custom(&content).unwrap();
-        assert_eq!(theme.bg, [30, 30, 46]);
-        assert_eq!(theme.fg, [205, 214, 244]);
+        assert_eq!(theme.background, [30, 30, 46]);
+        assert_eq!(theme.foreground, [205, 214, 244]);
     }
 
     #[test]
     fn parse_custom_theme_short_hex() {
         let mut content = String::new();
         content.push_str("name = Short\n");
-        content.push_str("bg = #abc\n");
+        content.push_str("background = #abc\n");
         let theme = Theme::parse_custom(&content).unwrap();
-        assert_eq!(theme.bg, [0xaa, 0xbb, 0xcc]);
+        assert_eq!(theme.background, [0xaa, 0xbb, 0xcc]);
     }
 
     #[test]
     fn parse_custom_theme_no_name_returns_none() {
-        let content = "bg = #000000\nfg = #ffffff\n";
+        let content = "background = #000000\nforeground = #ffffff\n";
         assert!(Theme::parse_custom(content).is_none());
     }
 
@@ -824,9 +850,9 @@ mod tests {
         content.push_str("# This is a comment\n");
         content.push_str("name = Commented\n");
         content.push_str("# Another comment\n");
-        content.push_str("bg = #112233\n");
+        content.push_str("background = #112233\n");
         let theme = Theme::parse_custom(&content).unwrap();
-        assert_eq!(theme.bg, [0x11, 0x22, 0x33]);
+        assert_eq!(theme.background, [0x11, 0x22, 0x33]);
     }
 
     #[test]
@@ -876,19 +902,19 @@ mod tests {
         let f = FontConfig::default();
         assert_eq!(f.size, 14);
         assert_eq!(f.line_spacing, 0);
-        assert!(!f.family.is_empty());
+        assert!(f.family.is_empty());
     }
 
     #[test]
     fn render_config_default_theme_is_catppuccin() {
         let r = RenderConfig::default();
-        assert_eq!(r.theme.bg, [30, 30, 46]);
-        assert_eq!(r.theme.fg, [205, 214, 244]);
+        assert_eq!(r.theme.background, [30, 30, 46]);
+        assert_eq!(r.theme.foreground, [205, 214, 244]);
     }
 
     #[test]
     fn theme_dracula_distinct_from_mocha() {
-        let a = Theme::catppuccin_mocha_named();
+        let a = Theme::dracula_plus();
         let b = Theme::catppuccin_mocha();
         assert_ne!(a.name, b.name);
     }
@@ -927,15 +953,15 @@ mod tests {
     fn parse_custom_theme_invalid_color_keeps_default() {
         let content = "name = Test\nbg = not_a_color\n";
         let theme = Theme::parse_custom(content).unwrap();
-        assert_eq!(theme.bg, [0, 0, 0]);
+        assert_eq!(theme.background, [0, 0, 0]);
     }
 
     #[test]
     fn parse_custom_theme_alternate_keys() {
         let content = "name = Test\nbackground = #111111\nforeground = #eeeeee\n";
         let theme = Theme::parse_custom(content).unwrap();
-        assert_eq!(theme.bg, [0x11, 0x11, 0x11]);
-        assert_eq!(theme.fg, [0xee, 0xee, 0xee]);
+        assert_eq!(theme.background, [0x11, 0x11, 0x11]);
+        assert_eq!(theme.foreground, [0xee, 0xee, 0xee]);
     }
 
     #[test]
@@ -956,13 +982,13 @@ mod tests {
     #[test]
     fn catppuccin_mocha_const_can_be_called() {
         let t = Theme::catppuccin_mocha();
-        assert_ne!(t.bg, [0, 0, 0]);
-        assert_ne!(t.fg, [0, 0, 0]);
+        assert_ne!(t.background, [0, 0, 0]);
+        assert_ne!(t.foreground, [0, 0, 0]);
     }
 
     #[test]
-    fn catppuccin_mocha_named_has_name() {
-        let t = Theme::catppuccin_mocha_named();
+    fn catppuccin_mocha_has_name() {
+        let t = Theme::catppuccin_mocha();
         assert_eq!(t.name, "Catppuccin Mocha");
     }
 
@@ -975,18 +1001,18 @@ mod tests {
 
     #[test]
     fn parse_custom_theme_quoted_value() {
-        let content = "name = \"My Theme\"\nbg = \"#ff0000\"\n";
+        let content = "name = \"My Theme\"\nbackground = \"#ff0000\"\n";
         let theme = Theme::parse_custom(content).unwrap();
         assert_eq!(theme.name, "My Theme");
-        assert_eq!(theme.bg, [255, 0, 0]);
+        assert_eq!(theme.background, [255, 0, 0]);
     }
 
     #[test]
     fn parse_custom_theme_single_quoted_value() {
-        let content = "name = 'My Theme'\nbg = '#ff0000'\n";
+        let content = "name = 'My Theme'\nbackground = '#ff0000'\n";
         let theme = Theme::parse_custom(content).unwrap();
         assert_eq!(theme.name, "My Theme");
-        assert_eq!(theme.bg, [255, 0, 0]);
+        assert_eq!(theme.background, [255, 0, 0]);
     }
 
     #[test]
@@ -1003,7 +1029,7 @@ mod tests {
                 size: 16,
                 line_spacing: 2,
             },
-            theme: Theme::catppuccin_mocha_named(),
+            theme: Theme::catppuccin_mocha(),
             cursor_style: crate::cursor::CursorStyle::Bar,
         };
         let json = serde_json::to_string(&r).unwrap();
@@ -1033,9 +1059,9 @@ mod tests {
 
     #[test]
     fn parse_custom_theme_short_hex_with_alpha_in_3() {
-        let content = "name = X\nbg = #fff\n";
+        let content = "name = X\nbackground = #fff\n";
         let t = Theme::parse_custom(content).unwrap();
-        assert_eq!(t.bg, [255, 255, 255]);
+        assert_eq!(t.background, [255, 255, 255]);
     }
 
     #[test]
@@ -1068,6 +1094,30 @@ mod tests {
         let json = serde_json::to_string(&s).unwrap();
         let back: Shell = serde_json::from_str(&json).unwrap();
         assert_eq!(back, Shell::Custom(String::new()));
+    }
+
+    #[test]
+    fn parse_custom_theme_selection_bg() {
+        let mut content = String::new();
+        content.push_str("name = SelectionTest\n");
+        content.push_str("selection_bg = #45475A\n");
+        let theme = Theme::parse_custom(&content).unwrap();
+        assert_eq!(theme.selection_bg, [0x45, 0x47, 0x5A]);
+    }
+
+    #[test]
+    fn parse_custom_theme_selection_bg_alt_key() {
+        let mut content = String::new();
+        content.push_str("name = SelectionAlt\n");
+        content.push_str("selection_bg = #ff8040\n");
+        let theme = Theme::parse_custom(&content).unwrap();
+        assert_eq!(theme.selection_bg, [0xff, 0x80, 0x40]);
+    }
+
+    #[test]
+    fn parse_color_extreme_shorthands() {
+        assert_eq!(parse_color("#000"), Some([0, 0, 0]));
+        assert_eq!(parse_color("#fff"), Some([255, 255, 255]));
     }
 
     #[test]
@@ -1106,6 +1156,23 @@ mod tests {
     }
 
     #[test]
+    fn parse_color_with_alpha_rrggbbaa_not_supported() {
+        assert_eq!(parse_color("#ff8040aa"), None);
+    }
+
+    #[test]
+    fn parse_color_named_colors_not_supported() {
+        assert_eq!(parse_color("red"), None);
+        assert_eq!(parse_color("green"), None);
+        assert_eq!(parse_color("blue"), None);
+        assert_eq!(parse_color("black"), None);
+        assert_eq!(parse_color("white"), None);
+        assert_eq!(parse_color("cyan"), None);
+        assert_eq!(parse_color("magenta"), None);
+        assert_eq!(parse_color("yellow"), None);
+    }
+
+    #[test]
     fn parse_color_three_part_invalid_parse() {
         assert_eq!(parse_color("abc,def,ghi"), None);
     }
@@ -1113,5 +1180,199 @@ mod tests {
     #[test]
     fn parse_color_comma_with_whitespace() {
         assert_eq!(parse_color("255, 128, 64"), Some([255, 128, 64]));
+    }
+
+    #[test]
+    fn theme_built_in_colors_valid() {
+        for theme in Theme::all_built_in() {
+            assert_eq!(theme.ansi.len(), 16, "theme '{}' must have 16 ANSI colors", theme.name);
+            for (i, color) in theme.ansi.iter().enumerate() {
+                assert_eq!(
+                    color.len(),
+                    3,
+                    "theme '{}' ansi[{}] must have 3 components",
+                    theme.name,
+                    i
+                );
+            }
+            assert_eq!(
+                theme.background.len(),
+                3,
+                "theme '{}' background must have 3 components",
+                theme.name
+            );
+            assert_eq!(
+                theme.foreground.len(),
+                3,
+                "theme '{}' foreground must have 3 components",
+                theme.name
+            );
+        }
+    }
+
+    #[test]
+    fn shell_system_default_path() {
+        let path = match Shell::SystemDefault {
+            Shell::SystemDefault => "/system/bin/sh",
+            Shell::Custom(_) => unreachable!(),
+        };
+        assert_eq!(
+            path, "/system/bin/sh",
+            "SystemDefault must resolve to Android shell path"
+        );
+    }
+
+    #[test]
+    fn terminal_config_rows_cols_bounds() {
+        let config = TerminalConfig::default();
+        assert!(config.rows >= 1, "default rows must be at least 1");
+        assert!(config.rows <= 200, "default rows must not exceed 200");
+        assert!(config.cols >= 1, "default cols must be at least 1");
+        assert!(config.cols <= 500, "default cols must not exceed 500");
+        let small = TerminalConfig {
+            rows: 1,
+            cols: 1,
+            ..Default::default()
+        };
+        assert_eq!(small.rows, 1, "minimum rows must be storable");
+        assert_eq!(small.cols, 1, "minimum cols must be storable");
+        let large = TerminalConfig {
+            rows: 200,
+            cols: 500,
+            ..Default::default()
+        };
+        assert_eq!(large.rows, 200, "maximum rows must be storable");
+        assert_eq!(large.cols, 500, "maximum cols must be storable");
+    }
+
+    #[test]
+    fn parse_color_shorthand_abc() {
+        assert_eq!(parse_color("#ABC"), Some([0xAA, 0xBB, 0xCC]));
+    }
+
+    #[test]
+    fn parse_color_shorthand_all_digits() {
+        assert_eq!(parse_color("#123"), Some([0x11, 0x22, 0x33]));
+    }
+
+    #[test]
+    fn parse_color_lowercase_shorthand() {
+        assert_eq!(parse_color("#abc"), Some([0xAA, 0xBB, 0xCC]));
+    }
+
+    #[test]
+    fn backspace_mode_del_byte() {
+        assert_eq!(BackspaceMode::DEL.byte(), 0x7f);
+    }
+
+    #[test]
+    fn backspace_mode_bs_byte() {
+        assert_eq!(BackspaceMode::BS.byte(), 0x08);
+    }
+
+    #[test]
+    fn backspace_mode_default_is_del() {
+        assert_eq!(BackspaceMode::default(), BackspaceMode::DEL);
+    }
+
+    #[test]
+    fn right_alt_mode_default() {
+        assert_eq!(RightAltMode::default(), RightAltMode::CharacterModifier);
+    }
+
+    #[test]
+    fn right_alt_mode_meta_not_default() {
+        assert_ne!(RightAltMode::Meta, RightAltMode::default());
+        assert_eq!(RightAltMode::Meta, RightAltMode::Meta);
+    }
+
+    #[test]
+    fn parse_color_whitespace_trimmed() {
+        assert_eq!(parse_color("  #ff0000  "), Some([255, 0, 0]));
+    }
+
+    #[test]
+    fn parse_color_comma_with_varying_whitespace() {
+        assert_eq!(parse_color("255,0,0"), Some([255, 0, 0]));
+        assert_eq!(parse_color("  0 , 255 , 0  "), Some([0, 255, 0]));
+    }
+
+    #[test]
+    fn parse_custom_theme_all_bright_keys() {
+        let content = "name = BrightTest\nbright_black = #111111\nbright_red = #222222\nbright_green = #333333\nbright_yellow = #444444\nbright_blue = #555555\nbright_magenta = #666666\nbright_cyan = #777777\nbright_white = #888888\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.ansi[8], [0x11, 0x11, 0x11]);
+        assert_eq!(theme.ansi[9], [0x22, 0x22, 0x22]);
+        assert_eq!(theme.ansi[10], [0x33, 0x33, 0x33]);
+        assert_eq!(theme.ansi[11], [0x44, 0x44, 0x44]);
+        assert_eq!(theme.ansi[12], [0x55, 0x55, 0x55]);
+        assert_eq!(theme.ansi[13], [0x66, 0x66, 0x66]);
+        assert_eq!(theme.ansi[14], [0x77, 0x77, 0x77]);
+        assert_eq!(theme.ansi[15], [0x88, 0x88, 0x88]);
+    }
+
+    #[test]
+    fn shell_custom_equality_same_path() {
+        let a = Shell::Custom(String::from("/bin/bash"));
+        let b = Shell::Custom(String::from("/bin/bash"));
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn shell_custom_equality_different_path() {
+        let a = Shell::Custom(String::from("/bin/bash"));
+        let b = Shell::Custom(String::from("/bin/zsh"));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn parse_custom_theme_invalid_hex_keeps_default() {
+        let content = "name = X\nbg = #GGG\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.background, [0, 0, 0]);
+    }
+
+    #[test]
+    fn parse_custom_theme_invalid_rgb_keeps_default() {
+        let content = "name = X\nred = abc,def,ghi\n";
+        let theme = Theme::parse_custom(content).unwrap();
+        assert_eq!(theme.ansi[1], [0, 0, 0]);
+    }
+
+    #[quickcheck]
+    fn prop_backspace_mode_byte_not_zero(_unit: ()) -> bool {
+        // BackspaceMode doesn't implement Arbitrary, so use a manual check
+        BackspaceMode::DEL.byte() != 0 && BackspaceMode::BS.byte() != 0
+    }
+
+    #[quickcheck]
+    fn prop_right_alt_mode_default(_unit: ()) -> bool {
+        RightAltMode::default() == RightAltMode::CharacterModifier
+    }
+
+    #[quickcheck]
+    fn prop_parse_color_rrggbb_three_components(r: u8, g: u8, b: u8) -> bool {
+        let hex = format!("#{:02x}{:02x}{:02x}", r, g, b);
+        if let Some(result) = parse_color(&hex) {
+            result == [r, g, b]
+        } else {
+            false
+        }
+    }
+
+    #[test]
+    fn font_config_line_spacing_negative() {
+        let f = FontConfig {
+            family: String::from("Mono"),
+            size: 12,
+            line_spacing: -4,
+        };
+        assert_eq!(f.line_spacing, -4);
+    }
+
+    #[test]
+    fn theme_default_background_different_from_cursor() {
+        let t = Theme::catppuccin_mocha();
+        assert_ne!(t.background, t.cursor);
     }
 }

@@ -1,16 +1,14 @@
-// @Cell data model, IMPL_CORE_001, impl, [REQ_CORE_001]
-// @need-ids: REQ_CORE_001, REQ_CORE_002
+// @REQ_CORE_001
+//! Cell, Color, Attrs, and DirtyMask — the terminal's atomic display unit.
 use serde::{Deserialize, Serialize};
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+/// A single terminal cell with character, colors, and attributes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
     pub char: char,
-    pub fg: Color,
-    pub bg: Color,
+    pub foreground: Color,
+    pub background: Color,
     pub attrs: Attrs,
     pub width: u8,
 }
@@ -19,18 +17,16 @@ impl Default for Cell {
     fn default() -> Self {
         Self {
             char: ' ',
-            fg: Color::default(),
-            bg: Color::default(),
+            foreground: Color::default(),
+            background: Color::default(),
             attrs: Attrs::default(),
             width: 1,
         }
     }
 }
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+/// RGBA color value.
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
     pub r: u8,
@@ -50,10 +46,8 @@ impl Default for Color {
     }
 }
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+/// Text attributes (bold, italic, underline, etc.).
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Attrs {
     pub bold: bool,
@@ -74,15 +68,31 @@ pub struct Attrs {
 
 const BITS_PER_PARTITION: u32 = 64;
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+/// Bitmask tracking which rows need re-rendering.
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirtyMask {
     partitions: alloc::vec::Vec<u64>,
 }
 
+/// A bit-packed mask tracking which rows have been modified.
+///
+/// ```
+/// use torvox_core::cell::DirtyMask;
+///
+/// let mut mask = DirtyMask::new(80);
+/// assert!(!mask.any_dirty());
+///
+/// mask.mark(5);
+/// assert!(mask.is_dirty(5));
+/// assert!(!mask.is_dirty(0));
+///
+/// mask.clear();
+/// assert!(!mask.any_dirty());
+///
+/// mask.mark_all(80);
+/// assert!(mask.is_dirty(79));
+/// ```
 impl DirtyMask {
     pub fn new(total_rows: u32) -> Self {
         let num_partitions = (total_rows as usize).div_ceil(BITS_PER_PARTITION as usize);
@@ -93,9 +103,7 @@ impl DirtyMask {
 
     pub fn is_dirty(&self, row: u32) -> bool {
         let (part, bit) = Self::partition_index(row);
-        self.partitions
-            .get(part)
-            .is_some_and(|p| *p & (1 << bit) != 0)
+        self.partitions.get(part).is_some_and(|p| *p & (1 << bit) != 0)
     }
 
     pub fn mark(&mut self, row: u32) {
@@ -118,9 +126,7 @@ impl DirtyMask {
     }
 
     pub fn clear(&mut self) {
-        for p in &mut self.partitions {
-            *p = 0;
-        }
+        self.partitions.fill(0);
     }
 
     pub fn any_dirty(&self) -> bool {
@@ -139,7 +145,27 @@ impl DirtyMask {
     }
 }
 
+/// Create a color from RGB components (alpha defaults to 255).
+///
+/// ```
+/// use torvox_core::cell::Color;
+///
+/// let red = Color::new(255, 0, 0);
+/// assert_eq!(red.r, 255);
+/// assert_eq!(red.g, 0);
+/// assert_eq!(red.b, 0);
+/// assert_eq!(red.a, 255);
+///
+/// let a = Color::new(200, 100, 50);
+/// let b = Color::new(100, 200, 50);
+/// let c = a.saturating_add(&b);
+/// assert_eq!(c, Color::new(255, 255, 100));
+///
+/// let d = Color::new(100, 200, 50).saturating_mul(2);
+/// assert_eq!(d, Color::new(200, 255, 100));
+/// ```
 impl Color {
+    /// Create a new opaque RGB color.
     pub fn new(red: u8, green: u8, blue: u8) -> Self {
         Self {
             r: red,
@@ -149,11 +175,13 @@ impl Color {
         }
     }
 
+    /// Create a color from an ANSI 256-color palette index.
     pub fn from_ansi(index: u8) -> Self {
         let [r, g, b] = crate::ansi::ansi_to_rgb(index);
         Self { r, g, b, a: 255 }
     }
 
+    /// Component-wise saturating addition of two colors.
     pub fn saturating_add(&self, other: &Color) -> Color {
         Color {
             r: self.r.saturating_add(other.r),
@@ -163,6 +191,7 @@ impl Color {
         }
     }
 
+    /// Component-wise saturating multiplication by a scalar.
     pub fn saturating_mul(&self, scalar: u8) -> Color {
         Color {
             r: self.r.saturating_mul(scalar),
@@ -173,6 +202,23 @@ impl Color {
     }
 }
 
+/// A terminal cell with character, colors, and attributes.
+///
+/// Default cell is a space with white-on-white colors and no attributes.
+///
+/// ```
+/// use torvox_core::cell::{Cell, Color};
+///
+/// let cell = Cell::default();
+/// assert_eq!(cell.char, ' ');
+/// assert_eq!(cell.foreground, Color::new(255, 255, 255));
+/// assert_eq!(cell.background, Color::new(255, 255, 255));
+/// assert_eq!(cell.width, 1);
+///
+/// let x = Cell::with_char('X');
+/// assert_eq!(x.char, 'X');
+/// assert_eq!(x.width, 1);
+/// ```
 impl Cell {
     pub fn with_char(character: char) -> Self {
         Self {
@@ -185,20 +231,21 @@ impl Cell {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quickcheck_macros::quickcheck;
 
     #[test]
     fn cell_default_is_space() {
         let c = Cell::default();
         assert_eq!(c.char, ' ');
-        assert_eq!(c.fg, Color::default());
-        assert_eq!(c.bg, Color::default());
+        assert_eq!(c.foreground, Color::default());
+        assert_eq!(c.background, Color::default());
     }
 
     #[test]
     fn cell_with_char() {
         let c = Cell::with_char('X');
         assert_eq!(c.char, 'X');
-        assert_eq!(c.fg, Color::default());
+        assert_eq!(c.foreground, Color::default());
     }
 
     #[test]
@@ -465,8 +512,8 @@ mod tests {
     fn cell_equality_full() {
         let c1 = Cell {
             char: 'A',
-            fg: Color::new(1, 2, 3),
-            bg: Color::new(4, 5, 6),
+            foreground: Color::new(1, 2, 3),
+            background: Color::new(4, 5, 6),
             attrs: Attrs {
                 bold: true,
                 ..Default::default()
@@ -511,8 +558,8 @@ mod tests {
     fn cell_with_char_keeps_default_colors() {
         let c = Cell::with_char('日');
         assert_eq!(c.char, '日');
-        assert_eq!(c.fg, Color::default());
-        assert_eq!(c.bg, Color::default());
+        assert_eq!(c.foreground, Color::default());
+        assert_eq!(c.background, Color::default());
         assert_eq!(c.width, 1);
     }
 
@@ -551,8 +598,8 @@ mod tests {
     fn cell_serde_json_roundtrip() {
         let c = Cell {
             char: 'X',
-            fg: Color::new(1, 2, 3),
-            bg: Color::new(4, 5, 6),
+            foreground: Color::new(1, 2, 3),
+            background: Color::new(4, 5, 6),
             attrs: Attrs {
                 bold: true,
                 italic: true,
@@ -685,12 +732,7 @@ mod tests {
             b: 25,
             a: 128,
         };
-        let zero = Color {
-            r: 0,
-            g: 0,
-            b: 0,
-            a: 0,
-        };
+        let zero = Color { r: 0, g: 0, b: 0, a: 0 };
         let c = a.saturating_add(&zero);
         assert_eq!(c, a);
     }
@@ -750,5 +792,332 @@ mod tests {
         assert_eq!(d.g, 255);
         assert_eq!(d.b, 255);
         assert_eq!(d.a, 255);
+    }
+
+    #[test]
+    fn dirty_mask_mark_out_of_range_partition_untouched() {
+        // Row 200 maps to partition 3 (200/64), while a 5-row mask has only partition 0.
+        // Marking rows in non-existent partitions is a silent no-op.
+        let mut m = DirtyMask::new(5);
+        m.mark(200);
+        assert!(!m.any_dirty(), "marking row in non-existent partition sets no bit");
+    }
+
+    #[test]
+    fn dirty_mask_mark_existing_partition_sets_bit() {
+        // Row 10 maps to partition 0 (10/64), which exists even for a 5-row mask.
+        // The mark succeeds even though 10 >= total_rows(5) — the mask does not track
+        // per-partition capacity.
+        let mut m = DirtyMask::new(5);
+        m.mark(10);
+        assert!(m.any_dirty(), "marking row in existing partition must set a bit");
+    }
+
+    #[test]
+    fn dirty_mask_new_with_zero_rows_creates_empty_mask() {
+        let m = DirtyMask::new(0);
+        assert!(!m.any_dirty(), "zero-row mask must start clean");
+        assert_eq!(m, DirtyMask::new(0), "all zero-row masks must be equal");
+    }
+
+    #[test]
+    fn color_from_argb_via_fields() {
+        let color = Color {
+            a: 128,
+            r: 255,
+            g: 128,
+            b: 64,
+        };
+        assert_eq!(color.r, 255, "red component must match");
+        assert_eq!(color.g, 128, "green component must match");
+        assert_eq!(color.b, 64, "blue component must match");
+        assert_eq!(color.a, 128, "alpha component must match");
+    }
+
+    #[test]
+    fn color_to_argb_via_fields() {
+        let color = Color {
+            r: 10,
+            g: 20,
+            b: 30,
+            a: 200,
+        };
+        let (alpha, red, green, blue) = (color.a, color.r, color.g, color.b);
+        assert_eq!(alpha, 200, "extracted alpha must match");
+        assert_eq!(red, 10, "extracted red must match");
+        assert_eq!(green, 20, "extracted green must match");
+        assert_eq!(blue, 30, "extracted blue must match");
+    }
+
+    #[test]
+    fn attrs_all_fields_default_false() {
+        let a = Attrs::default();
+        assert!(!a.bold);
+        assert!(!a.dim);
+        assert!(!a.italic);
+        assert!(!a.underline);
+        assert!(!a.double_underline);
+        assert!(!a.reverse);
+        assert!(!a.strikethrough);
+        assert!(!a.blink);
+        assert!(!a.hidden);
+        assert!(!a.overline);
+        assert!(!a.protected);
+        assert!(!a.double_width);
+        assert!(!a.double_height_top);
+        assert!(!a.double_height_bottom);
+    }
+
+    #[test]
+    fn attrs_bold_set_and_read() {
+        let mut a = Attrs::default();
+        assert!(!a.bold);
+        a.bold = true;
+        assert!(a.bold);
+    }
+
+    #[test]
+    fn attrs_dim_set_and_read() {
+        let mut a = Attrs::default();
+        a.dim = true;
+        assert!(a.dim);
+        a.dim = false;
+        assert!(!a.dim);
+    }
+
+    #[test]
+    fn attrs_italic_set_and_read() {
+        let mut a = Attrs::default();
+        a.italic = true;
+        assert!(a.italic);
+    }
+
+    #[test]
+    fn attrs_underline_set_and_read() {
+        let mut a = Attrs::default();
+        a.underline = true;
+        assert!(a.underline);
+    }
+
+    #[test]
+    fn attrs_strikethrough_set_and_read() {
+        let mut a = Attrs::default();
+        a.strikethrough = true;
+        assert!(a.strikethrough);
+    }
+
+    #[test]
+    fn attrs_blink_set_and_read() {
+        let mut a = Attrs::default();
+        a.blink = true;
+        assert!(a.blink);
+    }
+
+    #[test]
+    fn attrs_hidden_set_and_read() {
+        let mut a = Attrs::default();
+        a.hidden = true;
+        assert!(a.hidden);
+    }
+
+    #[test]
+    fn attrs_reverse_set_and_read() {
+        let mut a = Attrs::default();
+        a.reverse = true;
+        assert!(a.reverse);
+    }
+
+    #[test]
+    fn attrs_overline_set_and_read() {
+        let mut a = Attrs::default();
+        a.overline = true;
+        assert!(a.overline);
+    }
+
+    #[test]
+    fn attrs_double_underline_set_and_read() {
+        let mut a = Attrs::default();
+        a.double_underline = true;
+        assert!(a.double_underline);
+    }
+
+    #[test]
+    fn attrs_protected_set_and_read() {
+        let mut a = Attrs::default();
+        a.protected = true;
+        assert!(a.protected);
+    }
+
+    #[test]
+    fn attrs_all_fields_set_and_serde() {
+        let a = Attrs {
+            bold: true,
+            dim: true,
+            italic: true,
+            underline: true,
+            double_underline: true,
+            reverse: true,
+            strikethrough: true,
+            blink: true,
+            hidden: true,
+            overline: true,
+            protected: true,
+            double_width: true,
+            double_height_top: true,
+            double_height_bottom: true,
+        };
+        let json = serde_json::to_string(&a).unwrap();
+        let back: Attrs = serde_json::from_str(&json).unwrap();
+        assert_eq!(a, back);
+    }
+
+    #[quickcheck]
+    fn prop_color_from_ansi_bounds(index: u8) -> bool {
+        let c = Color::from_ansi(index);
+        c.a == 255
+    }
+
+    #[quickcheck]
+    fn prop_color_saturating_add_bounds(r1: u8, g1: u8, b1: u8, r2: u8, g2: u8, b2: u8) -> bool {
+        let a = Color {
+            r: r1,
+            g: g1,
+            b: b1,
+            a: 255,
+        };
+        let b = Color {
+            r: r2,
+            g: g2,
+            b: b2,
+            a: 0,
+        };
+        let _ = a.saturating_add(&b);
+        true
+    }
+
+    #[quickcheck]
+    fn prop_color_saturating_mul_bounds(r: u8, g: u8, b: u8, factor: u8) -> bool {
+        let a = Color { r, g, b, a: 255 };
+        let _ = a.saturating_mul(factor);
+        true
+    }
+
+    #[quickcheck]
+    fn prop_attrs_first_eight_roundtrip(
+        bold: bool,
+        dim: bool,
+        italic: bool,
+        underline: bool,
+        double_underline: bool,
+        reverse: bool,
+        strikethrough: bool,
+        blink: bool,
+    ) -> bool {
+        let a = Attrs {
+            bold,
+            dim,
+            italic,
+            underline,
+            double_underline,
+            reverse,
+            strikethrough,
+            blink,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&a).unwrap();
+        let back: Attrs = serde_json::from_str(&json).unwrap();
+        a == back
+    }
+
+    #[quickcheck]
+    fn prop_attrs_last_six_roundtrip(
+        hidden: bool,
+        overline: bool,
+        protected: bool,
+        double_width: bool,
+        double_height_top: bool,
+        double_height_bottom: bool,
+    ) -> bool {
+        let a = Attrs {
+            hidden,
+            overline,
+            protected,
+            double_width,
+            double_height_top,
+            double_height_bottom,
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&a).unwrap();
+        let back: Attrs = serde_json::from_str(&json).unwrap();
+        a == back
+    }
+
+    #[quickcheck]
+    fn prop_cell_equality_reflexive(char_code: u32, r: u8, g: u8, b: u8, width: u8) -> bool {
+        let cell = Cell {
+            char: char::from_u32(char_code & 0x10FFFF).unwrap_or(' '),
+            foreground: Color { r, g, b, a: 255 },
+            background: Color { r, g, b, a: 255 },
+            width: if width == 0 { 1 } else { width % 3 + 1 },
+            ..Default::default()
+        };
+        cell == cell
+    }
+
+    #[quickcheck]
+    fn prop_dirty_mask_new_not_dirty(rows: u8) -> bool {
+        let m = DirtyMask::new(rows as u32);
+        !m.any_dirty()
+    }
+
+    #[test]
+    fn color_serde_with_alias_fg() {
+        let json = r#"{"r":255,"g":0,"b":0,"a":255}"#;
+        let color: Color = serde_json::from_str(json).unwrap();
+        assert_eq!(color, Color::new(255, 0, 0));
+    }
+
+    #[test]
+    fn color_serde_with_alias_bg() {
+        let json = r#"{"r":0,"g":255,"b":0,"a":255}"#;
+        let color: Color = serde_json::from_str(json).unwrap();
+        assert_eq!(color, Color::new(0, 255, 0));
+    }
+
+    #[test]
+    fn dirty_mask_mark_cross_partition_boundary() {
+        let mut m = DirtyMask::new(128);
+        m.mark(63);
+        m.mark(64);
+        m.mark(65);
+        assert!(m.is_dirty(63));
+        assert!(m.is_dirty(64));
+        assert!(m.is_dirty(65));
+        assert!(!m.is_dirty(62));
+        assert!(!m.is_dirty(66));
+    }
+
+    #[test]
+    fn dirty_mask_mark_all_exact_partition_and_one_more() {
+        let mut m = DirtyMask::new(65);
+        m.mark_all(65);
+        for i in 0..65 {
+            assert!(m.is_dirty(i));
+        }
+        assert!(!m.is_dirty(65));
+    }
+
+    #[test]
+    fn cell_with_char_preserves_foreground_alias() {
+        let c = Cell::with_char('X');
+        assert_eq!(c.foreground.r, 255);
+        assert_eq!(c.foreground.g, 255);
+        assert_eq!(c.foreground.b, 255);
+    }
+
+    #[test]
+    fn cell_width_default_is_1() {
+        let c = Cell::with_char('A');
+        assert_eq!(c.width, 1);
     }
 }

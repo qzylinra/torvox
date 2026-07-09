@@ -1,13 +1,11 @@
+//! Terminal display line with cell storage and scrollback semantics.
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 use crate::cell::Cell;
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LineAttr {
     #[default]
@@ -20,16 +18,33 @@ pub enum LineAttr {
 /// Terminal line: fixed-capacity `Box<[Cell]>` providing stable addresses and small inline `attr`.
 /// `Box<[Cell]>` avoids the capacity/length overhead of `Vec`, making it a natural choice
 /// for lines whose size is known at construction time.
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
+#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+/// A fixed-capacity row of cells.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Line {
     cells: Box<[Cell]>,
     pub attr: LineAttr,
 }
 
+/// A fixed-capacity row of cells with a line attribute.
+///
+/// ```
+/// use torvox_core::line::{Line, LineAttr};
+/// use torvox_core::cell::Cell;
+///
+/// let mut line = Line::new(80);
+/// assert_eq!(line.len(), 80);
+/// assert!(!line.is_empty());
+/// assert_eq!(line.attr, LineAttr::Normal);
+///
+/// line.get_mut(5).unwrap().char = 'H';
+/// assert_eq!(line.get(5).unwrap().char, 'H');
+///
+/// line.resize(100);
+/// assert_eq!(line.len(), 100);
+/// assert_eq!(line.get(5).unwrap().char, 'H');
+/// assert_eq!(line.get(99).unwrap().char, ' ');
+/// ```
 impl Line {
     pub fn new(cols: u32) -> Self {
         let cells: Box<[Cell]> = (0..cols).map(|_| Cell::default()).collect();
@@ -208,9 +223,9 @@ mod tests {
         let mut l = Line::new(3);
         let c = l.get_mut(1).unwrap();
         c.char = 'X';
-        c.fg = crate::cell::Color::new(1, 2, 3);
+        c.foreground = crate::cell::Color::new(1, 2, 3);
         assert_eq!(l.get(1).unwrap().char, 'X');
-        assert_eq!(l.get(1).unwrap().fg, crate::cell::Color::new(1, 2, 3));
+        assert_eq!(l.get(1).unwrap().foreground, crate::cell::Color::new(1, 2, 3));
     }
 
     #[test]
@@ -314,11 +329,7 @@ mod tests {
         }
         assert_eq!(line.cells()[0].char, 'H', "first cell should be H");
         assert_eq!(line.cells()[1].char, 'i', "second cell should be i");
-        assert_eq!(
-            line.cells()[2].char,
-            ' ',
-            "third cell should remain default"
-        );
+        assert_eq!(line.cells()[2].char, ' ', "third cell should remain default");
     }
 
     #[test]
@@ -328,16 +339,8 @@ mod tests {
             char: 'Z',
             ..Cell::default()
         };
-        assert_eq!(
-            line.get(2).unwrap().char,
-            'Z',
-            "cell at index 2 should be Z"
-        );
-        assert_eq!(
-            line.cells_mut().len(),
-            3,
-            "cells_mut should return full-length slice"
-        );
+        assert_eq!(line.get(2).unwrap().char, 'Z', "cell at index 2 should be Z");
+        assert_eq!(line.cells_mut().len(), 3, "cells_mut should return full-length slice");
     }
 
     #[test]
@@ -351,13 +354,7 @@ mod tests {
         }
         for i in 0..10 {
             let expected = (b'A' + i as u8) as char;
-            assert_eq!(
-                line.cells()[i].char,
-                expected,
-                "cell {} should be '{}'",
-                i,
-                expected
-            );
+            assert_eq!(line.cells()[i].char, expected, "cell {} should be '{}'", i, expected);
         }
     }
 }

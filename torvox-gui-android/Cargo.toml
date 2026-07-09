@@ -20,11 +20,7 @@ log = { workspace = true }
 android_logger = "0.15"
 
 [dev-dependencies]
-proptest = { workspace = true }
-arbitrary = { workspace = true }
 wgpu = { workspace = true, features = ["noop"] }
-futures = { workspace = true }
-bytemuck = { workspace = true }
 
 [lints]
 workspace = true

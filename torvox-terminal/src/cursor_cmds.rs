@@ -27,26 +27,21 @@ pub fn assert_cup(t: &mut GhosttyTerminal, row: u32, col: u32, exp_row: u32, exp
     let seq = format!("\x1b[{};{}H", row, col);
     t.vt_write(seq.as_bytes());
     t.flush();
-    let pos = CursorPosition::read(t);
+    let position = CursorPosition::read(t);
     assert_eq!(
-        pos.row, exp_row,
+        position.row, exp_row,
         "CUP {};{}: expected row {}, got {}",
-        row, col, exp_row, pos.row
+        row, col, exp_row, position.row
     );
     assert_eq!(
-        pos.col, exp_col,
+        position.col, exp_col,
         "CUP {};{}: expected col {}, got {}",
-        row, col, exp_col, pos.col
+        row, col, exp_col, position.col
     );
 }
 
 /// Move cursor relatively and verify the delta.
-pub fn assert_relative(
-    t: &mut GhosttyTerminal,
-    seq: &[u8],
-    delta_row: i32,
-    delta_col: i32,
-) -> CursorPosition {
+pub fn assert_relative(t: &mut GhosttyTerminal, seq: &[u8], delta_row: i32, delta_col: i32) -> CursorPosition {
     let before = CursorPosition::read(t);
     t.vt_write(seq);
     t.flush();
@@ -81,10 +76,10 @@ pub fn assert_write_appears(t: &mut GhosttyTerminal, text: &str, exp_row: u32, e
     t.vt_write(text.as_bytes());
     t.flush();
     let snap = t.take_snapshot();
-    let idx = (exp_row * snap.cols + exp_col) as usize;
+    let index = (exp_row * snap.cols + exp_col) as usize;
     let first_char = text.chars().next().unwrap() as u32;
     assert_eq!(
-        snap.cells[idx].codepoint, first_char,
+        snap.cells[index].codepoint, first_char,
         "Text '{}' should appear at ({}, {})",
         text, exp_row, exp_col
     );
@@ -92,11 +87,11 @@ pub fn assert_write_appears(t: &mut GhosttyTerminal, text: &str, exp_row: u32, e
 
 /// Assert that a scroll region restricts cursor movement.
 pub fn assert_cursor_in_region(t: &mut GhosttyTerminal, top: u32, bottom: u32) {
-    let pos = CursorPosition::read(t);
+    let position = CursorPosition::read(t);
     assert!(
-        pos.row >= top && pos.row <= bottom,
+        position.row >= top && position.row <= bottom,
         "Cursor row {} should be in region [{}, {}]",
-        pos.row,
+        position.row,
         top,
         bottom
     );

@@ -1,7 +1,12 @@
+// @REQ_CORE_003
+//! TerminalState — cursor, modes, tabs, and VT state machine.
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::sgr::SgrAttribute;
+
+/// Standard VT100 tab stop interval (every 8 columns)
+const TAB_STOP_INTERVAL: u16 = 8;
 
 /// Terminal state for VT protocol conformance
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,10 +43,21 @@ pub struct TerminalState {
 
 impl TerminalState {
     /// Create a new terminal state with given dimensions
+    ///
+    /// ```
+    /// use torvox_core::terminal::TerminalState;
+    ///
+    /// let state = TerminalState::new(24, 80);
+    /// assert_eq!(state.cursor_row, 0);
+    /// assert_eq!(state.cursor_col, 0);
+    /// assert!(state.cursor_visible);
+    /// assert!(state.auto_wrap);
+    /// assert_eq!(state.alternate_screen, false);
+    /// ```
     pub fn new(_rows: u16, cols: u16) -> Self {
         let mut tab_stops = Vec::with_capacity(cols as usize + 1);
         for i in 0..=cols {
-            tab_stops.push(i % 8 == 0);
+            tab_stops.push(i % TAB_STOP_INTERVAL == 0);
         }
 
         Self {
@@ -76,9 +92,8 @@ impl TerminalState {
                     return;
                 }
                 _ => {
-                    self.sgr_attributes.retain(|existing| {
-                        core::mem::discriminant(existing) != core::mem::discriminant(attr)
-                    });
+                    self.sgr_attributes
+                        .retain(|existing| core::mem::discriminant(existing) != core::mem::discriminant(attr));
                     self.sgr_attributes.push(*attr);
                 }
             }
@@ -86,6 +101,20 @@ impl TerminalState {
     }
 
     /// Save cursor position (DECSC)
+    ///
+    /// ```
+    /// use torvox_core::terminal::TerminalState;
+    ///
+    /// let mut state = TerminalState::new(24, 80);
+    /// state.cursor_row = 15;
+    /// state.cursor_col = 40;
+    /// state.save_cursor();
+    /// state.cursor_row = 0;
+    /// state.cursor_col = 0;
+    /// state.restore_cursor();
+    /// assert_eq!(state.cursor_row, 15);
+    /// assert_eq!(state.cursor_col, 40);
+    /// ```
     pub fn save_cursor(&mut self) {
         self.saved_cursor_row = self.cursor_row;
         self.saved_cursor_col = self.cursor_col;
@@ -97,7 +126,7 @@ impl TerminalState {
         self.cursor_col = self.saved_cursor_col;
     }
 
-    /// Set DEC private mode
+    /// Set or clear a DEC private mode.
     pub fn set_dec_mode(&mut self, mode: u16, enabled: bool) {
         if enabled {
             if !self.dec_modes.contains(&mode) {
@@ -110,7 +139,7 @@ impl TerminalState {
         }
     }
 
-    /// Check if DEC private mode is enabled
+    /// Check if a DEC private mode is enabled.
     pub fn is_dec_mode(&self, mode: u16) -> bool {
         self.dec_modes.contains(&mode)
     }
@@ -132,38 +161,41 @@ impl TerminalState {
         self.cursor_col = target_col;
     }
 
-    /// Move cursor up by count rows
+    /// Move cursor up by `count` rows.
     pub fn cursor_up(&mut self, count: u16, _total_rows: u16) {
         let count = count.max(1);
         self.cursor_row = self.cursor_row.saturating_sub(count);
     }
 
-    /// Move cursor down by count rows
+    /// Move cursor down by `count` rows.
     pub fn cursor_down(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = (self.cursor_row + count).min(total_rows.saturating_sub(1));
+        self.cursor_row = self.cursor_row.saturating_add(count).min(total_rows.saturating_sub(1));
     }
 
-    /// Move cursor forward by count columns
+    /// Move cursor forward by `count` columns.
     pub fn cursor_forward(&mut self, count: u16, total_columns: u16) {
         let count = count.max(1);
-        self.cursor_col = (self.cursor_col + count).min(total_columns.saturating_sub(1));
+        self.cursor_col = self
+            .cursor_col
+            .saturating_add(count)
+            .min(total_columns.saturating_sub(1));
     }
 
-    /// Move cursor back by count columns
+    /// Move cursor back by `count` columns.
     pub fn cursor_back(&mut self, count: u16) {
         let count = count.max(1);
         self.cursor_col = self.cursor_col.saturating_sub(count);
     }
 
-    /// Move cursor to next line
+    /// Move cursor to next line (column 0), down by `count` rows.
     pub fn cursor_next_line(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = (self.cursor_row + count).min(total_rows.saturating_sub(1));
+        self.cursor_row = self.cursor_row.saturating_add(count).min(total_rows.saturating_sub(1));
         self.cursor_col = 0;
     }
 
-    /// Move cursor to previous line
+    /// Move cursor to previous line, up by `count` rows.
     pub fn cursor_prev_line(&mut self, count: u16) {
         let count = count.max(1);
         self.cursor_row = self.cursor_row.saturating_sub(count);
@@ -174,7 +206,7 @@ impl TerminalState {
         self.cursor_col = col.min(cols.saturating_sub(1));
     }
 
-    /// Set cursor position (1-indexed per VT spec, converted to 0-indexed)
+    /// Set cursor position (1-indexed per VT spec, converted to 0-indexed).
     pub fn cursor_position(&mut self, row: u16, col: u16, rows: u16, cols: u16) {
         let row_0 = row.saturating_sub(1).min(rows.saturating_sub(1));
         let col_0 = col.saturating_sub(1).min(cols.saturating_sub(1));
@@ -198,7 +230,7 @@ impl TerminalState {
         if let Some(tab_col) = next_tab {
             self.cursor_col = tab_col;
         } else {
-            self.cursor_col = 0;
+            self.cursor_col = cols.saturating_sub(1);
         }
     }
 
@@ -215,6 +247,8 @@ impl TerminalState {
 
         if let Some(tab_col) = prev_tab {
             self.cursor_col = tab_col;
+        } else {
+            self.cursor_col = 0;
         }
     }
 
@@ -224,86 +258,45 @@ impl TerminalState {
     }
 
     /// Erase in display. Cursor position is preserved per VT spec.
-    /// Note: This only updates terminal state flags; actual grid erasure
-    /// is handled by the Grid in the production path.
-    pub fn erase_in_display(&mut self, mode: u8, _rows: u16, _cols: u16) {
-        // Mode: 0=below, 1=above, 2=all, 3=saved
-        // Cursor position must NOT change for any mode (VT spec).
-        match mode {
-            0 => {
-                // Erase from cursor to end of screen
-            }
-            1 => {
-                // Erase from start of screen to cursor
-            }
-            2 => {
-                // Erase entire screen
-            }
-            3 => {
-                // Erase saved lines (scrollback)
-            }
-            _ => {}
-        }
-    }
+    /// Grid erasure is handled by the caller; this method only updates
+    /// terminal state flags if needed.
+    pub fn erase_in_display(&mut self, _mode: u8, _rows: u16, _cols: u16) {}
 
     /// Erase in line. Cursor position is preserved per VT spec.
-    pub fn erase_in_line(&mut self, mode: u8) {
-        // Mode: 0=right, 1=left, 2=all
-        // Cursor position must NOT change.
-        match mode {
-            0 => {
-                // Erase from cursor to end of line
-            }
-            1 => {
-                // Erase from start of line to cursor
-            }
-            2 => {
-                // Erase entire line
-            }
-            _ => {}
-        }
-    }
+    /// Grid erasure is handled by the caller.
+    pub fn erase_in_line(&mut self, _mode: u8) {}
 
     /// Insert count blank lines at cursor. Cursor stays put.
-    /// Actual line insertion is handled by Grid in the production path.
-    pub fn insert_lines(&mut self, _count: u16, _total_rows: u16) {
-        // State-only: Grid handles the actual content shift.
-    }
+    /// Actual line insertion is handled by the caller.
+    pub fn insert_lines(&mut self, _count: u16, _total_rows: u16) {}
 
     /// Delete count lines at cursor. Cursor stays put.
-    pub fn delete_lines(&mut self, _count: u16, _total_rows: u16) {
-        // State-only: Grid handles the actual content shift.
-    }
+    /// Actual line deletion is handled by the caller.
+    pub fn delete_lines(&mut self, _count: u16, _total_rows: u16) {}
 
     /// Insert count blank characters at cursor. Cursor stays put.
-    pub fn insert_characters(&mut self, _count: u16) {
-        // State-only: Grid handles the actual character shift.
-    }
+    /// Character insertion is handled by the caller.
+    pub fn insert_characters(&mut self, _count: u16) {}
 
     /// Delete count characters at cursor. Cursor stays put.
-    pub fn delete_characters(&mut self, _count: u16) {
-        // State-only: Grid handles the actual character shift.
-    }
+    /// Character deletion is handled by the caller.
+    pub fn delete_characters(&mut self, _count: u16) {}
 
     /// Scroll up count lines within scrolling region.
-    pub fn scroll_up(&mut self, _count: u16, _total_rows: u16) {
-        // State-only: Grid handles the actual content scroll.
-    }
+    /// Scrolling is handled by the caller.
+    pub fn scroll_up(&mut self, _count: u16, _total_rows: u16) {}
 
     /// Scroll down count lines within scrolling region.
-    pub fn scroll_down(&mut self, _count: u16, _total_rows: u16) {
-        // State-only: Grid handles the actual content scroll.
-    }
+    /// Scrolling is handled by the caller.
+    pub fn scroll_down(&mut self, _count: u16, _total_rows: u16) {}
 
     /// Erase count characters starting at cursor (replaces with blanks).
-    pub fn erase_characters(&mut self, _count: u16) {
-        // State-only: Grid handles the actual erasure.
-    }
+    /// Character erasure is handled by the caller.
+    pub fn erase_characters(&mut self, _count: u16) {}
 
     /// Repeat the character preceding the cursor count times.
-    pub fn repeat_character(&mut self, _count: u16) {
-        // State-only: Grid handles the actual character insertion.
-    }
+    /// Character repetition is handled by the caller.
+    pub fn repeat_character(&mut self, _count: u16) {}
 
     /// Set scrolling region
     pub fn set_scrolling_region(&mut self, top: u16, bottom: u16) {
@@ -354,6 +347,7 @@ impl TerminalState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     #[test]
     fn erase_in_display_mode_zero_does_not_move_cursor() {
@@ -460,7 +454,31 @@ mod tests {
         let mut state = TerminalState::new(24, 80);
         state.cursor_col = 78;
         state.cursor_horizontal_tab(80);
-        assert!(state.cursor_col <= 79);
+        assert_eq!(state.cursor_col, 79, "tab past last stop must clamp to right margin");
+    }
+
+    #[test]
+    fn cursor_horizontal_tab_no_stop_moves_to_right_margin() {
+        let mut state = TerminalState::new(24, 80);
+        state.tab_stops = vec![false; 80];
+        state.cursor_col = 5;
+        state.cursor_horizontal_tab(80);
+        assert_eq!(
+            state.cursor_col, 79,
+            "no tab stop ahead must move to right margin (col 79)"
+        );
+    }
+
+    #[test]
+    fn cursor_horizontal_tab_back_moves_to_left_margin() {
+        let mut state = TerminalState::new(24, 80);
+        state.tab_stops = vec![false; 80];
+        state.cursor_col = 10;
+        state.cursor_horizontal_tab_back(80);
+        assert_eq!(
+            state.cursor_col, 0,
+            "no tab stop behind must move to left margin (col 0)"
+        );
     }
 
     #[test]
@@ -543,10 +561,7 @@ mod tests {
         state.cursor_row = 0;
         state.cursor_col = 0;
         state.restore_cursor();
-        assert_eq!(
-            state.cursor_row, 20,
-            "should restore to second save, not first"
-        );
+        assert_eq!(state.cursor_row, 20, "should restore to second save, not first");
         assert_eq!(state.cursor_col, 70, "col should restore to second save");
     }
 
@@ -658,15 +673,9 @@ mod tests {
         let mut state = TerminalState::new(24, 80);
         assert!(!state.is_dec_mode(25), "mode 25 should start unset");
         state.set_dec_mode(25, true);
-        assert!(
-            state.is_dec_mode(25),
-            "mode 25 should be set after set(true)"
-        );
+        assert!(state.is_dec_mode(25), "mode 25 should be set after set(true)");
         state.set_dec_mode(25, false);
-        assert!(
-            !state.is_dec_mode(25),
-            "mode 25 should be unset after set(false)"
-        );
+        assert!(!state.is_dec_mode(25), "mode 25 should be unset after set(false)");
     }
 
     #[test]
@@ -691,10 +700,7 @@ mod tests {
         state.set_dec_mode(7, true);
         state.set_dec_mode(7, true);
         let count = state.dec_modes.iter().filter(|&&m| m == 7).count();
-        assert_eq!(
-            count, 1,
-            "setting mode 7 three times should produce exactly one entry"
-        );
+        assert_eq!(count, 1, "setting mode 7 three times should produce exactly one entry");
         state.set_dec_mode(7, false);
         assert!(!state.is_dec_mode(7), "mode 7 should be unset");
     }
@@ -769,6 +775,40 @@ mod tests {
     }
 
     #[test]
+    fn cursor_down_does_not_overflow_u16() {
+        let mut state = TerminalState::new(24, 80);
+        state.cursor_row = 23;
+        state.cursor_down(u16::MAX, 24);
+        assert_eq!(
+            state.cursor_row, 23,
+            "saturating_add prevents u16 overflow panic and clamps to last row"
+        );
+    }
+
+    #[test]
+    fn cursor_forward_does_not_overflow_u16() {
+        let mut state = TerminalState::new(24, 80);
+        state.cursor_col = 79;
+        state.cursor_forward(u16::MAX, 80);
+        assert_eq!(
+            state.cursor_col, 79,
+            "saturating_add prevents u16 overflow panic and clamps to last col"
+        );
+    }
+
+    #[test]
+    fn cursor_next_line_does_not_overflow_u16() {
+        let mut state = TerminalState::new(24, 80);
+        state.cursor_row = 23;
+        state.cursor_next_line(u16::MAX, 24);
+        assert_eq!(
+            state.cursor_row, 23,
+            "saturating_add prevents u16 overflow panic and clamps to last row"
+        );
+        assert_eq!(state.cursor_col, 0, "col resets to 0");
+    }
+
+    #[test]
     fn cursor_position_sets_exact_location() {
         let mut state = TerminalState::new(24, 80);
         state.cursor_position(5, 10, 24, 80);
@@ -812,10 +852,7 @@ mod tests {
         let mut state = TerminalState::new(24, 80);
         state.cursor_col = 0;
         state.cursor_horizontal_tab_back(80);
-        assert_eq!(
-            state.cursor_col, 0,
-            "tab back at col 0 should not underflow"
-        );
+        assert_eq!(state.cursor_col, 0, "tab back at col 0 should not underflow");
     }
 
     #[test]
@@ -850,10 +887,7 @@ mod tests {
             state.set_dec_mode(7, true);
             state.set_dec_mode(7, false);
         }
-        assert!(
-            !state.is_dec_mode(7),
-            "after 100 toggles off, should be off"
-        );
+        assert!(!state.is_dec_mode(7), "after 100 toggles off, should be off");
         let count = state.dec_modes.iter().filter(|&&m| m == 7).count();
         assert_eq!(count, 0, "should have zero entries after all toggles off");
     }
@@ -883,27 +917,13 @@ mod tests {
         state.apply_sgr(&[SgrAttribute::Bold(true)]);
         assert!(matches!(state.sgr_attributes[0], SgrAttribute::Bold(true)));
         state.apply_sgr(&[SgrAttribute::Italic(true)]);
-        assert_eq!(
-            state.sgr_attributes.len(),
-            2,
-            "SGR accumulates across calls"
-        );
+        assert_eq!(state.sgr_attributes.len(), 2, "SGR accumulates across calls");
         assert!(matches!(state.sgr_attributes[0], SgrAttribute::Bold(true)));
-        assert!(matches!(
-            state.sgr_attributes[1],
-            SgrAttribute::Italic(true)
-        ));
+        assert!(matches!(state.sgr_attributes[1], SgrAttribute::Italic(true)));
         state.apply_sgr(&[SgrAttribute::Underline(crate::sgr::UnderlineStyle::Single)]);
-        assert_eq!(
-            state.sgr_attributes.len(),
-            3,
-            "each call adds, not replaces"
-        );
+        assert_eq!(state.sgr_attributes.len(), 3, "each call adds, not replaces");
         state.apply_sgr(&[]);
-        assert!(
-            state.sgr_attributes.is_empty(),
-            "empty slice clears attributes"
-        );
+        assert!(state.sgr_attributes.is_empty(), "empty slice clears attributes");
     }
 
     #[test]
@@ -931,10 +951,7 @@ mod tests {
             "should have 2 attributes after accumulation"
         );
         state.apply_sgr(&[]);
-        assert!(
-            state.sgr_attributes.is_empty(),
-            "empty apply_sgr should clear"
-        );
+        assert!(state.sgr_attributes.is_empty(), "empty apply_sgr should clear");
     }
 
     #[test]

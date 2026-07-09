@@ -1,0 +1,30 @@
+appId: com.termux
+name: Terminal basic command and verify output
+tags:
+  - smoke
+  - p0
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "TerminalScreen"
+    timeout: 30000
+- assertVisible:
+    id: "TerminalContent"
+- assertVisible:
+    id: "ModifierBar"
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "TerminalContent"
+- waitForAnimationToEnd:
+    timeout: 3000
+- inputText: "echo hello"
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 3000
+- assertVisible:
+    id: "TerminalContent"
+- takeScreenshot: terminal_basic_echo

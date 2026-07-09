@@ -1,7 +1,8 @@
 package io.torvox.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -16,7 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,7 +36,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.withTimeoutOrNull
 
+private const val BUTTON_HEIGHT_DP = 36
+private const val BUTTON_FONT_SIZE_SP = 10
+private const val REPEAT_TIMEOUT_MS = 500L
+
 enum class ModifierState { Off, Once, Locked }
+
+enum class ModifierBarMode { Normal, SelectionActions }
 
 fun ModifierState.next(): ModifierState = when (this) {
     ModifierState.Off -> ModifierState.Once
@@ -68,8 +78,8 @@ val defaultModifierKeys: List<ModifierKey> =
 @Composable
 fun rememberToolbarLayout(): List<ToolbarItem>? {
     val context = LocalContext.current
-    val prefs = remember { ToolbarPreferences(context) }
-    return remember { prefs.getLayout() }
+    val toolbarPreferences = remember { ToolbarPreferences(context) }
+    return remember { toolbarPreferences.getLayout() }
 }
 
 /**
@@ -96,9 +106,28 @@ fun ModifierBar(
     modifier: Modifier = Modifier,
     useNerdFontGlyphs: Boolean = false,
     toolbarLayout: List<ToolbarItem>? = null,
+    barMode: ModifierBarMode = ModifierBarMode.Normal,
+    onCopy: (() -> Unit)? = null,
+    onSelectAll: (() -> Unit)? = null,
+    onPaste: (() -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null,
 ) {
     fun label(key: String): String = if (useNerdFontGlyphs) NerdKeyLabels.label(key) else key
-    val buttonHeight = 36.dp
+    val buttonHeight = BUTTON_HEIGHT_DP.dp
+
+    if (barMode == ModifierBarMode.SelectionActions) {
+        SelectionActionsBar(
+            onCopy = onCopy,
+            onSelectAll = onSelectAll,
+            onPaste = onPaste,
+            onDismiss = onDismiss,
+            textColor = textColor,
+            backgroundColor = backgroundColor,
+            buttonHeight = buttonHeight,
+            modifier = modifier,
+        )
+        return
+    }
 
     if (toolbarLayout != null) {
         ConfigurableModifierBar(
@@ -222,6 +251,52 @@ fun ModifierBar(
     }
 }
 
+@Composable
+private fun SelectionActionsBar(
+    onCopy: (() -> Unit)?,
+    onSelectAll: (() -> Unit)?,
+    onPaste: (() -> Unit)?,
+    onDismiss: (() -> Unit)?,
+    textColor: Color,
+    backgroundColor: Color,
+    buttonHeight: androidx.compose.ui.unit.Dp,
+    modifier: Modifier,
+) {
+    val actions = mutableListOf<Pair<String, () -> Unit>>()
+    if (onCopy != null) actions.add("Copy" to onCopy)
+    if (onSelectAll != null) actions.add("Select All" to onSelectAll)
+    if (onPaste != null) actions.add("Paste" to onPaste)
+
+    Row(
+        modifier =
+        modifier
+            .fillMaxWidth()
+            .height(buttonHeight)
+            .background(backgroundColor),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for ((label, action) in actions) {
+            ExtraKeyButton(
+                text = label,
+                onClick = action,
+                textColor = textColor,
+                testTag = "Action_${label.replace(" ", "")}",
+                contentDescription = label,
+            )
+        }
+        if (onDismiss != null) {
+            ExtraKeyButton(
+                text = "\u00d7",
+                onClick = onDismiss,
+                textColor = textColor,
+                testTag = "Action_Dismiss",
+                contentDescription = "Dismiss selection",
+            )
+        }
+    }
+}
+
 @Suppress("LongParameterList", "CyclomaticComplexMethod")
 @Composable
 private fun ConfigurableModifierBar(
@@ -238,7 +313,7 @@ private fun ConfigurableModifierBar(
     modifier: Modifier,
     label: (String) -> String,
 ) {
-    val buttonHeight = 36.dp
+    val buttonHeight = BUTTON_HEIGHT_DP.dp
     val allKeys = toolbarLayout.toList()
     val midpoint = (allKeys.size + 1) / 2
     val row1 = allKeys.take(midpoint)
@@ -460,7 +535,7 @@ private fun ConfigurableModifierBar(
     }
 }
 
-@Suppress("LongParameterList", "CyclomaticComplexMethod")
+@Suppress("LongParameterList", "CyclomaticComplexMethod", "LongMethod")
 @Composable
 private fun RowScope.ExtraKeyButton(
     text: String,
@@ -476,13 +551,21 @@ private fun RowScope.ExtraKeyButton(
     val isLocked = modifierState == ModifierState.Locked
     val isOnce = modifierState == ModifierState.Once
 
-    val activeBg =
+    var isPressed by remember { mutableStateOf(false) }
+
+    val targetBg =
         when {
             isLocked -> MaterialTheme.colorScheme.primary
             isOnce -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
             isActive -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
             else -> Color.Transparent
         }
+    val pressedOverlay = Color.White.copy(alpha = 0.12f)
+    val animatedBg by animateColorAsState(
+        targetValue = if (isPressed && !active) pressedOverlay else targetBg,
+        animationSpec = tween(durationMillis = 100),
+        label = "btnBg",
+    )
     val activeFg =
         when {
             isLocked -> MaterialTheme.colorScheme.onPrimary
@@ -504,23 +587,31 @@ private fun RowScope.ExtraKeyButton(
             Modifier.pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
+                    isPressed = true
                     view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                     onClick()
                     var released = false
                     while (!released) {
-                        val event = withTimeoutOrNull(80) { waitForUpOrCancellation() }
+                        val event = withTimeoutOrNull(REPEAT_TIMEOUT_MS) { waitForUpOrCancellation() }
                         if (event == null) {
                             onRepeat()
                         } else {
                             released = true
                         }
                     }
+                    isPressed = false
                 }
             }
         } else {
-            Modifier.clickable {
-                view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                onClick()
+            Modifier.pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    isPressed = true
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                    onClick()
+                    waitForUpOrCancellation()
+                    isPressed = false
+                }
             }
         }
 
@@ -528,17 +619,21 @@ private fun RowScope.ExtraKeyButton(
         modifier =
         Modifier
             .weight(1f)
-            .height(36.dp)
+            .height(BUTTON_HEIGHT_DP.dp)
             .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier)
-            .then(if (active) Modifier.background(activeBg, RoundedCornerShape(4.dp)) else Modifier)
-            .then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
+            .then(
+                Modifier.background(
+                    if (active || isPressed) animatedBg else Color.Transparent,
+                    RoundedCornerShape(4.dp),
+                ),
+            ).then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
             .then(gestureModifier),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
             color = activeFg,
-            fontSize = 10.sp,
+            fontSize = BUTTON_FONT_SIZE_SP.sp,
             fontWeight = fontWeight,
             textAlign = TextAlign.Center,
             maxLines = 1,

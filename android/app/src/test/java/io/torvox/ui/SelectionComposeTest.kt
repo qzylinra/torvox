@@ -1,0 +1,187 @@
+package io.torvox.ui
+
+import androidx.compose.ui.test.junit4.AndroidComposeTestRule
+import com.github.takahirom.roborazzi.RoborazziRule
+import io.torvox.RobolectricActivityRule
+import io.torvox.TestActivity
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], application = android.app.Application::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class SelectionComposeTest {
+    @Suppress("DEPRECATION")
+    @get:Rule
+    val composeTestRule: AndroidComposeTestRule<RobolectricActivityRule<TestActivity>, TestActivity> =
+        AndroidComposeTestRule(
+            RobolectricActivityRule(TestActivity::class.java),
+            activityProvider = { it.activity },
+        )
+
+    @get:Rule
+    val roborazziRule =
+        RoborazziRule(
+            RoborazziRule.Options(
+                outputDirectoryPath = "src/test/resources/roborazzi",
+            ),
+        )
+
+    @Test
+    fun expandWordSelection_findsWordBoundaries() {
+        val (start, end) = expandWordOnLine("hello world", 0)
+        assertEquals(0, start)
+        assertEquals(5, end)
+    }
+
+    @Test
+    fun expandWordSelection_emptyString() {
+        val result = expandWordOnLine("", 0)
+        assertEquals(0, result.first.toLong())
+        assertEquals(0, result.second.toLong())
+    }
+
+    @Test
+    fun expandWordSelection_atWhitespace() {
+        val line = "hello world"
+        val col = 5
+        val result = expandWordOnLine(line, col)
+        // At the space character, should expand to nearest word char
+        assertTrue("startCol ($result.first) < endCol ($result.second)", result.first < result.second)
+    }
+
+    @Test
+    fun expandWordSelection_underscoreIsWordChar() {
+        assertTrue("underscore is word char", isWordChar('_'))
+    }
+
+    @Test
+    fun expandWordSelection_digitIsWordChar() {
+        assertTrue("digit is word char", isWordChar('5'))
+    }
+
+    @Test
+    fun expandWordSelection_dotHyphenSlashIsWordChar() {
+        assertTrue("period is word char (URL)", isWordChar('.'))
+        assertTrue("hyphen is word char (path)", isWordChar('-'))
+        assertTrue("slash is word char (URL)", isWordChar('/'))
+    }
+
+    @Test
+    fun expandWordSelection_punctuationIsNotWordChar() {
+        assertFalse("comma is not word char", isWordChar(','))
+        assertFalse("paren is not word char", isWordChar(')'))
+        assertFalse("space is not word char", isWordChar(' '))
+    }
+
+    @Test
+    fun expandWordSelection_middleOfWord() {
+        val (start, end) = expandWordOnLine("testing select", 8)
+        assertEquals(8, start)
+        assertEquals(14, end)
+    }
+
+    @Test
+    fun expandWordSelection_singleWord() {
+        val (start, end) = expandWordOnLine("torvox", 2)
+        assertEquals(0, start)
+        assertEquals(6, end)
+    }
+
+    @Test
+    fun expandWordSelection_outOfBoundsCol() {
+        val (start, end) = expandWordOnLine("hello", 20)
+        assertEquals(20, start)
+        assertEquals(20, end)
+    }
+
+    @Test
+    fun expandAcrossUrlWrap_detectsUrlContinuation() {
+        val lines = listOf("https://example.com/abc", "def")
+        val span = expandAcrossUrlWrap(lines, 0, 0, 22)
+        assertNotNull(span)
+    }
+
+    @Test
+    fun expandAcrossUrlWrap_wwwDot() {
+        val lines = listOf("check www.example.com/abc", "def")
+        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
+        assertNotNull(span)
+    }
+
+    @Test
+    fun expandAcrossUrlWrap_dotGit() {
+        val lines = listOf("clone https://git.example.com/repo", ".git")
+        val span = expandAcrossUrlWrap(lines, 0, 6, 33)
+        assertNotNull(span)
+    }
+
+    @Test
+    fun expandAcrossUrlWrap_rejectsNonUrlFirstLine() {
+        val lines = listOf("not a url", "continuation")
+        val span = expandAcrossUrlWrap(lines, 0, 0, 9)
+        assertTrue("non-URL should be null", span == null)
+    }
+
+    @Test
+    fun expandAcrossUrlWrap_rejectsEmptyContinuation() {
+        val lines = listOf("check https://example", "")
+        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
+        assertTrue("empty continuation should be null", span == null)
+    }
+
+    @Test
+    fun expandAcrossUrlWrap_rejectsMultiWordContinuation() {
+        val lines =
+            listOf(
+                "check https://example",
+                "/path more",
+            )
+        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
+        assertTrue("multi-word continuation should be null", span == null)
+    }
+
+    @Test
+    fun expandAcrossUrlWrap_rejectsOverlyLongContinuation() {
+        val lines = listOf("check https://example", "a".repeat(20))
+        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
+        assertTrue("overly long continuation should be null", span == null)
+    }
+
+    @Test
+    fun isWordChar_letter_isTrue() {
+        assertTrue("'a' is a word char", isWordChar('a'))
+        assertTrue("'Z' is a word char", isWordChar('Z'))
+    }
+
+    @Test
+    fun isWordChar_digit_isTrue() {
+        assertTrue("'0' is a word char", isWordChar('0'))
+        assertTrue("'9' is a word char", isWordChar('9'))
+    }
+
+    @Test
+    fun isWordChar_underscore_isTrue() {
+        assertTrue("'_' is a word char", isWordChar('_'))
+    }
+
+    @Test
+    fun isWordChar_space_isFalse() {
+        assertFalse("space is not a word char", isWordChar(' '))
+    }
+
+    @Test
+    fun isWordChar_punctuation_isFalse() {
+        assertFalse("',' is not a word char", isWordChar(','))
+        assertFalse("'!' is not a word char", isWordChar('!'))
+        assertFalse("'(' is not a word char", isWordChar('('))
+    }
+}

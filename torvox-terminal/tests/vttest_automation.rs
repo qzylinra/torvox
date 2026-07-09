@@ -55,12 +55,10 @@ fn vttest_scr02_cup_positioning() {
     t.flush();
     let snap = t.take_snapshot();
     assert_eq!(snap.cursor_row, 11, "vttest scr02: row 12 (0-idx 11)");
+    assert_eq!(snap.cursor_col, 40, "vttest scr02: col 40 (0-idx), advances after X");
     assert_eq!(
-        snap.cursor_col, 40,
-        "vttest scr02: col 40 (0-idx), advances after X"
-    );
-    assert!(
-        snap.cells[11 * 80 + 39].codepoint == 'X' as u32,
+        snap.cells[11 * 80 + 39].codepoint,
+        'X' as u32,
         "vttest scr02: X at (11,39)"
     );
     assert_invariants(&snap);
@@ -97,17 +95,11 @@ fn vttest_scr04_tab_stops() {
     t.vt_write(b"\x09A");
     t.flush();
     let snap = t.take_snapshot();
-    assert_eq!(
-        snap.cells[8].codepoint, 'A' as u32,
-        "vttest scr04: HT jumps to col 8"
-    );
+    assert_eq!(snap.cells[8].codepoint, 'A' as u32, "vttest scr04: HT jumps to col 8");
     t.vt_write(b"\x09B");
     t.flush();
     let snap = t.take_snapshot();
-    assert_eq!(
-        snap.cells[16].codepoint, 'B' as u32,
-        "vttest scr04: HT jumps to col 16"
-    );
+    assert_eq!(snap.cells[16].codepoint, 'B' as u32, "vttest scr04: HT jumps to col 16");
     assert_invariants(&snap);
 }
 
@@ -121,10 +113,7 @@ fn vttest_scr05_line_wrap() {
     t.flush();
     let snap = t.take_snapshot();
     // Row 0: first 10 chars (wrapping position varies by terminal)
-    assert_eq!(
-        snap.cells[0].codepoint, 'A' as u32,
-        "vttest scr05: col 0 = A"
-    );
+    assert_eq!(snap.cells[0].codepoint, 'A' as u32, "vttest scr05: col 0 = A");
     // After wrapping with 14 chars, cursor at col 4 on row 1
     assert_invariants(&snap);
 }
@@ -167,7 +156,7 @@ fn vttest_scr07_scroll_region() {
 #[test]
 fn vttest_scr08_il_dl() {
     let mut t = make_term(5, 20);
-    t.vt_write(b"AAA\nBBB\nCCC\nDDD\nEEE");
+    t.pty_write(b"AAA\nBBB\nCCC\nDDD\nEEE");
     t.flush();
     // IL 2 at row 3 (1-idx) → inserts 2 blank lines below cursor
     t.vt_write(b"\x1b[3;1H\x1b[2L");
@@ -228,11 +217,7 @@ fn vttest_scr11_ed() {
     // Row 2 should be empty
     let snap = t.take_snapshot();
     for col in 0..5 {
-        assert_eq!(
-            snap.cells[10 + col].codepoint,
-            0,
-            "vttest scr11: row 2 empty"
-        );
+        assert_eq!(snap.cells[10 + col].codepoint, 0, "vttest scr11: row 2 empty");
     }
     assert_invariants(&snap);
 }
@@ -287,11 +272,7 @@ fn vttest_scr15_origin_mode() {
     t.vt_write(b"\x1b[1;1H"); // home (relative to region = row 3)
     t.flush();
     // Should be at row 3 (0-idx 2) not row 1
-    assert_eq!(
-        t.cursor_y(),
-        2,
-        "vttest scr15: origin mode home = region top"
-    );
+    assert_eq!(t.cursor_y(), 2, "vttest scr15: origin mode home = region top");
     t.vt_write(b"\x1b[?6l"); // origin mode OFF
     t.vt_write(b"\x1b[r"); // reset region
     t.flush();
@@ -576,10 +557,7 @@ fn vttest_screen_36_cursor_report() {
     t.vt_write(b"\x1b[6n");
     t.flush();
     let responses = t.drain_pty_write_responses();
-    assert!(
-        !responses.is_empty(),
-        "scr36: CPR should produce a response"
-    );
+    assert!(!responses.is_empty(), "scr36: CPR should produce a response");
     let last = responses.last().unwrap();
     let text = String::from_utf8_lossy(last);
     assert!(
@@ -596,10 +574,7 @@ fn vttest_screen_37_device_attributes() {
     t.vt_write(b"\x1b[c");
     t.flush();
     let responses = t.drain_pty_write_responses();
-    assert!(
-        !responses.is_empty(),
-        "scr37: primary DA should produce a response"
-    );
+    assert!(!responses.is_empty(), "scr37: primary DA should produce a response");
     let last = responses.last().unwrap();
     let text = String::from_utf8_lossy(last);
     assert!(
@@ -660,7 +635,7 @@ fn vttest_screen_41_insert_mode_sgr() {
     t.vt_write(b"XYZ");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[0].fg[0] > 0.0, "scr41: IRM color");
+    assert!(snap.cells[0].foreground[0] > 0.0, "scr41: IRM color");
     assert_invariants(&snap);
 }
 

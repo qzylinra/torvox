@@ -53,19 +53,19 @@ class SettingsInstrumentedTest {
         val settingsBtn = device.findObject(By.text("Settings"))
         if (settingsBtn != null) {
             settingsBtn.click()
-            Thread.sleep(2000)
+            Thread.sleep(3000)
         }
     }
 
     private fun scrollTo(
         text: String,
-        maxSwipes: Int = 10,
+        maxSwipes: Int = 25,
     ) {
         for (i in 0 until maxSwipes) {
             if (device.findObject(By.textContains(text)) != null) return
             val cx = device.displayWidth / 2
             device.swipe(cx, device.displayHeight * 3 / 4, cx, device.displayHeight / 4, 10)
-            Thread.sleep(800)
+            Thread.sleep(1200)
         }
     }
 
@@ -95,7 +95,7 @@ class SettingsInstrumentedTest {
         openSettings()
         val restoreReady = device.wait(Until.hasObject(By.textContains("Restore")), WAIT_TIMEOUT)
         if (!restoreReady) {
-            scrollTo("Restore")
+            scrollTo("Restore", maxSwipes = 40)
         }
         val found = device.findObject(By.textContains("Restore")) != null
         assertTrue("Should see Restore sessions", found)

@@ -1,18 +1,26 @@
 package io.torvox.installer
 
 import android.system.Os
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-class SecondStageRunner {
+class SecondStageRunner(
+    private val prefixDir: File,
+    private val homeDir: File,
+) {
+    companion object {
+        private const val THREAD_JOIN_TIMEOUT_MS = 5_000L
+    }
+
     data class Result(
         val success: Boolean,
         val errors: List<String> = emptyList(),
     )
 
     suspend fun run(): Result = withContext(Dispatchers.IO) {
-        val lockFile = File("${BootstrapInstaller.PREFIX_DIR}/bin/termux-bootstrap-second-stage.sh.lock")
+        val lockFile = File(prefixDir, "bin/termux-bootstrap-second-stage.sh.lock")
         if (lockFile.exists()) {
             return@withContext Result(true)
         }
@@ -27,7 +35,7 @@ class SecondStageRunner {
         }
         val dpkgVersion = detectDpkgVersion() ?: "unknown"
         val arch = detectAbi()
-        val postinstDir = File("${BootstrapInstaller.PREFIX_DIR}/var/lib/dpkg/info")
+        val postinstDir = File(prefixDir, "var/lib/dpkg/info")
         val errors = mutableListOf<String>()
         if (postinstDir.isDirectory) {
             postinstDir
@@ -36,8 +44,8 @@ class SecondStageRunner {
                 ?.forEach { script ->
                     val packageName = script.name.removeSuffix(".postinst")
                     try {
-                        Os.chmod(script.absolutePath, 0x1ED)
-                        val env =
+                        Os.chmod(script.absolutePath, BootstrapInstaller.EXECUTABLE_FILE_MODE)
+                        val environment =
                             mapOf(
                                 "DPKG_MAINTSCRIPT_PACKAGE" to packageName,
                                 "DPKG_MAINTSCRIPT_PACKAGE_REFCOUNT" to "1",
@@ -46,24 +54,30 @@ class SecondStageRunner {
                                 "DPKG_MAINTSCRIPT_DEBUG" to "0",
                                 "DPKG_RUNNING_VERSION" to dpkgVersion,
                                 "DPKG_FORCE" to "security-mac,downgrade",
-                                "DPKG_ADMINDIR" to "${BootstrapInstaller.PREFIX_DIR}/var/lib/dpkg",
+                                "DPKG_ADMINDIR" to File(prefixDir, "var/lib/dpkg").absolutePath,
                                 "DPKG_ROOT" to "",
-                                "HOME" to BootstrapInstaller.HOME_DIR,
-                                "PATH" to "${BootstrapInstaller.PREFIX_DIR}/bin:/system/bin:/system/xbin",
-                                "PREFIX" to BootstrapInstaller.PREFIX_DIR,
+                                "HOME" to homeDir.absolutePath,
+                                "PATH" to "${File(prefixDir, "bin").absolutePath}:/system/bin:/system/xbin",
+                                "PREFIX" to prefixDir.absolutePath,
                             )
                         val proc =
                             Runtime.getRuntime().exec(
                                 arrayOf(script.absolutePath, "configure"),
-                                env.map { "${it.key}=${it.value}" }.toTypedArray(),
+                                environment.map { "${it.key}=${it.value}" }.toTypedArray(),
                                 File("/"),
                             )
+                        val stdoutThread = Thread { proc.inputStream.bufferedReader().readText() }
+                        val stderrThread = Thread { proc.errorStream.bufferedReader().readText() }
+                        stdoutThread.start()
+                        stderrThread.start()
                         val exitCode = proc.waitFor()
+                        stdoutThread.join(THREAD_JOIN_TIMEOUT_MS)
+                        stderrThread.join(THREAD_JOIN_TIMEOUT_MS)
                         if (exitCode != 0) {
                             errors.add("$packageName postinst exited with code $exitCode")
                         }
                     } catch (exception: Exception) {
-                        errors.add("$packageName postinst error: ${exception.message}")
+                        errors.add("$packageName postinst error [${exception.javaClass.simpleName}]: ${exception.message}")
                     }
                 }
         }
@@ -72,35 +86,27 @@ class SecondStageRunner {
     }
 
     private fun detectDpkgVersion(): String? = try {
-        val proc = Runtime.getRuntime().exec(arrayOf("${BootstrapInstaller.PREFIX_DIR}/bin/dpkg", "--version"))
+        val proc = Runtime.getRuntime().exec(arrayOf(File(prefixDir, "bin/dpkg").absolutePath, "--version"))
         val text = proc.inputStream.bufferedReader().readText()
         val match = Regex("""(\d+\.\d+\.\d+)""").find(text)
         match?.value
-    } catch (_: Exception) {
+    } catch (e: Exception) {
+        Log.w("SecondStageRunner", "detectDpkgVersion failed", e)
         null
     }
 
-    private fun detectAbi(): String = when (
-        android.os.Build.SUPPORTED_ABIS
-            .firstOrNull()
-    ) {
-        "arm64-v8a" -> "aarch64"
-        "armeabi-v7a" -> "arm"
-        "x86_64" -> "x86_64"
-        "x86" -> "i686"
-        else -> "aarch64"
-    }
+    private fun detectAbi(): String = io.torvox.detectArchFromAbi()
 
     private fun writeTermuxEnv() {
-        val envFile = File("${BootstrapInstaller.PREFIX_DIR}/etc/termux/termux.env")
+        val envFile = File(prefixDir, "etc/termux/termux.env")
         envFile.parentFile?.mkdirs()
         envFile.writeText(
             """
-HOME=${BootstrapInstaller.HOME_DIR}
-PREFIX=${BootstrapInstaller.PREFIX_DIR}
-PATH=${BootstrapInstaller.PREFIX_DIR}/bin:/system/bin:/system/xbin
-TMPDIR=${BootstrapInstaller.PREFIX_DIR}/tmp
-SHELL=${BootstrapInstaller.PREFIX_DIR}/bin/bash
+HOME=${homeDir.absolutePath}
+PREFIX=${prefixDir.absolutePath}
+PATH=${File(prefixDir, "bin").absolutePath}:/system/bin:/system/xbin
+TMPDIR=${File(prefixDir, "tmp").absolutePath}
+SHELL=${File(prefixDir, "bin/bash").absolutePath}
 LANG=en_US.UTF-8
 TERM=xterm-256color
 COLORTERM=truecolor

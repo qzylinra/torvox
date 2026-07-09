@@ -1,0 +1,57 @@
+appId: com.termux
+name: Terminal copy and paste via selection
+tags:
+  - e2e
+  - p1
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "TerminalScreen"
+    timeout: 30000
+- assertVisible:
+    id: "ModifierBar"
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "TerminalContent"
+- waitForAnimationToEnd:
+    timeout: 3000
+# Type some text to select
+- inputText: "echo COPY_ME_12345"
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 3000
+- hideKeyboard
+- waitForAnimationToEnd:
+    timeout: 1000
+# Long press on terminal to trigger selection
+- longPressOn:
+    id: "TerminalContent"
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: selection_triggered
+# Tap Copy action if available
+- tapOn:
+    text: "Copy"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1000
+- tapOn:
+    id: "TerminalContent"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1000
+# Long press to trigger paste
+- longPressOn:
+    id: "TerminalContent"
+- waitForAnimationToEnd:
+    timeout: 2000
+- tapOn:
+    text: "Paste"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 1000
+- takeScreenshot: copy_paste_complete

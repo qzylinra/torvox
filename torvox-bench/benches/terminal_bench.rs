@@ -1,4 +1,5 @@
-use criterion::{BatchSize, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
+use std::hint::black_box;
 use torvox_core::grid::Grid;
 use torvox_core::line::Line;
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
@@ -51,8 +52,7 @@ fn bench_vt_parse_cursor_movement(c: &mut Criterion) {
 }
 
 fn bench_vt_parse_large_output(c: &mut Criterion) {
-    let line =
-        b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
+    let line = b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
     let mut input = Vec::with_capacity(line.len() * 1000);
     for _ in 0..1000 {
         input.extend_from_slice(line);
@@ -153,8 +153,7 @@ fn bench_ghostty_screenshot(c: &mut Criterion) {
 }
 
 fn bench_vt_throughput_100k_lines(c: &mut Criterion) {
-    let line =
-        b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
+    let line = b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
     let mut input = Vec::with_capacity(line.len() * 100_000);
     for _ in 0..100_000 {
         input.extend_from_slice(line);
@@ -185,38 +184,6 @@ fn bench_vt_throughput_ls_la(c: &mut Criterion) {
         });
     });
     group.finish();
-}
-
-// ── B09: Keyboard encoding ─────────────────────────────────────
-fn bench_keyboard_encode(c: &mut Criterion) {
-    use torvox_terminal::keyboard::{InputEngine, KeyAction, KeyEvent, SpecialKey};
-    let engine = InputEngine::new();
-    c.bench_function("B09_keyboard_encode_legacy_char", |b| {
-        b.iter(|| {
-            let out = engine.process_key(KeyEvent::Char('a'), KeyAction::Press);
-            black_box(out.len());
-        });
-    });
-    c.bench_function("B09_keyboard_encode_legacy_enter", |b| {
-        b.iter(|| {
-            let out = engine.process_key(KeyEvent::Special(SpecialKey::Enter), KeyAction::Press);
-            black_box(out.len());
-        });
-    });
-    let mut kitty_engine = InputEngine::new();
-    kitty_engine.set_kitty_protocol(true);
-    c.bench_function("B09_keyboard_encode_kitty_char", |b| {
-        b.iter(|| {
-            let out = kitty_engine.process_key(KeyEvent::Char('a'), KeyAction::Press);
-            black_box(out.len());
-        });
-    });
-    c.bench_function("B09_keyboard_encode_kitty_up", |b| {
-        b.iter(|| {
-            let out = kitty_engine.process_key(KeyEvent::Special(SpecialKey::Up), KeyAction::Press);
-            black_box(out.len());
-        });
-    });
 }
 
 fn bench_input_to_pixel_latency(c: &mut Criterion) {
@@ -305,13 +272,7 @@ fn bench_csi_mixed_throughput(c: &mut Criterion) {
     use std::fmt::Write;
     let mut input = String::with_capacity(100_000 * 12);
     for i in 0..100_000 {
-        let _ = write!(
-            input,
-            "\x1b[{};{}H\x1b[{}m",
-            (i % 24) + 1,
-            (i % 80) + 1,
-            i % 8 + 1
-        );
+        let _ = write!(input, "\x1b[{};{}H\x1b[{}m", (i % 24) + 1, (i % 80) + 1, i % 8 + 1);
     }
     let input = input.into_bytes();
     let mut group = c.benchmark_group("B13_csi_mixed_100k");
@@ -349,7 +310,9 @@ fn bench_osc_throughput(c: &mut Criterion) {
 fn bench_osc_heavy_throughput(c: &mut Criterion) {
     let mut input = Vec::with_capacity(1000 * 100);
     for _ in 0..1000 {
-        input.extend_from_slice(b"\x1b]0;This is a very long window title that tests string parsing in the terminal emulator\x1b\\");
+        input.extend_from_slice(
+            b"\x1b]0;This is a very long window title that tests string parsing in the terminal emulator\x1b\\",
+        );
     }
     let mut group = c.benchmark_group("B14_osc_heavy_1000");
     group.throughput(Throughput::Bytes(input.len() as u64));
@@ -465,14 +428,7 @@ fn bench_kitty_scrolling_heavy(c: &mut Criterion) {
     use std::fmt::Write;
     let mut input = String::with_capacity(100_000 * 40);
     for i in 0..100_000 {
-        let _ = write!(
-            input,
-            "\x1b[{};{}H\x1b[{}mLine {}\r\n",
-            (i % 24) + 1,
-            1,
-            i % 8 + 1,
-            i
-        );
+        let _ = write!(input, "\x1b[{};{}H\x1b[{}mLine {}\r\n", (i % 24) + 1, 1, i % 8 + 1, i);
     }
     let input = input.into_bytes();
     let mut group = c.benchmark_group("kitty_heavy_scroll_100k");
@@ -580,14 +536,7 @@ fn bench_fuzz_throughput(c: &mut Criterion) {
     use std::io::Write;
     let mut input = Vec::with_capacity(500_000);
     for i in 0..1_000 {
-        let _ = write!(
-            input,
-            "\x1b[{};{}H\x1b[{}mLine{}\r\n",
-            (i % 24) + 1,
-            1,
-            i % 8 + 1,
-            i
-        );
+        let _ = write!(input, "\x1b[{};{}H\x1b[{}mLine{}\r\n", (i % 24) + 1, 1, i % 8 + 1, i);
     }
     let input_len = input.len();
     let mut group = c.benchmark_group("B23_fuzz_throughput_1k_sequences");
@@ -627,6 +576,277 @@ fn bench_grid_fill_comprehensive(c: &mut Criterion) {
     group.finish();
 }
 
+// ── B26: GPU render throughput ─────────────────────────────────────
+fn bench_gpu_render_throughput(c: &mut Criterion) {
+    use torvox_core::cursor::CursorStyle;
+    use torvox_renderer::font::FontPipeline;
+    use torvox_renderer::gpu::{GpuContext, build_cell_instances_from_snapshot};
+
+    let mut ctx = GpuContext::new_with_no_surface();
+    ctx.surface_config = Some(wgpu::SurfaceConfiguration {
+        width: 800,
+        height: 600,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        present_mode: wgpu::PresentMode::Fifo,
+        alpha_mode: wgpu::CompositeAlphaMode::Auto,
+        view_formats: vec![],
+        desired_maximum_frame_latency: 2,
+    });
+    ctx.set_bg_color([0, 0, 0]);
+    ctx.initialize_pipeline_and_bind_group(256, 256, 800, 600);
+    let mut font_pipeline = FontPipeline::new(256, 256, 14.0);
+
+    let mut terminal = GhosttyTerminal::new(24, 80, 1000).unwrap();
+    terminal.vt_write(b"\x1b[2J\x1b[1;1H");
+    for row in 0..24u8 {
+        terminal.vt_write(&[
+            b'R',
+            0x30 + (row & 0xf),
+            b' ',
+            b'H',
+            0x30 + row,
+            b'e',
+            b'l',
+            b'l',
+            b'o',
+            b'\n',
+        ]);
+    }
+    terminal.flush();
+    let snap = terminal.take_snapshot();
+
+    c.bench_function("B26_gpu_render_snapshot_24x80", |b| {
+        b.iter(|| {
+            let instances = build_cell_instances_from_snapshot(
+                &snap,
+                &mut font_pipeline,
+                torvox_renderer::gpu::CellInstanceConfig {
+                    atlas_width: 256.0,
+                    atlas_height: 256.0,
+                    dirty_rows: None,
+                    selection: None,
+                    selection_bg: None,
+                    search_highlights: &[],
+                    cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
+                    cursor_style: CursorStyle::Block,
+                },
+            );
+            let pixels = ctx.render_to_buffer(&instances, &[]).unwrap();
+            black_box(pixels.len());
+        });
+    });
+}
+
+// ── B50-B52: Grid cell access patterns ─────────────────────────────
+fn bench_cell_random_access(c: &mut Criterion) {
+    let g = Grid::new(24, 80);
+    let mut rng: u32 = 12345;
+    let mut positions = Vec::with_capacity(1000);
+    for _ in 0..1000 {
+        rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);
+        positions.push(((rng >> 16) % 24, (rng & 0xFFFF) % 80));
+    }
+    c.bench_function("B50_cell_random_access_1000", |b| {
+        b.iter(|| {
+            let mut sum: u32 = 0;
+            for &(row, col) in &positions {
+                if let Some(cell) = g.cell(row, col) {
+                    sum += cell.width as u32;
+                }
+            }
+            black_box(sum);
+        });
+    });
+}
+
+fn bench_cell_sequential(c: &mut Criterion) {
+    let g = Grid::new(24, 80);
+    c.bench_function("B51_cell_sequential", |b| {
+        b.iter(|| {
+            let mut sum: u32 = 0;
+            for row in 0..24 {
+                for col in 0..80 {
+                    if let Some(cell) = g.cell(row, col) {
+                        sum += cell.width as u32;
+                    }
+                }
+            }
+            black_box(sum);
+        });
+    });
+}
+
+fn bench_cell_column_by_column(c: &mut Criterion) {
+    let g = Grid::new(24, 80);
+    c.bench_function("B52_cell_column_by_column", |b| {
+        b.iter(|| {
+            let mut sum: u32 = 0;
+            for col in 0..80 {
+                for row in 0..24 {
+                    if let Some(cell) = g.cell(row, col) {
+                        sum += cell.width as u32;
+                    }
+                }
+            }
+            black_box(sum);
+        });
+    });
+}
+
+// ── B53-B55: Selection operations ─────────────────────────────────
+fn bench_selection_word(c: &mut Criterion) {
+    use torvox_core::selection::{Selection, SelectionAnchor, SelectionMode};
+    let mut g = Grid::new(24, 80);
+    for row in 0..24 {
+        let mut col = 0u32;
+        for word_idx in 0..10 {
+            let len = (word_idx % 5 + 2) as u32;
+            for offset in 0..len {
+                if col + offset < 80 {
+                    g.fill_cells(row, b'a' as char, col + offset, col + offset + 1);
+                }
+            }
+            col += len;
+            if col < 80 {
+                g.fill_cells(row, ' ', col, col + 1);
+                col += 1;
+            }
+        }
+    }
+    let cell_at = |row: u32, col: u32| g.cell(row, col).map(|c| c.char);
+    let sel = Selection::new(
+        SelectionAnchor { row: 5, col: 10 },
+        SelectionAnchor { row: 5, col: 14 },
+        SelectionMode::Word,
+    );
+    c.bench_function("B53_selection_word_expand_1000", |b| {
+        b.iter(|| {
+            for _ in 0..1000 {
+                let expanded = sel.expand_word(&cell_at);
+                black_box(expanded.start.col);
+            }
+        });
+    });
+}
+
+fn bench_selection_line(c: &mut Criterion) {
+    use torvox_core::selection::{Selection, SelectionAnchor, SelectionMode};
+    let mut g = Grid::new(24, 80);
+    for row in 0..24 {
+        g.fill_cells(row, 'A', 0, 80);
+    }
+    let sel = Selection::new(
+        SelectionAnchor { row: 5, col: 0 },
+        SelectionAnchor { row: 10, col: 79 },
+        SelectionMode::Line,
+    );
+    c.bench_function("B54_selection_line_text_1000", |b| {
+        b.iter(|| {
+            for _ in 0..1000 {
+                let text = sel.text(&g);
+                black_box(text.len());
+            }
+        });
+    });
+}
+
+fn bench_selection_text_extraction(c: &mut Criterion) {
+    use torvox_core::selection::{Selection, SelectionAnchor, SelectionMode};
+    let mut g = Grid::new(24, 80);
+    for row in 0..24 {
+        g.fill_cells(row, 'A', 0, 80);
+    }
+    let sel_char = Selection::new(
+        SelectionAnchor { row: 3, col: 10 },
+        SelectionAnchor { row: 20, col: 70 },
+        SelectionMode::Char,
+    );
+    let sel_block = Selection::new(
+        SelectionAnchor { row: 3, col: 10 },
+        SelectionAnchor { row: 20, col: 70 },
+        SelectionMode::Block,
+    );
+    c.bench_function("B55_selection_char_text_extract", |b| {
+        b.iter(|| {
+            let text = sel_char.text(&g);
+            black_box(text.len());
+        });
+    });
+    c.bench_function("B55_selection_block_text_extract", |b| {
+        b.iter(|| {
+            let text = sel_block.text(&g);
+            black_box(text.len());
+        });
+    });
+}
+
+// ── B56-B57: SGR attribute parsing and applying ────────────────────
+fn bench_sgr_parse_short(c: &mut Criterion) {
+    use torvox_core::sgr::parse_sgr;
+    c.bench_function("B56_sgr_parse_short_3_params", |b| {
+        b.iter(|| {
+            let attrs = parse_sgr(&[1, 31, 44]);
+            black_box(attrs.len());
+        });
+    });
+    c.bench_function("B56_sgr_parse_medium_6_params", |b| {
+        b.iter(|| {
+            let attrs = parse_sgr(&[1, 3, 4, 31, 44, 53]);
+            black_box(attrs.len());
+        });
+    });
+}
+
+fn bench_sgr_parse_extended_color(c: &mut Criterion) {
+    use torvox_core::sgr::parse_sgr;
+    c.bench_function("B56_sgr_parse_256_color", |b| {
+        b.iter(|| {
+            let attrs = parse_sgr(&[38, 5, 196, 48, 5, 255]);
+            black_box(attrs.len());
+        });
+    });
+    c.bench_function("B56_sgr_parse_rgb_color", |b| {
+        b.iter(|| {
+            let attrs = parse_sgr(&[38, 2, 255, 128, 64, 48, 2, 64, 128, 255]);
+            black_box(attrs.len());
+        });
+    });
+}
+
+fn bench_sgr_apply(c: &mut Criterion) {
+    use torvox_core::cell::Cell;
+    use torvox_core::sgr::{ColorSpec, SgrAttribute, UnderlineStyle, apply_sgr};
+    c.bench_function("B57_sgr_apply_single_attr", |b| {
+        b.iter_batched(
+            || Cell::default(),
+            |mut cell| {
+                apply_sgr(&[SgrAttribute::Bold(true)], &mut cell);
+                black_box(cell.attrs.bold);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+    c.bench_function("B57_sgr_apply_multiple_attrs", |b| {
+        let attrs = [
+            SgrAttribute::Bold(true),
+            SgrAttribute::Italic(true),
+            SgrAttribute::Underline(UnderlineStyle::Single),
+            SgrAttribute::ForegroundColor(ColorSpec::Named(2)),
+            SgrAttribute::BackgroundColor(ColorSpec::Indexed(235)),
+            SgrAttribute::Reverse(true),
+        ];
+        b.iter_batched(
+            || Cell::default(),
+            |mut cell| {
+                apply_sgr(&attrs, &mut cell);
+                black_box(cell.attrs.bold);
+            },
+            BatchSize::SmallInput,
+        );
+    });
+}
+
 criterion_group!(
     vt_benches,
     bench_device_create,
@@ -646,7 +866,6 @@ criterion_group!(
     bench_clipboard_ops,
     bench_ghostty_screenshot,
     bench_session_startup,
-    bench_keyboard_encode,
     bench_kitty_scrolling_heavy,
     bench_kitty_1024_glyphs,
 );
@@ -674,6 +893,20 @@ criterion_group!(
     bench_selection_ops,
     bench_fuzz_throughput,
     bench_cpu_idle,
+    bench_gpu_render_throughput,
 );
 
-criterion_main!(vt_benches, grid_benches, other_benches);
+criterion_group!(
+    cell_access_benches,
+    bench_cell_random_access,
+    bench_cell_sequential,
+    bench_cell_column_by_column,
+    bench_selection_word,
+    bench_selection_line,
+    bench_selection_text_extraction,
+    bench_sgr_parse_short,
+    bench_sgr_parse_extended_color,
+    bench_sgr_apply,
+);
+
+criterion_main!(vt_benches, grid_benches, other_benches, cell_access_benches);

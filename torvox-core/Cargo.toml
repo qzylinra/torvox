@@ -6,7 +6,6 @@ description = "Core types for Torvox terminal emulator (no_std compatible)"
 
 [dependencies]
 serde = { workspace = true }
-thiserror = { workspace = true, optional = true }
 unicode-width = { version = "0.2", default-features = false, features = [
   "no_std",
   "cjk",
@@ -17,7 +16,7 @@ rkyv = { workspace = true, default-features = false, features = [
 
 [features]
 default = ["std", "alloc"]
-std = ["thiserror", "serde/std"]
+std = ["serde/std"]
 alloc = ["serde/alloc"]
 rkyv = ["dep:rkyv"]
 
@@ -25,7 +24,6 @@ rkyv = ["dep:rkyv"]
 quickcheck = { workspace = true }
 quickcheck_macros = { workspace = true }
 proptest = { workspace = true }
-arbitrary = { workspace = true }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
 
 [lints]

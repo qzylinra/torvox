@@ -32,6 +32,8 @@
     <string name="bootstrap_preset_custom">Personnalisé / Vide</string>
     <string name="bootstrap_preset_custom_desc">Démarrer avec un système de fichiers racine vide</string>
     <string name="bootstrap">Bootstrap</string>
+    <string name="bootstrap_install">Installer Bootstrap</string>
+    <string name="bootstrap_installing">Installation\u2026</string>
     <string name="session_restore">Restaurer la session</string>
     <string name="session_restore_desc">Rouvrir la session précédente au lancement de l\'application</string>
     <string name="keyboard_mode">Mode clavier</string>
@@ -97,4 +99,14 @@
     <string name="volume_key_map">Correspondance des touches de volume</string>
     <string name="volume_key_map_desc">Mapper volume+ sur Ctrl et volume- sur Fn</string>
     <string name="install">Installer</string>
+
+    <!-- Cursor Settings -->
+    <string name="session_restore_off_desc">Les sessions ne seront pas restaurées au démarrage de l\'application</string>
+    <string name="on">Activé</string>
+    <string name="off">Désactivé</string>
+    <string name="cjk_fallback_missing_warning">Aucune police de secours CJK détectée. Les caractères d\'Asie de l\'Est peuvent ne pas s\'afficher correctement.</string>
+    <string name="cursor_blink">Clignotement du curseur</string>
+    <string name="cursor_blink_desc">Activer/désactiver l\'animation du clignotement du curseur</string>
+    <string name="cursor_speed">Vitesse de clignotement</string>
+    <string name="cursor_style_label">Style du curseur</string>
 </resources>

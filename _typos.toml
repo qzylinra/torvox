@@ -9,6 +9,7 @@ extend-exclude = [
   "result-kudzu/",
   "test-screenshots/",
   "**/res/values*/strings.xml",
+  "ultragoal/",
 ]
 
 [default]
@@ -26,3 +27,5 @@ pris = "pris"
 BA = "BA"
 Pn = "Pn"
 decid = "decid"
+Secon = "Secon"
+Thir = "Thir"

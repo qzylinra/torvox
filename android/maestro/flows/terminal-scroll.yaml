@@ -1,0 +1,41 @@
+appId: com.termux
+name: Terminal scroll up and down verification
+tags:
+  - e2e
+  - p1
+---
+- launchApp:
+    clearState: true
+    stopApp: true
+- extendedWaitUntil:
+    visible:
+      id: "TerminalScreen"
+    timeout: 30000
+- assertVisible:
+    id: "ModifierBar"
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "TerminalContent"
+- waitForAnimationToEnd:
+    timeout: 3000
+# Generate enough output to enable scrolling
+- inputText: "for i in $(seq 1 50); do echo Line $i; done"
+- pressKey: Enter
+- waitForAnimationToEnd:
+    timeout: 10000
+- takeScreenshot: terminal_scroll_output_generated
+# Swipe up to scroll the terminal content
+- swipe:
+    direction: UP
+    start: 50%
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: terminal_scrolled_up
+# Swipe down to scroll back
+- swipe:
+    direction: DOWN
+    start: 50%
+- waitForAnimationToEnd:
+    timeout: 2000
+- takeScreenshot: terminal_scrolled_down
