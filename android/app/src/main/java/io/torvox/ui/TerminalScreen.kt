@@ -260,9 +260,18 @@ fun TerminalScreen(
                     )
                 if (results.isNotEmpty()) {
                     val match = results[newIndex]
-                    val visibleRows = surfaceRef.value?.getRows() ?: 24
-                    val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
-                    surfaceRef.value?.scrollToRow(centeredRow)
+                    val surface = surfaceRef.value
+                    if (surface != null) {
+                        val visibleRows = surface.getRows()
+                        val scrollbackLen = surface.getMaxScrollOffset()
+                        val scrollOffset = surface.getScrollOffset()
+                        val firstVisibleRow = scrollbackLen - scrollOffset
+                        val lastVisibleRow = firstVisibleRow + visibleRows - 1
+                        if (match.lineIndex !in firstVisibleRow..lastVisibleRow) {
+                            val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
+                            surface.scrollToRow(centeredRow)
+                        }
+                    }
                 }
             }
 
@@ -485,12 +494,19 @@ fun TerminalScreen(
                                         searchState.resultCount - 1
                                     }
                                 val match = searchState.results[newIndex]
-                                val visibleRows = surfaceRef.value?.getRows() ?: 24
-                                val scrollbackLen = surfaceRef.value?.getMaxScrollOffset() ?: 0
-                                val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
-                                val targetScroll = (scrollbackLen - centeredRow).coerceIn(0, scrollbackLen)
-                                surfaceRef.value?.scrollToRow(centeredRow)
-                                Log.d("TerminalScreen", "Search prev: match row=${match.lineIndex} scroll=$targetScroll")
+                                val surface = surfaceRef.value
+                                if (surface != null) {
+                                    val visibleRows = surface.getRows()
+                                    val scrollbackLen = surface.getMaxScrollOffset()
+                                    val scrollOffset = surface.getScrollOffset()
+                                    val firstVisibleRow = scrollbackLen - scrollOffset
+                                    val lastVisibleRow = firstVisibleRow + visibleRows - 1
+                                    if (match.lineIndex !in firstVisibleRow..lastVisibleRow) {
+                                        val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
+                                        surface.scrollToRow(centeredRow)
+                                    }
+                                }
+                                Log.d("TerminalScreen", "Search prev: match row=${match.lineIndex}")
                                 searchState = searchState.copy(currentIndex = newIndex)
                             }
                         },
@@ -503,12 +519,19 @@ fun TerminalScreen(
                                         0
                                     }
                                 val match = searchState.results[newIndex]
-                                val visibleRows = surfaceRef.value?.getRows() ?: 24
-                                val scrollbackLen = surfaceRef.value?.getMaxScrollOffset() ?: 0
-                                val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
-                                val targetScroll = (scrollbackLen - centeredRow).coerceIn(0, scrollbackLen)
-                                surfaceRef.value?.scrollToRow(centeredRow)
-                                Log.d("TerminalScreen", "Search next: match row=${match.lineIndex} scroll=$targetScroll")
+                                val surface = surfaceRef.value
+                                if (surface != null) {
+                                    val visibleRows = surface.getRows()
+                                    val scrollbackLen = surface.getMaxScrollOffset()
+                                    val scrollOffset = surface.getScrollOffset()
+                                    val firstVisibleRow = scrollbackLen - scrollOffset
+                                    val lastVisibleRow = firstVisibleRow + visibleRows - 1
+                                    if (match.lineIndex !in firstVisibleRow..lastVisibleRow) {
+                                        val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
+                                        surface.scrollToRow(centeredRow)
+                                    }
+                                }
+                                Log.d("TerminalScreen", "Search next: match row=${match.lineIndex}")
                                 searchState = searchState.copy(currentIndex = newIndex)
                             }
                         },
