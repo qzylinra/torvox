@@ -77,6 +77,12 @@ fn vale_finds_no_violations() {
             "docs/standards/STYLE.md",
             "docs/standards/TESTING.md",
             "docs/standards/QUALITY-GATE.md",
+            "docs/standards/BUILD.md",
+            "docs/srs.md",
+            "docs/architecture.md",
+            "docs/acceptance.md",
+            "docs/dependencies.md",
+            "docs/adr/README.md",
         ])
         .current_dir(WORKSPACE)
         .output()
@@ -86,6 +92,128 @@ fn vale_finds_no_violations() {
     assert!(
         output.status.success(),
         "vale found style violations:\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn doc_srs_requirement_format() {
+    let srs_path = std::path::Path::new(WORKSPACE).join("docs/srs.md");
+    let content = std::fs::read_to_string(&srs_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", srs_path.display()));
+    // Extract all FR-xxx / NFR-xxx IDs from the document
+    let re = regex_lite::Regex::new(r"(?m)^(?:\|?\s*)?(FR-\d{3}|NFR-\d{3})\b").unwrap();
+    let mut ids: Vec<(usize, String)> = Vec::new();
+    for (lineno, line) in content.lines().enumerate() {
+        for cap in re.captures_iter(line) {
+            ids.push((lineno + 1, cap[1].to_string()));
+        }
+    }
+    assert!(
+        !ids.is_empty(),
+        "no FR-xxx or NFR-xxx requirement IDs found in docs/srs.md"
+    );
+    // Report duplicate IDs
+    let mut seen = std::collections::BTreeMap::new();
+    for (lineno, id) in &ids {
+        seen.entry(id.clone())
+            .or_insert_with(Vec::new)
+            .push(*lineno);
+    }
+    let mut dupes: Vec<String> = Vec::new();
+    for (id, lines) in &seen {
+        if lines.len() > 1 {
+            dupes.push(format!(
+                "  {id}: lines {}",
+                lines
+                    .iter()
+                    .map(|l| l.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
+    assert!(
+        dupes.is_empty(),
+        "duplicate requirement IDs found in docs/srs.md:\n{}",
+        dupes.join("\n")
+    );
+}
+
+#[test]
+fn doc_traceability_references() {
+    let yaml_path = std::path::Path::new(WORKSPACE).join("docs/traceability.yml");
+    let content = std::fs::read_to_string(&yaml_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", yaml_path.display()));
+
+    // Extract requirement keys listed under `requirements:`
+    let re = regex_lite::Regex::new(r"(?m)^  (FR-\d{3}|NFR-\d{3}):").unwrap();
+    let trace_ids: std::collections::BTreeSet<String> = re
+        .captures_iter(&content)
+        .map(|c| c[1].to_string())
+        .collect();
+    assert!(
+        !trace_ids.is_empty(),
+        "no requirement IDs found in docs/traceability.yml"
+    );
+
+    // Check that every traceability ID exists in docs/srs.md
+    let srs_path = std::path::Path::new(WORKSPACE).join("docs/srs.md");
+    let srs_content = std::fs::read_to_string(&srs_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", srs_path.display()));
+    let srs_re = regex_lite::Regex::new(r"\b(FR-\d{3}|NFR-\d{3})\b").unwrap();
+    let srs_ids: std::collections::BTreeSet<String> = srs_re
+        .captures_iter(&srs_content)
+        .map(|c| c[1].to_string())
+        .collect();
+
+    let missing: Vec<&str> = trace_ids
+        .iter()
+        .filter(|id| !srs_ids.contains(id.as_str()))
+        .map(|s| s.as_str())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "traceability.yml references requirement IDs not found in docs/srs.md:\n  {}",
+        missing.join("\n  ")
+    );
+}
+
+#[test]
+fn doc_acceptance_links_to_srs() {
+    let acceptance_path = std::path::Path::new(WORKSPACE).join("docs/acceptance.md");
+    let content = std::fs::read_to_string(&acceptance_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", acceptance_path.display()));
+
+    // Extract referenced requirement IDs from acceptance criteria
+    let re = regex_lite::Regex::new(r"\b(FR-\d{3}|NFR-\d{3})\b").unwrap();
+    let acceptance_ids: std::collections::BTreeSet<String> = re
+        .captures_iter(&content)
+        .map(|c| c[1].to_string())
+        .collect();
+    assert!(
+        !acceptance_ids.is_empty(),
+        "no requirement IDs found in docs/acceptance.md"
+    );
+
+    // Check that every acceptance-referenced ID exists in docs/srs.md
+    let srs_path = std::path::Path::new(WORKSPACE).join("docs/srs.md");
+    let srs_content = std::fs::read_to_string(&srs_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", srs_path.display()));
+    let srs_re = regex_lite::Regex::new(r"\b(FR-\d{3}|NFR-\d{3})\b").unwrap();
+    let srs_ids: std::collections::BTreeSet<String> = srs_re
+        .captures_iter(&srs_content)
+        .map(|c| c[1].to_string())
+        .collect();
+
+    let missing: Vec<&str> = acceptance_ids
+        .iter()
+        .filter(|id| !srs_ids.contains(id.as_str()))
+        .map(|s| s.as_str())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "docs/acceptance.md references requirement IDs not found in docs/srs.md:\n  {}",
+        missing.join("\n  ")
     );
 }
 
