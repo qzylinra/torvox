@@ -863,6 +863,11 @@ impl TorvoxBridge {
             detail: format!("lock failed: {}", e),
         })?;
         if let Some(surface) = surface_guard.as_mut() {
+            // Re-apply the theme background before updating the native window
+            // so the wgpu swapchain clear color matches this session's theme
+            // rather than the default deep-blue (catppuccin mocha bg) or
+            // the previous session's background.
+            surface.set_theme(self.config.theme.clone().into());
             surface
                 .update_native_window(window_ptr as *mut std::ffi::c_void, width, height)
                 .map_err(|e| TerminalError::PtyError {

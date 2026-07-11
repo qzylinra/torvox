@@ -2420,6 +2420,24 @@ pub fn build_cell_instances_from_snapshot(
     instances
 }
 
+/// Apply a search highlight to a cell's foreground and background colors.
+///
+/// When the highlight alpha is >= 128 (current match), the foreground and
+/// background are swapped (inverted) to produce a strong "反色" effect.
+/// When alpha is < 128 (other match), only the background is tinted with
+/// the highlight color, leaving the foreground unchanged.
+#[inline]
+fn apply_search_highlight(
+    fg: &mut [f32; 4],
+    bg: &mut [f32; 4],
+    hl: [u8; 4],
+) {
+    if hl[3] >= 128 {
+        std::mem::swap(fg, bg);
+    }
+    *bg = blend_highlight(*bg, hl);
+}
+
 /// Like [`build_cell_instances_from_snapshot`] but reuses a caller-owned
 /// `instances` buffer, clearing it first. Reusing the buffer avoids a fresh
 /// `Vec` heap allocation on every rendered frame (the hot path would otherwise
@@ -2501,12 +2519,7 @@ pub fn build_cell_instances_into(
                     }
                 }
                 if let Some(hl) = cell_highlight(row, col, &highlights_by_row) {
-                    // Current match (alpha >= 128): invert fg/bg for strong 反色
-                    // Other matches (alpha < 128): just tint background, don't invert
-                    if hl[3] >= 128 {
-                        std::mem::swap(&mut fg, &mut bg);
-                    }
-                    bg = blend_highlight(bg, *hl);
+                    apply_search_highlight(&mut fg, &mut bg, *hl);
                 }
                 let (fg, bg, quad_origin, quad_size) = if is_cursor {
                     let raw_cursor_bg = cursor_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -2590,10 +2603,7 @@ pub fn build_cell_instances_into(
                     }
                 }
                 if let Some(hl) = cell_highlight(row, col, &highlights_by_row) {
-                    if hl[3] >= 128 {
-                        std::mem::swap(&mut fg, &mut bg);
-                    }
-                    bg = blend_highlight(bg, *hl);
+                    apply_search_highlight(&mut fg, &mut bg, *hl);
                 }
                 let base_x = col as f32 * cell_w;
                 let base_y = row as f32 * cell_h;
@@ -2733,10 +2743,7 @@ pub fn build_cell_instances_into(
                         }
                     }
                     if let Some(hl) = cell_highlight(row, gcol, &highlights_by_row) {
-                        if hl[3] >= 128 {
-                            std::mem::swap(&mut gfg, &mut gbg);
-                        }
-                        gbg = blend_highlight(gbg, *hl);
+                        apply_search_highlight(&mut gfg, &mut gbg, *hl);
                     }
                     let (gfg_scoped, gbg_scoped) = if g_cursor {
                         let raw_cursor_bg = cursor_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
@@ -2829,10 +2836,7 @@ pub fn build_cell_instances_into(
                 }
             }
             if let Some(hl) = cell_highlight(row, col, &highlights_by_row) {
-                if hl[3] >= 128 {
-                    std::mem::swap(&mut fg, &mut bg);
-                }
-                bg = blend_highlight(bg, *hl);
+                apply_search_highlight(&mut fg, &mut bg, *hl);
             }
 
             let (fg, bg) = if is_cursor {

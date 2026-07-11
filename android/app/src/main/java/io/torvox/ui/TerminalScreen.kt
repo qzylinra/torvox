@@ -201,11 +201,11 @@ fun TerminalScreen(
 
         Box(
             modifier =
-            Modifier
-                .fillMaxSize()
-                .testTag("TerminalScreen")
-                .background(terminalBg)
-                .statusBarsPadding(),
+                Modifier
+                    .fillMaxSize()
+                    .testTag("TerminalScreen")
+                    .background(terminalBg)
+                    .statusBarsPadding(),
         ) {
             LaunchedEffect(drawerState.isOpen) {
                 surfaceRef.value?.drawerOpen = drawerState.isOpen
@@ -220,6 +220,19 @@ fun TerminalScreen(
                 showTextSearch = false
                 searchState = SearchState()
                 surfaceRef.value?.searchActive = false
+            }
+
+            fun scrollToMatchIfNeeded(match: SearchResult) {
+                val surface = surfaceRef.value ?: return
+                val visibleRows = surface.getRows()
+                val scrollbackLen = surface.getMaxScrollOffset()
+                val scrollOffset = surface.getScrollOffset()
+                val firstVisibleRow = scrollbackLen - scrollOffset
+                val lastVisibleRow = firstVisibleRow + visibleRows - 1
+                if (match.lineIndex !in firstVisibleRow..lastVisibleRow) {
+                    val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
+                    surface.scrollToRow(centeredRow)
+                }
             }
 
             suspend fun performSearch() {
@@ -259,19 +272,7 @@ fun TerminalScreen(
                         previousQuery = query,
                     )
                 if (results.isNotEmpty()) {
-                    val match = results[newIndex]
-                    val surface = surfaceRef.value
-                    if (surface != null) {
-                        val visibleRows = surface.getRows()
-                        val scrollbackLen = surface.getMaxScrollOffset()
-                        val scrollOffset = surface.getScrollOffset()
-                        val firstVisibleRow = scrollbackLen - scrollOffset
-                        val lastVisibleRow = firstVisibleRow + visibleRows - 1
-                        if (match.lineIndex !in firstVisibleRow..lastVisibleRow) {
-                            val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
-                            surface.scrollToRow(centeredRow)
-                        }
-                    }
+                    scrollToMatchIfNeeded(results[newIndex])
                 }
             }
 
@@ -295,9 +296,9 @@ fun TerminalScreen(
 
             Box(
                 modifier =
-                Modifier
-                    .fillMaxSize()
-                    .testTag("TerminalContent"),
+                    Modifier
+                        .fillMaxSize()
+                        .testTag("TerminalContent"),
             ) {
                 AndroidView(
                     factory = { context ->
@@ -378,12 +379,13 @@ fun TerminalScreen(
                     }
                     val themeAccent = if (state.selectionAccent != 0) Color(state.selectionAccent) else resolvedTerminalTheme.foreground
 
-                    fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int = android.graphics.Color.argb(
-                        (color.alpha * 255).toInt(),
-                        (color.red * 255).toInt(),
-                        (color.green * 255).toInt(),
-                        (color.blue * 255).toInt(),
-                    )
+                    fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int =
+                        android.graphics.Color.argb(
+                            (color.alpha * 255).toInt(),
+                            (color.red * 255).toInt(),
+                            (color.green * 255).toInt(),
+                            (color.blue * 255).toInt(),
+                        )
                     val themeAccentArgb = colorToArgb(themeAccent)
 
                     if (selection.dragging) {
@@ -468,9 +470,9 @@ fun TerminalScreen(
 
             Box(
                 modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .imePadding(),
+                    Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 if (showTextSearch) {
@@ -493,18 +495,7 @@ fun TerminalScreen(
                                         searchState.resultCount - 1
                                     }
                                 val match = searchState.results[newIndex]
-                                val surface = surfaceRef.value
-                                if (surface != null) {
-                                    val visibleRows = surface.getRows()
-                                    val scrollbackLen = surface.getMaxScrollOffset()
-                                    val scrollOffset = surface.getScrollOffset()
-                                    val firstVisibleRow = scrollbackLen - scrollOffset
-                                    val lastVisibleRow = firstVisibleRow + visibleRows - 1
-                                    if (match.lineIndex !in firstVisibleRow..lastVisibleRow) {
-                                        val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
-                                        surface.scrollToRow(centeredRow)
-                                    }
-                                }
+                                scrollToMatchIfNeeded(match)
                                 Log.d("TerminalScreen", "Search prev: match row=${match.lineIndex}")
                                 searchState = searchState.copy(currentIndex = newIndex)
                             }
@@ -518,18 +509,7 @@ fun TerminalScreen(
                                         0
                                     }
                                 val match = searchState.results[newIndex]
-                                val surface = surfaceRef.value
-                                if (surface != null) {
-                                    val visibleRows = surface.getRows()
-                                    val scrollbackLen = surface.getMaxScrollOffset()
-                                    val scrollOffset = surface.getScrollOffset()
-                                    val firstVisibleRow = scrollbackLen - scrollOffset
-                                    val lastVisibleRow = firstVisibleRow + visibleRows - 1
-                                    if (match.lineIndex !in firstVisibleRow..lastVisibleRow) {
-                                        val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
-                                        surface.scrollToRow(centeredRow)
-                                    }
-                                }
+                                scrollToMatchIfNeeded(match)
                                 Log.d("TerminalScreen", "Search next: match row=${match.lineIndex}")
                                 searchState = searchState.copy(currentIndex = newIndex)
                             }
@@ -561,8 +541,8 @@ fun TerminalScreen(
 
                     ModifierBar(
                         modifier =
-                        Modifier
-                            .testTag("ModifierBar"),
+                            Modifier
+                                .testTag("ModifierBar"),
                         onKeyClick = { data ->
                             viewModel.writeToPty(data.toByteArray())
                         },
@@ -586,38 +566,38 @@ fun TerminalScreen(
                         toolbarLayout = rememberToolbarLayout(),
                         barMode = barMode,
                         onCopy =
-                        if (selectionActive) {
-                            {
-                                viewModel.copySelectionToClipboard()
-                                viewModel.clearSelection()
-                            }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                {
+                                    viewModel.copySelectionToClipboard()
+                                    viewModel.clearSelection()
+                                }
+                            } else {
+                                null
+                            },
                         onSelectAll =
-                        if (selectionActive) {
-                            { viewModel.selectAll() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.selectAll() }
+                            } else {
+                                null
+                            },
                         onPaste =
-                        if (selectionActive && hasClipboard) {
-                            { viewModel.pasteFromClipboard() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive && hasClipboard) {
+                                { viewModel.pasteFromClipboard() }
+                            } else {
+                                null
+                            },
                         onShare =
-                        if (selectionActive) {
-                            { viewModel.shareSelection() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.shareSelection() }
+                            } else {
+                                null
+                            },
                         onDismiss =
-                        if (selectionActive) {
-                            { viewModel.clearSelection() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.clearSelection() }
+                            } else {
+                                null
+                            },
                     )
                 }
             }
