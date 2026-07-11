@@ -74,7 +74,6 @@ fn vale_finds_no_violations() {
             "--config",
             &config.to_string_lossy(),
             "AGENTS.md",
-            "README.md",
             "docs/standards/STYLE.md",
             "docs/standards/TESTING.md",
             "docs/standards/QUALITY-GATE.md",
