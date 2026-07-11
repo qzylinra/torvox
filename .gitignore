@@ -22,7 +22,9 @@ fuzz/artifacts/
 .opencode
 vendor/
 .omo/
-.slim/
+.slim/*
+!.slim/deepwork/
+!.slim/deepwork/*
 .workflows/
 
 # boltffi

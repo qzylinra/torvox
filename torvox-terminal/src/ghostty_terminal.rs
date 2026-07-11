@@ -1721,24 +1721,22 @@ impl GhosttyTerminal {
                 };
                 if fuzzy {
                     let max_distance = std::cmp::max(1, search_query.len() / 3);
-                    let mut best_col: Option<usize> = None;
-                    let mut best_distance = usize::MAX;
                     if search_query.len() <= search_line.len() {
-                        for start in 0..=(search_line.len() - search_query.len()) {
+                        let end = search_line.len() - search_query.len();
+                        // Sliding window: find all windows whose edit distance is within threshold.
+                        // Return each match position so all results are highlighted, not just
+                        // the nearest one (which would miss overlapping near-matches).
+                        for start in 0..=end {
                             let window = &search_line[start..start + search_query.len()];
                             let dist = Self::levenshtein_distance(&search_query, window);
-                            if dist <= max_distance && dist < best_distance {
-                                best_distance = dist;
-                                best_col = Some(start);
+                            if dist <= max_distance {
+                                results.push(SearchMatch {
+                                    row,
+                                    start_col: start as u32,
+                                    end_col: (start + search_query.len()) as u32,
+                                });
                             }
                         }
-                    }
-                    if let Some(col) = best_col {
-                        results.push(SearchMatch {
-                            row,
-                            start_col: col as u32,
-                            end_col: (col + search_query.len()) as u32,
-                        });
                     }
                 } else {
                     let mut start = 0;
