@@ -59,46 +59,26 @@ Checklist:
 
 ---
 
-## Architecture
+## Architecture — Summary
 
-### Crate Direction (strict one-way, violations break the build)
+See `docs/architecture.md` for the full architecture document including module boundaries, data flow, thread model, design decisions with requirement traceability, and error handling strategy.
 
-```text
-libghostty-vt / libghostty-vt-sys         ← Ghostty VT parser (vendored)
-    ↑
-torvox-core (no_std, serde + unicode-width)  ← Data model, Grid, Cell, Event
-    ↑
-torvox-terminal (libghostty-vt + nix + flume) ← PTY, VT parse, Session
-    ↑
-torvox-renderer (wgpu + cosmic-text + swash + guillotiere) ← GPU render
-    ↑
-torvox-gui-android (boltffi + JNA)           ← Kotlin↔Rust bridge
-    ↑
-android/app (Kotlin + Compose)               ← Android UI
-```
-
-Verify: `cargo metadata --no-deps --format-version 1`
-
-### Thread Model
-
-6-7 threads per session. PTY reader and render threads always active; process waiter exits when child exits.
+### Crate Direction (strict one-way)
 
 ```text
-PTY Reader → GhosttyTerminal (dedicated thread, flume channel) → Grid
-Input Writer → PTY Master
-Process Waiter → waitpid
-→ RenderThread (CountDownLatch wake) → wgpu → SurfaceView
+libghostty-vt / libghostty-vt-sys ← torvox-core ← torvox-terminal ←
+torvox-renderer ← torvox-gui-android ← android/app
 ```
 
-### Render Pipeline
+Each crate depends only on the crate directly below it in the chain. Violations break the build. Verify with `cargo metadata --no-deps --format-version 1`.
 
-GPU-only via wgpu (Vulkan everywhere, including Android). No GL, no CPU software path. Emulator use SwiftShader. Linux use Lavapipe.
+### Thread Count
 
-```text
-PTY → flume → GhosttyTerminal → DirtyMask → RenderThread
-→ cosmic-text shape + swash glyph rasterize → guillotiere pack
-→ wgpu atlas upload → Instance[] → wgpu render_frame → SurfaceView
-```
+6-7 threads per session (PTY Reader, Input Writer, Process Waiter, RenderThread, plus shared bridge/MCP threads). See `docs/architecture.md#4-thread-model`.
+
+### Render Path
+
+GPU-only via wgpu (Vulkan). No GL, no CPU software fallback. Emulators use SwiftShader; Linux uses Lavapipe. See `docs/architecture.md#3-data-flow` for the full pipeline.
 
 ---
 

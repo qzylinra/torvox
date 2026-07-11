@@ -78,3 +78,52 @@ Used by `torvox-renderer/tests/text_ocr_test.rs` to verify font rendering end-to
 ```bash
 nu scripts/test-emulator.nu                         # automated emulator tests
 ```
+
+---
+
+## Traceability
+
+### Requirement-to-Test Mapping
+
+Every functional requirement (FR-xxx) and non-functional requirement (NFR-xxx) in
+`docs/srs.md` must be traceable to at least one test. The traceability matrix is
+maintained in `docs/traceability.yml`.
+
+### Verification Methods
+
+| Method | Description | CI Command |
+|--------|-------------|------------|
+| **unit** | Rust unit/integration test | `cargo nextest run --workspace --profile ci` |
+| **doctest** | Rust doc-test (executable examples in `///` comments) | `cargo test --doc` |
+| **property** | Property-based test (proptest/quickcheck) | `cargo nextest run --package torvox-core --test property_tests` |
+| **fuzz** | Fuzz target | `cargo fuzz run <target> -- -max_total_time=5` |
+| **lint** | Lint/static analysis check | `cargo clippy --all -- --deny warnings` |
+| **android-unit** | Android unit test (Robolectric) | `./gradlew testDebugUnitTest` |
+| **screenshot** | Roborazzi screenshot test | `./gradlew roborazziDebug` |
+| **instrumented** | Android instrumented test | `./gradlew connectedDebugAndroidTest` |
+| **maestro** | Maestro E2E flow | `maestro test <flow.yaml>` |
+| **ui-automator** | UiAutomator cross-app test | Via instrumented test suite |
+| **espresso** | Espresso in-app interaction test | Via instrumented test suite |
+| **emulator** | Full emulator E2E test | `nu scripts/test-emulator.nu` |
+| **tool-lint** | External tool quality check | `cargo test -p torvox-integration-tests --test tool_lint` |
+| **docs-validate** | Documentation structural validation | `cargo test -p torvox-integration-tests --test tool_lint -- docs_*` |
+
+### Adding Tests for New Requirements
+
+When adding a new requirement to `docs/srs.md`:
+
+1. Determine which verification method(s) apply
+2. Add or update test(s) in the appropriate test directory
+3. Update `docs/traceability.yml` with the new requirement-to-test mapping
+4. Run the relevant test command and confirm it passes
+
+### SRS ID Checks
+
+The following structural checks ensure traceability integrity:
+
+- Every `FR-\d{3}` / `NFR-\d{3}` in `docs/srs.md` follows the format
+- Every referenced requirement in `docs/traceability.yml` exists in `docs/srs.md`
+- Every acceptance criterion in `docs/acceptance.md` references a valid requirement ID
+- Every ADR in `docs/adr/` references at least one requirement ID
+
+These checks run as part of `tool_lint.rs` (see `cargo test -p torvox-integration-tests --test tool_lint`).

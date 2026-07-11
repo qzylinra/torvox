@@ -316,8 +316,8 @@ AI Agent  <--stdio/JSON-RPC-->  torvox-mcp  <--Unix socket-->  torvox-gui-androi
 - `list_sessions`, `read_grid`, `read_scrollback`, `read_cursor`, `read_selection`,
   `read_title`, `send_input`, `send_signal`, `set_terminal_size`, etc.
 
-**Design** (FR-007): The MCP server enables AI coding agents to inspect terminal
-state during development sessions. The `SessionStore` trait allows a `NoOpStore`
+**Design** (FR-044, FR-045): The MCP server enables AI coding agents to inspect
+terminal state during development sessions. The `SessionStore` trait allows a `NoOpStore`
 implementation (returns empty data) when no GUI is connected, or a real
 implementation backed by `torvox-gui-android`'s session registry.
 
@@ -482,7 +482,7 @@ Each terminal session creates 6–7 threads:
 ### 5.1 GPU-only with wgpu (Vulkan)
 
 **Decision:** No GL fallback, no CPU software rendering path. Vulkan everywhere.
-**Rationale** (FR-005, NFR-002):
+**Rationale** (FR-010, NFR-006, NFR-018):
 - Single rendering backend simplifies maintenance across Linux, Android, and
   emulator targets.
 - Vulkan provides explicit control over GPU resources (memory, barriers,
@@ -497,7 +497,7 @@ Each terminal session creates 6–7 threads:
 
 **Decision:** Vendored Ghostty VT parser (`libghostty-vt` / `libghostty-vt-sys`)
 instead of a custom VT parser.
-**Rationale** (FR-004):
+**Rationale** (FR-001):
 - Ghostty's parser implements the full VT5xx+ specification with extensive
   real-world testing.
 - Avoids reimplementing hundreds of escape sequences, DEC modes, OSC commands,
@@ -512,22 +512,22 @@ instead of a custom VT parser.
 ### 5.3 no_std for torvox-core
 
 **Decision:** `#![no_std]` with `extern crate alloc`.
-**Rationale** (FR-003):
+**Rationale** (NFR-001):
 - Enforces heap allocation discipline — all allocs go through explicit `Vec`,
   `String`, `VecDeque` from `alloc`.
 - Keeps the data model embeddable in constrained environments (e.g., kernel
   debugging, bare-metal).
 - `thiserror 2` with optional `std` feature enables `Error` trait impls when
   needed.
-- Zero `unsafe` (`#![forbid(unsafe_code)]`) ensures the data model cannot
-  introduce memory corruption (NFR-001).
+- Zero `unsafe` (`#![forbid(unsafe_code)]`) is reinforced by the limited no_std
+  surface, which excludes potentially unsafe std APIs.
 **Implementation:** `torvox-core/src/lib.rs` line 1: `#![no_std]`
 
 ### 5.4 One-way Crate Dependency
 
 **Decision:** Strict one-way dependency chain (lower crates never import higher
 ones). Violations break the build.
-**Rationale** (FR-001, FR-002):
+**Rationale** (NFR-012):
 - Prevents circular dependencies between session management and rendering.
 - Forces clean layering: `torvox-core` (data model) → `torvox-terminal` (PTY) →
   `torvox-renderer` (GPU) → `torvox-gui-android` (bridge).
@@ -540,11 +540,13 @@ the graph; build CI enforces it.
 
 **Decision:** Two-way bridge: boltffi for Rust→Kotlin (grid data), JNA for
 Kotlin→Rust (commands).
-**Rationale** (FR-006, NFR-004):
+**Rationale** (FR-049, FR-050):
 - boltffi efficiently serializes bulk terminal grid data (thousands of cells)
-  into a compact binary format for Kotlin consumption.
+  into a compact binary format for Kotlin consumption (FR-049).
 - JNA handles Kotlin→Rust calls because boltffi lacks a CLI bridge generator
   (pitfall #7).
+- rkyv serialization provides zero-copy snapshots for grid/cursor/selection
+  state synchronization to the Kotlin layer (FR-050).
 - ProGuard R8 needs `-dontoptimize` for JNA reflection-based binding on release
   builds (pitfall #14).
 - The `message` field on boltffi Error types is avoided — it conflicts with
@@ -556,7 +558,7 @@ Kotlin→Rust (commands).
 
 **Decision:** Dedicated threads for PTY reading, VT parsing, input writing,
 process waiting, and rendering.
-**Rationale** (NFR-005):
+**Rationale** (NFR-009, FR-027, FR-028):
 - PTY reader and VT parser on the same thread avoids cross-thread state
   synchronization for the terminal grid.
 - Input writer on a separate thread prevents keyboard input from being blocked
@@ -572,18 +574,21 @@ thread).
 
 **Decision:** Use `cargo-audit` for security vulnerability scanning; do not use
 `cargo-deny`.
-**Rationale** (NFR-006): Existing project infrastructure and CI scripts use
+**Rationale** (NFR-019): Existing project infrastructure and CI scripts use
 `cargo-audit`. `cargo-deny` was not chosen because license/duplicate checking is
-handled by other tools.
+handled by other tools. Build determinism via Nix flake pinning ensures audit
+consistency across environments.
 **Implementation:** Rust CI script (`check-rust.nu`) runs `cargo audit`.
 
 ### 5.8 TextureView over SurfaceView
 
 **Decision:** Use `TextureView` for the terminal display surface.
-**Rationale** (NFR-003): TextureView does not require `setZOrderOnTop`. The
+**Rationale** (FR-052): TextureView does not require `setZOrderOnTop`. The
 previous SurfaceView approach needed `setZOrderOnTop(true)` on SwiftShader
 emulators, causing overlay alpha=0 and invisible output (pitfall #12).
-TextureView integrates naturally with Compose's layout system.
+TextureView integrates naturally with Compose's layout system and handles
+Android surface lifecycle events (configuration changes, activity restart)
+for wgpu pipeline recreation.
 **Implementation:** `android/app` Kotlin UI layer uses `TextureView` as the
 rendering surface target.
 
