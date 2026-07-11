@@ -56,28 +56,25 @@ and any CI workflow that invokes them.
 
 ## Code Quality Rules
 
-12. **No `| complete`** — Use direct pipeline capture or explicit `^command;
-     if $env.LAST_EXIT_CODE != 0 { exit 1 }`. Per STYLE.md.
+12. **No abbreviated CLI flags** — Use `--target`, `--package`, `--profile`,
+     `--dereference` etc. Never `-t`, `-p`, etc.
 
-13. **No abbreviated CLI flags** — Use `--target`, `--package`, `--profile`,
-     `--dereference` etc. Never `-t`, `-p`, etc. Per STYLE.md.
-
-14. **No non-deterministic code** — No `if` conditionals on tool versions,
+13. **No non-deterministic code** — No `if` conditionals on tool versions,
      environment variables, or runtime-detected paths. The nix environment is
      the single source of truth.
 
-15. **No fallback behavior** — If a resource is not found, fail. No `try/catch`
+14. **No fallback behavior** — If a resource is not found, fail. No `try/catch`
      or `else` fallback blocks for expected resources.
 
-16. **No `ignore`** — No `| ignore` to suppress expected failures.
+15. **No `ignore`** — No `| ignore` to suppress expected failures.
 
-17. **No `which`** — All tool paths guaranteed by nix.
+16. **No `which`** — All tool paths guaranteed by nix.
 
-18. **No `nu` script execution inside scripts** — Never call `nu scripts/xxx.nu`
+17. **No `nu` script execution inside scripts** — Never call `nu scripts/xxx.nu`
      inside a `.nu` script. Use shebang or `nix develop --command nu
-     scripts/xxx.nu` per STYLE.md.
+     scripts/xxx.nu`.
 
-19. **No sdkmanager** — Never invoke `sdkmanager` for NDK or SDK component
+18. **No sdkmanager** — Never invoke `sdkmanager` for NDK or SDK component
      installation.
 
 ---
@@ -91,8 +88,6 @@ and any CI workflow that invokes them.
 | `if ($zig_version != "0.15.2")` | Non-deterministic version check |
 | `which zig` | Tool lookup when nix guarantees presence |
 | `let zig15_path = ...` | Hardcoded version coupling |
-| `$env.PATH` manipulation | Environment mutation from script |
-| `| complete` | Style violation per STYLE.md |
 | Abbreviated flags | Style violation per STYLE.md |
 | NDK path fallback search | Environment must be deterministic |
 | `^cargo zigbuild --package torvox-exec` | Must use `cargo ndk` |

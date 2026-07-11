@@ -2,7 +2,7 @@
 name = "torvox-renderer"
 version.workspace = true
 edition.workspace = true
-description = "GPU-native terminal renderer for Torvox (wgpu 29 + cosmic-text + swash)"
+description = "GPU-native terminal renderer for Torvox (wgpu + cosmic-text + swash)"
 
 [dependencies]
 torvox-core = { workspace = true }

@@ -4,12 +4,8 @@ extend-exclude = [
   "fuzz/artifacts/",
   "fuzz/seeds/",
   "target/",
-  "libghostty-rs/",
   ".github/",
-  "result-kudzu/",
-  "test-screenshots/",
   "**/res/values*/strings.xml",
-  "ultragoal/",
 ]
 
 [default]

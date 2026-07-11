@@ -1,17 +1,11 @@
-# Backup files
 *.bak
-
-# Rust
+.auto
 target/
-
-# Android
 android/.gradle/
 android/.kotlin/
 android/build/
 android/app/build/
-!android/app/build/outputs/roborazzi/*.png
 !android/app/aosp-testkey.p12
-android/app/src/test/resources/roborazzi/*.png
 android/benchmark/build/
 android/baselineprofile/build/
 android/local.properties
@@ -19,86 +13,18 @@ android/local.properties
 .idea/
 *.apk
 *.aab
-
-# NDK / Rust cross-compilation (cargo-ndk v4)
 android/app/src/main/jniLibs/
 android/app/src/main/assets/bin/
-
-# IDE
-.vscode/
-
-# Nix build artifacts
-result
-result-*
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Generated
-docs/_build/
+result*
 *.log
-boltffi.toml
 fuzz/corpus/
-
-# Compiled binaries (tools/)
-tools/libvterm-ref
-tools/*.o
-
-# Fuzz artifacts
 fuzz/artifacts/
-
-# Profiling
-flamegraph.svg
-perf.data
-massif.out.*
-
-# Mutation testing artifacts
-mutants.out/
-mutants.out.old/
-
-.serena/
-libghostty-vt/
-libghostty-vt-sys/
-
-# Ghostty source clone (scripts/bootstrap-libghostty.nu)
-.ghostty/
+.opencode
+vendor/
+.omo/
+.slim/
+.workflows/
 
 # boltffi
 android/app/src/main/java/io/torvox/bridge/kotlin/
-
-# SDK manager artifact (literal $sdk_root directory)
-\$sdk_root/
-
-# opencode
-.opencode/sessions/
-.opencode/cache/
-.opencode/magic-context/
-.opencode/opencode.jsonc
-research/
-target-ci/
-cline-memory-bank/
-Conduit/
-LetsFLUTssh/
-ghostty-android-terminal/
-termux-app/
-Haven/
-termlib/
-/tmp/
-
-# Allow reference review docs (but not the cloned repos themselves)
-vendor/ghostty/
-# Generated test screenshots
-screenshots/
-torvox-renderer/test-screenshots/
-!docs/screenshots/
-# Block root-level PNGs (Maestro output etc.)
-/*.png
-
-# Agent working directories
-.omo/
-.auto/log.jsonl
-.auto/checkpoint*
+.slim/deepwork/

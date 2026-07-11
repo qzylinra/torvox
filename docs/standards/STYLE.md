@@ -6,19 +6,15 @@ All shell scripts use Nushell (`.nu`). No bash or sh.
 
 - Shebang: `#!/usr/bin/env -S nix develop --command nu`
 - `snake_case` naming
-- `^command` for external commands
-- Stderr: `e>|` for stderr-only redirect, `out+err>` for combined
-- No `$args` at module level (breaks `source`-based syntax check)
 
 ### Deterministic script rules
 
-The CI environment is deterministic: SDK paths, tool availability, and system state are fixed at runtime. Scripts must match this.
+The environment is deterministic: SDK paths, tool availability, and system state are fixed at runtime. Scripts must match this.
 
 - Single source of truth: don't check the same condition two ways (`ps` AND `adb` to detect emulator). Pick one command and trust its output.
 - No `ps | where name =~ ...` process-table scanning: use the tool's native status output (`adb get-state`, `adb shell getprop`).
 - No `do --ignore-errors`: let non-zero exits propagate. Use `try/catch` ONLY when the failure IS an expected state (e.g., `adb` with no device), never for error masking.
 - No `err> /dev/null` or `e>| null`: stderr is diagnostic output. If a command's error message is noise, the command is wrong.
-- No `| complete` for output parsing: use direct pipeline capture `let x = (^cmd)` or `try { ^cmd }`. `| complete` is for multi-stream capture only when both stdout+stderr are needed.
 - No `which X` for tool lookup: tools guaranteed by `nix develop`. Hardcode SDK root paths when they are fixed in CI.
 - No process-liveness collateral checks in wait loops: check only the signal you care about (`boot_completed`), not whether the process table entry still exists.
 - No `job spawn` for work that must complete before proceeding — `job spawn` is fire-and-forget. Use it only for background processes whose completion is polled separately.
@@ -26,8 +22,6 @@ The CI environment is deterministic: SDK paths, tool availability, and system st
 ### Forbidden patterns
 
 - No abbreviated CLI flags: use `--target` not `-t`, `--package` not `-p`, `--replace-existing` not `-r`, `--downgrade` not `-d`, `--overwrite` not `-o`, `--force` not `-f`, `--recursive` not `-r`, `--dereference` not `-L`, `--directory` not `-d`, `--strip` not `-p`, `--list` not `-l`, `--deny` not `-D`, `--maxdepth` not `-maxdepth`, `--name` not `-name`, `--type` not `-type`, `--not-path` not `-not -path`, `--dynamic` not `-d`, `--parents` not `-p`, `--in-place` not `-i`, `--raw` not `-f` (for save)
-- No `| complete` — use direct pipeline failure or `^command; if $env.LAST_EXIT_CODE != 0 { exit 1 }`
-- No `if $env.LAST_EXIT_CODE` immediately after a single command — let the command fail naturally
 - No `else { print }` fallback blocks — errors propagate naturally
 - No `try {} catch {}` for commands that should simply fail
 - No `| ignore` to suppress expected failures — use explicit error handling
@@ -40,7 +34,7 @@ The CI environment is deterministic: SDK paths, tool availability, and system st
 - For directories that SHOULD exist: check explicitly and exit with non-zero if missing
 - No intermediate variables like `let start = ... let elapsed = ...` that add no clarity
 - No `$env.ANDROID_HOME/platform-tools/adb` or hardcoded path bin usage — `adb`, `emulator`, `sdkmanager`, `avdmanager` come from nix devShell (`android-tools` package)
-- No `nu scripts/xxx.nu` inside nu scripts — use `./scripts/xxx.nu` (shebang) or `nix develop --command nu scripts/xxx.nu`
+- No `nu scripts/xxx.nu` inside nu scripts — use `./scripts/xxx.nu` (shebang) or `nix develop --command "nu scripts/xxx.nu"`
 - No multi-level single directories for vendored sources — clone directly to `vendor/<name>/` not `vendor/<name>/src/`
 - No `rustup target add` or cross-compilation targets in check scripts — only workspace tests
 - No silent `if ($dir | path exists)` for maestro/flows directories — let `ls` fail naturally if missing
@@ -59,14 +53,13 @@ The CI environment is deterministic: SDK paths, tool availability, and system st
 
 All environment management via Nix. No system shell builds.
 
-- Always: `nix develop`, `nix develop --command cargo build`, `nix fmt`
+- Always: `nix develop`, `nix develop --command "cargo build"`, `nix fmt`
 - No abbreviated variable names
 - ShellHook is the primary mechanism; checks and formatter defined in flake.nix
 
 ## GitHub Actions
 
 - Action versions: default branch (`@main` or `@master`), not tags
-- Exception: `actions/upload-artifact@v4` — `@main` is unavailable for this action
 - Exception: `reactivecircus/android-emulator-runner@v2` — `@main` has no compiled node_modules
 - Exception: `emulator -avd` — no `--avd` long form exists in Android Emulator
 - Exception: `adb install -r` — `--replace-existing` unsupported by API 35 PackageManager
@@ -74,7 +67,6 @@ All environment management via Nix. No system shell builds.
 - Merge adjacent `run` steps into multi-line blocks
 - `||` only for explicit error handling, never for error swallowing
 - kebab-case job naming
-- Always declare `permissions:`
 
 ## General
 

@@ -13,10 +13,7 @@
   outputs =
     inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
+      systems = nixpkgs.lib.systems.flakeExposed;
       perSystem =
         {
           pkgs,
@@ -27,27 +24,7 @@
           _module.args.pkgs = import inputs.nixpkgs {
             inherit system;
             config.allowUnfree = true;
-            overlays = [
-              inputs.fenix.overlays.default
-              inputs.fenix.overlays.default
-            ];
-          };
-          packages = {
-            rust-toolchain = pkgs.fenix.stable.withComponents [
-              "cargo"
-              "clippy"
-              "rust-src"
-              "rustc"
-              "rustfmt"
-            ];
-            nightly-toolchain = pkgs.fenix.latest.withComponents [
-              "cargo"
-              "clippy"
-              "miri"
-              "rust-src"
-              "rustc"
-              "rustfmt"
-            ];
+            overlays = [ inputs.fenix.overlays.default ];
           };
           formatter = pkgs.nixfmt-tree.override {
             nixfmtPackage = pkgs.nixfmt-rs;
@@ -97,10 +74,10 @@
             };
           };
           devShells.default = pkgs.mkShell {
-            name = "torvox-dev";
+            name = "default";
             packages = with pkgs; [
               (fenix.combine [
-                (fenix.latest.withComponents [
+                (fenix.stable.withComponents [
                   "cargo"
                   "clippy"
                   "miri"
@@ -108,19 +85,9 @@
                   "rustc"
                   "rustfmt"
                 ])
-                fenix.targets.thumbv6m-none-eabi.latest.rust-std
-                fenix.targets.x86_64-linux-android.latest.rust-std
-                fenix.targets.aarch64-linux-android.latest.rust-std
-              ])
-              (fenix.combine [
-                (fenix.stable.withComponents [
-                  "cargo"
-                  "clippy"
-                  "rust-src"
-                  "rustc"
-                  "rustfmt"
-                ])
                 fenix.targets.thumbv6m-none-eabi.stable.rust-std
+                fenix.targets.x86_64-linux-android.stable.rust-std
+                fenix.targets.aarch64-linux-android.stable.rust-std
               ])
               cargo-nextest
               cargo-fuzz
@@ -173,8 +140,7 @@
                       substituteInPlace rapidocr/config.yaml \
                         --replace-fail "model_root_dir: null" "model_root_dir: /tmp/.rapidocr-models"
                       substituteInPlace rapidocr/utils/parse_parameters.py \
-                        --replace-fail "cfg = OmegaConf.load(file_path)" \
-                        "cfg = OmegaConf.load(file_path if file_path else str(Path(__file__).parent.parent / 'config.yaml'))"
+                        --replace-fail "cfg = OmegaConf.load(file_path)" "cfg = OmegaConf.load(file_path if file_path else str(Path(__file__).parent.parent / 'config.yaml'))"
                     '';
                   }))
                 ]
