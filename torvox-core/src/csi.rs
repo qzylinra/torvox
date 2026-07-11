@@ -6,7 +6,12 @@ pub struct CsiHandler;
 
 impl CsiHandler {
     /// Process a CSI sequence
-    pub fn process_csi(sequence: &crate::vt_types::CsiSequence, terminal: &mut TerminalState, rows: u16, cols: u16) {
+    pub fn process_csi(
+        sequence: &crate::vt_types::CsiSequence,
+        terminal: &mut TerminalState,
+        rows: u16,
+        cols: u16,
+    ) {
         let final_byte = sequence.final_byte;
         let params = &sequence.params;
 
@@ -19,7 +24,12 @@ impl CsiHandler {
             b'E' => terminal.cursor_next_line(sequence.first_param_or(1), rows),
             b'F' => terminal.cursor_prev_line(sequence.first_param_or(1), rows),
             b'G' => terminal.cursor_horizontal_absolute(sequence.first_param_or(1), cols),
-            b'H' => terminal.cursor_position(sequence.first_param_or(1), sequence.second_param_or(1), rows, cols),
+            b'H' => terminal.cursor_position(
+                sequence.first_param_or(1),
+                sequence.second_param_or(1),
+                rows,
+                cols,
+            ),
             b'I' => terminal.cursor_horizontal_tab(cols),
             b'J' => terminal.erase_in_display(sequence.first_param_or(0) as u8, rows, cols),
             b'K' => terminal.erase_in_line(sequence.first_param_or(0) as u8),
@@ -37,7 +47,12 @@ impl CsiHandler {
                 // In a real implementation, this would send a response
             }
             b'd' => terminal.cursor_vertical_absolute(sequence.first_param_or(1), rows),
-            b'f' => terminal.cursor_position(sequence.first_param_or(1), sequence.second_param_or(1), rows, cols),
+            b'f' => terminal.cursor_position(
+                sequence.first_param_or(1),
+                sequence.second_param_or(1),
+                rows,
+                cols,
+            ),
             b'h' => {
                 if let Some(param) = params.first() {
                     CsiHandler::process_dec_mode(*param, true, terminal);
@@ -152,7 +167,12 @@ impl EscHandler {
 }
 
 /// Complete VT sequence processing
-pub fn process_vt_sequence(sequence: &crate::vt_types::VtSequence, terminal: &mut TerminalState, rows: u16, cols: u16) {
+pub fn process_vt_sequence(
+    sequence: &crate::vt_types::VtSequence,
+    terminal: &mut TerminalState,
+    rows: u16,
+    cols: u16,
+) {
     match sequence {
         crate::vt_types::VtSequence::Csi(csi) => {
             CsiHandler::process_csi(csi, terminal, rows, cols);
@@ -293,11 +313,19 @@ mod tests {
         let mut terminal = TerminalState::new(24, 80);
         let sequence = csi(b'm', vec![1]);
         CsiHandler::process_csi(&sequence, &mut terminal, 24, 80);
-        assert!(terminal.sgr_attributes.contains(&crate::sgr::SgrAttribute::Bold(true)));
+        assert!(
+            terminal
+                .sgr_attributes
+                .contains(&crate::sgr::SgrAttribute::Bold(true))
+        );
 
         let reset_sequence = csi(b'm', vec![0]);
         CsiHandler::process_csi(&reset_sequence, &mut terminal, 24, 80);
-        assert!(!terminal.sgr_attributes.contains(&crate::sgr::SgrAttribute::Bold(true)));
+        assert!(
+            !terminal
+                .sgr_attributes
+                .contains(&crate::sgr::SgrAttribute::Bold(true))
+        );
     }
 
     #[test]

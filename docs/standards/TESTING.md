@@ -37,12 +37,6 @@ nix develop --command "cargo nextest run --package torvox-core --test property_t
 - Structured VT fuzz: `nix develop --command "cargo fuzz run fuzz_vt_structured"` (6 target types, 20s each)
 - Wire format fuzz: `cargo fuzz run fuzz_wire`
 
-## Requirement Coverage
-
-```bash
-nix develop --command "cargo test --package torvox-integration-tests requirement_coverage_is_monitored --exact --nocapture"
-```
-
 ## Android Tests
 
 ```bash

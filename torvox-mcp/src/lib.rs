@@ -284,7 +284,11 @@ pub trait SessionStore: Send + Sync {
     fn feed_terminal_output(&self, _session_id: u32, _text: &str) -> Result<(), String> {
         Err("feed_terminal_output not supported".into())
     }
-    fn read_scrollback_tail(&self, _session_id: u32, _max_lines: usize) -> Result<Vec<String>, String> {
+    fn read_scrollback_tail(
+        &self,
+        _session_id: u32,
+        _max_lines: usize,
+    ) -> Result<Vec<String>, String> {
         Err("read_scrollback_tail not supported".into())
     }
 }
@@ -420,7 +424,12 @@ impl InputQueue {
         let now = Instant::now();
         let mut to_remove = Vec::new();
 
-        for (entry_id, entry) in self.entries.lock().unwrap_or_else(|e| e.into_inner()).iter() {
+        for (entry_id, entry) in self
+            .entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+        {
             if now > entry.deadline {
                 to_remove.push(entry_id.clone());
                 continue;
@@ -500,7 +509,11 @@ impl McpServer {
 
     fn list_tools() -> Value {
         let tools = vec![
-            ("list_sessions", "List all active terminal sessions", empty_schema()),
+            (
+                "list_sessions",
+                "List all active terminal sessions",
+                empty_schema(),
+            ),
             (
                 "read_grid",
                 "Read current grid state of a session (rows × cols cells)",
@@ -536,7 +549,11 @@ impl McpServer {
                 "Send signal to child process (SIGINT/SIGTERM/SIGHUP/SIGQUIT)",
                 schema_required(&["session_id", "signal"]),
             ),
-            ("get_app_info", "Get app version and capabilities", empty_schema()),
+            (
+                "get_app_info",
+                "Get app version and capabilities",
+                empty_schema(),
+            ),
             (
                 "scrollback_search",
                 "Search scrollback buffer for a text pattern (regex)",
@@ -557,7 +574,11 @@ impl McpServer {
                 "Read contents of a local file (text, limited lines)",
                 schema_required(&["path", "max_lines"]),
             ),
-            ("read_clipboard", "Read current clipboard content", empty_schema()),
+            (
+                "read_clipboard",
+                "Read current clipboard content",
+                empty_schema(),
+            ),
             (
                 "write_clipboard",
                 "Write text to clipboard (requires write consent)",
@@ -583,7 +604,11 @@ impl McpServer {
                 "Queue text to be typed when a prompt pattern appears in scrollback (AI agent automation)",
                 schema_required(&["session_id", "text", "prompt_pattern", "timeout_seconds"]),
             ),
-            ("list_queued_inputs", "List all pending queued inputs", empty_schema()),
+            (
+                "list_queued_inputs",
+                "List all pending queued inputs",
+                empty_schema(),
+            ),
             (
                 "cancel_queued_input",
                 "Cancel a pending queued input by its entry_id",
@@ -612,7 +637,10 @@ impl McpServer {
 
         match name {
             "list_sessions" => {
-                let resp = self.store.read(ReadRequest::Sessions).map_err(McpError::Internal)?;
+                let resp = self
+                    .store
+                    .read(ReadRequest::Sessions)
+                    .map_err(McpError::Internal)?;
                 Ok(json!({ "content": [{ "type": "json", "data": resp }] }))
             }
             "read_grid" => {
@@ -700,7 +728,9 @@ impl McpServer {
                     .ok_or_else(|| McpError::InvalidParams("data required".into()))?
                     .as_bytes()
                     .to_vec();
-                self.store.write(session_id, data).map_err(McpError::Internal)?;
+                self.store
+                    .write(session_id, data)
+                    .map_err(McpError::Internal)?;
                 Ok(json!({ "content": [{ "type": "text", "text": "wrote to PTY" }] }))
             }
             "send_signal" => {
@@ -724,10 +754,14 @@ impl McpServer {
                     "SIGHUP" | "HUP" | "hangup" => SignalKind::Hangup,
                     "SIGQUIT" | "QUIT" | "quit" => SignalKind::Quit,
                     _ => {
-                        return Err(McpError::InvalidParams(format!("unknown signal: {signal_string}")));
+                        return Err(McpError::InvalidParams(format!(
+                            "unknown signal: {signal_string}"
+                        )));
                     }
                 };
-                self.store.signal(session_id, signal_kind).map_err(McpError::Internal)?;
+                self.store
+                    .signal(session_id, signal_kind)
+                    .map_err(McpError::Internal)?;
                 Ok(json!({ "content": [{ "type": "text", "text": "sent signal" }] }))
             }
             "get_app_info" => Ok(json!({
@@ -764,7 +798,10 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| McpError::InvalidParams("pattern required".into()))?
                     .to_string();
-                let max = args.get("max_matches").and_then(|v| v.as_u64()).unwrap_or(50) as u32;
+                let max = args
+                    .get("max_matches")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(50) as u32;
                 let resp = self
                     .store
                     .read(ReadRequest::ScrollbackSearch {
@@ -789,15 +826,19 @@ impl McpServer {
                 let rows = args
                     .get("rows")
                     .and_then(|v| v.as_u64())
-                    .ok_or_else(|| McpError::InvalidParams("rows required".into()))? as u32;
+                    .ok_or_else(|| McpError::InvalidParams("rows required".into()))?
+                    as u32;
                 let cols = args
                     .get("cols")
                     .and_then(|v| v.as_u64())
-                    .ok_or_else(|| McpError::InvalidParams("cols required".into()))? as u32;
+                    .ok_or_else(|| McpError::InvalidParams("cols required".into()))?
+                    as u32;
                 self.store
                     .set_terminal_size(session_id, rows, cols)
                     .map_err(McpError::Internal)?;
-                Ok(json!({ "content": [{ "type": "text", "text": format!("resized to {rows}x{cols}") }] }))
+                Ok(
+                    json!({ "content": [{ "type": "text", "text": format!("resized to {rows}x{cols}") }] }),
+                )
             }
             "list_directory" => {
                 let path = args
@@ -817,10 +858,16 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| McpError::InvalidParams("path required".into()))?
                     .to_string();
-                let max = args.get("max_lines").and_then(|v| v.as_u64()).unwrap_or(1000) as u32;
+                let max = args
+                    .get("max_lines")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(1000) as u32;
                 let resp = self
                     .store
-                    .read(ReadRequest::ReadFile { path, max_lines: max })
+                    .read(ReadRequest::ReadFile {
+                        path,
+                        max_lines: max,
+                    })
                     .map_err(McpError::Internal)?;
                 Ok(json!({ "content": [{ "type": "json", "data": resp }] }))
             }
@@ -839,7 +886,9 @@ impl McpServer {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| McpError::InvalidParams("text required".into()))?
                     .to_string();
-                self.store.write_clipboard(&text).map_err(McpError::Internal)?;
+                self.store
+                    .write_clipboard(&text)
+                    .map_err(McpError::Internal)?;
                 Ok(json!({ "content": [{ "type": "text", "text": "clipboard updated" }] }))
             }
             "raise_notification" => {
@@ -869,10 +918,11 @@ impl McpServer {
                     .and_then(|v| v.as_u64())
                     .ok_or_else(|| McpError::InvalidParams("session_id required".into()))?
                     as u32;
-                let lines =
-                    args.get("lines")
-                        .and_then(|v| v.as_i64())
-                        .ok_or_else(|| McpError::InvalidParams("lines required".into()))? as i32;
+                let lines = args
+                    .get("lines")
+                    .and_then(|v| v.as_i64())
+                    .ok_or_else(|| McpError::InvalidParams("lines required".into()))?
+                    as i32;
                 let offset = self
                     .store
                     .scroll_terminal(session_id, lines)
@@ -920,8 +970,14 @@ impl McpServer {
                     .get("prompt_pattern")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| McpError::InvalidParams("prompt_pattern required".into()))?;
-                let timeout_seconds = args.get("timeout_seconds").and_then(|v| v.as_u64()).unwrap_or(60) as u32;
-                let submit_key = args.get("submit_key").and_then(|v| v.as_str()).unwrap_or("\r");
+                let timeout_seconds = args
+                    .get("timeout_seconds")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(60) as u32;
+                let submit_key = args
+                    .get("submit_key")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("\r");
                 let entry_id = self.input_queue.enqueue(
                     session_id,
                     text.to_string(),
@@ -973,7 +1029,10 @@ fn schema_required(required: &[&str]) -> Value {
     for r in required {
         match *r {
             "session_id" => {
-                properties.insert("session_id".to_string(), json!({ "type": "integer", "minimum": 0 }));
+                properties.insert(
+                    "session_id".to_string(),
+                    json!({ "type": "integer", "minimum": 0 }),
+                );
             }
             "max_lines" => {
                 properties.insert(
@@ -1059,7 +1118,11 @@ fn schema_required(required: &[&str]) -> Value {
 
 /// Run a JSON-RPC server over a Unix socket at `socket_path`.
 #[cfg(unix)]
-pub fn serve_unix(socket_path: &Path, store: Arc<dyn SessionStore>, write_consent: bool) -> std::io::Result<()> {
+pub fn serve_unix(
+    socket_path: &Path,
+    store: Arc<dyn SessionStore>,
+    write_consent: bool,
+) -> std::io::Result<()> {
     use std::os::unix::net::UnixListener;
 
     if let Some(parent) = socket_path.parent() {
@@ -1154,7 +1217,9 @@ mod tests {
     impl SessionStore for MockStore {
         fn read(&self, req: ReadRequest) -> Result<ReadResponse, String> {
             match req {
-                ReadRequest::Sessions => Ok(ReadResponse::Sessions(self.sessions.lock().unwrap().clone())),
+                ReadRequest::Sessions => Ok(ReadResponse::Sessions(
+                    self.sessions.lock().unwrap().clone(),
+                )),
                 ReadRequest::Cursor { session_id } => {
                     if session_id == 1 {
                         Ok(ReadResponse::Cursor {
@@ -1190,12 +1255,17 @@ mod tests {
                     }
                     Ok(ReadResponse::DirectoryEntries(entries))
                 }
-                ReadRequest::ReadFile { path: _, max_lines: _ } => Ok(ReadResponse::FileContent {
+                ReadRequest::ReadFile {
+                    path: _,
+                    max_lines: _,
+                } => Ok(ReadResponse::FileContent {
                     lines: vec!["line 1".into(), "line 2".into()],
                     total_lines: 2,
                     truncated: false,
                 }),
-                ReadRequest::ReadClipboard => Ok(ReadResponse::ClipboardContent("mock clipboard".into())),
+                ReadRequest::ReadClipboard => {
+                    Ok(ReadResponse::ClipboardContent("mock clipboard".into()))
+                }
                 ReadRequest::ScrollbackSearch {
                     session_id,
                     pattern,
@@ -1898,7 +1968,12 @@ mod tests {
             id: json!(1),
         };
         let result = server.handle(&req).unwrap();
-        assert!(result["content"][0]["text"].as_str().unwrap().contains("50x120"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("50x120")
+        );
     }
 
     #[test]
@@ -1975,7 +2050,11 @@ mod tests {
         };
         let result = server.handle(&req_queue).unwrap();
         let text = result["content"][0]["text"].as_str().unwrap();
-        let entry_id = text.split_whitespace().nth(2).unwrap().trim_end_matches(':');
+        let entry_id = text
+            .split_whitespace()
+            .nth(2)
+            .unwrap()
+            .trim_end_matches(':');
         let req_cancel = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             method: "tools/call".into(),
@@ -1986,7 +2065,12 @@ mod tests {
             id: json!(2),
         };
         let result = server.handle(&req_cancel).unwrap();
-        assert!(result["content"][0]["text"].as_str().unwrap().contains("Cancelled"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Cancelled")
+        );
     }
 
     #[test]
@@ -2016,7 +2100,10 @@ mod tests {
             }),
             id: json!(1),
         };
-        assert!(matches!(server.handle(&req), Err(McpError::InvalidParams(_))));
+        assert!(matches!(
+            server.handle(&req),
+            Err(McpError::InvalidParams(_))
+        ));
     }
 
     #[test]

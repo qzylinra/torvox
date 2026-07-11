@@ -89,9 +89,18 @@ fn snapshot_from_grid_matches_cell_by_cell() {
             let orig = grid.cell(row, col).unwrap();
             let restored = &snap.visible_lines[row as usize].cells()[col as usize];
             assert_eq!(orig.char, restored.char, "char mismatch at [{row},{col}]");
-            assert_eq!(orig.foreground, restored.foreground, "fg mismatch at [{row},{col}]");
-            assert_eq!(orig.background, restored.background, "bg mismatch at [{row},{col}]");
-            assert_eq!(orig.attrs.bold, restored.attrs.bold, "bold mismatch at [{row},{col}]");
+            assert_eq!(
+                orig.foreground, restored.foreground,
+                "fg mismatch at [{row},{col}]"
+            );
+            assert_eq!(
+                orig.background, restored.background,
+                "bg mismatch at [{row},{col}]"
+            );
+            assert_eq!(
+                orig.attrs.bold, restored.attrs.bold,
+                "bold mismatch at [{row},{col}]"
+            );
         }
     }
 }
@@ -123,7 +132,10 @@ fn snapshot_preserves_sgr_attributes() {
     let cell1 = &snap.visible_lines[0].cells()[1];
     assert!(cell1.attrs.italic, "italic attribute should be preserved");
     let cell2 = &snap.visible_lines[0].cells()[2];
-    assert!(cell2.attrs.underline, "underline attribute should be preserved");
+    assert!(
+        cell2.attrs.underline,
+        "underline attribute should be preserved"
+    );
 }
 
 #[test]
@@ -163,7 +175,10 @@ fn snapshot_equality_for_same_content() {
     grid1.cell_mut(0, 0).unwrap().char = 'X';
     let snap1 = SessionSnapshot::from_grid(&grid1);
     let snap2 = SessionSnapshot::from_grid(&grid1);
-    assert_eq!(snap1, snap2, "same grid content should produce equal snapshots");
+    assert_eq!(
+        snap1, snap2,
+        "same grid content should produce equal snapshots"
+    );
 }
 
 #[test]
@@ -174,7 +189,10 @@ fn snapshot_inequality_for_different_content() {
     grid2.cell_mut(0, 0).unwrap().char = 'Y';
     let snap1 = SessionSnapshot::from_grid(&grid1);
     let snap2 = SessionSnapshot::from_grid(&grid2);
-    assert_ne!(snap1, snap2, "different content should produce different snapshots");
+    assert_ne!(
+        snap1, snap2,
+        "different content should produce different snapshots"
+    );
 }
 
 #[test]

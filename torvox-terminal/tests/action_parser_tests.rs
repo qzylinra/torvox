@@ -108,7 +108,12 @@ fn l2_csi_cup_5_10() {
 
 #[test]
 fn l2_csi_ed_params() {
-    for (seq, exp_p) in [("\x1b[J", 0), ("\x1b[0J", 0), ("\x1b[1J", 1), ("\x1b[2J", 2)] {
+    for (seq, exp_p) in [
+        ("\x1b[J", 0),
+        ("\x1b[0J", 0),
+        ("\x1b[1J", 1),
+        ("\x1b[2J", 2),
+    ] {
         let parsed = CsiSeq::parse(seq.as_bytes()).unwrap();
         assert_eq!(parsed.final_byte, b'J');
         if parsed.params.is_empty() {
@@ -143,8 +148,18 @@ fn l2_csi_missing_params() {
         t.vt_write(seq);
         t.flush();
         // Missing/0 params -> home (1,1) = (0,0)
-        assert_eq!(t.cursor_y(), 0, "CSI {:?} -> home row", String::from_utf8_lossy(seq));
-        assert_eq!(t.cursor_x(), 0, "CSI {:?} -> home col", String::from_utf8_lossy(seq));
+        assert_eq!(
+            t.cursor_y(),
+            0,
+            "CSI {:?} -> home row",
+            String::from_utf8_lossy(seq)
+        );
+        assert_eq!(
+            t.cursor_x(),
+            0,
+            "CSI {:?} -> home col",
+            String::from_utf8_lossy(seq)
+        );
         ci(&t);
     }
 }
@@ -168,7 +183,10 @@ fn l2_csi_leading_zeros() {
     // CSI 001;003;004m should be equivalent to CSI 1;3;4m
     let parsed1 = CsiSeq::parse(b"\x1b[001;003;004m").unwrap();
     let parsed2 = CsiSeq::parse(b"\x1b[1;3;4m").unwrap();
-    assert_eq!(parsed1.params, parsed2.params, "leading zeros should be ignored");
+    assert_eq!(
+        parsed1.params, parsed2.params,
+        "leading zeros should be ignored"
+    );
 }
 
 #[test]
@@ -203,8 +221,8 @@ fn l2_csi_unrecognized_final_bytes_safe() {
 #[test]
 fn l2_csi_decrqm_all_modes() {
     for mode in &[
-        1u16, 2, 3, 6, 7, 12, 25, 40, 42, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1015, 1016, 1034, 1035, 1036, 1037,
-        1039, 1040, 1041, 1042, 1048, 1049, 2004, 2026,
+        1u16, 2, 3, 6, 7, 12, 25, 40, 42, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1015, 1016,
+        1034, 1035, 1036, 1037, 1039, 1040, 1041, 1042, 1048, 1049, 2004, 2026,
     ] {
         let mut t = term();
         let q = format!("\x1b[?{};$p", mode);

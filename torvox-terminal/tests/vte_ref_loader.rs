@@ -87,18 +87,30 @@ fn run_vte_ref(relpath: &str) {
         eprintln!("vte_ref: file not found: {relpath} -> {:?}", resolved);
         return;
     }
-    let content = fs::read_to_string(&resolved).unwrap_or_else(|_| panic!("read VTE ref {:?}", resolved));
-    let rf: VteRefFile = serde_json::from_str(&content).unwrap_or_else(|_| panic!("parse VTE ref {:?}", resolved));
+    let content =
+        fs::read_to_string(&resolved).unwrap_or_else(|_| panic!("read VTE ref {:?}", resolved));
+    let rf: VteRefFile =
+        serde_json::from_str(&content).unwrap_or_else(|_| panic!("parse VTE ref {:?}", resolved));
     for (i, test) in rf.tests.iter().enumerate() {
         // Input is hex-encoded by generate-ref-data.py
         let seq = hex_decode(&test.input);
-        let expected: String = test.cells.iter().map(|c| c.char.as_deref().unwrap_or(" ")).collect();
+        let expected: String = test
+            .cells
+            .iter()
+            .map(|c| c.char.as_deref().unwrap_or(" "))
+            .collect();
         let actual = torvox_first_row(&seq);
         let ta = actual.trim_end();
         let te = expected.trim_end();
         // Normalize: treat CUF spacing differences as acceptable
-        let ta_norm: String = ta.chars().filter(|c| !c.is_whitespace() || *c == ' ').collect();
-        let te_norm: String = te.chars().filter(|c| !c.is_whitespace() || *c == ' ').collect();
+        let ta_norm: String = ta
+            .chars()
+            .filter(|c| !c.is_whitespace() || *c == ' ')
+            .collect();
+        let te_norm: String = te
+            .chars()
+            .filter(|c| !c.is_whitespace() || *c == ' ')
+            .collect();
         if !ta.contains(te.trim())
             && !te.contains(ta.trim())
             && !ta_norm.contains(&te_norm)
@@ -131,7 +143,11 @@ fn discover_vte_tests() -> Vec<String> {
 #[test]
 fn vte_ref_all_files() {
     let files = discover_vte_tests();
-    assert!(files.len() >= 5, "Need at least 5 VTE ref files, found {}", files.len());
+    assert!(
+        files.len() >= 5,
+        "Need at least 5 VTE ref files, found {}",
+        files.len()
+    );
     for f in &files {
         run_vte_ref(f);
     }

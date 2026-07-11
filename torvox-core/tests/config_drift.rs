@@ -3,7 +3,10 @@ use torvox_core::config::{Shell, TerminalConfig, Theme};
 #[test]
 fn default_theme_config_not_empty() {
     let themes = Theme::all_built_in();
-    assert!(!themes.is_empty(), "there should be at least one built-in theme");
+    assert!(
+        !themes.is_empty(),
+        "there should be at least one built-in theme"
+    );
 }
 
 #[test]
@@ -66,11 +69,17 @@ fn shell_serde_round_trip() {
     for (shell, desc) in &cases {
         let json = serde_json::to_string(shell).expect("serialize {desc}");
         let decoded: Shell = serde_json::from_str(&json).expect("deserialize {desc}");
-        assert_eq!(*shell, decoded, "{desc} round-trip should preserve identity");
+        assert_eq!(
+            *shell, decoded,
+            "{desc} round-trip should preserve identity"
+        );
     }
     // Verify JSON representation
     let json = serde_json::to_string(&Shell::SystemDefault).unwrap();
-    assert_eq!(json, "\"SystemDefault\"", "SystemDefault serializes as JSON string");
+    assert_eq!(
+        json, "\"SystemDefault\"",
+        "SystemDefault serializes as JSON string"
+    );
     let json = serde_json::to_string(&Shell::Custom("/bin/bash".into())).unwrap();
     assert!(
         json.contains("Custom"),

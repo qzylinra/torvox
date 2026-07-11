@@ -37,13 +37,18 @@ enum EscAssertion {
 }
 
 fn run_esctest_case(case: &EscTestCase) {
-    let mut t = GhosttyTerminal::new(case.rows, case.cols, case.scrollback).expect("esctest: create terminal");
+    let mut t = GhosttyTerminal::new(case.rows, case.cols, case.scrollback)
+        .expect("esctest: create terminal");
     t.pty_write(case.input);
     t.flush();
     let snap = t.take_snapshot();
     for a in &case.assertions {
         match a {
-            EscAssertion::RectChars { top, left, expected } => {
+            EscAssertion::RectChars {
+                top,
+                left,
+                expected,
+            } => {
                 for (row_off, row_str) in expected.iter().enumerate() {
                     let abs_row = top + row_off as u32;
                     for (col_off, ch) in row_str.chars().enumerate() {
@@ -87,7 +92,11 @@ fn run_esctest_case(case: &EscTestCase) {
                 let idx = (*row * case.cols + *col) as usize;
                 let cell = &snap.cells[idx];
                 assert_eq!(cell.bold, *bold, "esctest attrs bold at ({},{})", row, col);
-                assert_eq!(cell.italic, *italic, "esctest attrs italic at ({},{})", row, col);
+                assert_eq!(
+                    cell.italic, *italic,
+                    "esctest attrs italic at ({},{})",
+                    row, col
+                );
                 assert_eq!(
                     cell.underline, *underline,
                     "esctest attrs underline at ({},{})",

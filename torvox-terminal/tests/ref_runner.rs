@@ -55,7 +55,9 @@ struct RefCell {
 }
 
 fn collect_ref_files() -> Vec<std::path::PathBuf> {
-    let ref_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("ref");
+    let ref_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("ref");
     let mut files = Vec::new();
     if ref_dir.exists() {
         collect_files_recursive(&ref_dir, &mut files);
@@ -147,10 +149,18 @@ fn compare_snapshots(ref_snap: &RefSnapshot, actual: &GridSnapshot, path: &Path)
         }
 
         if let Some(bold) = ref_cell.bold {
-            assert_eq!(act_cell.bold, bold, "{:?}: bold mismatch at index {i}", path);
+            assert_eq!(
+                act_cell.bold, bold,
+                "{:?}: bold mismatch at index {i}",
+                path
+            );
         }
         if let Some(italic) = ref_cell.italic {
-            assert_eq!(act_cell.italic, italic, "{:?}: italic mismatch at index {i}", path);
+            assert_eq!(
+                act_cell.italic, italic,
+                "{:?}: italic mismatch at index {i}",
+                path
+            );
         }
         if let Some(underline) = ref_cell.underline {
             assert_eq!(
@@ -160,7 +170,11 @@ fn compare_snapshots(ref_snap: &RefSnapshot, actual: &GridSnapshot, path: &Path)
             );
         }
         if let Some(reverse) = ref_cell.reverse {
-            assert_eq!(act_cell.reverse, reverse, "{:?}: reverse mismatch at index {i}", path);
+            assert_eq!(
+                act_cell.reverse, reverse,
+                "{:?}: reverse mismatch at index {i}",
+                path
+            );
         }
     }
 }
@@ -208,8 +222,14 @@ fn ref_erase_bol() {
     for c in 0..5 {
         assert_eq!(snap.cells[c].codepoint, 0, "ref erase bol: col {c}");
     }
-    assert_eq!(snap.cells[5].codepoint, 0, "ref erase bol: col 5 erased (inclusive)");
-    assert_eq!(snap.cells[6].codepoint, 'G' as u32, "ref erase bol: col 6 = G");
+    assert_eq!(
+        snap.cells[5].codepoint, 0,
+        "ref erase bol: col 5 erased (inclusive)"
+    );
+    assert_eq!(
+        snap.cells[6].codepoint, 'G' as u32,
+        "ref erase bol: col 6 = G"
+    );
 }
 
 #[test]
@@ -255,7 +275,10 @@ fn ref_bold_italic_underline() {
     let snap = t.take_snapshot();
     assert!(snap.cells[0].bold, "ref bold+italic+underline: bold");
     assert!(snap.cells[0].italic, "ref bold+italic+underline: italic");
-    assert!(snap.cells[0].underline, "ref bold+italic+underline: underline");
+    assert!(
+        snap.cells[0].underline,
+        "ref bold+italic+underline: underline"
+    );
 }
 
 fn fast_text_row(snap: &GridSnapshot, row: u32) -> String {

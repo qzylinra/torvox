@@ -40,7 +40,11 @@ fn libvterm_text(seq_hex: &str) -> String {
         .expect("libvterm-ref binary");
     let stdout = String::from_utf8_lossy(&out.stdout);
     // First non-empty line is the text output on row 0
-    stdout.lines().find(|l| !l.is_empty()).unwrap_or("").to_string()
+    stdout
+        .lines()
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+        .to_string()
 }
 
 /// Cross-check: libvterm parsed input without crashing, produced output
@@ -60,7 +64,9 @@ fn cross_check_exact(input: &[u8]) {
     let t_text = torvox_first_row(input);
     let l_text = libvterm_text(&hex);
     if t_text != l_text {
-        panic!("exact libvterm mismatch:\n  input:   {hex}\n  torvox:  {t_text:?}\n  libvterm: {l_text:?}");
+        panic!(
+            "exact libvterm mismatch:\n  input:   {hex}\n  torvox:  {t_text:?}\n  libvterm: {l_text:?}"
+        );
     }
 }
 

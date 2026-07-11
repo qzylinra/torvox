@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 
 /// C0 control codes (0x00-0x1F)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum C0 {
     Nul,  // 0x00
     Enq,  // 0x05
@@ -47,7 +50,10 @@ impl C0 {
 
 /// C1 control codes (0x80-0x9F) - represented as ESC + byte
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum C1 {
     Hts, // ESC H - Horizontal Tab Set
     Ri,  // ESC M - Reverse Index

@@ -13,7 +13,7 @@
   outputs =
     inputs:
     inputs.flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = nixpkgs.lib.systems.flakeExposed;
+      systems = inputs.nixpkgs.lib.systems.flakeExposed;
       perSystem =
         {
           pkgs,
@@ -80,7 +80,6 @@
                 (fenix.stable.withComponents [
                   "cargo"
                   "clippy"
-                  "miri"
                   "rust-src"
                   "rustc"
                   "rustfmt"

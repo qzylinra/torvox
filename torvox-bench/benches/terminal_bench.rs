@@ -52,7 +52,8 @@ fn bench_vt_parse_cursor_movement(c: &mut Criterion) {
 }
 
 fn bench_vt_parse_large_output(c: &mut Criterion) {
-    let line = b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
+    let line =
+        b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
     let mut input = Vec::with_capacity(line.len() * 1000);
     for _ in 0..1000 {
         input.extend_from_slice(line);
@@ -153,7 +154,8 @@ fn bench_ghostty_screenshot(c: &mut Criterion) {
 }
 
 fn bench_vt_throughput_100k_lines(c: &mut Criterion) {
-    let line = b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
+    let line =
+        b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n";
     let mut input = Vec::with_capacity(line.len() * 100_000);
     for _ in 0..100_000 {
         input.extend_from_slice(line);
@@ -272,7 +274,13 @@ fn bench_csi_mixed_throughput(c: &mut Criterion) {
     use std::fmt::Write;
     let mut input = String::with_capacity(100_000 * 12);
     for i in 0..100_000 {
-        let _ = write!(input, "\x1b[{};{}H\x1b[{}m", (i % 24) + 1, (i % 80) + 1, i % 8 + 1);
+        let _ = write!(
+            input,
+            "\x1b[{};{}H\x1b[{}m",
+            (i % 24) + 1,
+            (i % 80) + 1,
+            i % 8 + 1
+        );
     }
     let input = input.into_bytes();
     let mut group = c.benchmark_group("B13_csi_mixed_100k");
@@ -428,7 +436,14 @@ fn bench_kitty_scrolling_heavy(c: &mut Criterion) {
     use std::fmt::Write;
     let mut input = String::with_capacity(100_000 * 40);
     for i in 0..100_000 {
-        let _ = write!(input, "\x1b[{};{}H\x1b[{}mLine {}\r\n", (i % 24) + 1, 1, i % 8 + 1, i);
+        let _ = write!(
+            input,
+            "\x1b[{};{}H\x1b[{}mLine {}\r\n",
+            (i % 24) + 1,
+            1,
+            i % 8 + 1,
+            i
+        );
     }
     let input = input.into_bytes();
     let mut group = c.benchmark_group("kitty_heavy_scroll_100k");
@@ -536,7 +551,14 @@ fn bench_fuzz_throughput(c: &mut Criterion) {
     use std::io::Write;
     let mut input = Vec::with_capacity(500_000);
     for i in 0..1_000 {
-        let _ = write!(input, "\x1b[{};{}H\x1b[{}mLine{}\r\n", (i % 24) + 1, 1, i % 8 + 1, i);
+        let _ = write!(
+            input,
+            "\x1b[{};{}H\x1b[{}mLine{}\r\n",
+            (i % 24) + 1,
+            1,
+            i % 8 + 1,
+            i
+        );
     }
     let input_len = input.len();
     let mut group = c.benchmark_group("B23_fuzz_throughput_1k_sequences");

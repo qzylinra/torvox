@@ -93,8 +93,9 @@ impl TerminalState {
                     return;
                 }
                 _ => {
-                    self.sgr_attributes
-                        .retain(|existing| core::mem::discriminant(existing) != core::mem::discriminant(attr));
+                    self.sgr_attributes.retain(|existing| {
+                        core::mem::discriminant(existing) != core::mem::discriminant(attr)
+                    });
                     self.sgr_attributes.push(*attr);
                 }
             }
@@ -176,13 +177,15 @@ impl TerminalState {
     /// Move cursor up by `count` rows.
     pub fn cursor_up(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_sub(count), total_rows);
+        self.cursor_row =
+            self.clamp_row_for_origin(self.cursor_row.saturating_sub(count), total_rows);
     }
 
     /// Move cursor down by `count` rows.
     pub fn cursor_down(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_add(count), total_rows);
+        self.cursor_row =
+            self.clamp_row_for_origin(self.cursor_row.saturating_add(count), total_rows);
     }
 
     /// Move cursor forward by `count` columns.
@@ -203,14 +206,16 @@ impl TerminalState {
     /// Move cursor to next line (column 0), down by `count` rows.
     pub fn cursor_next_line(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_add(count), total_rows);
+        self.cursor_row =
+            self.clamp_row_for_origin(self.cursor_row.saturating_add(count), total_rows);
         self.cursor_col = 0;
     }
 
     /// Move cursor to previous line, up by `count` rows.
     pub fn cursor_prev_line(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_sub(count), total_rows);
+        self.cursor_row =
+            self.clamp_row_for_origin(self.cursor_row.saturating_sub(count), total_rows);
     }
 
     /// Set cursor horizontal absolute position
@@ -463,7 +468,10 @@ mod tests {
         let mut state = TerminalState::new(24, 80);
         state.cursor_col = 78;
         state.cursor_horizontal_tab(80);
-        assert_eq!(state.cursor_col, 79, "tab past last stop must clamp to right margin");
+        assert_eq!(
+            state.cursor_col, 79,
+            "tab past last stop must clamp to right margin"
+        );
     }
 
     #[test]
@@ -570,7 +578,10 @@ mod tests {
         state.cursor_row = 0;
         state.cursor_col = 0;
         state.restore_cursor();
-        assert_eq!(state.cursor_row, 20, "should restore to second save, not first");
+        assert_eq!(
+            state.cursor_row, 20,
+            "should restore to second save, not first"
+        );
         assert_eq!(state.cursor_col, 70, "col should restore to second save");
     }
 
@@ -683,9 +694,15 @@ mod tests {
         let mut state = TerminalState::new(24, 80);
         assert!(!state.is_dec_mode(25), "mode 25 should start unset");
         state.set_dec_mode(25, true);
-        assert!(state.is_dec_mode(25), "mode 25 should be set after set(true)");
+        assert!(
+            state.is_dec_mode(25),
+            "mode 25 should be set after set(true)"
+        );
         state.set_dec_mode(25, false);
-        assert!(!state.is_dec_mode(25), "mode 25 should be unset after set(false)");
+        assert!(
+            !state.is_dec_mode(25),
+            "mode 25 should be unset after set(false)"
+        );
     }
 
     #[test]
@@ -710,7 +727,10 @@ mod tests {
         state.set_dec_mode(7, true);
         state.set_dec_mode(7, true);
         let count = state.dec_modes.iter().filter(|&&m| m == 7).count();
-        assert_eq!(count, 1, "setting mode 7 three times should produce exactly one entry");
+        assert_eq!(
+            count, 1,
+            "setting mode 7 three times should produce exactly one entry"
+        );
         state.set_dec_mode(7, false);
         assert!(!state.is_dec_mode(7), "mode 7 should be unset");
     }
@@ -862,7 +882,10 @@ mod tests {
         let mut state = TerminalState::new(24, 80);
         state.cursor_col = 0;
         state.cursor_horizontal_tab_back(80);
-        assert_eq!(state.cursor_col, 0, "tab back at col 0 should not underflow");
+        assert_eq!(
+            state.cursor_col, 0,
+            "tab back at col 0 should not underflow"
+        );
     }
 
     #[test]
@@ -897,7 +920,10 @@ mod tests {
             state.set_dec_mode(7, true);
             state.set_dec_mode(7, false);
         }
-        assert!(!state.is_dec_mode(7), "after 100 toggles off, should be off");
+        assert!(
+            !state.is_dec_mode(7),
+            "after 100 toggles off, should be off"
+        );
         let count = state.dec_modes.iter().filter(|&&m| m == 7).count();
         assert_eq!(count, 0, "should have zero entries after all toggles off");
     }
@@ -927,13 +953,27 @@ mod tests {
         state.apply_sgr(&[SgrAttribute::Bold(true)]);
         assert!(matches!(state.sgr_attributes[0], SgrAttribute::Bold(true)));
         state.apply_sgr(&[SgrAttribute::Italic(true)]);
-        assert_eq!(state.sgr_attributes.len(), 2, "SGR accumulates across calls");
+        assert_eq!(
+            state.sgr_attributes.len(),
+            2,
+            "SGR accumulates across calls"
+        );
         assert!(matches!(state.sgr_attributes[0], SgrAttribute::Bold(true)));
-        assert!(matches!(state.sgr_attributes[1], SgrAttribute::Italic(true)));
+        assert!(matches!(
+            state.sgr_attributes[1],
+            SgrAttribute::Italic(true)
+        ));
         state.apply_sgr(&[SgrAttribute::Underline(crate::sgr::UnderlineStyle::Single)]);
-        assert_eq!(state.sgr_attributes.len(), 3, "each call adds, not replaces");
+        assert_eq!(
+            state.sgr_attributes.len(),
+            3,
+            "each call adds, not replaces"
+        );
         state.apply_sgr(&[]);
-        assert!(state.sgr_attributes.is_empty(), "empty slice clears attributes");
+        assert!(
+            state.sgr_attributes.is_empty(),
+            "empty slice clears attributes"
+        );
     }
 
     #[test]
@@ -961,7 +1001,10 @@ mod tests {
             "should have 2 attributes after accumulation"
         );
         state.apply_sgr(&[]);
-        assert!(state.sgr_attributes.is_empty(), "empty apply_sgr should clear");
+        assert!(
+            state.sgr_attributes.is_empty(),
+            "empty apply_sgr should clear"
+        );
     }
 
     #[test]

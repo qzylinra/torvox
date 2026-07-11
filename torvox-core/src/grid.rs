@@ -39,7 +39,10 @@ impl GridSnapshot for Grid {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Grid {
     lines: Vec<Line>,
     dirty: DirtyMask,
@@ -150,7 +153,10 @@ impl Grid {
 
     /// Mutably borrow a cell at (row, col); marks the row dirty.
     pub fn cell_mut(&mut self, row: u32, col: u32) -> Option<&mut crate::cell::Cell> {
-        let result = self.lines.get_mut(row as usize).and_then(|line| line.get_mut(col));
+        let result = self
+            .lines
+            .get_mut(row as usize)
+            .and_then(|line| line.get_mut(col));
         if result.is_some() {
             self.dirty.mark(row);
         }
@@ -280,7 +286,15 @@ impl Grid {
     }
 
     /// Copy a rectangular region from (src_top, src_left) to (dest_top, dest_left).
-    pub fn copy_rect(&mut self, src_top: u32, src_left: u32, dest_top: u32, dest_left: u32, width: u32, height: u32) {
+    pub fn copy_rect(
+        &mut self,
+        src_top: u32,
+        src_left: u32,
+        dest_top: u32,
+        dest_left: u32,
+        width: u32,
+        height: u32,
+    ) {
         if width == 0 || height == 0 {
             return;
         }
@@ -638,7 +652,13 @@ mod tests {
     }
 
     #[quickcheck]
-    fn prop_grid_invariant_after_scroll(rows: u32, cols: u32, top: u32, bottom: u32, scroll_count: u8) -> bool {
+    fn prop_grid_invariant_after_scroll(
+        rows: u32,
+        cols: u32,
+        top: u32,
+        bottom: u32,
+        scroll_count: u8,
+    ) -> bool {
         let rows = rows.clamp(3, 50);
         let cols = cols.clamp(1, 80);
         let bottom = bottom.clamp(1, rows);
@@ -790,7 +810,10 @@ mod tests {
         let mut g = Grid::new(5, 5);
         g.mark_clean();
         g.scroll_up(0, 1, 5);
-        assert!(g.dirty().any_dirty(), "single-row scroll_up must mark dirty");
+        assert!(
+            g.dirty().any_dirty(),
+            "single-row scroll_up must mark dirty"
+        );
     }
 
     #[test]
@@ -1344,7 +1367,12 @@ mod tests {
     }
 
     #[quickcheck]
-    fn prop_grid_expand_retains_content(rows: u16, cols: u16, expand_rows: u16, expand_cols: u16) -> bool {
+    fn prop_grid_expand_retains_content(
+        rows: u16,
+        cols: u16,
+        expand_rows: u16,
+        expand_cols: u16,
+    ) -> bool {
         let r = (rows % 50).max(3) as u32;
         let c = (cols % 80).max(10) as u32;
         let er = r.saturating_add((expand_rows % 20) as u32);

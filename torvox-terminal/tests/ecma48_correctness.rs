@@ -67,7 +67,10 @@ fn sgr_underline_affects_subsequent_cells() {
     let c5 = cell(&t, 0, 5);
     assert!(c0.underline, "cell 0 'u' should be underlined");
     assert!(c4.underline, "cell 4 'r' should be underlined");
-    assert!(!c5.underline, "cell 5 'p' should not be underlined after SGR 0");
+    assert!(
+        !c5.underline,
+        "cell 5 'p' should not be underlined after SGR 0"
+    );
 }
 
 /// SGR 7 (reverse) sets reverse video
@@ -137,7 +140,10 @@ fn cup_out_of_range_row_clamps() {
     t.vt_write(b"\x1b[99;1HX");
     t.flush();
     let c = cell(&t, 4, 0);
-    assert_eq!(c.codepoint, 'X' as u32, "CUP row=99 should clamp to last row (4)");
+    assert_eq!(
+        c.codepoint, 'X' as u32,
+        "CUP row=99 should clamp to last row (4)"
+    );
 }
 
 #[test]
@@ -146,7 +152,10 @@ fn cup_out_of_range_col_clamps() {
     t.vt_write(b"\x1b[1;99HX");
     t.flush();
     let c = cell(&t, 0, 19);
-    assert_eq!(c.codepoint, 'X' as u32, "CUP col=99 should clamp to last col (19)");
+    assert_eq!(
+        c.codepoint, 'X' as u32,
+        "CUP col=99 should clamp to last col (19)"
+    );
 }
 
 // ============================================================
@@ -163,7 +172,10 @@ fn ed2_erases_entire_display() {
     for row in 0..3 {
         for col in 0..5 {
             let c = cell(&t, row, col);
-            assert_eq!(c.codepoint, 0, "cell({row},{col}) should be empty after ED 2");
+            assert_eq!(
+                c.codepoint, 0,
+                "cell({row},{col}) should be empty after ED 2"
+            );
         }
     }
 }
@@ -237,7 +249,10 @@ fn decsc_decrc_save_restore_cursor_position() {
     t.vt_write(b"X");
     t.flush();
     let c = cell(&t, 0, 5);
-    assert_eq!(c.codepoint, 'X' as u32, "DECRC should restore cursor to (0,5)");
+    assert_eq!(
+        c.codepoint, 'X' as u32,
+        "DECRC should restore cursor to (0,5)"
+    );
 }
 
 // ============================================================
@@ -386,7 +401,10 @@ fn dch_deletes_characters_and_shifts_left() {
     let c2 = cell(&t, 0, 2);
     let c8 = cell(&t, 0, 8);
     assert_eq!(c2.codepoint, 'D' as u32, "DCH: col 2 should have D");
-    assert_eq!(c8.codepoint, 'J' as u32, "DCH: col 8 should have J (shifted)");
+    assert_eq!(
+        c8.codepoint, 'J' as u32,
+        "DCH: col 8 should have J (shifted)"
+    );
     let c9 = cell(&t, 0, 9);
     assert_eq!(c9.codepoint, 0, "DCH: col 9 should be empty after shift");
 }
@@ -403,11 +421,27 @@ fn ech_erases_n_characters() {
     t.vt_write(b"\x1b[3G");
     t.vt_write(b"\x1b[3X");
     t.flush();
-    assert_eq!(cell(&t, 0, 0).codepoint, 'A' as u32, "col 0 should survive ECH");
-    assert_eq!(cell(&t, 0, 1).codepoint, 'B' as u32, "col 1 should survive ECH");
-    assert_eq!(cell(&t, 0, 2).codepoint, 0, "col 2 (cursor) should be erased by ECH");
+    assert_eq!(
+        cell(&t, 0, 0).codepoint,
+        'A' as u32,
+        "col 0 should survive ECH"
+    );
+    assert_eq!(
+        cell(&t, 0, 1).codepoint,
+        'B' as u32,
+        "col 1 should survive ECH"
+    );
+    assert_eq!(
+        cell(&t, 0, 2).codepoint,
+        0,
+        "col 2 (cursor) should be erased by ECH"
+    );
     assert_eq!(cell(&t, 0, 4).codepoint, 0, "col 4 should be erased by ECH");
-    assert_eq!(cell(&t, 0, 5).codepoint, 'F' as u32, "col 5 should survive ECH");
+    assert_eq!(
+        cell(&t, 0, 5).codepoint,
+        'F' as u32,
+        "col 5 should survive ECH"
+    );
 }
 
 // ============================================================
@@ -456,7 +490,10 @@ fn decawm_off_does_not_wrap() {
     let snap = t.take_snapshot();
     // Cursor stays at col 4 (right margin), chars overwrite it
     assert_eq!(snap.cells[0].codepoint, 'A' as u32, "col 0 = A (unchanged)");
-    assert_eq!(snap.cells[4].codepoint, 'H' as u32, "col 4 = H (overwritten by F,G,H)");
+    assert_eq!(
+        snap.cells[4].codepoint, 'H' as u32,
+        "col 4 = H (overwritten by F,G,H)"
+    );
 }
 
 /// DECRC restores SGR bold attribute.
@@ -475,7 +512,10 @@ fn decrc_restores_bold() {
     t.vt_write(b"\x1b8Y");
     t.flush();
     let cy = cell(&t, 0, 0);
-    assert!(cy.bold, "Y after DECRC should be bold (restored from DECSC)");
+    assert!(
+        cy.bold,
+        "Y after DECRC should be bold (restored from DECSC)"
+    );
 }
 
 /// SGR 3 sets italic attribute (verified: italic chain is correct in

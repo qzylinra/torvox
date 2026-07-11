@@ -1,4 +1,6 @@
-use torvox_android::bridge::{BridgeAttrs, BridgeCell, BridgeTheme, Shell, TerminalConfig, TorvoxBridge};
+use torvox_android::bridge::{
+    BridgeAttrs, BridgeCell, BridgeTheme, Shell, TerminalConfig, TorvoxBridge,
+};
 use torvox_core::cell::Cell;
 
 // ═══════════════════════════════════════════════
@@ -69,10 +71,17 @@ fn theme_set_via_rust_api_succeeds() {
     };
 
     let result = bridge.set_theme(theme.clone());
-    assert!(result.is_ok(), "set_theme should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "set_theme should succeed: {:?}",
+        result.err()
+    );
 
     let saved = bridge.get_theme("TestTheme".to_string());
-    assert!(saved.is_none(), "custom theme should not appear in built-in list");
+    assert!(
+        saved.is_none(),
+        "custom theme should not appear in built-in list"
+    );
 }
 
 #[test]
@@ -95,7 +104,8 @@ fn theme_null_ptr_returns_negative() {
     let config = TerminalConfig::default();
     let bridge = TorvoxBridge::new(config);
     let handle = Box::into_raw(Box::new(bridge)) as i64;
-    let result = unsafe { torvox_android::bridge::torvox_bridge_set_theme(handle, std::ptr::null(), 100) };
+    let result =
+        unsafe { torvox_android::bridge::torvox_bridge_set_theme(handle, std::ptr::null(), 100) };
     assert_eq!(result, -1, "null theme_ptr must return -1");
     unsafe {
         let _ = Box::from_raw(handle as *mut TorvoxBridge);
@@ -108,7 +118,8 @@ fn theme_zero_len_returns_negative() {
     let bridge = TorvoxBridge::new(config);
     let handle = Box::into_raw(Box::new(bridge)) as i64;
     let dummy = [0u8; 10];
-    let result = unsafe { torvox_android::bridge::torvox_bridge_set_theme(handle, dummy.as_ptr(), 0) };
+    let result =
+        unsafe { torvox_android::bridge::torvox_bridge_set_theme(handle, dummy.as_ptr(), 0) };
     assert_eq!(result, -1, "zero theme_len must return -1");
     unsafe {
         let _ = Box::from_raw(handle as *mut TorvoxBridge);
@@ -121,8 +132,12 @@ fn theme_truncated_buffer_returns_negative() {
     let bridge = TorvoxBridge::new(config);
     let handle = Box::into_raw(Box::new(bridge)) as i64;
     let dummy = [0u8; 2];
-    let result = unsafe { torvox_android::bridge::torvox_bridge_set_theme(handle, dummy.as_ptr(), 2) };
-    assert_eq!(result, -1, "truncated theme buffer must return -1, not panic");
+    let result =
+        unsafe { torvox_android::bridge::torvox_bridge_set_theme(handle, dummy.as_ptr(), 2) };
+    assert_eq!(
+        result, -1,
+        "truncated theme buffer must return -1, not panic"
+    );
     unsafe {
         let _ = Box::from_raw(handle as *mut TorvoxBridge);
     }
@@ -153,12 +168,19 @@ fn wire_format_roundtrip_terminal_config() {
     let wire_size = boltffi::__private::wire::WireEncode::wire_size(&config);
     let mut buf = vec![0u8; wire_size];
     let written = boltffi::__private::wire::WireEncode::encode_to(&config, &mut buf);
-    assert_eq!(written, wire_size, "encode_to must write exact wire_size bytes");
+    assert_eq!(
+        written, wire_size,
+        "encode_to must write exact wire_size bytes"
+    );
 
-    let (decoded, consumed) = <TerminalConfig as boltffi::__private::wire::WireDecode>::decode_from(&buf)
-        .expect("wire_decode of valid TerminalConfig must succeed");
+    let (decoded, consumed) =
+        <TerminalConfig as boltffi::__private::wire::WireDecode>::decode_from(&buf)
+            .expect("wire_decode of valid TerminalConfig must succeed");
     assert_eq!(consumed, wire_size, "decode_from must consume all bytes");
-    assert_eq!(decoded, config, "wire roundtrip must preserve TerminalConfig");
+    assert_eq!(
+        decoded, config,
+        "wire roundtrip must preserve TerminalConfig"
+    );
 }
 
 #[test]
@@ -179,8 +201,9 @@ fn wire_format_roundtrip_bridge_cell() {
     let written = boltffi::__private::wire::WireEncode::encode_to(&cell, &mut buf);
     assert_eq!(written, wire_size);
 
-    let (decoded, consumed) = <BridgeCell as boltffi::__private::wire::WireDecode>::decode_from(&buf)
-        .expect("wire_decode of valid BridgeCell must succeed");
+    let (decoded, consumed) =
+        <BridgeCell as boltffi::__private::wire::WireDecode>::decode_from(&buf)
+            .expect("wire_decode of valid BridgeCell must succeed");
     assert_eq!(consumed, wire_size);
     assert_eq!(decoded, cell, "wire roundtrip must preserve BridgeCell");
 }
@@ -218,10 +241,19 @@ fn bridge_cell_to_cell_roundtrip() {
     let back: Cell = bridge.into();
 
     assert_eq!(core_cell.char, back.char, "char must roundtrip");
-    assert_eq!(core_cell.foreground, back.foreground, "fg color must roundtrip");
-    assert_eq!(core_cell.background, back.background, "bg color must roundtrip");
+    assert_eq!(
+        core_cell.foreground, back.foreground,
+        "fg color must roundtrip"
+    );
+    assert_eq!(
+        core_cell.background, back.background,
+        "bg color must roundtrip"
+    );
     assert_eq!(core_cell.attrs, back.attrs, "attrs must roundtrip");
-    assert_eq!(core_cell, back, "full Cell roundtrip must preserve equality");
+    assert_eq!(
+        core_cell, back,
+        "full Cell roundtrip must preserve equality"
+    );
 }
 
 #[test]
@@ -258,7 +290,10 @@ fn truncated_wire_input_returns_error() {
         match result {
             Ok(Err(_)) => {}
             Ok(Ok(_)) => {
-                assert_eq!(truncate_len, wire_size, "decode should only succeed on complete input");
+                assert_eq!(
+                    truncate_len, wire_size,
+                    "decode should only succeed on complete input"
+                );
             }
             Err(panic_payload) => {
                 let msg = panic_payload
@@ -302,7 +337,10 @@ fn bitflip_corrupted_wire_returns_error() {
                     .map(|s| s.as_str())
                     .or_else(|| panic_payload.downcast_ref::<&str>().copied())
                     .unwrap_or("<opaque>");
-                panic!("decode_from panicked on bitflip at byte {}: {}", flip_pos, msg);
+                panic!(
+                    "decode_from panicked on bitflip at byte {}: {}",
+                    flip_pos, msg
+                );
             }
         }
     }
@@ -321,7 +359,10 @@ fn bitflip_single_bit_does_not_panic() {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         <TerminalConfig as boltffi::__private::wire::WireDecode>::decode_from(&corrupted)
     }));
-    assert!(result.is_ok(), "bit-flipped wire input must not cause a panic");
+    assert!(
+        result.is_ok(),
+        "bit-flipped wire input must not cause a panic"
+    );
 }
 
 // ═══════════════════════════════════════════════
@@ -498,12 +539,18 @@ fn load_font_file_returns_none_without_surface() {
         return;
     }
     let result = bridge.load_font_file(path.to_string_lossy().to_string());
-    assert!(result.is_none(), "load_font_file without surface should return None");
+    assert!(
+        result.is_none(),
+        "load_font_file without surface should return None"
+    );
 }
 
 #[test]
 fn load_nonexistent_font_returns_none() {
     let bridge = TorvoxBridge::new(TerminalConfig::default());
     let result = bridge.load_font_file("/nonexistent/font.ttf".to_string());
-    assert!(result.is_none(), "loading nonexistent font should return None");
+    assert!(
+        result.is_none(),
+        "loading nonexistent font should return None"
+    );
 }

@@ -87,7 +87,10 @@ fn alt_screen_clear_before_switch() {
     t.vt_write(b"\x1b[?1049l");
     t.flush();
     let line0 = t.read_line_text(0);
-    assert!(line0.is_some(), "main screen content should survive DECSET 1049");
+    assert!(
+        line0.is_some(),
+        "main screen content should survive DECSET 1049"
+    );
     let text = line0.unwrap();
     assert!(
         text.contains("PreserveThis"),

@@ -6,7 +6,10 @@ use crate::cell::Color;
 
 /// Underline styles for SGR
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum UnderlineStyle {
     #[default]
     None,
@@ -19,7 +22,10 @@ pub enum UnderlineStyle {
 
 /// Blink styles for SGR
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum BlinkStyle {
     #[default]
     None,
@@ -29,7 +35,10 @@ pub enum BlinkStyle {
 
 /// Color specification for SGR sequences
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum ColorSpec {
     /// Named color (0-15)
     Named(u8),
@@ -41,7 +50,10 @@ pub enum ColorSpec {
 
 /// SGR attribute (Select Graphic Rendition)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum SgrAttribute {
     Reset,
     Bold(bool),
@@ -105,7 +117,9 @@ impl SgrAttribute {
         match code {
             30..=37 => Some(Self::ForegroundColor(ColorSpec::Named((code - 30) as u8))),
             39 => Some(Self::DefaultForegroundColor),
-            90..=97 => Some(Self::ForegroundColor(ColorSpec::Named((code - 90 + 8) as u8))),
+            90..=97 => Some(Self::ForegroundColor(ColorSpec::Named(
+                (code - 90 + 8) as u8,
+            ))),
             _ => None,
         }
     }
@@ -115,7 +129,9 @@ impl SgrAttribute {
         match code {
             40..=47 => Some(Self::BackgroundColor(ColorSpec::Named((code - 40) as u8))),
             49 => Some(Self::DefaultBackgroundColor),
-            100..=107 => Some(Self::BackgroundColor(ColorSpec::Named((code - 100 + 8) as u8))),
+            100..=107 => Some(Self::BackgroundColor(ColorSpec::Named(
+                (code - 100 + 8) as u8,
+            ))),
             _ => None,
         }
     }
@@ -282,7 +298,10 @@ mod tests {
     #[test]
     fn sgr_underline_single() {
         let mut cell = Cell::default();
-        apply_sgr(&[SgrAttribute::Underline(UnderlineStyle::Single)], &mut cell);
+        apply_sgr(
+            &[SgrAttribute::Underline(UnderlineStyle::Single)],
+            &mut cell,
+        );
         assert!(cell.attrs.underline);
         assert!(!cell.attrs.double_underline);
     }
@@ -290,7 +309,10 @@ mod tests {
     #[test]
     fn sgr_underline_double() {
         let mut cell = Cell::default();
-        apply_sgr(&[SgrAttribute::Underline(UnderlineStyle::Double)], &mut cell);
+        apply_sgr(
+            &[SgrAttribute::Underline(UnderlineStyle::Double)],
+            &mut cell,
+        );
         assert!(cell.attrs.underline);
         assert!(cell.attrs.double_underline);
     }
@@ -349,14 +371,20 @@ mod tests {
     #[test]
     fn sgr_fg_named() {
         let mut cell = Cell::default();
-        apply_sgr(&[SgrAttribute::ForegroundColor(ColorSpec::Named(1))], &mut cell);
+        apply_sgr(
+            &[SgrAttribute::ForegroundColor(ColorSpec::Named(1))],
+            &mut cell,
+        );
         assert_eq!(cell.foreground, Color::from_ansi(1));
     }
 
     #[test]
     fn sgr_bg_named() {
         let mut cell = Cell::default();
-        apply_sgr(&[SgrAttribute::BackgroundColor(ColorSpec::Named(4))], &mut cell);
+        apply_sgr(
+            &[SgrAttribute::BackgroundColor(ColorSpec::Named(4))],
+            &mut cell,
+        );
         assert_eq!(cell.background, Color::from_ansi(4));
     }
 
@@ -364,7 +392,11 @@ mod tests {
     fn sgr_fg_rgb() {
         let mut cell = Cell::default();
         apply_sgr(
-            &[SgrAttribute::ForegroundColor(ColorSpec::Rgb { r: 10, g: 20, b: 30 })],
+            &[SgrAttribute::ForegroundColor(ColorSpec::Rgb {
+                r: 10,
+                g: 20,
+                b: 30,
+            })],
             &mut cell,
         );
         assert_eq!(cell.foreground, Color::new(10, 20, 30));
@@ -374,7 +406,11 @@ mod tests {
     fn sgr_bg_rgb() {
         let mut cell = Cell::default();
         apply_sgr(
-            &[SgrAttribute::BackgroundColor(ColorSpec::Rgb { r: 100, g: 200, b: 50 })],
+            &[SgrAttribute::BackgroundColor(ColorSpec::Rgb {
+                r: 100,
+                g: 200,
+                b: 50,
+            })],
             &mut cell,
         );
         assert_eq!(cell.background, Color::new(100, 200, 50));
@@ -383,7 +419,10 @@ mod tests {
     #[test]
     fn sgr_fg_indexed() {
         let mut cell = Cell::default();
-        apply_sgr(&[SgrAttribute::ForegroundColor(ColorSpec::Indexed(200))], &mut cell);
+        apply_sgr(
+            &[SgrAttribute::ForegroundColor(ColorSpec::Indexed(200))],
+            &mut cell,
+        );
         assert_eq!(cell.foreground, Color::from_ansi(200));
     }
 
@@ -426,8 +465,14 @@ mod tests {
     #[test]
     fn sgr_from_code_all_valid() {
         // All codes that should return Some
-        for code in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 21, 22, 23, 24, 25, 27, 28, 29, 53, 55] {
-            assert!(SgrAttribute::from_code(code).is_some(), "Code {} should be valid", code);
+        for code in [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 21, 22, 23, 24, 25, 27, 28, 29, 53, 55,
+        ] {
+            assert!(
+                SgrAttribute::from_code(code).is_some(),
+                "Code {} should be valid",
+                code
+            );
         }
     }
 
@@ -545,7 +590,10 @@ mod tests {
     fn parse_sgr_fg_256() {
         let attrs = parse_sgr(&[38, 5, 128]);
         assert_eq!(attrs.len(), 1);
-        assert_eq!(attrs[0], SgrAttribute::ForegroundColor(ColorSpec::Indexed(128)));
+        assert_eq!(
+            attrs[0],
+            SgrAttribute::ForegroundColor(ColorSpec::Indexed(128))
+        );
     }
 
     #[test]
@@ -554,7 +602,11 @@ mod tests {
         assert_eq!(attrs.len(), 1);
         assert_eq!(
             attrs[0],
-            SgrAttribute::ForegroundColor(ColorSpec::Rgb { r: 255, g: 128, b: 64 })
+            SgrAttribute::ForegroundColor(ColorSpec::Rgb {
+                r: 255,
+                g: 128,
+                b: 64
+            })
         );
     }
 
@@ -562,7 +614,10 @@ mod tests {
     fn parse_sgr_bg_256() {
         let attrs = parse_sgr(&[48, 5, 200]);
         assert_eq!(attrs.len(), 1);
-        assert_eq!(attrs[0], SgrAttribute::BackgroundColor(ColorSpec::Indexed(200)));
+        assert_eq!(
+            attrs[0],
+            SgrAttribute::BackgroundColor(ColorSpec::Indexed(200))
+        );
     }
 
     #[test]
@@ -571,7 +626,11 @@ mod tests {
         assert_eq!(attrs.len(), 1);
         assert_eq!(
             attrs[0],
-            SgrAttribute::BackgroundColor(ColorSpec::Rgb { r: 10, g: 20, b: 30 })
+            SgrAttribute::BackgroundColor(ColorSpec::Rgb {
+                r: 10,
+                g: 20,
+                b: 30
+            })
         );
     }
 
@@ -590,7 +649,10 @@ mod tests {
     #[test]
     fn sgr_bold_and_reverse() {
         let mut cell = Cell::default();
-        apply_sgr(&[SgrAttribute::Bold(true), SgrAttribute::Reverse(true)], &mut cell);
+        apply_sgr(
+            &[SgrAttribute::Bold(true), SgrAttribute::Reverse(true)],
+            &mut cell,
+        );
         assert!(cell.attrs.bold);
         assert!(cell.attrs.reverse);
     }
@@ -676,7 +738,10 @@ mod tests {
             cell.attrs.bold,
             "SGR 21 must not clear bold (it means double underline)"
         );
-        assert!(cell.attrs.double_underline, "SGR 21 must set double underline");
+        assert!(
+            cell.attrs.double_underline,
+            "SGR 21 must set double underline"
+        );
     }
 
     #[test]
@@ -701,7 +766,10 @@ mod tests {
             Color::new(0, 255, 0),
             "SGR 22 must not destroy bg color"
         );
-        assert!(cell.attrs.italic, "SGR 22 must not destroy other attributes");
+        assert!(
+            cell.attrs.italic,
+            "SGR 22 must not destroy other attributes"
+        );
     }
 
     #[test]
@@ -724,16 +792,27 @@ mod tests {
     #[test]
     fn color_from_spec_indexed_extremes() {
         assert_eq!(color_from_spec(&ColorSpec::Indexed(0)), Color::from_ansi(0));
-        assert_eq!(color_from_spec(&ColorSpec::Indexed(255)), Color::from_ansi(255));
+        assert_eq!(
+            color_from_spec(&ColorSpec::Indexed(255)),
+            Color::from_ansi(255)
+        );
     }
 
     #[test]
     fn color_from_spec_rgb_extremes() {
         let black = color_from_spec(&ColorSpec::Rgb { r: 0, g: 0, b: 0 });
         assert_eq!(black, Color::new(0, 0, 0));
-        let white = color_from_spec(&ColorSpec::Rgb { r: 255, g: 255, b: 255 });
+        let white = color_from_spec(&ColorSpec::Rgb {
+            r: 255,
+            g: 255,
+            b: 255,
+        });
         assert_eq!(white, Color::new(255, 255, 255));
-        let mid = color_from_spec(&ColorSpec::Rgb { r: 128, g: 128, b: 128 });
+        let mid = color_from_spec(&ColorSpec::Rgb {
+            r: 128,
+            g: 128,
+            b: 128,
+        });
         assert_eq!(mid, Color::new(128, 128, 128));
     }
 
@@ -788,8 +867,14 @@ mod tests {
         assert!(!cell.attrs.overline, "overline must reset");
         assert!(!cell.attrs.protected, "protected must reset");
         assert!(!cell.attrs.double_width, "double_width must reset");
-        assert!(!cell.attrs.double_height_top, "double_height_top must reset");
-        assert!(!cell.attrs.double_height_bottom, "double_height_bottom must reset");
+        assert!(
+            !cell.attrs.double_height_top,
+            "double_height_top must reset"
+        );
+        assert!(
+            !cell.attrs.double_height_bottom,
+            "double_height_bottom must reset"
+        );
     }
 
     #[test]

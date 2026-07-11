@@ -50,7 +50,9 @@ pub fn width_value(character: char) -> u8 {
 /// Sums the `width_value` of each character in the string.
 /// Useful for calculating cursor position after rendering text.
 pub fn string_width(text: &str) -> u32 {
-    text.chars().map(|character| u32::from(width_value(character))).sum()
+    text.chars()
+        .map(|character| u32::from(width_value(character)))
+        .sum()
 }
 
 /// Returns true if the character occupies two columns on screen.

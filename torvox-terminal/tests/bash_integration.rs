@@ -17,7 +17,12 @@ fn open_pty() -> TestPty {
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
-        assert_eq!(ret, 0, "openpty failed: {}", std::io::Error::last_os_error());
+        assert_eq!(
+            ret,
+            0,
+            "openpty failed: {}",
+            std::io::Error::last_os_error()
+        );
 
         let pid = libc::fork();
         assert!(pid >= 0, "fork failed");
@@ -195,7 +200,8 @@ fn bash_exit_code_42() {
 
 #[test]
 fn bash_redirect_and_cat() {
-    let output = run_command("echo REDIRECT_OK > /tmp/test_torvox_123.txt && cat /tmp/test_torvox_123.txt");
+    let output =
+        run_command("echo REDIRECT_OK > /tmp/test_torvox_123.txt && cat /tmp/test_torvox_123.txt");
     assert!(output.contains("REDIRECT_OK"), "got: {}", output);
 }
 

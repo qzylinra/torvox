@@ -3,7 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum CursorStyle {
     #[default]
     Block,
@@ -12,7 +15,10 @@ pub enum CursorStyle {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct CursorState {
     /// Current cursor row position (0-indexed).
     pub row: u32,
@@ -339,7 +345,11 @@ mod tests {
         let styles = [CursorStyle::Block, CursorStyle::Underline, CursorStyle::Bar];
         for style in &styles {
             let debug = format!("{:?}", style);
-            assert!(!debug.is_empty(), "CursorStyle {:?} should have non-empty debug", style);
+            assert!(
+                !debug.is_empty(),
+                "CursorStyle {:?} should have non-empty debug",
+                style
+            );
         }
     }
 }

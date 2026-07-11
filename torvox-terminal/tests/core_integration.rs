@@ -85,14 +85,20 @@ fn sgr_underline_applies_to_cell() {
 fn sgr_reverse_applies_to_cell() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[7mReverse");
-    assert!(snap.cells[0].reverse, "first cell should have reverse video");
+    assert!(
+        snap.cells[0].reverse,
+        "first cell should have reverse video"
+    );
 }
 
 #[test]
 fn sgr_strikethrough_applies_to_cell() {
     let mut t = term();
     let snap = process_and_snapshot(&mut t, b"\x1b[9mStrike");
-    assert!(snap.cells[0].strikethrough, "first cell should have strikethrough");
+    assert!(
+        snap.cells[0].strikethrough,
+        "first cell should have strikethrough"
+    );
 }
 
 #[test]
@@ -122,7 +128,10 @@ fn sgr_reset_clears_all_attributes() {
     let snap = t.take_snapshot();
     assert!(snap.cells[0].bold, "first cell should be bold");
     assert!(snap.cells[0].underline, "first cell should be underlined");
-    assert!(!snap.cells[1].bold, "second cell should not be bold after reset");
+    assert!(
+        !snap.cells[1].bold,
+        "second cell should not be bold after reset"
+    );
     assert!(
         !snap.cells[1].underline,
         "second cell should not be underlined after reset"
@@ -135,7 +144,10 @@ fn sgr_bold_off_22() {
     let _snap = process_and_snapshot(&mut t, b"\x1b[1mB\x1b[22mN");
     let snap = t.take_snapshot();
     assert!(snap.cells[0].bold, "first cell should be bold");
-    assert!(!snap.cells[1].bold, "second cell should not be bold after SGR 22");
+    assert!(
+        !snap.cells[1].bold,
+        "second cell should not be bold after SGR 22"
+    );
 }
 
 #[test]
@@ -156,7 +168,10 @@ fn multiple_sgr_params() {
     let snap = process_and_snapshot(&mut t, b"\x1b[1;4;31mX");
     assert!(snap.cells[0].bold, "bold from multi-param SGR");
     assert!(snap.cells[0].underline, "underline from multi-param SGR");
-    assert!(snap.cells[0].foreground[0] > 0.1, "red foreground from multi-param SGR");
+    assert!(
+        snap.cells[0].foreground[0] > 0.1,
+        "red foreground from multi-param SGR"
+    );
 }
 
 #[test]
@@ -164,7 +179,11 @@ fn text_output_cursor_advances() {
     let mut t = term();
     t.vt_write(b"Hello");
     t.flush();
-    assert_eq!(t.cursor_x(), 5, "cursor should advance 5 cols after 'Hello'");
+    assert_eq!(
+        t.cursor_x(),
+        5,
+        "cursor should advance 5 cols after 'Hello'"
+    );
 }
 
 #[test]
@@ -186,7 +205,10 @@ fn carriage_return_goes_to_col_0() {
     t.flush();
     assert_eq!(t.cursor_x(), 1, "cursor should be at col 1 after CR + X");
     let snap = t.take_snapshot();
-    assert_eq!(snap.cells[0].codepoint, 'X' as u32, "CR should overwrite first char");
+    assert_eq!(
+        snap.cells[0].codepoint, 'X' as u32,
+        "CR should overwrite first char"
+    );
 }
 
 #[test]
@@ -217,7 +239,10 @@ fn erase_line_clears_row() {
     let _snap = process_and_snapshot(&mut t, b"ABCDEFGHIJ\x1b[2K");
     let snap = t.take_snapshot();
     for col in 0..10 {
-        assert_eq!(snap.cells[col].codepoint, 0, "col {col} should be empty after EL 2");
+        assert_eq!(
+            snap.cells[col].codepoint, 0,
+            "col {col} should be empty after EL 2"
+        );
     }
 }
 
@@ -227,7 +252,10 @@ fn delete_chars_shifts_remaining_left() {
     let snap = process_and_snapshot(&mut t, b"ABCDE\x1b[3G\x1b[2P");
     assert_eq!(snap.cells[0].codepoint, 'A' as u32, "DCH: col 0");
     assert_eq!(snap.cells[1].codepoint, 'B' as u32, "DCH: col 1");
-    assert_eq!(snap.cells[2].codepoint, 'E' as u32, "DCH: col 2 = E (shifted)");
+    assert_eq!(
+        snap.cells[2].codepoint, 'E' as u32,
+        "DCH: col 2 = E (shifted)"
+    );
     assert_eq!(snap.cells[3].codepoint, 0, "DCH: col 3 blank");
     assert_eq!(snap.cells[4].codepoint, 0, "DCH: col 4 blank");
 }

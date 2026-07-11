@@ -134,8 +134,8 @@ fn torvox_core_forbids_unsafe_code() {
         .join("torvox-core")
         .join("src")
         .join("lib.rs");
-    let content =
-        std::fs::read_to_string(&lib_rs).unwrap_or_else(|e| panic!("failed to read {}: {e}", lib_rs.display()));
+    let content = std::fs::read_to_string(&lib_rs)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", lib_rs.display()));
     assert!(
         content.contains("#![forbid(unsafe_code)]"),
         "torvox-core/src/lib.rs must contain #![forbid(unsafe_code)]"
@@ -161,8 +161,8 @@ fn nu_scripts_are_valid() {
     .collect();
 
     let mut found_any = false;
-    for entry in
-        std::fs::read_dir(&scripts_dir).unwrap_or_else(|e| panic!("failed to read scripts dir {scripts_dir:?}: {e}"))
+    for entry in std::fs::read_dir(&scripts_dir)
+        .unwrap_or_else(|e| panic!("failed to read scripts dir {scripts_dir:?}: {e}"))
     {
         let entry = entry.unwrap();
         let path = entry.path();
@@ -171,10 +171,17 @@ fn nu_scripts_are_valid() {
         }
         found_any = true;
         let basename = path.file_name().unwrap().to_str().unwrap().to_string();
-        assert!(allowed.contains(basename.as_str()), "Unauthorized script: {basename}");
-        let content = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
+        assert!(
+            allowed.contains(basename.as_str()),
+            "Unauthorized script: {basename}"
+        );
+        let content = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read {path:?}: {e}"));
 
-        assert!(content.contains("#!/usr/bin/env"), "{basename} missing shebang line");
+        assert!(
+            content.contains("#!/usr/bin/env"),
+            "{basename} missing shebang line"
+        );
 
         assert!(
             !content.contains('\t'),
@@ -182,7 +189,10 @@ fn nu_scripts_are_valid() {
         );
 
         if basename != "check-rust.nu" {
-            assert!(!content.contains("||"), "{basename} contains forbidden || operator");
+            assert!(
+                !content.contains("||"),
+                "{basename} contains forbidden || operator"
+            );
         }
     }
     assert!(found_any, "no .nu scripts found in {scripts_dir:?}");
@@ -191,7 +201,10 @@ fn nu_scripts_are_valid() {
 #[test]
 fn deny_toml_must_not_exist() {
     let deny_toml = std::path::Path::new(WORKSPACE).join("deny.toml");
-    assert!(!deny_toml.exists(), "deny.toml is forbidden anywhere in the repository");
+    assert!(
+        !deny_toml.exists(),
+        "deny.toml is forbidden anywhere in the repository"
+    );
 }
 
 #[test]

@@ -49,7 +49,11 @@ fn parse_vttest_file(content: &str) -> Vec<Vec<u8>> {
             }
         }
     }
-    if !bytes.is_empty() { vec![bytes] } else { vec![] }
+    if !bytes.is_empty() {
+        vec![bytes]
+    } else {
+        vec![]
+    }
 }
 
 #[test]

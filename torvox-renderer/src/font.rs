@@ -131,9 +131,14 @@ fn resolve_system_monospace_from_fonts_xml() -> Option<String> {
 
 #[cfg(target_os = "android")]
 fn is_font_file(entry: &std::path::Path) -> bool {
-    entry.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| {
-        ext.eq_ignore_ascii_case("ttf") || ext.eq_ignore_ascii_case("otf") || ext.eq_ignore_ascii_case("ttc")
-    })
+    entry
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("ttf")
+                || ext.eq_ignore_ascii_case("otf")
+                || ext.eq_ignore_ascii_case("ttc")
+        })
 }
 
 #[cfg(target_os = "android")]
@@ -143,7 +148,8 @@ static CACHED_FONT_PATHS: std::sync::OnceLock<Vec<std::path::PathBuf>> = std::sy
 static CACHED_FONT_DB: std::sync::OnceLock<fontdb::Database> = std::sync::OnceLock::new();
 
 #[cfg(target_os = "android")]
-static EXTRA_FONT_PATHS: std::sync::RwLock<Vec<std::path::PathBuf>> = std::sync::RwLock::new(Vec::new());
+static EXTRA_FONT_PATHS: std::sync::RwLock<Vec<std::path::PathBuf>> =
+    std::sync::RwLock::new(Vec::new());
 
 #[cfg(target_os = "android")]
 pub fn set_extra_font_paths(paths: Vec<std::path::PathBuf>) {
@@ -239,7 +245,9 @@ impl FontPipeline {
                             let file_path = entry.path();
                             if is_font_file(&file_path) {
                                 if let Err(error) = db.load_font_file(&file_path) {
-                                    log::warn!("font: failed to load font file {file_path:?}: {error}");
+                                    log::warn!(
+                                        "font: failed to load font file {file_path:?}: {error}"
+                                    );
                                 }
                             }
                         }
@@ -266,7 +274,8 @@ impl FontPipeline {
             scaler_context,
             atlas,
             glyph_cache: LruCache::new(
-                NonZeroUsize::new(GLYPH_CACHE_CAPACITY).expect("GLYPH_CACHE_CAPACITY is 10_000, always non-zero"),
+                NonZeroUsize::new(GLYPH_CACHE_CAPACITY)
+                    .expect("GLYPH_CACHE_CAPACITY is 10_000, always non-zero"),
             ),
             atlas_bitmap,
             atlas_width: atlas_width as u32,
@@ -278,7 +287,8 @@ impl FontPipeline {
             system_locale: String::new(),
             shaping_buffer: None,
             shape_cache: LruCache::new(
-                NonZeroUsize::new(SHAPE_CACHE_CAPACITY).expect("SHAPE_CACHE_CAPACITY must be non-zero"),
+                NonZeroUsize::new(SHAPE_CACHE_CAPACITY)
+                    .expect("SHAPE_CACHE_CAPACITY must be non-zero"),
             ),
         };
 
@@ -305,10 +315,18 @@ impl FontPipeline {
                 if !face.monospaced {
                     continue;
                 }
-                let name = face.families.first().map(|(n, _)| n.to_lowercase()).unwrap_or_default();
+                let name = face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.to_lowercase())
+                    .unwrap_or_default();
                 let name_normalized = name.replace(['-', '_'], " ");
                 if name_normalized == stem_lower || name_normalized.contains(&stem_lower) {
-                    let display = face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
+                    let display = face
+                        .families
+                        .first()
+                        .map(|(n, _)| n.clone())
+                        .unwrap_or_default();
                     log::info!(
                         "FONT_SELECT: fonts.xml monospace id={:?} name='{}' (stem='{}')",
                         face.id,
@@ -326,11 +344,20 @@ impl FontPipeline {
                 let name_nospace: String = face
                     .families
                     .first()
-                    .map(|(n, _)| n.to_lowercase().chars().filter(|c| !c.is_whitespace()).collect())
+                    .map(|(n, _)| {
+                        n.to_lowercase()
+                            .chars()
+                            .filter(|c| !c.is_whitespace())
+                            .collect()
+                    })
                     .unwrap_or_default();
                 let stem_nospace = stem_lower.replace(' ', "");
                 if name_nospace == stem_nospace {
-                    let display = face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
+                    let display = face
+                        .families
+                        .first()
+                        .map(|(n, _)| n.clone())
+                        .unwrap_or_default();
                     log::info!(
                         "FONT_SELECT: fonts.xml monospace (nospace) id={:?} name='{}'",
                         face.id,
@@ -347,10 +374,22 @@ impl FontPipeline {
             if !face.monospaced {
                 continue;
             }
-            let name = face.families.first().map(|(n, _)| n.to_lowercase()).unwrap_or_default();
+            let name = face
+                .families
+                .first()
+                .map(|(n, _)| n.to_lowercase())
+                .unwrap_or_default();
             if PREFERRED_MONOSPACE_FONTS.iter().any(|p| name.contains(p)) {
-                let display = face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
-                log::info!("FONT_SELECT: preferred monospace id={:?} name='{}'", face.id, display);
+                let display = face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_default();
+                log::info!(
+                    "FONT_SELECT: preferred monospace id={:?} name='{}'",
+                    face.id,
+                    display
+                );
                 self.font_id = Some(face.id);
                 return;
             }
@@ -359,7 +398,11 @@ impl FontPipeline {
         // Strategy 2: any monospaced face (exclude CJK bitmap candidates)
         for face in db.faces() {
             if face.monospaced {
-                let name = face.families.first().map(|(n, _)| n.to_lowercase()).unwrap_or_default();
+                let name = face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.to_lowercase())
+                    .unwrap_or_default();
                 if name.contains("cjk")
                     || name.contains("sc")
                     || name.contains("tc")
@@ -369,7 +412,11 @@ impl FontPipeline {
                 {
                     continue;
                 }
-                let display = face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
+                let display = face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_default();
                 log::info!("FONT_SELECT: monospace id={:?} name='{}'", face.id, display);
                 self.font_id = Some(face.id);
                 return;
@@ -379,8 +426,16 @@ impl FontPipeline {
         // Strategy 2b: any monospaced face (including CJK)
         for face in db.faces() {
             if face.monospaced {
-                let name = face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
-                log::info!("FONT_SELECT: monospace (CJK ok) id={:?} name='{}'", face.id, name);
+                let name = face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_default();
+                log::info!(
+                    "FONT_SELECT: monospace (CJK ok) id={:?} name='{}'",
+                    face.id,
+                    name
+                );
                 self.font_id = Some(face.id);
                 return;
             }
@@ -388,8 +443,16 @@ impl FontPipeline {
 
         // Strategy 3: any face
         if let Some(face) = db.faces().next() {
-            let name = face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
-            log::warn!("FONT_SELECT: fallback to any face id={:?} name='{}'", face.id, name);
+            let name = face
+                .families
+                .first()
+                .map(|(n, _)| n.clone())
+                .unwrap_or_default();
+            log::warn!(
+                "FONT_SELECT: fallback to any face id={:?} name='{}'",
+                face.id,
+                name
+            );
             self.font_id = Some(face.id);
             return;
         }
@@ -399,14 +462,21 @@ impl FontPipeline {
 
     fn find_cjk_fallback_fonts(&mut self, system_locale: &str) {
         let locale_tag = match system_locale {
-            s if s.starts_with("zh") || s.starts_with("ja") || s.starts_with("ko") => match system_locale {
-                s if s.starts_with("zh-CN") || s.starts_with("zh-Hans") => "sc",
-                s if s.starts_with("zh-TW") || s.starts_with("zh-Hant") || s.starts_with("zh-HK") => "tc",
-                s if s.starts_with("zh") => "sc",
-                s if s.starts_with("ja") => "jp",
-                s if s.starts_with("ko") => "kr",
-                _ => "",
-            },
+            s if s.starts_with("zh") || s.starts_with("ja") || s.starts_with("ko") => {
+                match system_locale {
+                    s if s.starts_with("zh-CN") || s.starts_with("zh-Hans") => "sc",
+                    s if s.starts_with("zh-TW")
+                        || s.starts_with("zh-Hant")
+                        || s.starts_with("zh-HK") =>
+                    {
+                        "tc"
+                    }
+                    s if s.starts_with("zh") => "sc",
+                    s if s.starts_with("ja") => "jp",
+                    s if s.starts_with("ko") => "kr",
+                    _ => "",
+                }
+            }
             _ => "",
         };
 
@@ -435,9 +505,16 @@ impl FontPipeline {
             if face.id == self.font_id.unwrap_or_default() {
                 continue;
             }
-            let family_name = face.families.first().map(|(n, _)| n.to_lowercase()).unwrap_or_default();
+            let family_name = face
+                .families
+                .first()
+                .map(|(n, _)| n.to_lowercase())
+                .unwrap_or_default();
 
-            if family_name.contains("emoji") || family_name.contains("color") || family_name.contains("symbol") {
+            if family_name.contains("emoji")
+                || family_name.contains("color")
+                || family_name.contains("symbol")
+            {
                 continue;
             }
 
@@ -499,7 +576,8 @@ impl FontPipeline {
                 let (is_vector, source_quality_penalty): (bool, u8) = {
                     let is_vector = db
                         .with_face_data(face.id, |font_data, face_index| {
-                            let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
+                            let font_ref =
+                                swash::FontRef::from_index(font_data, face_index as usize)?;
                             let mut scaler = self
                                 .scaler_context
                                 .builder(font_ref)
@@ -515,7 +593,8 @@ impl FontPipeline {
                             Some(image.is_some_and(|img| {
                                 matches!(
                                     img.content,
-                                    swash::scale::image::Content::Mask | swash::scale::image::Content::SubpixelMask
+                                    swash::scale::image::Content::Mask
+                                        | swash::scale::image::Content::SubpixelMask
                                 )
                             }))
                         })
@@ -527,8 +606,13 @@ impl FontPipeline {
                         (false, CJK_BITMAP_PENALTY)
                     }
                 };
-                let outline_bonus = if is_vector { OUTLINE_BONUS as i16 } else { 0i16 };
-                let effective_priority = priority.saturating_sub(source_quality_penalty as i16) + outline_bonus;
+                let outline_bonus = if is_vector {
+                    OUTLINE_BONUS as i16
+                } else {
+                    0i16
+                };
+                let effective_priority =
+                    priority.saturating_sub(source_quality_penalty as i16) + outline_bonus;
                 candidates.push((face.id, advance_px, effective_priority));
             }
         }
@@ -554,7 +638,9 @@ impl FontPipeline {
             MAX_CJK_FALLBACK_FONTS
         );
         if candidates.is_empty() || candidates.iter().all(|c| c.2 <= 0i16) {
-            log::warn!("CJK_FALLBACK: no font with vector outlines found; CJK may render as bitmap");
+            log::warn!(
+                "CJK_FALLBACK: no font with vector outlines found; CJK may render as bitmap"
+            );
         }
     }
 
@@ -565,8 +651,10 @@ impl FontPipeline {
             self.font_id = None;
             self.find_monospace_font();
             self.glyph_cache.clear();
-            self.atlas =
-                guillotiere::AtlasAllocator::new(guillotiere::size2(self.atlas_width as i32, self.atlas_height as i32));
+            self.atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(
+                self.atlas_width as i32,
+                self.atlas_height as i32,
+            ));
             self.atlas_bitmap.fill(0);
             self.atlas_generation = self.atlas_generation.wrapping_add(1);
             self.cjk_fallback_ids.clear();
@@ -581,8 +669,10 @@ impl FontPipeline {
         if let Some(id) = found {
             self.font_id = Some(id);
             self.glyph_cache.clear();
-            self.atlas =
-                guillotiere::AtlasAllocator::new(guillotiere::size2(self.atlas_width as i32, self.atlas_height as i32));
+            self.atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(
+                self.atlas_width as i32,
+                self.atlas_height as i32,
+            ));
             self.atlas_bitmap.fill(0);
             self.atlas_generation = self.atlas_generation.wrapping_add(1);
             self.cjk_fallback_ids.clear();
@@ -606,7 +696,12 @@ impl FontPipeline {
         self.atlas_generation = 0;
         self.rasterize_ascii();
         let (cw, ch) = self.cell_metrics();
-        log::info!("FONT_SIZE_IN_PLACE: size={} cell={:.1}x{:.1}", new_size, cw, ch);
+        log::info!(
+            "FONT_SIZE_IN_PLACE: size={} cell={:.1}x{:.1}",
+            new_size,
+            cw,
+            ch
+        );
         (cw, ch)
     }
 
@@ -637,14 +732,26 @@ impl FontPipeline {
             if !face.monospaced {
                 continue;
             }
-            let name = face.families.first().map(|(n, _)| n.to_lowercase()).unwrap_or_default();
+            let name = face
+                .families
+                .first()
+                .map(|(n, _)| n.to_lowercase())
+                .unwrap_or_default();
             if PREFERRED_MONOSPACE_FONTS.iter().any(|p| name.contains(p)) {
-                return face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
+                return face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_default();
             }
         }
         for face in db.faces() {
             if face.monospaced {
-                return face.families.first().map(|(n, _)| n.clone()).unwrap_or_default();
+                return face
+                    .families
+                    .first()
+                    .map(|(n, _)| n.clone())
+                    .unwrap_or_default();
             }
         }
         "monospace".to_string()
@@ -685,7 +792,11 @@ impl FontPipeline {
             && let Some(face) = db.face(id)
         {
             let name = face.families.first().map_or("unknown", |(n, _)| n.as_str());
-            let mono = if face.monospaced { "monospaced" } else { "proportional" };
+            let mono = if face.monospaced {
+                "monospaced"
+            } else {
+                "proportional"
+            };
             parts.push(format!("Active: {} ({})", name, mono));
         }
         let cjk = self.cjk_fallback_names();
@@ -767,7 +878,11 @@ impl FontPipeline {
         let db = self.font_system.db();
         let result = db.with_face_data(font_id, |font_data, face_index| {
             let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
-            let mut scaler = scaler_context.builder(font_ref).size(font_size).hint(true).build();
+            let mut scaler = scaler_context
+                .builder(font_ref)
+                .size(font_size)
+                .hint(true)
+                .build();
             let image = Render::new(&[]).render(&mut scaler, glyph_id);
             Some(image.is_some_and(|img| {
                 matches!(
@@ -821,20 +936,25 @@ impl FontPipeline {
 
         let db = self.font_system.db();
         let font_size = self.font_size;
-        let (image, advance_width) = db.with_face_data(font_id, |font_data, face_index| -> Option<(_, f32)> {
-            let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
-            let mut scaler = self
-                .scaler_context
-                .builder(font_ref)
-                .size(font_size)
-                .hint(false)
-                .build();
-            let image = Render::new(&[Source::Outline]).render(&mut scaler, glyph_id);
-            let upem = font_ref.metrics(&[]).units_per_em as f32;
-            let scale = if upem > 0.0 { font_size / upem } else { font_size };
-            let advance_width = font_ref.glyph_metrics(&[]).advance_width(glyph_id) * scale;
-            Some((image, advance_width))
-        })??;
+        let (image, advance_width) =
+            db.with_face_data(font_id, |font_data, face_index| -> Option<(_, f32)> {
+                let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
+                let mut scaler = self
+                    .scaler_context
+                    .builder(font_ref)
+                    .size(font_size)
+                    .hint(false)
+                    .build();
+                let image = Render::new(&[Source::Outline]).render(&mut scaler, glyph_id);
+                let upem = font_ref.metrics(&[]).units_per_em as f32;
+                let scale = if upem > 0.0 {
+                    font_size / upem
+                } else {
+                    font_size
+                };
+                let advance_width = font_ref.glyph_metrics(&[]).advance_width(glyph_id) * scale;
+                Some((image, advance_width))
+            })??;
 
         let image = match image {
             Some(img) => img,
@@ -870,7 +990,10 @@ impl FontPipeline {
             return Some(info);
         }
 
-        let allocation = match self.atlas.allocate(guillotiere::size2(width + 1, height + 1)) {
+        let allocation = match self
+            .atlas
+            .allocate(guillotiere::size2(width + 1, height + 1))
+        {
             Some(a) => a,
             None => {
                 let evict_count = (self.glyph_cache.len() / GLYPH_CACHE_EVICTION_DIVISOR).max(1);
@@ -881,7 +1004,10 @@ impl FontPipeline {
                         self.atlas.deallocate(allocated_id);
                     }
                 }
-                if let Some(a) = self.atlas.allocate(guillotiere::size2(width + 1, height + 1)) {
+                if let Some(a) = self
+                    .atlas
+                    .allocate(guillotiere::size2(width + 1, height + 1))
+                {
                     a
                 } else {
                     log::warn!(
@@ -891,7 +1017,8 @@ impl FontPipeline {
                         self.glyph_cache.len(),
                     );
                     self.rebuild_atlas();
-                    self.atlas.allocate(guillotiere::size2(width + 1, height + 1))?
+                    self.atlas
+                        .allocate(guillotiere::size2(width + 1, height + 1))?
                 }
             }
         };
@@ -964,9 +1091,15 @@ impl FontPipeline {
     }
 
     fn rebuild_atlas(&mut self) {
-        let entries: Vec<(GlyphKey, GlyphInfo)> = self.glyph_cache.iter().map(|(k, v)| (*k, v.clone())).collect();
-        self.atlas =
-            guillotiere::AtlasAllocator::new(guillotiere::size2(self.atlas_width as i32, self.atlas_height as i32));
+        let entries: Vec<(GlyphKey, GlyphInfo)> = self
+            .glyph_cache
+            .iter()
+            .map(|(k, v)| (*k, v.clone()))
+            .collect();
+        self.atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(
+            self.atlas_width as i32,
+            self.atlas_height as i32,
+        ));
         self.atlas_bitmap.fill(0);
         self.glyph_cache.clear();
         for (key, _old_info) in &entries {
@@ -1048,7 +1181,11 @@ impl FontPipeline {
         let cleaned_nospace: String = cleaned.chars().filter(|c| !c.is_whitespace()).collect();
         for face in db.faces() {
             for (family, _) in &face.families {
-                let fam_nospace: String = family.to_lowercase().chars().filter(|c| !c.is_whitespace()).collect();
+                let fam_nospace: String = family
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect();
                 if fam_nospace == cleaned_nospace {
                     return Some(face.id);
                 }
@@ -1074,7 +1211,12 @@ impl FontPipeline {
 
     /// Create a FontPipeline from a fixture directory.
     /// Loads .ttf/.otf files from the given directory, skipping bundled font loading.
-    pub fn from_fixture(atlas_width: i32, atlas_height: i32, font_size: f32, fixture_dir: &str) -> Self {
+    pub fn from_fixture(
+        atlas_width: i32,
+        atlas_height: i32,
+        font_size: f32,
+        fixture_dir: &str,
+    ) -> Self {
         let mut font_system = FontSystem::new();
         let db = font_system.db_mut();
 
@@ -1104,7 +1246,8 @@ impl FontPipeline {
             scaler_context,
             atlas,
             glyph_cache: LruCache::new(
-                NonZeroUsize::new(GLYPH_CACHE_CAPACITY).expect("GLYPH_CACHE_CAPACITY is 10_000, always non-zero"),
+                NonZeroUsize::new(GLYPH_CACHE_CAPACITY)
+                    .expect("GLYPH_CACHE_CAPACITY is 10_000, always non-zero"),
             ),
             atlas_bitmap,
             atlas_width: atlas_width as u32,
@@ -1116,7 +1259,8 @@ impl FontPipeline {
             system_locale: String::new(),
             shaping_buffer: None,
             shape_cache: LruCache::new(
-                NonZeroUsize::new(SHAPE_CACHE_CAPACITY).expect("SHAPE_CACHE_CAPACITY must be non-zero"),
+                NonZeroUsize::new(SHAPE_CACHE_CAPACITY)
+                    .expect("SHAPE_CACHE_CAPACITY must be non-zero"),
             ),
         };
 
@@ -1131,7 +1275,8 @@ impl FontPipeline {
     pub fn load_font_file(&mut self, path: &std::path::Path) -> Option<String> {
         let db = self.font_system.db_mut();
         let source = fontdb::Source::File(path.into());
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| db.load_font_source(source)));
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| db.load_font_source(source)));
         let ids = match result {
             Ok(ids) => ids,
             Err(_) => {
@@ -1351,7 +1496,11 @@ impl FontPipeline {
     }
 
     /// Look up or rasterize a glyph by its font ID and glyph ID (from shaping).
-    pub fn glyph_information_for_glyph(&mut self, font_id: fontdb::ID, glyph_id: u16) -> Option<GlyphInfo> {
+    pub fn glyph_information_for_glyph(
+        &mut self,
+        font_id: fontdb::ID,
+        glyph_id: u16,
+    ) -> Option<GlyphInfo> {
         self.glyph_information_from_font(font_id, '\0', glyph_id)
     }
 }
@@ -1366,14 +1515,20 @@ mod tests {
     fn font_pipeline_creation() {
         let pipeline = FontPipeline::new(2048, 2048, 14.0);
         assert_eq!(pipeline.atlas_dimensions(), (2048, 2048));
-        assert!(pipeline.cache_length() > 0, "ASCII glyphs should be pre-rasterized");
+        assert!(
+            pipeline.cache_length() > 0,
+            "ASCII glyphs should be pre-rasterized"
+        );
     }
 
     #[test]
     fn font_pipeline_has_system_fonts() {
         let pipeline = FontPipeline::new(2048, 2048, 14.0);
         let fonts = pipeline.list_monospace_fonts();
-        assert!(!fonts.is_empty(), "Should have at least one system monospace font");
+        assert!(
+            !fonts.is_empty(),
+            "Should have at least one system monospace font"
+        );
     }
 
     #[test]
@@ -1419,9 +1574,16 @@ mod tests {
     #[test]
     fn cjk_width_is_double_ascii() {
         let mut pipeline = FontPipeline::new(512, 512, 14.0);
-        let ascii_info = pipeline.glyph_information('A').expect("ascii 'A' glyph info");
-        let cjk_info = pipeline.glyph_information('中').expect("CJK '中' glyph info");
-        assert!(ascii_info.width > 0, "ASCII glyph should have positive width");
+        let ascii_info = pipeline
+            .glyph_information('A')
+            .expect("ascii 'A' glyph info");
+        let cjk_info = pipeline
+            .glyph_information('中')
+            .expect("CJK '中' glyph info");
+        assert!(
+            ascii_info.width > 0,
+            "ASCII glyph should have positive width"
+        );
         assert!(cjk_info.width > 0, "CJK glyph should have positive width");
         let (cell_w, _) = pipeline.cell_metrics();
         assert!(cell_w > 0.0, "cell width should be positive");
@@ -1720,7 +1882,10 @@ mod tests {
                 break;
             }
         }
-        assert!(has_ink, "CJK '好' should have non-zero coverage in pipeline atlas");
+        assert!(
+            has_ink,
+            "CJK '好' should have non-zero coverage in pipeline atlas"
+        );
 
         // Also compare against the committed freetype golden (must exist).
         let (_ft_w, _ft_h, _ft_data) = load_freetype_golden(TEST_DATA_DIR, "hao")
@@ -1730,7 +1895,9 @@ mod tests {
     #[test]
     fn bearing_values_for_dot() {
         let mut pipeline = FontPipeline::new(512, 512, 14.0);
-        let info = pipeline.glyph_information('.').expect("'.' should glyph_information");
+        let info = pipeline
+            .glyph_information('.')
+            .expect("'.' should glyph_information");
         assert!(
             info.placement.left >= 0,
             "dot bearing_x={} should be >= 0",
@@ -1847,7 +2014,10 @@ mod tests {
             "FontLoader should find at least one monospace face, got: {:?}",
             fonts
         );
-        assert!(pipeline.has_font(), "FontPipeline should have a font assigned");
+        assert!(
+            pipeline.has_font(),
+            "FontPipeline should have a font assigned"
+        );
     }
 
     // ── 13.2: CJK glyph ────────────────────────────────────────────
@@ -1858,7 +2028,11 @@ mod tests {
         let info = pipeline
             .glyph_information('中')
             .expect("CJK '中' (U+4E2D) should have glyph info");
-        assert!(info.width > 0, "CJK '中' width should be non-zero, got {}", info.width);
+        assert!(
+            info.width > 0,
+            "CJK '中' width should be non-zero, got {}",
+            info.width
+        );
         assert!(
             info.height > 0,
             "CJK '中' height should be non-zero, got {}",
@@ -1895,11 +2069,15 @@ mod tests {
         let info = pipeline.glyph_information(ch);
         if info.is_none() || info.as_ref().is_some_and(|i| i.width == 0) {
             let fonts = pipeline.list_monospace_fonts();
-            let found_emoji = fonts
-                .iter()
-                .any(|name| name.contains("Emoji") || name.contains("Noto") || name.to_lowercase().contains("emoji"));
+            let found_emoji = fonts.iter().any(|name| {
+                name.contains("Emoji")
+                    || name.contains("Noto")
+                    || name.to_lowercase().contains("emoji")
+            });
             if !found_emoji {
-                panic!("no emoji-supporting font found in system; emoji glyph test requires Noto Emoji or similar");
+                panic!(
+                    "no emoji-supporting font found in system; emoji glyph test requires Noto Emoji or similar"
+                );
             }
         }
         let info = info.expect("emoji 😀 should have glyph info");
@@ -1942,7 +2120,11 @@ mod tests {
         }
         let final_len = pipeline.cache_length();
         // Cache must be bounded by its capacity.
-        assert!(final_len <= 10000, "cache_length {} exceeds capacity 10000", final_len);
+        assert!(
+            final_len <= 10000,
+            "cache_length {} exceeds capacity 10000",
+            final_len
+        );
         // At least some new glyphs were inserted.
         assert!(
             final_len >= after_ascii,
@@ -1963,7 +2145,9 @@ mod tests {
     #[test]
     fn cjk_glyph_information_returns_nonzero_for_common_chars() {
         let mut pipeline = FontPipeline::new(2048, 2048, 14.0);
-        let chars = ['你', '好', '世', '界', '中', '文', '字', '体', '渲', '染', '测', '试'];
+        let chars = [
+            '你', '好', '世', '界', '中', '文', '字', '体', '渲', '染', '测', '试',
+        ];
         for ch in chars {
             let info = pipeline
                 .glyph_information(ch)
@@ -2030,7 +2214,11 @@ mod tests {
     fn cell_metrics_height_is_integer() {
         let pipeline = FontPipeline::new(2048, 2048, 14.0);
         let (_cw, ch) = pipeline.cell_metrics();
-        assert_eq!(ch, ch.floor(), "cell_height should be integer (ceil'd), got {ch}");
+        assert_eq!(
+            ch,
+            ch.floor(),
+            "cell_height should be integer (ceil'd), got {ch}"
+        );
     }
 
     #[test]
@@ -2080,11 +2268,19 @@ mod tests {
         // bearing_y = baseline - placement.top = ascent_pixels - placement.top
         let mut pipeline = FontPipeline::new(2048, 2048, 14.0);
         let ascent = pipeline.ascent_pixels();
-        let info = pipeline.glyph_information('A').expect("should have 'A' glyph");
+        let info = pipeline
+            .glyph_information('A')
+            .expect("should have 'A' glyph");
         let bearing_y = ascent - info.placement.top as f32;
-        assert!(bearing_y >= 0.0, "bearing_y for 'A' should be >= 0, got {bearing_y}");
+        assert!(
+            bearing_y >= 0.0,
+            "bearing_y for 'A' should be >= 0, got {bearing_y}"
+        );
         let (_, ch) = pipeline.cell_metrics();
-        assert!(bearing_y < ch, "bearing_y({bearing_y}) should be < cell_h({ch})");
+        assert!(
+            bearing_y < ch,
+            "bearing_y({bearing_y}) should be < cell_h({ch})"
+        );
     }
 
     #[test]
@@ -2181,7 +2377,11 @@ mod tests {
         for ch in ascii {
             if let Some(info) = pipeline.glyph_information(ch) {
                 let bearing_y = ascent - info.placement.top as f32;
-                assert!(bearing_y >= -2.0, "bearing_y('{ch}')={:.1} should be >= -2", bearing_y);
+                assert!(
+                    bearing_y >= -2.0,
+                    "bearing_y('{ch}')={:.1} should be >= -2",
+                    bearing_y
+                );
             }
         }
     }
@@ -2230,7 +2430,10 @@ mod tests {
         let fonts = pipeline.list_monospace_fonts();
         if let Some(other) = fonts.iter().find(|n| n.as_str() != default_name.as_str()) {
             pipeline.set_font_family(other);
-            assert_eq!(pipeline.current_font_family_name().as_deref(), Some(other.as_str()));
+            assert_eq!(
+                pipeline.current_font_family_name().as_deref(),
+                Some(other.as_str())
+            );
             pipeline.set_font_family("");
             assert_eq!(
                 pipeline.current_font_family_name().as_deref(),
@@ -2484,8 +2687,14 @@ mod tests {
                 successes += 1;
             }
         }
-        assert!(successes > 0, "should have inserted at least some CJK glyphs");
+        assert!(
+            successes > 0,
+            "should have inserted at least some CJK glyphs"
+        );
         let bitmap = pipeline.atlas_bitmap();
-        assert!(bitmap.iter().any(|&b| b != 0), "atlas should have content after defrag");
+        assert!(
+            bitmap.iter().any(|&b| b != 0),
+            "atlas should have content after defrag"
+        );
     }
 }

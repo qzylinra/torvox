@@ -41,7 +41,12 @@ pub fn assert_cup(t: &mut GhosttyTerminal, row: u32, col: u32, exp_row: u32, exp
 }
 
 /// Move cursor relatively and verify the delta.
-pub fn assert_relative(t: &mut GhosttyTerminal, seq: &[u8], delta_row: i32, delta_col: i32) -> CursorPosition {
+pub fn assert_relative(
+    t: &mut GhosttyTerminal,
+    seq: &[u8],
+    delta_row: i32,
+    delta_col: i32,
+) -> CursorPosition {
     let before = CursorPosition::read(t);
     t.vt_write(seq);
     t.flush();

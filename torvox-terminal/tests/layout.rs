@@ -90,7 +90,11 @@ fn newline_at_bottom_scrolls() {
     assert_eq!(get_line_padded(&t, 2, 10).trim_end(), "3");
     t.pty_write(b"\n4");
     t.flush();
-    assert_eq!(get_line_padded(&t, 0, 10).trim_end(), "2", "line 0 should scroll");
+    assert_eq!(
+        get_line_padded(&t, 0, 10).trim_end(),
+        "2",
+        "line 0 should scroll"
+    );
     assert_eq!(get_line_padded(&t, 1, 10).trim_end(), "3");
     assert_eq!(get_line_padded(&t, 2, 10).trim_end(), "4");
 }
@@ -102,7 +106,11 @@ fn tab_advances_cursor() {
     t.flush();
     let text = get_line_padded(&t, 0, 20);
     assert_eq!(text.chars().next().unwrap(), 'A');
-    assert_eq!(text.chars().nth(8).unwrap(), 'B', "Tab should advance to column 8");
+    assert_eq!(
+        text.chars().nth(8).unwrap(),
+        'B',
+        "Tab should advance to column 8"
+    );
 }
 
 #[test]
@@ -159,8 +167,14 @@ fn mixed_ascii_and_cjk() {
     t.flush();
     let text = get_line_padded(&t, 0, 30);
     assert!(text.contains("Hello"));
-    assert!(text.contains('\u{4E16}'), "Row 0 should contain CJK char \u{4E16}");
-    assert!(text.contains('\u{754C}'), "Row 0 should contain CJK char \u{754C}");
+    assert!(
+        text.contains('\u{4E16}'),
+        "Row 0 should contain CJK char \u{4E16}"
+    );
+    assert!(
+        text.contains('\u{754C}'),
+        "Row 0 should contain CJK char \u{754C}"
+    );
 }
 
 /// Cursor wraps at column 80 (standard terminal width default)
@@ -174,7 +188,11 @@ fn cursor_wrap_to_next_line() {
     t.flush();
     let text0 = get_line_padded(&t, 0, 10);
     let text1 = get_line_padded(&t, 1, 10);
-    assert_eq!(text0.trim_end().len(), 10, "row 0 should be full after 10 chars");
+    assert_eq!(
+        text0.trim_end().len(),
+        10,
+        "row 0 should be full after 10 chars"
+    );
     assert_eq!(
         text1.chars().next().unwrap_or('?'),
         'y',
@@ -198,8 +216,16 @@ fn reverse_index_at_top() {
     t.flush();
     let text0 = get_line_padded(&t, 0, 10);
     let text1 = get_line_padded(&t, 1, 10);
-    assert_eq!(text0.trim_end(), "", "RI at top scrolls — row 0 should be blank");
-    assert_eq!(text1.trim_end(), "line1", "row 1 should have previous top content");
+    assert_eq!(
+        text0.trim_end(),
+        "",
+        "RI at top scrolls — row 0 should be blank"
+    );
+    assert_eq!(
+        text1.trim_end(),
+        "line1",
+        "row 1 should have previous top content"
+    );
 }
 
 /// Scroll with wide chars in grid

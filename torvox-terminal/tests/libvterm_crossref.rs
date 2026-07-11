@@ -140,7 +140,10 @@ fn lv_el_1_start_to_cursor() {
     for col in 0..5 {
         assert_eq!(snap.cells[col].codepoint, 0, "lv EL1: col {col} erased");
     }
-    assert_eq!(snap.cells[5].codepoint, 'F' as u32, "lv EL1: col 5 preserved");
+    assert_eq!(
+        snap.cells[5].codepoint, 'F' as u32,
+        "lv EL1: col 5 preserved"
+    );
     assert_invariants(&snap);
 }
 
@@ -166,7 +169,10 @@ fn lv_ed_0_cursor_to_end() {
     t.vt_write(b"\x1b[2;1H\x1b[0J");
     t.flush();
     let snap = t.take_snapshot();
-    assert_eq!(snap.cells[0].codepoint, 'A' as u32, "lv ED0: row 0 preserved");
+    assert_eq!(
+        snap.cells[0].codepoint, 'A' as u32,
+        "lv ED0: row 0 preserved"
+    );
     for c in 5..15 {
         assert_eq!(snap.cells[c].codepoint, 0, "lv ED0: cell {c} erased");
     }
@@ -188,10 +194,19 @@ fn lv_ed_1_start_to_cursor() {
         assert_eq!(snap.cells[c].codepoint, 0, "lv ED1: cell {c} erased");
     }
     // Row 1 cols 1-4 preserved (after cursor)
-    assert_eq!(snap.cells[6].codepoint, 'B' as u32, "lv ED1 row1 col1 preserved");
-    assert_eq!(snap.cells[7].codepoint, 'B' as u32, "lv ED1 row1 col2 preserved");
+    assert_eq!(
+        snap.cells[6].codepoint, 'B' as u32,
+        "lv ED1 row1 col1 preserved"
+    );
+    assert_eq!(
+        snap.cells[7].codepoint, 'B' as u32,
+        "lv ED1 row1 col2 preserved"
+    );
     // Row 2 entirely preserved
-    assert_eq!(snap.cells[10].codepoint, 'C' as u32, "lv ED1: row 2 col0 preserved");
+    assert_eq!(
+        snap.cells[10].codepoint, 'C' as u32,
+        "lv ED1: row 2 col0 preserved"
+    );
     assert_invariants(&snap);
 }
 
@@ -223,7 +238,10 @@ fn lv_ech_erases_no_shift() {
     for col in 3..6 {
         assert_eq!(snap.cells[col].codepoint, 0, "lv ECH: col {col} erased");
     }
-    assert_eq!(snap.cells[6].codepoint, '7' as u32, "lv ECH: col 6 preserved");
+    assert_eq!(
+        snap.cells[6].codepoint, '7' as u32,
+        "lv ECH: col 6 preserved"
+    );
     assert_invariants(&snap);
 }
 
@@ -240,7 +258,10 @@ fn lv_ich_shifts_right() {
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 0, "lv ICH: col 0 inserted blank");
     assert_eq!(snap.cells[1].codepoint, 0, "lv ICH: col 1 inserted blank");
-    assert_eq!(snap.cells[2].codepoint, 'C' as u32, "lv ICH: C shifted to col 2");
+    assert_eq!(
+        snap.cells[2].codepoint, 'C' as u32,
+        "lv ICH: C shifted to col 2"
+    );
     assert_invariants(&snap);
 }
 
@@ -255,7 +276,10 @@ fn lv_dch_shifts_left() {
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 'A' as u32, "lv DCH: A");
     assert_eq!(snap.cells[1].codepoint, 'B' as u32, "lv DCH: B");
-    assert_eq!(snap.cells[2].codepoint, 'E' as u32, "lv DCH: E shifted left");
+    assert_eq!(
+        snap.cells[2].codepoint, 'E' as u32,
+        "lv DCH: E shifted left"
+    );
     assert_eq!(snap.cells[3].codepoint, 0, "lv DCH: col 3 blank");
     assert_invariants(&snap);
 }
@@ -353,7 +377,11 @@ fn lv_tbc_clears_tabs() {
     t.flush();
     t.vt_write(b"\x09");
     t.flush();
-    assert_eq!(t.cursor_x(), 10, "lv TBC: skipped cleared tab, went to col 10");
+    assert_eq!(
+        t.cursor_x(),
+        10,
+        "lv TBC: skipped cleared tab, went to col 10"
+    );
     assert_invariants(&t.take_snapshot());
 }
 
@@ -406,7 +434,9 @@ fn lv_auto_wrap() {
         row1_col0 == 'X' as u32 || (row0[9] == 'X' as u32),
         "lv wrap: X must be either at cells[9] or cells[10], got row0={:?}, row1_col0={}",
         row0,
-        char::from_u32(row1_col0).map(|c| c.to_string()).unwrap_or("?".into())
+        char::from_u32(row1_col0)
+            .map(|c| c.to_string())
+            .unwrap_or("?".into())
     );
     // Turn wrap off — subsequent characters beyond cols-1 overwrite last col
     t.vt_write(b"\x1b[?7l");
@@ -420,7 +450,13 @@ fn lv_auto_wrap() {
         .iter()
         .enumerate()
         .filter(|(_, c)| c.codepoint == 'Y' as u32)
-        .map(|(i, _)| format!("row{} col{}", i / snap2.cols as usize, i % snap2.cols as usize))
+        .map(|(i, _)| {
+            format!(
+                "row{} col{}",
+                i / snap2.cols as usize,
+                i % snap2.cols as usize
+            )
+        })
         .collect();
     assert!(
         !y_positions.is_empty(),
@@ -637,7 +673,10 @@ fn lv_ri_scrolls_down_at_top() {
     t.vt_write(b"\x1b[1;1H\x1bM"); // RI at top
     t.flush();
     let snap = t.take_snapshot();
-    assert_eq!(snap.cells[10].codepoint, 'L' as u32, "lv RI: Line1 scrolled down");
+    assert_eq!(
+        snap.cells[10].codepoint, 'L' as u32,
+        "lv RI: Line1 scrolled down"
+    );
     assert_invariants(&snap);
 }
 
@@ -687,12 +726,24 @@ fn lv_ed_0_preserves_before_cursor() {
     t.flush();
     let snap = t.take_snapshot();
     for col in 0..10 {
-        assert_eq!(snap.cells[col].codepoint, 'A' as u32, "lv ED0 before: row 0 col {col}");
+        assert_eq!(
+            snap.cells[col].codepoint, 'A' as u32,
+            "lv ED0 before: row 0 col {col}"
+        );
     }
-    assert_eq!(snap.cells[10].codepoint, 'B' as u32, "lv ED0 before: row 1 col 0");
-    assert_eq!(snap.cells[11].codepoint, 'B' as u32, "lv ED0 before: row 1 col 1");
+    assert_eq!(
+        snap.cells[10].codepoint, 'B' as u32,
+        "lv ED0 before: row 1 col 0"
+    );
+    assert_eq!(
+        snap.cells[11].codepoint, 'B' as u32,
+        "lv ED0 before: row 1 col 1"
+    );
     for col in 12..30 {
-        assert_eq!(snap.cells[col].codepoint, 0, "lv ED0 before: cell {col} erased");
+        assert_eq!(
+            snap.cells[col].codepoint, 0,
+            "lv ED0 before: cell {col} erased"
+        );
     }
     assert_invariants(&snap);
 }
@@ -805,20 +856,32 @@ fn lv_sgr_attr_independence() {
     t.flush();
     let snap = t.take_snapshot();
     assert!(snap.cells[0].bold, "lv SGR indep: bold on");
-    assert!(!snap.cells[0].italic, "lv SGR indep: italic not set by bold");
-    assert!(!snap.cells[0].underline, "lv SGR indep: underline not set by bold");
+    assert!(
+        !snap.cells[0].italic,
+        "lv SGR indep: italic not set by bold"
+    );
+    assert!(
+        !snap.cells[0].underline,
+        "lv SGR indep: underline not set by bold"
+    );
     // New SGR sequence: set bold+italic together
     t.vt_write(b"\x1b[1;3mY");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[1].bold, "lv SGR indep: bold preserved in combined SGR");
+    assert!(
+        snap.cells[1].bold,
+        "lv SGR indep: bold preserved in combined SGR"
+    );
     assert!(snap.cells[1].italic, "lv SGR indep: italic on");
     // SGR 0 resets everything
     t.vt_write(b"\x1b[0mZ");
     t.flush();
     let snap = t.take_snapshot();
     assert!(!snap.cells[2].bold, "lv SGR indep: bold off after SGR 0");
-    assert!(!snap.cells[2].italic, "lv SGR indep: italic off after SGR 0");
+    assert!(
+        !snap.cells[2].italic,
+        "lv SGR indep: italic off after SGR 0"
+    );
     assert_invariants(&snap);
 }
 
@@ -833,7 +896,13 @@ fn lv_cup_then_write_and_backspace() {
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 'X' as u32, "lv BS: col 0 = X");
     assert_eq!(snap.cells[1].codepoint, 'Y' as u32, "lv BS: col 1 = Y");
-    assert_eq!(snap.cells[2].codepoint, 'A' as u32, "lv BS: col 2 = A (overwrote Z)");
-    assert_eq!(snap.cells[3].codepoint, 'B' as u32, "lv BS: col 3 = B (overwrote W)");
+    assert_eq!(
+        snap.cells[2].codepoint, 'A' as u32,
+        "lv BS: col 2 = A (overwrote Z)"
+    );
+    assert_eq!(
+        snap.cells[3].codepoint, 'B' as u32,
+        "lv BS: col 3 = B (overwrote W)"
+    );
     assert_invariants(&snap);
 }

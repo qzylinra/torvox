@@ -236,7 +236,11 @@ mod tests {
     fn csi_first_param_zero_means_use_default() {
         let seq = CsiSequence::with_params(vec![0], b'A');
         assert_eq!(seq.first_param_or(1), 1, "param 0 should trigger default");
-        assert_eq!(seq.first_param_or(5), 5, "param 0 should use caller's default");
+        assert_eq!(
+            seq.first_param_or(5),
+            5,
+            "param 0 should use caller's default"
+        );
     }
 
     #[test]
@@ -302,7 +306,11 @@ mod tests {
             dec_mode::BRACKETED_PASTE,
         ];
         assert!(modes.iter().all(|&m| m > 0), "all modes should be positive");
-        assert_eq!(dec_mode::BRACKETED_PASTE, 2004, "bracketed paste is DEC mode 2004");
+        assert_eq!(
+            dec_mode::BRACKETED_PASTE,
+            2004,
+            "bracketed paste is DEC mode 2004"
+        );
     }
 
     #[test]

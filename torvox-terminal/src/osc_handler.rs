@@ -314,7 +314,11 @@ impl OscHandler {
     fn dispatch_osc8(&self, payload: &str) -> Option<OscEvent> {
         let semi = payload.find(';')?;
         let url = &payload[semi + 1..];
-        let url_opt = if url.is_empty() { None } else { Some(url.to_string()) };
+        let url_opt = if url.is_empty() {
+            None
+        } else {
+            Some(url.to_string())
+        };
         Some(OscEvent::Hyperlink(HyperlinkEvent { url: url_opt }))
     }
 
@@ -559,7 +563,10 @@ mod tests {
     fn osc7_process_emits_cwd_event_with_path() {
         let mut handler = OscHandler::new();
         handler.process(b"\x1b]7;file:///home/user/project\x07");
-        assert!(handler.output().is_empty(), "OSC 7 body must be stripped from output");
+        assert!(
+            handler.output().is_empty(),
+            "OSC 7 body must be stripped from output"
+        );
         assert_eq!(handler.events().len(), 1, "exactly one event expected");
         match &handler.events()[0] {
             OscEvent::Cwd(cwd) => {

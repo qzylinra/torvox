@@ -21,7 +21,10 @@ use crate::selection::Selection;
 /// * **Rendering events** — `DirtyRegion` — identifies which rows of the grid
 ///   have changed and need re-rendering.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum TerminalEvent {
     OutputReady,
     Bell,
@@ -43,7 +46,10 @@ pub enum TerminalEvent {
 /// Row indices are 0-based and reference the visible viewport rows,
 /// not scrollback history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct DirtyRegion {
     /// First modified row (inclusive).
     pub start_row: u32,
@@ -205,7 +211,11 @@ mod tests {
             start_row: 3,
             end_row: 7,
         };
-        assert_eq!(region.end_row - region.start_row, 4, "region should span 4 rows");
+        assert_eq!(
+            region.end_row - region.start_row,
+            4,
+            "region should span 4 rows"
+        );
     }
 
     #[cfg(feature = "rkyv")]
@@ -231,7 +241,8 @@ mod tests {
         for e in events {
             let bytes = rkyv::to_bytes::<Error>(&e).expect("rkyv serialize");
             let archived =
-                rkyv::access::<<TerminalEvent as rkyv::Archive>::Archived, Error>(&bytes).expect("rkyv access");
+                rkyv::access::<<TerminalEvent as rkyv::Archive>::Archived, Error>(&bytes)
+                    .expect("rkyv access");
             let restored: TerminalEvent =
                 rkyv::deserialize::<TerminalEvent, Error>(archived).expect("rkyv deserialize");
             assert_eq!(e, restored);

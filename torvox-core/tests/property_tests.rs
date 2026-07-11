@@ -265,7 +265,12 @@ mod cell_serde_invariants {
     }
 
     #[quickcheck]
-    fn cell_serde_roundtrip_attrs(bold: bool, italic: bool, underline: bool, reverse: bool) -> bool {
+    fn cell_serde_roundtrip_attrs(
+        bold: bool,
+        italic: bool,
+        underline: bool,
+        reverse: bool,
+    ) -> bool {
         let attrs = Attrs {
             bold,
             italic,
@@ -297,7 +302,12 @@ mod cell_serde_invariants {
     }
 
     #[quickcheck]
-    fn attrs_mid_four_roundtrip(double_underline: bool, reverse: bool, strikethrough: bool, blink: bool) -> bool {
+    fn attrs_mid_four_roundtrip(
+        double_underline: bool,
+        reverse: bool,
+        strikethrough: bool,
+        blink: bool,
+    ) -> bool {
         let a = Attrs {
             double_underline,
             reverse,
@@ -557,7 +567,12 @@ mod color_ops_invariants {
     #[quickcheck]
     fn color_saturating_add_identity(r: u8, g: u8, b: u8) {
         let a = Color { r, g, b, a: 255 };
-        let zero = Color { r: 0, g: 0, b: 0, a: 0 };
+        let zero = Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        };
         assert_eq!(a.saturating_add(&zero), a);
     }
 
@@ -636,7 +651,12 @@ mod grid_properties {
     }
 
     #[quickcheck]
-    fn grid_resize_preserves_invariants(rows: u32, cols: u32, new_rows: u32, new_cols: u32) -> TestResult {
+    fn grid_resize_preserves_invariants(
+        rows: u32,
+        cols: u32,
+        new_rows: u32,
+        new_cols: u32,
+    ) -> TestResult {
         if rows == 0 || cols == 0 || rows > 50 || cols > 100 {
             return TestResult::discard();
         }

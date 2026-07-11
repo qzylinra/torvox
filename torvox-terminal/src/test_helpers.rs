@@ -25,11 +25,17 @@ pub enum EffectFlag {
 
 /// Compare two `[f32; 4]` colors channel-by-channel with tolerance.
 pub fn colors_approx_eq(a: &[f32; 4], b: &[f32; 4]) -> bool {
-    a.iter().zip(b.iter()).all(|(x, y)| (x - y).abs() <= COLOR_TOLERANCE)
+    a.iter()
+        .zip(b.iter())
+        .all(|(x, y)| (x - y).abs() <= COLOR_TOLERANCE)
 }
 
 /// Get a cell from a snapshot by row/col.
-fn cell_at(snap: &GridSnapshot, row: u32, col: u32) -> Option<&crate::ghostty_terminal::CellSnapshot> {
+fn cell_at(
+    snap: &GridSnapshot,
+    row: u32,
+    col: u32,
+) -> Option<&crate::ghostty_terminal::CellSnapshot> {
     if row >= snap.rows || col >= snap.cols {
         return None;
     }
@@ -159,7 +165,10 @@ impl<'a> TermTestCase<'a> {
         let snap = self.term.take_snapshot();
         for (i, &exp) in expected.iter().enumerate() {
             let actual = row_text(&snap, i as u32);
-            assert_eq!(actual, exp, "row {i} mismatch (expected={exp:?}, actual={actual:?})");
+            assert_eq!(
+                actual, exp,
+                "row {i} mismatch (expected={exp:?}, actual={actual:?})"
+            );
         }
         self
     }
@@ -231,7 +240,10 @@ impl<'a> TermTestCase<'a> {
                 }
                 EffectFlag::Reverse => assert!(cell.reverse, "expected Reverse at ({row},{col})"),
                 EffectFlag::Strikethrough => {
-                    assert!(cell.strikethrough, "expected Strikethrough at ({row},{col})")
+                    assert!(
+                        cell.strikethrough,
+                        "expected Strikethrough at ({row},{col})"
+                    )
                 }
                 EffectFlag::Blink => assert!(cell.blink, "expected Blink at ({row},{col})"),
                 EffectFlag::Hidden => assert!(cell.hidden, "expected Hidden at ({row},{col})"),
@@ -247,7 +259,10 @@ impl<'a> TermTestCase<'a> {
     pub fn assert_strikethrough(self, row: u32, col: u32) -> Self {
         let snap = self.term.take_snapshot();
         let cell = cell_at(&snap, row, col).unwrap_or_else(|| panic!("no cell at ({row}, {col})"));
-        assert!(cell.strikethrough, "expected strikethrough at ({row},{col})");
+        assert!(
+            cell.strikethrough,
+            "expected strikethrough at ({row},{col})"
+        );
         self
     }
 
@@ -303,7 +318,10 @@ impl<'a> TermTestCase<'a> {
                     assert!(!cell.reverse, "unexpected Reverse at ({row},{col})")
                 }
                 EffectFlag::Strikethrough => {
-                    assert!(!cell.strikethrough, "unexpected Strikethrough at ({row},{col})")
+                    assert!(
+                        !cell.strikethrough,
+                        "unexpected Strikethrough at ({row},{col})"
+                    )
                 }
                 EffectFlag::Blink => {
                     assert!(!cell.blink, "unexpected Blink at ({row},{col})")
@@ -328,7 +346,11 @@ impl<'a> TermTestCase<'a> {
             "expected terminal output response, but none were captured"
         );
         let last = responses.last().expect("non-empty responses");
-        assert_eq!(last.as_slice(), expected, "terminal output response mismatch");
+        assert_eq!(
+            last.as_slice(),
+            expected,
+            "terminal output response mismatch"
+        );
         self
     }
 
@@ -340,8 +362,14 @@ impl<'a> TermTestCase<'a> {
             .as_ref()
             .expect("assert_content_preserved requires a prior capture_before() call");
         let after = self.term.take_snapshot();
-        assert_eq!(before.rows, after.rows, "row count changed between snapshots");
-        assert_eq!(before.cols, after.cols, "col count changed between snapshots");
+        assert_eq!(
+            before.rows, after.rows,
+            "row count changed between snapshots"
+        );
+        assert_eq!(
+            before.cols, after.cols,
+            "col count changed between snapshots"
+        );
         for (i, (b, a)) in before.cells.iter().zip(after.cells.iter()).enumerate() {
             assert_eq!(
                 b.codepoint,
@@ -359,7 +387,13 @@ impl<'a> TermTestCase<'a> {
     /// Assert that a sequence leaves the terminal in a clean state.
     /// Writes `sequence`, flushes, writes a known token, then asserts
     /// the token appears at the expected cursor position.
-    pub fn assert_sequence_clean(self, sequence: &[u8], token: &[u8], expected_row: u32, expected_col: u32) -> Self {
+    pub fn assert_sequence_clean(
+        self,
+        sequence: &[u8],
+        token: &[u8],
+        expected_row: u32,
+        expected_col: u32,
+    ) -> Self {
         let token_str = std::str::from_utf8(token).unwrap_or("");
         let tc = self
             .write(sequence)
@@ -415,7 +449,9 @@ mod tests {
     #[test]
     fn test_case_cursor_movement() {
         let mut t = term();
-        TermTestCase::new(&mut t).write(b"\x1b[5;10HX").assert_cursor_at(4, 10);
+        TermTestCase::new(&mut t)
+            .write(b"\x1b[5;10HX")
+            .assert_cursor_at(4, 10);
     }
 
     #[test]
@@ -424,7 +460,15 @@ mod tests {
         TermTestCase::new(&mut t)
             .write(b"\x1b[1mB")
             .assert_effects(0, 0, &[EffectFlag::Bold])
-            .assert_no_effects(0, 0, &[EffectFlag::Italic, EffectFlag::Underline, EffectFlag::Reverse]);
+            .assert_no_effects(
+                0,
+                0,
+                &[
+                    EffectFlag::Italic,
+                    EffectFlag::Underline,
+                    EffectFlag::Reverse,
+                ],
+            );
     }
 
     #[test]
@@ -532,7 +576,10 @@ mod tests {
         if !responses.is_empty() {
             let last = responses.last().expect("non-empty");
             let text = String::from_utf8_lossy(last);
-            assert!(text.contains("\x1b[0n"), "DSR should respond with status, got: {text}");
+            assert!(
+                text.contains("\x1b[0n"),
+                "DSR should respond with status, got: {text}"
+            );
         }
         // DSR may not be supported by all backends — skip assertion if no response
     }
@@ -662,19 +709,25 @@ mod tests {
     #[test]
     fn test_assert_strikethrough() {
         let mut t = term();
-        TermTestCase::new(&mut t).write(b"\x1b[9mX").assert_strikethrough(0, 0);
+        TermTestCase::new(&mut t)
+            .write(b"\x1b[9mX")
+            .assert_strikethrough(0, 0);
     }
 
     #[test]
     fn test_assert_blink() {
         let mut t = term();
-        TermTestCase::new(&mut t).write(b"\x1b[5mX").assert_blink(0, 0);
+        TermTestCase::new(&mut t)
+            .write(b"\x1b[5mX")
+            .assert_blink(0, 0);
     }
 
     #[test]
     fn test_assert_hidden() {
         let mut t = term();
-        TermTestCase::new(&mut t).write(b"\x1b[8mX").assert_hidden(0, 0);
+        TermTestCase::new(&mut t)
+            .write(b"\x1b[8mX")
+            .assert_hidden(0, 0);
     }
 
     #[test]

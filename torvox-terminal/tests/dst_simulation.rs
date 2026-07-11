@@ -113,7 +113,10 @@ fn dst_simulation_mixed_operations() {
     }
 
     terminal.receive(&TerminalMessage::Render);
-    assert!(terminal.render_count > 0, "at least one render should have occurred");
+    assert!(
+        terminal.render_count > 0,
+        "at least one render should have occurred"
+    );
     assert_eq!(terminal.messages_processed, 52);
 }
 
@@ -133,7 +136,10 @@ fn dst_render_destroyed_surface_logs_warning() {
     terminal.receive(&TerminalMessage::SurfaceCreated(80, 24));
     terminal.receive(&TerminalMessage::SurfaceDestroyed);
     terminal.receive(&TerminalMessage::Render);
-    assert!(terminal.error_count > 0, "render on destroyed surface should log error");
+    assert!(
+        terminal.error_count > 0,
+        "render on destroyed surface should log error"
+    );
 }
 
 #[test]
@@ -234,7 +240,10 @@ fn dst_fault_injection_message_errors() {
     // Terminal should still work after faults
     terminal.receive(&TerminalMessage::Render);
     let snap = terminal.terminal.take_snapshot();
-    assert!(snap.rows > 0, "after fault injection: rows should be positive");
+    assert!(
+        snap.rows > 0,
+        "after fault injection: rows should be positive"
+    );
     assert!(terminal.fault_count > 0, "faults should have been injected");
 }
 
@@ -276,7 +285,10 @@ fn dst_fault_injection_with_recovery() {
     terminal.receive(&TerminalMessage::PtyOutput(b"recovery\n".to_vec()));
     terminal.receive(&TerminalMessage::Flush);
     let snap = terminal.terminal.take_snapshot();
-    assert!(snap.rows > 0, "after fault recovery: rows should be positive");
+    assert!(
+        snap.rows > 0,
+        "after fault recovery: rows should be positive"
+    );
     assert!(
         terminal.error_count > 0,
         "errors should have occurred during fault burst"
@@ -297,7 +309,9 @@ fn dst_extreme_resize_1x1() {
         } else {
             terminal.receive(&TerminalMessage::Resize(24, 80));
         }
-        terminal.receive(&TerminalMessage::PtyOutput(format!("x{}\n", i).into_bytes()));
+        terminal.receive(&TerminalMessage::PtyOutput(
+            format!("x{}\n", i).into_bytes(),
+        ));
     }
 
     terminal.receive(&TerminalMessage::Resize(24, 80));
@@ -361,7 +375,9 @@ fn dst_extreme_resize_with_writes() {
             _ => (200, 1),
         };
         terminal.receive(&TerminalMessage::Resize(rows, cols));
-        terminal.receive(&TerminalMessage::PtyOutput(format!("hello_{}\n", i).into_bytes()));
+        terminal.receive(&TerminalMessage::PtyOutput(
+            format!("hello_{}\n", i).into_bytes(),
+        ));
         if i % 10 == 0 {
             terminal.receive(&TerminalMessage::Render);
         }

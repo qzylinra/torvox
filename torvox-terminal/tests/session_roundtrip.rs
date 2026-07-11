@@ -262,7 +262,11 @@ fn r29_roundtrip_osc_title() {
     g.vt_write(b"\x1b]0;TestTitle\x07");
     g.flush();
     let snap = g.take_snapshot();
-    assert_eq!(g.title(), "TestTitle".to_string(), "OSC 0 should set terminal title");
+    assert_eq!(
+        g.title(),
+        "TestTitle".to_string(),
+        "OSC 0 should set terminal title"
+    );
     assert_eq!(
         snap.cells[0].codepoint, 0,
         "OSC 0 does not write to cells, cell should be empty"

@@ -99,7 +99,12 @@ pub fn capture_snapshot(term: &GhosttyTerminal) -> TestSnapshot {
     from_dumped_grid(&dumped, cursor_x, cursor_y, cursor_visible)
 }
 
-fn from_dumped_grid(dumped: &DumpedGrid, cursor_x: u32, cursor_y: u32, cursor_visible: bool) -> TestSnapshot {
+fn from_dumped_grid(
+    dumped: &DumpedGrid,
+    cursor_x: u32,
+    cursor_y: u32,
+    cursor_visible: bool,
+) -> TestSnapshot {
     let cells: Vec<CellJson> = dumped.visible.iter().map(cell_to_json).collect();
     let scrollback: Vec<Vec<CellJson>> = dumped
         .scrollback
@@ -213,20 +218,29 @@ pub fn diff(expected: &TestSnapshot, actual: &TestSnapshot) -> DiffResult {
 
 /// Load expected snapshot from a `.json` file.
 pub fn load_expected(path: &Path) -> TestSnapshot {
-    let data = fs::read_to_string(path).unwrap_or_else(|e| panic!("failed to read expected snapshot {path:?}: {e}"));
+    let data = fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("failed to read expected snapshot {path:?}: {e}"));
     serde_json::from_str(&data).unwrap_or_else(|e| panic!("invalid JSON in {path:?}: {e}"))
 }
 
 /// Save snapshot to a `.json` file.
 pub fn save_snapshot(path: &Path, snap: &TestSnapshot) {
-    let data = serde_json::to_string_pretty(snap).unwrap_or_else(|e| panic!("failed to serialize snapshot: {e}"));
+    let data = serde_json::to_string_pretty(snap)
+        .unwrap_or_else(|e| panic!("failed to serialize snapshot: {e}"));
     fs::write(path, &data).unwrap_or_else(|e| panic!("failed to write {path:?}: {e}"));
 }
 
 /// Run a ref test from a `.seq` file and compare against the expected `.json`.
 /// Returns `true` if the test passed or the expected file was updated.
-pub fn run_ref_test(seq_path: &Path, json_path: &Path, rows: u32, cols: u32, scrollback: u32) -> bool {
-    let seq_bytes = fs::read(seq_path).unwrap_or_else(|e| panic!("failed to read seq {seq_path:?}: {e}"));
+pub fn run_ref_test(
+    seq_path: &Path,
+    json_path: &Path,
+    rows: u32,
+    cols: u32,
+    scrollback: u32,
+) -> bool {
+    let seq_bytes =
+        fs::read(seq_path).unwrap_or_else(|e| panic!("failed to read seq {seq_path:?}: {e}"));
 
     let mut term = GhosttyTerminal::new(rows, cols, scrollback)
         .unwrap_or_else(|e| panic!("failed to create terminal ({rows}x{cols}): {e}"));
@@ -272,7 +286,10 @@ pub fn run_ref_test(seq_path: &Path, json_path: &Path, rows: u32, cols: u32, scr
         let max_reported = 20;
         for (idx, (row, col)) in sorted.iter().enumerate() {
             if idx >= max_reported {
-                msg.push_str(&format!("  ... and {} more cell diffs\n", sorted.len() - max_reported));
+                msg.push_str(&format!(
+                    "  ... and {} more cell diffs\n",
+                    sorted.len() - max_reported
+                ));
                 break;
             }
             let detail = &result.cell_diffs[&(*row, *col)];
@@ -292,7 +309,10 @@ pub fn run_ref_test_dir(dir: &str, rows: u32, cols: u32, scrollback: u32) {
         .join("ref")
         .join(dir);
 
-    assert!(test_dir.exists(), "test directory {test_dir:?} does not exist");
+    assert!(
+        test_dir.exists(),
+        "test directory {test_dir:?} does not exist"
+    );
 
     let mut entries: Vec<_> = fs::read_dir(&test_dir)
         .unwrap_or_else(|e| panic!("failed to read {test_dir:?}: {e}"))
@@ -306,7 +326,10 @@ pub fn run_ref_test_dir(dir: &str, rows: u32, cols: u32, scrollback: u32) {
             continue;
         }
         let json_path = path.with_extension("json");
-        eprintln!("  ref {dir}/{}", path.file_stem().unwrap().to_string_lossy());
+        eprintln!(
+            "  ref {dir}/{}",
+            path.file_stem().unwrap().to_string_lossy()
+        );
         run_ref_test(&path, &json_path, rows, cols, scrollback);
     }
 }

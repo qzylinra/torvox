@@ -17,7 +17,12 @@ fn open_pty() -> TestPty {
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
-        assert_eq!(ret, 0, "openpty failed: {}", std::io::Error::last_os_error());
+        assert_eq!(
+            ret,
+            0,
+            "openpty failed: {}",
+            std::io::Error::last_os_error()
+        );
 
         let pid = libc::fork();
         assert!(pid >= 0, "fork failed");
@@ -152,13 +157,21 @@ fn bash_echo() {
 #[test]
 fn bash_pwd_returns_path() {
     let output = run_command("pwd");
-    assert!(output.contains("/"), "pwd should contain /, got: {}", output);
+    assert!(
+        output.contains("/"),
+        "pwd should contain /, got: {}",
+        output
+    );
 }
 
 #[test]
 fn bash_pipe_grep() {
     let output = run_command("echo 'alpha beta gamma' | grep beta");
-    assert!(output.contains("beta"), "pipe+grep should work, got: {}", output);
+    assert!(
+        output.contains("beta"),
+        "pipe+grep should work, got: {}",
+        output
+    );
 }
 
 #[test]
@@ -234,7 +247,11 @@ fn bash_command_substitution() {
 #[test]
 fn bash_arithmetic_expansion() {
     let output = run_command("echo $((2 + 3))");
-    assert!(output.contains("5"), "arithmetic should produce 5, got: {}", output);
+    assert!(
+        output.contains("5"),
+        "arithmetic should produce 5, got: {}",
+        output
+    );
 }
 
 #[test]
@@ -250,8 +267,16 @@ fn bash_variable_expansion() {
 #[test]
 fn bash_multiple_commands_semicolon() {
     let output = run_command("echo FIRST; echo SECOND");
-    assert!(output.contains("FIRST"), "should contain FIRST, got: {}", output);
-    assert!(output.contains("SECOND"), "should contain SECOND, got: {}", output);
+    assert!(
+        output.contains("FIRST"),
+        "should contain FIRST, got: {}",
+        output
+    );
+    assert!(
+        output.contains("SECOND"),
+        "should contain SECOND, got: {}",
+        output
+    );
 }
 
 #[test]
@@ -290,15 +315,31 @@ fn bash_pid_of_current_shell() {
 #[test]
 fn bash_wc_l_lines() {
     let output = run_command("printf 'a\nb\nc\n' | wc -l");
-    assert!(output.contains("3"), "wc -l should count 3 lines, got: {}", output);
+    assert!(
+        output.contains("3"),
+        "wc -l should count 3 lines, got: {}",
+        output
+    );
 }
 
 #[test]
 fn bash_sort_unique() {
     let output = run_command("echo -e 'c\na\nb\na\nb' | sort -u");
-    assert!(output.contains("a"), "sorted unique should contain a, got: {}", output);
-    assert!(output.contains("b"), "sorted unique should contain b, got: {}", output);
-    assert!(output.contains("c"), "sorted unique should contain c, got: {}", output);
+    assert!(
+        output.contains("a"),
+        "sorted unique should contain a, got: {}",
+        output
+    );
+    assert!(
+        output.contains("b"),
+        "sorted unique should contain b, got: {}",
+        output
+    );
+    assert!(
+        output.contains("c"),
+        "sorted unique should contain c, got: {}",
+        output
+    );
 }
 
 #[test]
@@ -306,13 +347,21 @@ fn bash_touch_and_stat() {
     let output = run_command(
         "touch /tmp/_torvox_stat_test && test -f /tmp/_torvox_stat_test && echo EXISTS && rm -f /tmp/_torvox_stat_test",
     );
-    assert!(output.contains("EXISTS"), "touch+test should work, got: {}", output);
+    assert!(
+        output.contains("EXISTS"),
+        "touch+test should work, got: {}",
+        output
+    );
 }
 
 #[test]
 fn bash_true_false_exit_codes() {
     let output_true = run_command("true; echo $?");
-    assert!(output_true.contains("0"), "true should return 0, got: {}", output_true);
+    assert!(
+        output_true.contains("0"),
+        "true should return 0, got: {}",
+        output_true
+    );
 
     let output_false = run_command("false; echo $?");
     assert!(
@@ -331,7 +380,11 @@ fn bash_glob_star() {
 #[test]
 fn bash_subshell() {
     let output = run_command("(echo IN_SUBSHELL)");
-    assert!(output.contains("IN_SUBSHELL"), "subshell should work, got: {}", output);
+    assert!(
+        output.contains("IN_SUBSHELL"),
+        "subshell should work, got: {}",
+        output
+    );
 }
 
 #[test]

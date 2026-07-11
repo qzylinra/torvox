@@ -87,8 +87,8 @@ fn global_gpu() -> &'static GlobalGpu {
     static INSTANCE: OnceLock<GlobalGpu> = OnceLock::new();
     // SAFETY: no_std initializer — cannot return Result from OnceLock::get_or_init.
     // If GPU init fails here the process cannot render and must abort.
-    INSTANCE.get_or_init(
-        || match futures::executor::block_on(GpuContext::initialize_instance_adapter_device()) {
+    INSTANCE.get_or_init(|| {
+        match futures::executor::block_on(GpuContext::initialize_instance_adapter_device()) {
             Ok((instance, adapter, device, queue)) => GlobalGpu {
                 instance,
                 adapter,
@@ -104,8 +104,8 @@ fn global_gpu() -> &'static GlobalGpu {
                      or a physical GPU with Vulkan drivers."
                 )
             }
-        },
-    )
+        }
+    })
 }
 
 #[derive(Debug, Error)]
@@ -343,44 +343,48 @@ impl GpuContext {
         Ok((instance, adapter, device, queue))
     }
 
-    fn create_cell_pipeline(device: &wgpu::Device, format: wgpu::TextureFormat) -> wgpu::RenderPipeline {
+    fn create_cell_pipeline(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> wgpu::RenderPipeline {
         let wgsl_source = include_str!("../shaders/cell.wgsl");
         let cell_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Cell Shader"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_source)),
         });
 
-        let cell_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Cell Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+        let cell_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Cell Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
         let cell_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Cell Pipeline Layout"),
@@ -433,37 +437,38 @@ impl GpuContext {
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_source)),
         });
 
-        let bg_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Background Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+        let bg_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Background Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
         let bg_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Background Pipeline Layout"),
@@ -518,37 +523,38 @@ impl GpuContext {
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_source)),
         });
 
-        let kgp_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("KGP Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+        let kgp_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("KGP Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
         let kgp_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("KGP Pipeline Layout"),
@@ -668,7 +674,8 @@ impl GpuContext {
             texel_size: [texel_x, texel_y],
             _padding: [0.0; 2],
         };
-        self.queue.write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
+        self.queue
+            .write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
 
         self.bg_bind_group = Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Background Bind Group"),
@@ -739,7 +746,8 @@ impl GpuContext {
             atlas_size: [self.kgp_atlas_width as f32, self.kgp_atlas_height as f32],
             _padding: [0.0; 2],
         };
-        self.queue.write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
+        self.queue
+            .write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
 
         let view = match self.kgp_texture.as_ref() {
             Some(t) => t.create_view(&wgpu::TextureViewDescriptor::default()),
@@ -989,7 +997,10 @@ impl GpuContext {
     fn select_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
         if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
             wgpu::CompositeAlphaMode::Opaque
-        } else if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::PreMultiplied) {
+        } else if caps
+            .alpha_modes
+            .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
+        {
             wgpu::CompositeAlphaMode::PreMultiplied
         } else {
             caps.alpha_modes
@@ -1020,8 +1031,8 @@ impl GpuContext {
     ) -> Result<(), GpuError> {
         use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle};
 
-        let non_null =
-            std::ptr::NonNull::new(window_ptr).ok_or_else(|| GpuError::Surface("null window pointer".to_string()))?;
+        let non_null = std::ptr::NonNull::new(window_ptr)
+            .ok_or_else(|| GpuError::Surface("null window pointer".to_string()))?;
 
         let android_handle = AndroidNdkWindowHandle::new(non_null);
         let display_handle = AndroidDisplayHandle::new();
@@ -1049,11 +1060,13 @@ impl GpuContext {
         // The initial adapter in new_with_no_surface was created without a
         // compatible_surface, which may select an adapter that does not
         // support the Android NDK native window surface (SwiftShader / real GPU).
-        let adapter = futures::executor::block_on(self.instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
-            compatible_surface: Some(&surface),
-            force_fallback_adapter: false,
-        }))
+        let adapter = futures::executor::block_on(self.instance.request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            },
+        ))
         .map_err(|_| GpuError::NoAdapter)?;
 
         let adapter_info = adapter.get_info();
@@ -1064,13 +1077,14 @@ impl GpuContext {
             adapter_info.device_type,
         );
 
-        let (device, queue) = futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("Torvox Device"),
-            required_features: wgpu::Features::empty(),
-            required_limits: adapter.limits(),
-            ..Default::default()
-        }))
-        .map_err(|e| GpuError::DeviceRequest(e.to_string()))?;
+        let (device, queue) =
+            futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some("Torvox Device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: adapter.limits(),
+                ..Default::default()
+            }))
+            .map_err(|e| GpuError::DeviceRequest(e.to_string()))?;
 
         device.on_uncaptured_error(Arc::new(|error| {
             log_gpu_error(&error);
@@ -1081,22 +1095,33 @@ impl GpuContext {
         self.queue = queue;
 
         // Re-create device-dependent resources (old ones were tied to old device)
-        self.quad_vertex_buffer = self.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Quad Vertex Buffer"),
-            contents: bytemuck::cast_slice(QUAD_CORNERS),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        self.quad_vertex_buffer =
+            self.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Quad Vertex Buffer"),
+                    contents: bytemuck::cast_slice(QUAD_CORNERS),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
 
         let caps = surface.get_capabilities(&self.adapter);
         let format = caps
             .formats
             .iter()
             .copied()
-            .find(|f| matches!(f, wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm))
+            .find(|f| {
+                matches!(
+                    f,
+                    wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
+                )
+            })
             .or_else(|| caps.formats.first().copied())
             .unwrap_or(wgpu::TextureFormat::Rgba8Unorm);
 
-        log::info!("Surface formats available: {:?} (chose: {:?})", caps.formats, format);
+        log::info!(
+            "Surface formats available: {:?} (chose: {:?})",
+            caps.formats,
+            format
+        );
         log::info!("Present modes available: {:?}", caps.present_modes);
 
         // Prefer Opaque alpha mode.  With `setZOrderOnTop(true)` (SurfaceView
@@ -1420,8 +1445,8 @@ impl GpuContext {
             log::warn!("configure_android_surface: device poll error: {error}");
         }
 
-        let non_null =
-            std::ptr::NonNull::new(window_ptr).ok_or_else(|| GpuError::Surface("null window pointer".to_string()))?;
+        let non_null = std::ptr::NonNull::new(window_ptr)
+            .ok_or_else(|| GpuError::Surface("null window pointer".to_string()))?;
         let android_handle = raw_window_handle::AndroidNdkWindowHandle::new(non_null);
         let display_handle = raw_window_handle::AndroidDisplayHandle::new();
 
@@ -1433,8 +1458,12 @@ impl GpuContext {
         let surface = unsafe {
             self.instance
                 .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                    raw_window_handle: raw_window_handle::RawWindowHandle::AndroidNdk(android_handle),
-                    raw_display_handle: Some(raw_window_handle::RawDisplayHandle::Android(display_handle)),
+                    raw_window_handle: raw_window_handle::RawWindowHandle::AndroidNdk(
+                        android_handle,
+                    ),
+                    raw_display_handle: Some(raw_window_handle::RawDisplayHandle::Android(
+                        display_handle,
+                    )),
                 })
         }
         .map_err(|e| GpuError::Surface(e.to_string()))?;
@@ -1444,7 +1473,12 @@ impl GpuContext {
             .formats
             .iter()
             .copied()
-            .find(|f| matches!(f, wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm))
+            .find(|f| {
+                matches!(
+                    f,
+                    wgpu::TextureFormat::Rgba8Unorm | wgpu::TextureFormat::Bgra8Unorm
+                )
+            })
             .or_else(|| caps.formats.first().copied())
             .unwrap_or(wgpu::TextureFormat::Rgba8Unorm);
 
@@ -1502,18 +1536,27 @@ impl GpuContext {
         };
 
         // Catch panics from get_current_texture (e.g. SwiftShader Vulkan config issues)
-        let output = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| surface.get_current_texture())) {
-            Ok(wgpu::CurrentSurfaceTexture::Success(tex) | wgpu::CurrentSurfaceTexture::Suboptimal(tex)) => tex,
+        let output = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            surface.get_current_texture()
+        })) {
+            Ok(
+                wgpu::CurrentSurfaceTexture::Success(tex)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(tex),
+            ) => tex,
             Ok(_) => return,
             Err(_) => {
                 log::warn!("warmup: get_current_texture panicked (SwiftShader compat)");
                 return;
             }
         };
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Warmup Encoder"),
-        });
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Warmup Encoder"),
+            });
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
         {
             let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Warmup Pass"),
@@ -1547,8 +1590,13 @@ impl GpuContext {
         _cfg_width: u32,
         _cfg_height: u32,
     ) -> Option<wgpu::SurfaceTexture> {
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| surface.get_current_texture())) {
-            Ok(wgpu::CurrentSurfaceTexture::Success(tex) | wgpu::CurrentSurfaceTexture::Suboptimal(tex)) => Some(tex),
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            surface.get_current_texture()
+        })) {
+            Ok(
+                wgpu::CurrentSurfaceTexture::Success(tex)
+                | wgpu::CurrentSurfaceTexture::Suboptimal(tex),
+            ) => Some(tex),
             Ok(wgpu::CurrentSurfaceTexture::Lost) => {
                 if let Some(config) = &self.surface_config {
                     surface.configure(&self.device, config);
@@ -1557,22 +1605,31 @@ impl GpuContext {
             }
             Ok(_) => None,
             Err(_) => {
-                log::warn!("render_frame: get_current_texture panicked (unconfigured surface), reconfiguring");
+                log::warn!(
+                    "render_frame: get_current_texture panicked (unconfigured surface), reconfiguring"
+                );
                 if let Some(config) = &self.surface_config {
                     surface.configure(&self.device, config);
                 }
                 // Retry once after reconfigure
-                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| surface.get_current_texture())) {
-                    Ok(wgpu::CurrentSurfaceTexture::Success(tex) | wgpu::CurrentSurfaceTexture::Suboptimal(tex)) => {
-                        Some(tex)
-                    }
+                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    surface.get_current_texture()
+                })) {
+                    Ok(
+                        wgpu::CurrentSurfaceTexture::Success(tex)
+                        | wgpu::CurrentSurfaceTexture::Suboptimal(tex),
+                    ) => Some(tex),
                     _ => None,
                 }
             }
         }
     }
 
-    pub fn render_frame(&mut self, instances: &[CellInstance], kgp_instances: &[KgpInstance]) -> Result<(), GpuError> {
+    pub fn render_frame(
+        &mut self,
+        instances: &[CellInstance],
+        kgp_instances: &[KgpInstance],
+    ) -> Result<(), GpuError> {
         let mut cfg_width = self
             .surface_config
             .as_ref()
@@ -1637,7 +1694,9 @@ impl GpuContext {
                 ..self
                     .surface_config
                     .as_ref()
-                    .ok_or_else(|| GpuError::Surface("surface_config lost during reconfiguration".to_string()))?
+                    .ok_or_else(|| {
+                        GpuError::Surface("surface_config lost during reconfiguration".to_string())
+                    })?
                     .clone()
             };
             surface.configure(&self.device, &new_config);
@@ -1652,22 +1711,30 @@ impl GpuContext {
                 _padding: [0.0; 2],
             };
             if let Some(buf) = &self.cell_uniform_buffer {
-                self.queue.write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
+                self.queue
+                    .write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
             }
             log::debug!("RENDER_FRAME_RECONFIGURE: {}x{}", cfg_width, cfg_height);
         }
 
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Frame Encoder"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Frame Encoder"),
+            });
 
         // Upload instance data
         if !instances.is_empty() {
             let instance_data = bytemuck::cast_slice(instances);
             let needed_size = instance_data.len() as u64;
-            let resize_buffer = self.instance_buffer.as_ref().is_none_or(|buf| buf.size() < needed_size);
+            let resize_buffer = self
+                .instance_buffer
+                .as_ref()
+                .is_none_or(|buf| buf.size() < needed_size);
             if resize_buffer {
                 self.instance_buffer = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("Instance Buffer"),
@@ -1690,12 +1757,13 @@ impl GpuContext {
                 .as_ref()
                 .is_none_or(|buf| buf.size() < needed_size);
             if resize_buffer {
-                self.kgp_instance_buffer = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("KGP Instance Buffer"),
-                    size: needed_size.max(MIN_ATLAS_BUFFER_SIZE),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }));
+                self.kgp_instance_buffer =
+                    Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("KGP Instance Buffer"),
+                        size: needed_size.max(MIN_ATLAS_BUFFER_SIZE),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    }));
             }
             if let Some(ref buf) = self.kgp_instance_buffer {
                 self.queue.write_buffer(buf, 0, kgp_instance_data);
@@ -1729,7 +1797,8 @@ impl GpuContext {
         }
 
         // KGP image render pass (after background, before cells)
-        if let (Some(kgp_pipeline), Some(kgp_bind_group)) = (&self.kgp_pipeline, &self.kgp_bind_group)
+        if let (Some(kgp_pipeline), Some(kgp_bind_group)) =
+            (&self.kgp_pipeline, &self.kgp_bind_group)
             && !kgp_instances.is_empty()
         {
             let mut kgp_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1822,7 +1891,10 @@ impl GpuContext {
         instances: &[CellInstance],
         kgp_instances: &[KgpInstance],
     ) -> Result<Vec<u8>, GpuError> {
-        let (w, h) = self.surface_config.as_ref().map_or((0, 0), |c| (c.width, c.height));
+        let (w, h) = self
+            .surface_config
+            .as_ref()
+            .map_or((0, 0), |c| (c.width, c.height));
         if w == 0 || h == 0 {
             return Err(GpuError::Surface("No surface config".to_string()));
         }
@@ -1857,8 +1929,8 @@ impl GpuContext {
             .ok_or_else(|| GpuError::Surface("readback_texture creation failed".to_string()))?;
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let bytes_per_row_padded =
-            ((w * 4) + (wgpu::COPY_BYTES_PER_ROW_ALIGNMENT - 1)) & !(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT - 1);
+        let bytes_per_row_padded = ((w * 4) + (wgpu::COPY_BYTES_PER_ROW_ALIGNMENT - 1))
+            & !(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT - 1);
         let buf_size = (bytes_per_row_padded * h) as u64;
         let needs_buf_new = match &self.readback_buffer {
             Some(b) => b.size() < buf_size,
@@ -1880,15 +1952,20 @@ impl GpuContext {
 
         let has_bg = self.bg_bind_group.is_some();
 
-        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Readback Encoder"),
-        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Readback Encoder"),
+            });
 
         // Upload instance data
         if !instances.is_empty() {
             let instance_data = bytemuck::cast_slice(instances);
             let needed_size = instance_data.len() as u64;
-            let resize = self.instance_buffer.as_ref().is_none_or(|b| b.size() < needed_size);
+            let resize = self
+                .instance_buffer
+                .as_ref()
+                .is_none_or(|b| b.size() < needed_size);
             if resize {
                 self.instance_buffer = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("Instance Buffer (readback)"),
@@ -1906,14 +1983,18 @@ impl GpuContext {
         if !kgp_instances.is_empty() {
             let kgp_instance_data = bytemuck::cast_slice(kgp_instances);
             let needed_size = kgp_instance_data.len() as u64;
-            let resize = self.kgp_instance_buffer.as_ref().is_none_or(|b| b.size() < needed_size);
+            let resize = self
+                .kgp_instance_buffer
+                .as_ref()
+                .is_none_or(|b| b.size() < needed_size);
             if resize {
-                self.kgp_instance_buffer = Some(self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("KGP Instance Buffer (readback)"),
-                    size: needed_size.max(MIN_ATLAS_BUFFER_SIZE),
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                }));
+                self.kgp_instance_buffer =
+                    Some(self.device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some("KGP Instance Buffer (readback)"),
+                        size: needed_size.max(MIN_ATLAS_BUFFER_SIZE),
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        mapped_at_creation: false,
+                    }));
             }
             if let Some(ref buf) = self.kgp_instance_buffer {
                 self.queue.write_buffer(buf, 0, kgp_instance_data);
@@ -1921,7 +2002,9 @@ impl GpuContext {
         }
 
         // Background render pass (if bg bind group exists)
-        if let (Some(bg_pipeline), Some(bg_bind_group)) = (self.bg_pipeline.as_ref(), self.bg_bind_group.as_ref()) {
+        if let (Some(bg_pipeline), Some(bg_bind_group)) =
+            (self.bg_pipeline.as_ref(), self.bg_bind_group.as_ref())
+        {
             let mut bg_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Background Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1945,7 +2028,8 @@ impl GpuContext {
         }
 
         // KGP render pass
-        if let (Some(kgp_pipeline), Some(kgp_bind_group)) = (self.kgp_pipeline.as_ref(), self.kgp_bind_group.as_ref())
+        if let (Some(kgp_pipeline), Some(kgp_bind_group)) =
+            (self.kgp_pipeline.as_ref(), self.kgp_bind_group.as_ref())
             && !kgp_instances.is_empty()
         {
             let mut kgp_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -2131,7 +2215,14 @@ impl FlatGrid {
         }
     }
 
-    pub fn set_cell(&mut self, row: u32, col: u32, ch: char, foreground: [f32; 4], background: [f32; 4]) {
+    pub fn set_cell(
+        &mut self,
+        row: u32,
+        col: u32,
+        ch: char,
+        foreground: [f32; 4],
+        background: [f32; 4],
+    ) {
         let idx = (row * self.cols + col) as usize;
         if idx < self.chars.len() {
             self.chars[idx] = ch;
@@ -2233,7 +2324,9 @@ impl SelectionRange {
         let (lo_row, lo_col, hi_row, hi_col) = self.ordered();
         match self.mode {
             SelectionMode::Line => row >= lo_row && row <= hi_row,
-            SelectionMode::Block => row >= lo_row && row <= hi_row && col >= lo_col && col <= hi_col,
+            SelectionMode::Block => {
+                row >= lo_row && row <= hi_row && col >= lo_col && col <= hi_col
+            }
             SelectionMode::Char | SelectionMode::Word => {
                 if row < lo_row || row > hi_row {
                     return false;
@@ -2252,7 +2345,9 @@ impl SelectionRange {
     }
 
     fn ordered(&self) -> (i32, i32, i32, i32) {
-        if self.start_row < self.end_row || (self.start_row == self.end_row && self.start_col <= self.end_col) {
+        if self.start_row < self.end_row
+            || (self.start_row == self.end_row && self.start_col <= self.end_col)
+        {
             (self.start_row, self.start_col, self.end_row, self.end_col)
         } else {
             (self.end_row, self.end_col, self.start_row, self.start_col)
@@ -2268,7 +2363,11 @@ pub struct SearchHighlight {
     pub color: [u8; 4],
 }
 
-fn cell_highlight<'a>(row: u32, col: u32, by_row: &'a HashMap<i32, Vec<&'a SearchHighlight>>) -> Option<&'a [u8; 4]> {
+fn cell_highlight<'a>(
+    row: u32,
+    col: u32,
+    by_row: &'a HashMap<i32, Vec<&'a SearchHighlight>>,
+) -> Option<&'a [u8; 4]> {
     let h_list = by_row.get(&(row as i32))?;
     let highlight = h_list
         .iter()
@@ -2421,7 +2520,9 @@ pub fn build_cell_instances_into(
                     let base_x = col as f32 * cell_w;
                     let base_y = row as f32 * cell_h;
                     match cursor_style {
-                        torvox_core::cursor::CursorStyle::Block => (bg, cursor_bg, [base_x, base_y], [cell_w, cell_h]),
+                        torvox_core::cursor::CursorStyle::Block => {
+                            (bg, cursor_bg, [base_x, base_y], [cell_w, cell_h])
+                        }
                         torvox_core::cursor::CursorStyle::Bar => (
                             [0.0, 0.0, 0.0, 0.0],
                             cursor_bg,
@@ -2431,12 +2532,20 @@ pub fn build_cell_instances_into(
                         torvox_core::cursor::CursorStyle::Underline => (
                             [0.0, 0.0, 0.0, 0.0],
                             cursor_bg,
-                            [base_x, base_y + cell_h - cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO],
+                            [
+                                base_x,
+                                base_y + cell_h - cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO,
+                            ],
                             [cell_w, cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO],
                         ),
                     }
                 } else {
-                    (fg, bg, [col as f32 * cell_w, row as f32 * cell_h], [cell_w, cell_h])
+                    (
+                        fg,
+                        bg,
+                        [col as f32 * cell_w, row as f32 * cell_h],
+                        [cell_w, cell_h],
+                    )
                 };
                 instances.push(CellInstance {
                     quad_origin,
@@ -2499,13 +2608,18 @@ pub fn build_cell_instances_into(
                     fg = bg;
                     bg = cursor_bg;
                     match cursor_style {
-                        torvox_core::cursor::CursorStyle::Block => ([cell_w, cell_h], [base_x, base_y]),
+                        torvox_core::cursor::CursorStyle::Block => {
+                            ([cell_w, cell_h], [base_x, base_y])
+                        }
                         torvox_core::cursor::CursorStyle::Bar => {
                             ([cell_w * CURSOR_BAR_WIDTH_RATIO, cell_h], [base_x, base_y])
                         }
                         torvox_core::cursor::CursorStyle::Underline => (
                             [cell_w, cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO],
-                            [base_x, base_y + cell_h - cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO],
+                            [
+                                base_x,
+                                base_y + cell_h - cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO,
+                            ],
                         ),
                     }
                 } else {
@@ -2636,7 +2750,9 @@ pub fn build_cell_instances_into(
                         (gfg, gbg)
                     };
 
-                    if let Some(info) = font_pipeline.glyph_information_for_glyph(sg.font_id, sg.glyph_id) {
+                    if let Some(info) =
+                        font_pipeline.glyph_information_for_glyph(sg.font_id, sg.glyph_id)
+                    {
                         glyph_found += 1;
                         let uv_x = info.atlas_x as f32 / atlas_width;
                         let uv_y = info.atlas_y as f32 / atlas_height;
@@ -2734,10 +2850,13 @@ pub fn build_cell_instances_into(
             let base_y = row as f32 * cell_h;
             let (cursor_quad_size, cursor_quad_origin) = if is_cursor {
                 match cursor_style {
-                    torvox_core::cursor::CursorStyle::Block => ([cell_w * cell_span, cell_h], [base_x, base_y]),
+                    torvox_core::cursor::CursorStyle::Block => {
+                        ([cell_w * cell_span, cell_h], [base_x, base_y])
+                    }
                     // Bar/Underline on text cells: use full cell so text is not clipped;
                     // cursor indicator color provides the positional highlight.
-                    torvox_core::cursor::CursorStyle::Bar | torvox_core::cursor::CursorStyle::Underline => {
+                    torvox_core::cursor::CursorStyle::Bar
+                    | torvox_core::cursor::CursorStyle::Underline => {
                         ([cell_w * cell_span, cell_h], [base_x, base_y])
                     }
                 }
@@ -2776,7 +2895,9 @@ pub fn build_cell_instances_into(
                     skip_cols = (cell_span as u32) - 1;
                 }
                 for &cp in cell.graphemes.iter().skip(1) {
-                    let Some(mark_ch) = char::from_u32(cp) else { continue };
+                    let Some(mark_ch) = char::from_u32(cp) else {
+                        continue;
+                    };
                     let Some(info) = font_pipeline.glyph_information(mark_ch) else {
                         continue;
                     };
@@ -2821,7 +2942,9 @@ pub fn build_cell_instances_into(
                     skip_cols = (cell_span as u32) - 1;
                 }
                 for &cp in cell.graphemes.iter().skip(1) {
-                    let Some(mark_ch) = char::from_u32(cp) else { continue };
+                    let Some(mark_ch) = char::from_u32(cp) else {
+                        continue;
+                    };
                     let Some(info) = font_pipeline.glyph_information(mark_ch) else {
                         continue;
                     };
@@ -2979,7 +3102,10 @@ mod tests {
 
     #[test]
     fn color_f32x4_eq_zero_vs_near_zero() {
-        assert!(!color_f32x4_eq([0.0, 0.0, 0.0, 0.0], [0.0001, 0.0, 0.0, 0.0]));
+        assert!(!color_f32x4_eq(
+            [0.0, 0.0, 0.0, 0.0],
+            [0.0001, 0.0, 0.0, 0.0]
+        ));
     }
 
     #[test]
@@ -3023,9 +3149,14 @@ mod tests {
         let v = [1.0_f32, 1.0, 0.0, 1.0];
         let mut result = [0.0_f32; 4];
         for i in 0..4 {
-            result[i] = proj[0][i] * v[0] + proj[1][i] * v[1] + proj[2][i] * v[2] + proj[3][i] * v[3];
+            result[i] =
+                proj[0][i] * v[0] + proj[1][i] * v[1] + proj[2][i] * v[2] + proj[3][i] * v[3];
         }
-        assert!((result[0] - (-0.98)).abs() < 1e-6, "result[0]={}", result[0]);
+        assert!(
+            (result[0] - (-0.98)).abs() < 1e-6,
+            "result[0]={}",
+            result[0]
+        );
         assert!((result[1] - (0.98)).abs() < 1e-6, "result[1]={}", result[1]);
         assert!((result[3] - 1.0).abs() < 1e-6, "result[3]={}", result[3]);
     }
@@ -3135,19 +3266,21 @@ mod tests {
     /// Returns None when no suitable GPU is available.
     fn create_test_device() -> Option<(wgpu::Instance, wgpu::Adapter, wgpu::Device, wgpu::Queue)> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-        let adapter = futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-            compatible_surface: None,
-            power_preference: wgpu::PowerPreference::LowPower,
-            force_fallback_adapter: false,
-        }))
-        .ok()?;
-        let (device, queue) = futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("gpu_test_device"),
-            required_features: wgpu::Features::empty(),
-            required_limits: wgpu::Limits::default(),
-            ..Default::default()
-        }))
-        .ok()?;
+        let adapter =
+            futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                compatible_surface: None,
+                power_preference: wgpu::PowerPreference::LowPower,
+                force_fallback_adapter: false,
+            }))
+            .ok()?;
+        let (device, queue) =
+            futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+                label: Some("gpu_test_device"),
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::default(),
+                ..Default::default()
+            }))
+            .ok()?;
         Some((instance, adapter, device, queue))
     }
 
@@ -3262,9 +3395,11 @@ mod tests {
 
         // Map read
         let (tx, rx) = std::sync::mpsc::channel();
-        staging_buffer.slice(..).map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).ok();
-        });
+        staging_buffer
+            .slice(..)
+            .map_async(wgpu::MapMode::Read, move |result| {
+                tx.send(result).ok();
+            });
         let _ = device.poll(wgpu::PollType::Wait {
             submission_index: None,
             timeout: None,
@@ -3642,7 +3777,8 @@ mod tests {
 
             let mut grid = FlatGrid::new(1, 1);
             grid.set_cell(0, 0, ch, [1.0; 4], [0.0; 4]);
-            let instances = build_cell_instances_from_flat(&grid, &mut font_pipeline, 2048.0, 2048.0);
+            let instances =
+                build_cell_instances_from_flat(&grid, &mut font_pipeline, 2048.0, 2048.0);
             let cell = &instances[0];
 
             assert!(
@@ -3667,7 +3803,8 @@ mod tests {
 
             let mut grid = FlatGrid::new(1, 1);
             grid.set_cell(0, 0, ch, [1.0; 4], [0.0; 4]);
-            let instances = build_cell_instances_from_flat(&grid, &mut font_pipeline, 2048.0, 2048.0);
+            let instances =
+                build_cell_instances_from_flat(&grid, &mut font_pipeline, 2048.0, 2048.0);
             let cell = &instances[0];
 
             assert!(
@@ -3724,7 +3861,8 @@ mod tests {
 
                 let mut grid = FlatGrid::new(1, 2);
                 grid.set_cell(0, 0, ch, [1.0; 4], [0.0; 4]);
-                let instances = build_cell_instances_from_flat(&grid, &mut font_pipeline, 2048.0, 2048.0);
+                let instances =
+                    build_cell_instances_from_flat(&grid, &mut font_pipeline, 2048.0, 2048.0);
                 let cell = &instances[0];
 
                 assert!(
@@ -3883,13 +4021,16 @@ mod tests {
         let width = 480u32;
         let height = 60u32;
         let atlas_dim = width.max(256);
-        let Some(mut ctx) = setup_test_gpu_context_custom(instance, adapter, device, queue, width, height) else {
+        let Some(mut ctx) =
+            setup_test_gpu_context_custom(instance, adapter, device, queue, width, height)
+        else {
             return;
         };
         // Ensure GPU atlas dimensions match the font pipeline atlas (both must be square)
         ctx.initialize_pipeline_and_bind_group(atlas_dim, atlas_dim, width, height);
 
-        let mut font_pipeline = crate::font::FontPipeline::new(atlas_dim as i32, atlas_dim as i32, 14.0);
+        let mut font_pipeline =
+            crate::font::FontPipeline::new(atlas_dim as i32, atlas_dim as i32, 14.0);
 
         let mut fg = FlatGrid::new(1, 11);
         fg.chars = "HELLO WORLD".chars().collect();
@@ -3898,7 +4039,12 @@ mod tests {
             fg.background[col] = [0.0, 0.0, 0.0, 1.0];
         }
 
-        let instances = build_cell_instances_from_flat(&fg, &mut font_pipeline, atlas_dim as f32, atlas_dim as f32);
+        let instances = build_cell_instances_from_flat(
+            &fg,
+            &mut font_pipeline,
+            atlas_dim as f32,
+            atlas_dim as f32,
+        );
         assert!(
             !instances.is_empty(),
             "build_cell_instances_from_flat returned 0 instances - font/glyph load failure"
@@ -3912,8 +4058,13 @@ mod tests {
             "render output size mismatch"
         );
 
-        let has_white = pixels.chunks(4).any(|p| p[0] > 200 && p[1] > 200 && p[2] > 200);
-        assert!(has_white, "rendered output should contain non-black pixels (text)");
+        let has_white = pixels
+            .chunks(4)
+            .any(|p| p[0] > 200 && p[1] > 200 && p[2] > 200);
+        assert!(
+            has_white,
+            "rendered output should contain non-black pixels (text)"
+        );
 
         let dir = std::env::temp_dir().join("torvox-ocr-test");
         if let Err(error) = std::fs::create_dir_all(&dir) {
@@ -4017,7 +4168,11 @@ mod tests {
         // render_to_buffer must not panic
         let result = ctx.render_to_buffer(&[], &[]).unwrap();
 
-        assert_eq!(result.len(), 50 * 50 * 4, "bg transparent render output size");
+        assert_eq!(
+            result.len(),
+            50 * 50 * 4,
+            "bg transparent render output size"
+        );
         let idx = (25 * 50 + 25) * 4;
         assert_eq!(
             result[idx],
@@ -4051,7 +4206,10 @@ mod tests {
         let result = ctx.render_to_buffer(&[], &[]).unwrap();
 
         let idx = (25 * 50 + 25) * 4;
-        assert_eq!(result[idx], 30, "center R should be 30 (Catppuccin Mocha bg)");
+        assert_eq!(
+            result[idx], 30,
+            "center R should be 30 (Catppuccin Mocha bg)"
+        );
         assert_eq!(result[idx + 1], 30, "center G should be 30");
         assert_eq!(result[idx + 2], 46, "center B should be 46");
         assert_eq!(result[idx + 3], 255, "center A should be 255");

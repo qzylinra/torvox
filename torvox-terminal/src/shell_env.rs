@@ -53,16 +53,24 @@ mod tests {
         let mut env = ShellEnv::default();
         assert!(env.prefix.is_none());
         env.prefix = Some("/data/data/com.termux/files/usr".to_string());
-        assert_eq!(env.prefix.as_deref(), Some("/data/data/com.termux/files/usr"));
+        assert_eq!(
+            env.prefix.as_deref(),
+            Some("/data/data/com.termux/files/usr")
+        );
     }
 
     #[test]
     fn shell_env_extra_variables_roundtrip() {
         let mut env = ShellEnv::default();
-        env.extra.push(("CUSTOM_VAR".to_string(), "custom_value".to_string()));
-        env.extra.push(("ANOTHER_VAR".to_string(), "another_value".to_string()));
+        env.extra
+            .push(("CUSTOM_VAR".to_string(), "custom_value".to_string()));
+        env.extra
+            .push(("ANOTHER_VAR".to_string(), "another_value".to_string()));
         assert_eq!(env.extra.len(), 2);
-        assert_eq!(env.extra[0], ("CUSTOM_VAR".to_string(), "custom_value".to_string()));
+        assert_eq!(
+            env.extra[0],
+            ("CUSTOM_VAR".to_string(), "custom_value".to_string())
+        );
     }
 
     #[test]

@@ -20,7 +20,10 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/codecov.yml");
         let content = fs::read_to_string(&path).expect("codecov.yml must exist");
-        assert!(content.contains("codecov:"), "codecov.yml must contain 'codecov:' key");
+        assert!(
+            content.contains("codecov:"),
+            "codecov.yml must contain 'codecov:' key"
+        );
         assert!(
             content.contains("coverage:"),
             "codecov.yml must contain 'coverage:' key"
@@ -32,7 +35,8 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/.cargo/mutants.toml");
         let content = fs::read_to_string(&path).expect(".cargo/mutants.toml must exist");
-        let parsed: toml::Value = toml::from_str(&content).expect(".cargo/mutants.toml must be valid TOML");
+        let parsed: toml::Value =
+            toml::from_str(&content).expect(".cargo/mutants.toml must be valid TOML");
         let has_valid_keys = parsed.get("examine_globs").is_some()
             || parsed.get("exclude_globs").is_some()
             || parsed.get("test_tool").is_some();
@@ -69,7 +73,8 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/rust-toolchain.toml");
         let content = fs::read_to_string(&path).expect("rust-toolchain.toml must exist");
-        let parsed: toml::Value = toml::from_str(&content).expect("rust-toolchain.toml must be valid TOML");
+        let parsed: toml::Value =
+            toml::from_str(&content).expect("rust-toolchain.toml must be valid TOML");
         assert!(
             parsed.get("toolchain").is_some(),
             "rust-toolchain.toml must have [toolchain] section"
@@ -81,7 +86,8 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/Cargo.toml");
         let content = fs::read_to_string(&path).expect("workspace Cargo.toml must exist");
-        let parsed: toml::Value = toml::from_str(&content).expect("workspace Cargo.toml must be valid TOML");
+        let parsed: toml::Value =
+            toml::from_str(&content).expect("workspace Cargo.toml must be valid TOML");
         assert!(
             parsed.get("workspace").is_some(),
             "workspace Cargo.toml must have [workspace] section"
@@ -115,7 +121,8 @@ mod config_file_validation {
         let root = workspace_root();
         let path = format!("{root}/coverage-ratchet.toml");
         let content = fs::read_to_string(&path).expect("coverage-ratchet.toml must exist");
-        let parsed: toml::Value = toml::from_str(&content).expect("coverage-ratchet.toml must be valid TOML");
+        let parsed: toml::Value =
+            toml::from_str(&content).expect("coverage-ratchet.toml must be valid TOML");
         assert!(
             parsed.get("workspace").is_some(),
             "coverage-ratchet.toml must have [workspace] section"
@@ -138,12 +145,24 @@ mod config_file_validation {
         let parsed: toml::Value = toml::from_str(&content).unwrap();
 
         let ws = parsed.get("workspace").unwrap();
-        let initial = ws.get("initial_threshold").and_then(|v| v.as_float()).unwrap();
-        let target = ws.get("target_threshold").and_then(|v| v.as_float()).unwrap();
-        let increment = ws.get("ratchet_increment").and_then(|v| v.as_float()).unwrap();
+        let initial = ws
+            .get("initial_threshold")
+            .and_then(|v| v.as_float())
+            .unwrap();
+        let target = ws
+            .get("target_threshold")
+            .and_then(|v| v.as_float())
+            .unwrap();
+        let increment = ws
+            .get("ratchet_increment")
+            .and_then(|v| v.as_float())
+            .unwrap();
 
         assert!(initial > 0.0, "initial_threshold must be > 0");
-        assert!(target > initial, "target_threshold must be > initial_threshold");
+        assert!(
+            target > initial,
+            "target_threshold must be > initial_threshold"
+        );
         assert!(increment > 0.0, "ratchet_increment must be > 0");
         assert!(
             increment <= target - initial,
@@ -247,13 +266,19 @@ mod config_file_validation {
         let parsed: toml::Value = toml::from_str(&content).unwrap();
 
         let ratchet = parsed.get("ratchet").unwrap();
-        let auto_bump = ratchet.get("auto_bump").and_then(|v| v.as_bool()).unwrap_or(false);
+        let auto_bump = ratchet
+            .get("auto_bump")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let require_clean = ratchet
             .get("require_clean_ci")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        assert!(auto_bump, "ratchet.auto_bump must be true for CI enforcement");
+        assert!(
+            auto_bump,
+            "ratchet.auto_bump must be true for CI enforcement"
+        );
         assert!(
             require_clean,
             "ratchet.require_clean_ci must be true for CI enforcement"
@@ -268,13 +293,21 @@ mod config_file_validation {
         let parsed: toml::Value = toml::from_str(&content).unwrap();
 
         let cov_section = parsed.get("cargo-llvm-cov").unwrap();
-        let exclude = cov_section.get("exclude_lines").and_then(|v| v.as_array()).unwrap();
+        let exclude = cov_section
+            .get("exclude_lines")
+            .and_then(|v| v.as_array())
+            .unwrap();
 
         assert!(!exclude.is_empty(), "exclude_lines must not be empty");
 
         for pattern in exclude {
-            let s = pattern.as_str().expect("exclude_lines entries must be strings");
-            assert!(!s.is_empty(), "exclude_lines entries must not be empty strings");
+            let s = pattern
+                .as_str()
+                .expect("exclude_lines entries must be strings");
+            assert!(
+                !s.is_empty(),
+                "exclude_lines entries must not be empty strings"
+            );
         }
     }
 
@@ -299,13 +332,21 @@ mod config_file_validation {
                 }
             }
         }
-        assert!(names.len() >= 3, "Expected ≥3 CI workflow files, found {}", names.len());
         assert!(
-            names.iter().any(|n| n.contains("Rust") || n.contains("rust")),
+            names.len() >= 3,
+            "Expected ≥3 CI workflow files, found {}",
+            names.len()
+        );
+        assert!(
+            names
+                .iter()
+                .any(|n| n.contains("Rust") || n.contains("rust")),
             "Expected workflow with 'Rust' in name, got: {names:?}"
         );
         assert!(
-            names.iter().any(|n| n.contains("Android") || n.contains("android")),
+            names
+                .iter()
+                .any(|n| n.contains("Android") || n.contains("android")),
             "Expected workflow with 'Android' in name, got: {names:?}"
         );
     }
@@ -370,7 +411,10 @@ mod config_file_validation {
                         }
                     }
                 }
-                assert!(cancel_in_progress_true, "{fname} must have `cancel-in-progress: true`");
+                assert!(
+                    cancel_in_progress_true,
+                    "{fname} must have `cancel-in-progress: true`"
+                );
 
                 assert!(
                     !content.contains("cargo doc"),
@@ -393,7 +437,9 @@ mod config_file_validation {
             }
             if in_deps && !trimmed.starts_with('#') && !trimmed.is_empty() {
                 assert!(
-                    !trimmed.contains("gl") && !trimmed.contains("gles") && !trimmed.contains("opengl"),
+                    !trimmed.contains("gl")
+                        && !trimmed.contains("gles")
+                        && !trimmed.contains("opengl"),
                     "Dependency section must not contain GL/GLES/OpenGL: {trimmed}"
                 );
             }
@@ -495,7 +541,10 @@ mod vt_to_snapshot_pipeline {
         t.flush();
         let dumped = t.dump_grid();
         let cps: Vec<u32> = dumped.visible[0..5].iter().map(|c| c.codepoint).collect();
-        assert_eq!(cps, vec!['A' as u32, 'B' as u32, 'C' as u32, 'D' as u32, 'E' as u32]);
+        assert_eq!(
+            cps,
+            vec!['A' as u32, 'B' as u32, 'C' as u32, 'D' as u32, 'E' as u32]
+        );
     }
 }
 
@@ -654,7 +703,11 @@ mod common {
     use std::time::{Duration, Instant};
     use torvox_terminal::session::Session;
 
-    pub fn drain_until(s: &mut Session, condition: impl Fn(&Session) -> bool, timeout: Duration) -> bool {
+    pub fn drain_until(
+        s: &mut Session,
+        condition: impl Fn(&Session) -> bool,
+        timeout: Duration,
+    ) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             s.process_output();
@@ -717,7 +770,10 @@ mod linux_pty_shell_interaction {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"pwd\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
-        assert!(result.contains("/"), "pwd should output a path with /, got: {result}");
+        assert!(
+            result.contains("/"),
+            "pwd should output a path with /, got: {result}"
+        );
     }
 
     #[test]
@@ -769,7 +825,10 @@ mod linux_pty_shell_interaction {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         s.write(b"echo hello | cat\n").expect("write");
         let result = drain_to_string(&mut s, Duration::from_secs(3));
-        assert!(result.contains("hello"), "expected piped echo output, got: {result}");
+        assert!(
+            result.contains("hello"),
+            "expected piped echo output, got: {result}"
+        );
     }
 
     #[test]
@@ -1042,7 +1101,10 @@ mod linux_scrollback {
         s.write(b"echo SEARCH_TARGET_XYZ\n").expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         let result = s.terminal().search_in_scrollback("SEARCH_TARGET_XYZ");
-        assert!(result.is_some(), "should find SEARCH_TARGET_XYZ in scrollback");
+        assert!(
+            result.is_some(),
+            "should find SEARCH_TARGET_XYZ in scrollback"
+        );
     }
 
     #[test]
@@ -1092,7 +1154,8 @@ mod linux_unicode_handling {
     fn echo_mixed_ascii_and_cjk() {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Write raw UTF-8 bytes "hello 中文" followed by newline through the shell
-        s.write(b"echo hello \xe4\xb8\xad\xe6\x96\x87\n").expect("write");
+        s.write(b"echo hello \xe4\xb8\xad\xe6\x96\x87\n")
+            .expect("write");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         let snap = s.terminal().take_snapshot();
         let has_h = snap.cells.iter().any(|c| c.codepoint == 'h' as u32);
@@ -1148,7 +1211,10 @@ mod linux_ansi_sequences {
                     .collect()
             })
             .collect();
-        panic!("screen should be cleared after ESC[2J. Grid:\n{}", lines.join("\n"));
+        panic!(
+            "screen should be cleared after ESC[2J. Grid:\n{}",
+            lines.join("\n")
+        );
     }
 
     #[test]
@@ -1264,7 +1330,8 @@ mod linux_binary_safety {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         // Write a line longer than the terminal width
         let long_line = "A".repeat(500);
-        s.write(format!("{long_line}\n").as_bytes()).expect("write long line");
+        s.write(format!("{long_line}\n").as_bytes())
+            .expect("write long line");
         drain_until(&mut s, |_| false, Duration::from_secs(3));
         // No crash = success
     }
@@ -1273,503 +1340,17 @@ mod linux_binary_safety {
     fn rapid_writes_do_not_crash() {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         for i in 0..50 {
-            s.write(format!("echo line{i}\n").as_bytes()).expect("write");
+            s.write(format!("echo line{i}\n").as_bytes())
+                .expect("write");
         }
         drain_until(&mut s, |_| false, Duration::from_secs(5));
         // No crash = success
     }
 }
 
-#[cfg(test)]
-mod requirements_format {
-    use std::collections::HashSet;
-    use std::fs;
-    use std::path::PathBuf;
 
-    fn workspace_root() -> PathBuf {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let root = manifest_dir.strip_suffix("/torvox-integration-tests").unwrap();
-        PathBuf::from(root)
-    }
 
-    fn reqs_dir() -> PathBuf {
-        workspace_root().join("docs").join("requirements")
-    }
 
-    fn suppressions_path() -> PathBuf {
-        workspace_root().join("docs").join("suppressions.toml")
-    }
-
-    fn load_suppressions() -> HashSet<String> {
-        let path = suppressions_path();
-        if !path.exists() {
-            return HashSet::new();
-        }
-        let content = fs::read_to_string(&path).unwrap();
-        let mut ids = HashSet::new();
-        for line in content.lines() {
-            if let Some(rest) = line.strip_prefix("[suppression.")
-                && let Some(id) = rest.strip_suffix("]")
-            {
-                ids.insert(id.trim().to_string());
-            }
-        }
-        ids
-    }
-
-    struct Req {
-        id: String,
-        has_rationale: bool,
-        has_acceptance: bool,
-        body_starts_with_shall: bool,
-        exception_ids: Vec<String>,
-        satisfies: Vec<String>,
-    }
-
-    fn parse_rst_file(path: &PathBuf) -> Vec<Req> {
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => return vec![],
-        };
-        let mut reqs = Vec::new();
-        let mut current_id = String::new();
-        let mut in_req = false;
-        let mut in_body = false;
-        let mut has_rationale = false;
-        let mut has_acceptance = false;
-        let mut exc_ids: Vec<String> = Vec::new();
-        let mut sat_ids: Vec<String> = Vec::new();
-        let mut body_lines: Vec<String> = Vec::new();
-
-        for line in content.lines() {
-            if line.starts_with(".. req:: ") {
-                if in_req {
-                    let body = body_lines.join(" ");
-                    reqs.push(Req {
-                        id: current_id,
-                        has_rationale,
-                        has_acceptance,
-                        body_starts_with_shall: body.contains("SHALL"),
-                        exception_ids: exc_ids,
-                        satisfies: sat_ids,
-                    });
-                }
-                current_id = line.strip_prefix(".. req:: ").unwrap().trim().to_string();
-                in_req = true;
-                in_body = false;
-                has_rationale = false;
-                has_acceptance = false;
-                exc_ids = Vec::new();
-                sat_ids = Vec::new();
-                body_lines = Vec::new();
-            } else if in_req {
-                let trimmed = line.trim();
-                if let Some(val) = trimmed.strip_prefix(":id:") {
-                    let new_id = val.trim().to_string();
-                    if !new_id.is_empty() {
-                        current_id = new_id;
-                    }
-                } else if let Some(val) = trimmed.strip_prefix(":rationale:") {
-                    has_rationale = !val.trim().is_empty();
-                } else if let Some(val) = trimmed.strip_prefix(":acceptance:") {
-                    has_acceptance = !val.trim().is_empty();
-                } else if let Some(val) = trimmed.strip_prefix(":exception_ids:") {
-                    exc_ids = val
-                        .split(|c: char| c == ',' || c.is_whitespace())
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                } else if let Some(val) = trimmed.strip_prefix(":satisfies:") {
-                    sat_ids = val
-                        .split(|c: char| c == ',' || c.is_whitespace())
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                } else if trimmed.is_empty() {
-                    in_body = true;
-                } else if in_body {
-                    body_lines.push(trimmed.to_string());
-                }
-            }
-        }
-        if in_req {
-            let body = body_lines.join(" ");
-            reqs.push(Req {
-                id: current_id,
-                has_rationale,
-                has_acceptance,
-                body_starts_with_shall: body.contains("SHALL"),
-                exception_ids: exc_ids,
-                satisfies: sat_ids,
-            });
-        }
-        reqs
-    }
-
-    fn all_reqs() -> Vec<Req> {
-        let dir = reqs_dir();
-        let mut reqs = Vec::new();
-        if !dir.exists() {
-            return reqs;
-        }
-        for entry in fs::read_dir(&dir).unwrap() {
-            let entry = entry.unwrap();
-            if entry.path().extension().is_some_and(|e| e == "rst") {
-                reqs.extend(parse_rst_file(&entry.path()));
-            }
-        }
-        reqs
-    }
-
-    #[test]
-    fn all_reqs_have_rationale() {
-        let reqs = all_reqs();
-        assert!(!reqs.is_empty(), "no requirements found in docs/requirements/");
-        let missing: Vec<&str> = reqs
-            .iter()
-            .filter(|r| !r.has_rationale)
-            .map(|r| r.id.as_str())
-            .collect();
-        assert!(missing.is_empty(), "requirements missing :rationale: {:?}", missing);
-    }
-
-    #[test]
-    fn all_reqs_have_acceptance() {
-        let reqs = all_reqs();
-        let missing: Vec<&str> = reqs
-            .iter()
-            .filter(|r| !r.has_acceptance)
-            .map(|r| r.id.as_str())
-            .collect();
-        assert!(missing.is_empty(), "requirements missing :acceptance: {:?}", missing);
-    }
-
-    #[test]
-    fn all_reqs_body_contains_shall() {
-        let reqs = all_reqs();
-        let missing: Vec<&str> = reqs
-            .iter()
-            .filter(|r| !r.body_starts_with_shall)
-            .map(|r| r.id.as_str())
-            .collect();
-        assert!(missing.is_empty(), "requirements body missing SHALL: {:?}", missing);
-    }
-
-    #[test]
-    fn exception_ids_reference_valid_suppressions() {
-        let reqs = all_reqs();
-        let suppressions = load_suppressions();
-        let mut bad_refs = Vec::new();
-        for r in &reqs {
-            for eid in &r.exception_ids {
-                if !suppressions.contains(eid) {
-                    bad_refs.push(format!("{} -> unknown suppression {}", r.id, eid));
-                }
-            }
-        }
-        assert!(
-            bad_refs.is_empty(),
-            "unknown suppression references:\n{}",
-            bad_refs.join("\n")
-        );
-    }
-
-    #[test]
-    fn satisfies_reference_valid_req_ids() {
-        let reqs = all_reqs();
-        let valid_ids: HashSet<&str> = reqs.iter().map(|r| r.id.as_str()).collect();
-        let mut bad_sat = Vec::new();
-        for r in &reqs {
-            for sat in &r.satisfies {
-                if !valid_ids.contains(sat.as_str()) {
-                    bad_sat.push(format!("{} -> unknown satisfies {}", r.id, sat));
-                }
-            }
-        }
-        assert!(
-            bad_sat.is_empty(),
-            "invalid :satisfies: references:\n{}",
-            bad_sat.join("\n")
-        );
-    }
-
-    #[test]
-    fn all_reqs_have_satisfies() {
-        let reqs = all_reqs();
-        let missing: Vec<&str> = reqs
-            .iter()
-            .filter(|r| !r.id.starts_with("REQ_SYS_"))
-            .filter(|r| r.satisfies.is_empty())
-            .map(|r| r.id.as_str())
-            .collect();
-        assert!(missing.is_empty(), "requirements missing :satisfies: {:?}", missing);
-    }
-
-    #[test]
-    fn all_reqs_have_unique_ids() {
-        let reqs = all_reqs();
-        let mut ids = HashSet::new();
-        let mut dups = Vec::new();
-        for r in &reqs {
-            if !ids.insert(r.id.as_str()) {
-                dups.push(r.id.clone());
-            }
-        }
-        assert!(dups.is_empty(), "duplicate requirement IDs: {:?}", dups);
-    }
-
-    #[test]
-    fn acceptance_has_verification_method() {
-        let reqs = all_reqs();
-        // Acceptance requires at least one [test], [inspection], or [analysis] prefix.
-        // Since our parser only checks existence, this is a soft check via print.
-        let has_method = reqs.iter().filter(|r| r.has_acceptance).count();
-        if has_method < reqs.len() {
-            eprintln!(
-                "WARNING: {}/{} requirements have acceptance defined",
-                has_method,
-                reqs.len()
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-mod cucumber_coverage {
-    use std::collections::HashSet;
-    use std::fs;
-    use std::path::PathBuf;
-
-    fn workspace_root() -> PathBuf {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let root = manifest_dir.strip_suffix("/torvox-integration-tests").unwrap();
-        PathBuf::from(root)
-    }
-
-    /// Scan .feature files for @REQ_* tags.
-    fn scan_feature_tags(dir: &PathBuf) -> HashSet<String> {
-        let mut tags = HashSet::new();
-        if !dir.exists() {
-            return tags;
-        }
-        for entry in fs::read_dir(dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "feature") {
-                let content = fs::read_to_string(&path).unwrap();
-                for line in content.lines() {
-                    if line.trim().starts_with("@REQ_") {
-                        for tag in line.split_whitespace() {
-                            let tag = tag.trim().trim_start_matches('@');
-                            if tag.starts_with("REQ_") {
-                                tags.insert(tag.to_string());
-                            }
-                        }
-                    }
-                }
-            } else if path.is_dir() {
-                tags.extend(scan_feature_tags(&path));
-            }
-        }
-        tags
-    }
-
-    /// Scan .rs, .kt, .yaml files for // @REQ_* or # @REQ_* line comments.
-    /// Each token matching `REQ_<DOMAIN>_<NUM>` is extracted.
-    fn scan_req_file_tags(dir: &PathBuf) -> HashSet<String> {
-        let mut tags = HashSet::new();
-        let mut files = Vec::new();
-        collect_req_files(dir, &mut files);
-        for path in &files {
-            let content = fs::read_to_string(path).unwrap_or_default();
-            for line in content.lines() {
-                let trimmed = line.trim();
-                let found = trimmed.starts_with("// @REQ_") || trimmed.starts_with("# @REQ_");
-                if !found {
-                    continue;
-                }
-                for token in trimmed.split_whitespace() {
-                    let cleaned = token
-                        .trim_start_matches("//")
-                        .trim_start_matches('#')
-                        .trim_start_matches('@');
-                    if cleaned.starts_with("REQ_") {
-                        tags.insert(cleaned.to_string());
-                    }
-                }
-            }
-        }
-        tags
-    }
-
-    fn collect_req_files(dir: &PathBuf, out: &mut Vec<PathBuf>) {
-        let Ok(entries) = fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if path.file_name().is_some_and(|n| n == "target") {
-                    continue;
-                }
-                collect_req_files(&path, out);
-            } else if let Some(ext) = path.extension()
-                && matches!(ext.to_str(), Some("rs" | "kt" | "yaml" | "yml"))
-            {
-                out.push(path);
-            }
-        }
-    }
-
-    /// Scan .rst requirement files for :id: fields inside .. req:: blocks.
-    ///
-    /// State machine:
-    /// 1. When we see `.. req::`, we enter a requirement block.
-    /// 2. Inside the block, look for `:id:` line and extract the ID value.
-    /// 3. Also set fallback ID from the block title if no :id: is found.
-    /// 4. Exit block at empty line or next directive.
-    fn scan_doc_tags(dir: &PathBuf) -> Vec<String> {
-        let mut req_ids = Vec::new();
-        if !dir.exists() {
-            return req_ids;
-        }
-        for entry in fs::read_dir(dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.extension().is_some_and(|e| e == "rst") {
-                let content = fs::read_to_string(&path).unwrap();
-                let mut current_id = String::new();
-                let mut fallback_id = String::new();
-                let mut in_req = false;
-
-                for line in content.lines() {
-                    if line.starts_with(".. req:: ") {
-                        // Entering a new requirement block.
-                        // Push previous block if it had an ID.
-                        if in_req {
-                            let id = if !current_id.is_empty() {
-                                current_id.clone()
-                            } else if !fallback_id.is_empty() {
-                                fallback_id.clone()
-                            } else {
-                                String::new()
-                            };
-                            if !id.is_empty() {
-                                req_ids.push(id);
-                            }
-                        }
-                        // Start new block: use title as fallback ID
-                        fallback_id = line.strip_prefix(".. req:: ").unwrap().trim().to_string();
-                        current_id = String::new();
-                        in_req = true;
-                    } else if in_req {
-                        let trimmed = line.trim();
-                        if let Some(val) = trimmed.strip_prefix(":id:") {
-                            let id = val.trim().to_string();
-                            if !id.is_empty() {
-                                current_id = id;
-                            }
-                        } else if trimmed.is_empty() {
-                            // Empty line ends the requirement block
-                            let id = if !current_id.is_empty() {
-                                current_id.clone()
-                            } else if !fallback_id.is_empty() {
-                                fallback_id.clone()
-                            } else {
-                                String::new()
-                            };
-                            if !id.is_empty() {
-                                req_ids.push(id);
-                            }
-                            current_id = String::new();
-                            fallback_id = String::new();
-                            in_req = false;
-                        }
-                    }
-                }
-                // Handle last block if file ends without trailing blank line
-                if in_req {
-                    let id = if !current_id.is_empty() {
-                        current_id
-                    } else if !fallback_id.is_empty() {
-                        fallback_id
-                    } else {
-                        String::new()
-                    };
-                    if !id.is_empty() {
-                        req_ids.push(id);
-                    }
-                }
-            }
-        }
-        req_ids
-    }
-
-    #[test]
-    fn requirement_coverage_is_monitored() {
-        let features_dir = workspace_root()
-            .join("android")
-            .join("app")
-            .join("src")
-            .join("androidTest")
-            .join("assets")
-            .join("features");
-        let doc_dir = workspace_root().join("docs").join("requirements");
-        let rust_dirs = [
-            workspace_root().join("torvox-renderer").join("src"),
-            workspace_root().join("torvox-renderer").join("tests"),
-            workspace_root().join("torvox-integration-tests").join("src"),
-            workspace_root().join("torvox-integration-tests").join("tests"),
-        ];
-        let kotlin_dir = workspace_root()
-            .join("android")
-            .join("app")
-            .join("src")
-            .join("test")
-            .join("java")
-            .join("io")
-            .join("torvox")
-            .join("architecture");
-        let semgrep_dir = workspace_root().join("semgrep-rules");
-
-        let feature_covered = scan_feature_tags(&features_dir);
-        let all_reqs = scan_doc_tags(&doc_dir);
-
-        let mut covered = feature_covered;
-        for dir in &rust_dirs {
-            covered.extend(scan_req_file_tags(dir));
-        }
-        covered.extend(scan_req_file_tags(&kotlin_dir));
-        covered.extend(scan_req_file_tags(&semgrep_dir));
-
-        let missing: Vec<&String> = all_reqs.iter().filter(|r| !covered.contains(*r)).collect();
-        let covered_count = all_reqs.len() - missing.len();
-
-        eprintln!(
-            "Requirement coverage: {}/{} ({}%)",
-            covered_count,
-            all_reqs.len(),
-            if all_reqs.is_empty() {
-                0
-            } else {
-                covered_count * 100 / all_reqs.len()
-            }
-        );
-        eprintln!("Covered tags: {:?}", covered);
-        eprintln!("Uncovered: {:?}", missing);
-
-        // Baseline: 41 requirements covered.
-        // REQ_ANDR_001 (boltffi bridge) and REQ_ANDR_007 (ProGuard) are Android-specific
-        // and cannot be covered by Linux-only Rust integration tests.
-        assert!(
-            covered_count >= 41,
-            "Coverage dropped: {}/{} ({:.1}%)",
-            covered_count,
-            all_reqs.len(),
-            covered_count as f64 / all_reqs.len() as f64 * 100.0
-        );
-    }
-}
 
 #[cfg(test)]
 mod linux_session_lifecycle {
@@ -1782,7 +1363,10 @@ mod linux_session_lifecycle {
     #[test]
     fn spawn_is_not_exited() {
         let s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
-        assert!(!s.is_exited(), "new session should not be immediately exited");
+        assert!(
+            !s.is_exited(),
+            "new session should not be immediately exited"
+        );
     }
 
     #[test]
@@ -1831,7 +1415,8 @@ mod linux_session_lifecycle {
     fn session_drop_after_many_writes() {
         let mut s = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn");
         for i in 0..20 {
-            s.write(format!("echo line{i}\n").as_bytes()).expect("write");
+            s.write(format!("echo line{i}\n").as_bytes())
+                .expect("write");
         }
         let deadline = Instant::now() + Duration::from_millis(200);
         while Instant::now() < deadline {
@@ -1851,7 +1436,9 @@ mod build_config_validation {
 
     fn workspace_root() -> PathBuf {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let root = manifest_dir.strip_suffix("/torvox-integration-tests").unwrap();
+        let root = manifest_dir
+            .strip_suffix("/torvox-integration-tests")
+            .unwrap();
         PathBuf::from(root)
     }
 
@@ -1861,7 +1448,10 @@ mod build_config_validation {
     fn gradle_wrapper_is_9_6_or_later() {
         let path = workspace_root().join("android/gradle/wrapper/gradle-wrapper.properties");
         let content = fs::read_to_string(path).unwrap();
-        let line = content.lines().find(|l| l.contains("distributionUrl")).unwrap();
+        let line = content
+            .lines()
+            .find(|l| l.contains("distributionUrl"))
+            .unwrap();
         let version = line
             .split('/')
             .filter(|s| s.starts_with("gradle-"))
@@ -1986,8 +1576,10 @@ mod build_config_validation {
         let config_path = workspace_root().join("maestro/config.yaml");
         let build_path = workspace_root().join("android/app/build.gradle.kts");
 
-        let config = fs::read_to_string(&config_path).unwrap_or_else(|e| panic!("failed to read maestro config: {e}"));
-        let build = fs::read_to_string(&build_path).unwrap_or_else(|e| panic!("failed to read build.gradle.kts: {e}"));
+        let config = fs::read_to_string(&config_path)
+            .unwrap_or_else(|e| panic!("failed to read maestro config: {e}"));
+        let build = fs::read_to_string(&build_path)
+            .unwrap_or_else(|e| panic!("failed to read build.gradle.kts: {e}"));
 
         let app_id_line = config
             .lines()
@@ -2014,7 +1606,8 @@ mod build_config_validation {
     #[test]
     fn maestro_flow_file_exists() {
         let flows_dir = workspace_root().join("maestro/flows");
-        let entries = fs::read_dir(&flows_dir).unwrap_or_else(|e| panic!("failed to read {flows_dir:?}: {e}"));
+        let entries = fs::read_dir(&flows_dir)
+            .unwrap_or_else(|e| panic!("failed to read {flows_dir:?}: {e}"));
         let yaml_count = entries
             .filter_map(Result::ok)
             .filter(|e| e.path().extension().map(|x| x == "yaml").unwrap_or(false))
@@ -2028,10 +1621,15 @@ mod build_config_validation {
     #[test]
     fn maestro_flow_not_empty() {
         let flows_dir = workspace_root().join("maestro/flows");
-        let entries = fs::read_dir(&flows_dir).unwrap_or_else(|e| panic!("failed to read {flows_dir:?}: {e}"));
+        let entries = fs::read_dir(&flows_dir)
+            .unwrap_or_else(|e| panic!("failed to read {flows_dir:?}: {e}"));
         for entry in entries.flatten() {
             let content = fs::read_to_string(entry.path()).unwrap_or_default();
-            assert!(!content.trim().is_empty(), "flow file {:?} is empty", entry.path());
+            assert!(
+                !content.trim().is_empty(),
+                "flow file {:?} is empty",
+                entry.path()
+            );
         }
     }
 }

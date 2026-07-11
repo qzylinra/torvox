@@ -9,7 +9,10 @@ fn t() -> GhosttyTerminal {
     GhosttyTerminal::new(5, 40, 1000).expect("terminal create")
 }
 
-fn snap_write(t: &mut GhosttyTerminal, data: &[u8]) -> torvox_terminal::ghostty_terminal::GridSnapshot {
+fn snap_write(
+    t: &mut GhosttyTerminal,
+    data: &[u8],
+) -> torvox_terminal::ghostty_terminal::GridSnapshot {
     t.vt_write(data);
     t.flush();
     t.take_snapshot()
@@ -183,7 +186,12 @@ fn sgr11_19_alt_fonts_no_crash() {
     for param in 11u8..=19 {
         let seq = format!("\x1b[{}mX", param);
         let snap = snap_write(&mut t, seq.as_bytes());
-        assert_eq!(cell_at(&snap, 0).codepoint, 'X' as u32, "SGR {} writes char", param);
+        assert_eq!(
+            cell_at(&snap, 0).codepoint,
+            'X' as u32,
+            "SGR {} writes char",
+            param
+        );
     }
 }
 
@@ -283,7 +291,10 @@ fn sgr39_default_foreground() {
     let mut t = t();
     let snap = snap_write(&mut t, b"\x1b[31mR\x1b[39mD");
     let c1 = cell_at(&snap, 1);
-    assert!(c1.foreground[3] >= 0.0, "SGR 39: valid fg color after reset");
+    assert!(
+        c1.foreground[3] >= 0.0,
+        "SGR 39: valid fg color after reset"
+    );
 }
 
 #[test]
@@ -505,7 +516,13 @@ fn sgr_random_combinations_100() {
         let p2 = (i * 11 + 5) % 109;
         let seq = format!("\x1b[{};{}mX", p1, p2);
         let snap = snap_write(&mut t, seq.as_bytes());
-        assert_eq!(cell_at(&snap, 0).codepoint, 'X' as u32, "SGR {} {} writes char", p1, p2);
+        assert_eq!(
+            cell_at(&snap, 0).codepoint,
+            'X' as u32,
+            "SGR {} {} writes char",
+            p1,
+            p2
+        );
     }
 }
 

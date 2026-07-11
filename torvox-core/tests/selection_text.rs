@@ -90,12 +90,18 @@ fn char_selection_multi_line() {
         SelectionMode::Char,
     );
     let result = s.text(&grid);
-    assert!(result.contains("rst"), "should contain 'rst', got: {result:?}");
+    assert!(
+        result.contains("rst"),
+        "should contain 'rst', got: {result:?}"
+    );
     assert!(
         result.contains("Secon"),
         "should contain 'Secon' (end col exclusive), got: {result:?}"
     );
-    assert!(result.contains("Thir"), "should contain 'Thir', got: {result:?}");
+    assert!(
+        result.contains("Thir"),
+        "should contain 'Thir', got: {result:?}"
+    );
     let lines: Vec<&str> = result.split('\n').collect();
     assert_eq!(lines.len(), 3, "should have 3 lines, got: {result:?}");
 }
@@ -271,7 +277,10 @@ fn selection_reversed_multi_line() {
         SelectionMode::Char,
     );
     let result = s.text(&grid);
-    assert!(result.contains("rst"), "should contain 'rst', got: {result:?}");
+    assert!(
+        result.contains("rst"),
+        "should contain 'rst', got: {result:?}"
+    );
     assert!(
         result.contains("Secon"),
         "should contain 'Secon' (col 4 = 'n', not 'd'), got: {result:?}"
@@ -560,7 +569,11 @@ fn line_selection_reversed_single_line() {
 
 #[test]
 fn block_selection_span_multiple_rows_with_nulls() {
-    let grid = make_grid_with_nulls(&[&['A', 'B', '\0', 'D'], &['E', '\0', 'G', 'H'], &['I', 'J', 'K', '\0']]);
+    let grid = make_grid_with_nulls(&[
+        &['A', 'B', '\0', 'D'],
+        &['E', '\0', 'G', 'H'],
+        &['I', 'J', 'K', '\0'],
+    ]);
     let s = Selection::new(
         SelectionAnchor { row: 0, col: 0 },
         SelectionAnchor { row: 2, col: 2 },

@@ -153,7 +153,9 @@ mod conformance_backends {
             },
             VtCase {
                 name: "scroll up",
-                input: b"Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8\nLine9\nLine10\n\x1b[S".to_vec(),
+                input:
+                    b"Line1\nLine2\nLine3\nLine4\nLine5\nLine6\nLine7\nLine8\nLine9\nLine10\n\x1b[S"
+                        .to_vec(),
                 expected_substrings: &["Line2"],
             },
             VtCase {
@@ -565,7 +567,10 @@ mod conformance_backends {
     fn torvox_conformance_insert_chars() {
         let seq = b"Hell\x1b[@World";
         let lines = torvox_grid_output(seq, 24, 80);
-        assert!(lines.iter().any(|l| l.contains("Hell")), "ICH should insert space");
+        assert!(
+            lines.iter().any(|l| l.contains("Hell")),
+            "ICH should insert space"
+        );
         assert!(lines.iter().any(|l| l.contains("World")), "ICH World");
     }
 
@@ -573,7 +578,10 @@ mod conformance_backends {
     fn torvox_conformance_repeat_char() {
         let seq = b"ABC\x1b[b";
         let lines = torvox_grid_output(seq, 24, 80);
-        assert!(lines.iter().any(|l| l.contains("ABCC")), "REP should repeat C");
+        assert!(
+            lines.iter().any(|l| l.contains("ABCC")),
+            "REP should repeat C"
+        );
     }
 
     #[test]
@@ -613,7 +621,11 @@ mod conformance_backends {
         let seq = b"ABC\x1b7\x1b[5;5H\x1b8D";
         let lines = torvox_grid_output(seq, 10, 40);
         let all = lines.join(" ");
-        assert!(all.contains("ABC"), "DECSC should save text 'ABC': {:?}", all);
+        assert!(
+            all.contains("ABC"),
+            "DECSC should save text 'ABC': {:?}",
+            all
+        );
         assert!(all.contains('D'), "DECRC should restore cursor: {:?}", all);
     }
 

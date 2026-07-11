@@ -2,7 +2,10 @@
 //! Cell, Color, Attrs, and DirtyMask — the terminal's atomic display unit.
 use serde::{Deserialize, Serialize};
 
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 /// A single terminal cell with character, colors, and attributes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cell {
@@ -26,7 +29,10 @@ impl Default for Cell {
 }
 
 /// RGBA color value.
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Color {
     pub r: u8,
@@ -47,7 +53,10 @@ impl Default for Color {
 }
 
 /// Text attributes (bold, italic, underline, etc.).
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Attrs {
     pub bold: bool,
@@ -69,7 +78,10 @@ pub struct Attrs {
 const BITS_PER_PARTITION: u32 = 64;
 
 /// Bitmask tracking which rows need re-rendering.
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirtyMask {
     partitions: alloc::vec::Vec<u64>,
@@ -103,7 +115,9 @@ impl DirtyMask {
 
     pub fn is_dirty(&self, row: u32) -> bool {
         let (part, bit) = Self::partition_index(row);
-        self.partitions.get(part).is_some_and(|p| *p & (1 << bit) != 0)
+        self.partitions
+            .get(part)
+            .is_some_and(|p| *p & (1 << bit) != 0)
     }
 
     pub fn mark(&mut self, row: u32) {
@@ -732,7 +746,12 @@ mod tests {
             b: 25,
             a: 128,
         };
-        let zero = Color { r: 0, g: 0, b: 0, a: 0 };
+        let zero = Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        };
         let c = a.saturating_add(&zero);
         assert_eq!(c, a);
     }
@@ -800,7 +819,10 @@ mod tests {
         // Marking rows in non-existent partitions is a silent no-op.
         let mut m = DirtyMask::new(5);
         m.mark(200);
-        assert!(!m.any_dirty(), "marking row in non-existent partition sets no bit");
+        assert!(
+            !m.any_dirty(),
+            "marking row in non-existent partition sets no bit"
+        );
     }
 
     #[test]
@@ -810,7 +832,10 @@ mod tests {
         // per-partition capacity.
         let mut m = DirtyMask::new(5);
         m.mark(10);
-        assert!(m.any_dirty(), "marking row in existing partition must set a bit");
+        assert!(
+            m.any_dirty(),
+            "marking row in existing partition must set a bit"
+        );
     }
 
     #[test]

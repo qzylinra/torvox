@@ -14,7 +14,10 @@ fn no_args_prints_usage() {
     let output = Command::new(BIN).output().expect("failed to run binary");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("usage"), "stderr should mention usage, got: {stderr}");
+    assert!(
+        stderr.contains("usage"),
+        "stderr should mention usage, got: {stderr}"
+    );
 }
 
 #[test]

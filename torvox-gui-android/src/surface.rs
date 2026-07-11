@@ -43,7 +43,12 @@ const MAX_SURFACE_DIMENSION: u16 = 4096;
 #[link(name = "android")]
 unsafe extern "C" {
     fn ANativeWindow_release(window: *mut std::ffi::c_void);
-    fn ANativeWindow_setBuffersGeometry(window: *mut std::ffi::c_void, width: i32, height: i32, format: i32) -> i32;
+    fn ANativeWindow_setBuffersGeometry(
+        window: *mut std::ffi::c_void,
+        width: i32,
+        height: i32,
+        format: i32,
+    ) -> i32;
     fn ATrace_beginSection(section_name: *const std::os::raw::c_char);
     fn ATrace_endSection();
 }
@@ -211,7 +216,11 @@ impl AndroidSurface {
         self.save_path = Some(PathBuf::from(path));
     }
 
-    pub fn spawn_session(&mut self, shell: &str, env: &ShellEnv) -> Result<Arc<Mutex<Session>>, SurfaceError> {
+    pub fn spawn_session(
+        &mut self,
+        shell: &str,
+        env: &ShellEnv,
+    ) -> Result<Arc<Mutex<Session>>, SurfaceError> {
         let (background, foreground) = (self.theme.background, self.theme.foreground);
         let ansi = self.theme.ansi;
         let session = Session::spawn_with_theme(
@@ -276,7 +285,12 @@ impl AndroidSurface {
             // surface dimensions, and WINDOW_FORMAT_RGBA_8888 is a valid
             // Android native window format constant.
             if unsafe {
-                ANativeWindow_setBuffersGeometry(nw.0.as_ptr(), width as i32, height as i32, WINDOW_FORMAT_RGBA_8888)
+                ANativeWindow_setBuffersGeometry(
+                    nw.0.as_ptr(),
+                    width as i32,
+                    height as i32,
+                    WINDOW_FORMAT_RGBA_8888,
+                )
             } != 0
             {
                 log::error!("ANativeWindow_setBuffersGeometry failed");
@@ -345,7 +359,8 @@ impl AndroidSurface {
             self.cols,
         );
 
-        self.font_pipeline = FontPipeline::new(self.atlas_width as i32, self.atlas_height as i32, font_size);
+        self.font_pipeline =
+            FontPipeline::new(self.atlas_width as i32, self.atlas_height as i32, font_size);
         self.font_pipeline.rasterize_ascii();
         let (_aw, _ah) = self.font_pipeline.atlas_dimensions();
         let (cw, ch) = self.font_pipeline.cell_metrics();
@@ -378,7 +393,12 @@ impl AndroidSurface {
             // lock discipline. width/height are surface dimensions,
             // WINDOW_FORMAT_RGBA_8888 is a valid format constant.
             if unsafe {
-                ANativeWindow_setBuffersGeometry(nw.0.as_ptr(), width as i32, height as i32, WINDOW_FORMAT_RGBA_8888)
+                ANativeWindow_setBuffersGeometry(
+                    nw.0.as_ptr(),
+                    width as i32,
+                    height as i32,
+                    WINDOW_FORMAT_RGBA_8888,
+                )
             } != 0
             {
                 log::error!("ANativeWindow_setBuffersGeometry failed");
@@ -393,7 +413,10 @@ impl AndroidSurface {
             height,
         );
 
-        let needs_init = self.gpu.as_ref().is_none_or(|g| !g.has_pipeline() || !g.has_surface());
+        let needs_init = self
+            .gpu
+            .as_ref()
+            .is_none_or(|g| !g.has_pipeline() || !g.has_surface());
 
         if needs_init {
             let (aw, ah) = self.font_pipeline.atlas_dimensions();
@@ -496,7 +519,11 @@ impl AndroidSurface {
                     self.search_highlights.len()
                 );
             }
-            if !had_output && self.frame_count > 0 && !has_search_highlights && !self.render_requested {
+            if !had_output
+                && self.frame_count > 0
+                && !has_search_highlights
+                && !self.render_requested
+            {
                 #[cfg(target_os = "android")]
                 // SAFETY: Paired with the ATrace_beginSection at the top of render().
                 // These NDK functions are thread-safe and the call is correctly nested.
@@ -544,7 +571,12 @@ impl AndroidSurface {
         let sync_active = self.poll_sync_active();
         let gen_before = self.font_pipeline.atlas_generation();
         let tc = self.theme.cursor;
-        let cursor_color = Some([tc[0] as f32 / 255.0, tc[1] as f32 / 255.0, tc[2] as f32 / 255.0, 1.0]);
+        let cursor_color = Some([
+            tc[0] as f32 / 255.0,
+            tc[1] as f32 / 255.0,
+            tc[2] as f32 / 255.0,
+            1.0,
+        ]);
         let selection_bg = self.theme.selection_bg;
         let selection_bg = Some([
             selection_bg[0] as f32 / 255.0,
@@ -581,7 +613,9 @@ impl AndroidSurface {
             );
             self.gpu
                 .as_mut()
-                .ok_or_else(|| SurfaceError::GpuInit("GPU not initialized during atlas upload".into()))?
+                .ok_or_else(|| {
+                    SurfaceError::GpuInit("GPU not initialized during atlas upload".into())
+                })?
                 .upload_atlas(&atlas_data, self.atlas_width, self.atlas_height);
         }
 
@@ -622,7 +656,8 @@ impl AndroidSurface {
                     let start = (row * img.width * 4) as usize;
                     let end = ((row + 1) * img.width * 4) as usize;
                     atlas_pixels.extend_from_slice(&img.data[start..end]);
-                    atlas_pixels.resize(atlas_pixels.len() + ((atlas_w - img.width) * 4) as usize, 0);
+                    atlas_pixels
+                        .resize(atlas_pixels.len() + ((atlas_w - img.width) * 4) as usize, 0);
                 }
                 for p in &snapshot.kgp_placements {
                     if p.image_id == img.id {
@@ -630,7 +665,10 @@ impl AndroidSurface {
                             [p.col as f32 * cell_w, p.row as f32 * cell_h],
                             [img.width as f32, img.height as f32],
                             [0.0, offset_y as f32 / atlas_h as f32],
-                            [img.width as f32 / atlas_w as f32, img.height as f32 / atlas_h as f32],
+                            [
+                                img.width as f32 / atlas_w as f32,
+                                img.height as f32 / atlas_h as f32,
+                            ],
                             1.0,
                         );
                         kgp_instances.push(inst);
@@ -718,18 +756,19 @@ impl AndroidSurface {
                 } // AndroidSurface::render
                 return Ok(false);
             }
-            let gpu = self
-                .gpu
-                .as_mut()
-                .ok_or_else(|| SurfaceError::GpuInit("GPU not initialized for Android render".into()))?;
+            let gpu = self.gpu.as_mut().ok_or_else(|| {
+                SurfaceError::GpuInit("GPU not initialized for Android render".into())
+            })?;
             if gpu.has_surface() {
                 match gpu.render_frame(instances, &[]) {
                     Ok(()) => true,
                     Err(e) => {
                         log::error!("SWAPCHAIN_FAILED (will reconfigure): {}", e);
                         let (sw, sh) = (
-                            self.surface_width.load(std::sync::atomic::Ordering::Relaxed),
-                            self.surface_height.load(std::sync::atomic::Ordering::Relaxed),
+                            self.surface_width
+                                .load(std::sync::atomic::Ordering::Relaxed),
+                            self.surface_height
+                                .load(std::sync::atomic::Ordering::Relaxed),
                         );
                         if let Some(ref nw) = self.native_window {
                             if let Err(reconfig_err) =
@@ -804,7 +843,12 @@ impl AndroidSurface {
             snapshot.cols,
         );
         let tc = self.theme.cursor;
-        let cursor_color = Some([tc[0] as f32 / 255.0, tc[1] as f32 / 255.0, tc[2] as f32 / 255.0, 1.0]);
+        let cursor_color = Some([
+            tc[0] as f32 / 255.0,
+            tc[1] as f32 / 255.0,
+            tc[2] as f32 / 255.0,
+            1.0,
+        ]);
         let selection_bg = self.theme.selection_bg;
         let selection_bg = Some([
             selection_bg[0] as f32 / 255.0,
@@ -838,14 +882,20 @@ impl AndroidSurface {
         let pixels = gpu
             .render_to_buffer(instances, &[])
             .map_err(|e| SurfaceError::Render(e.to_string()))?;
-        let surface_width = self.surface_width.load(std::sync::atomic::Ordering::Relaxed);
+        let surface_width = self
+            .surface_width
+            .load(std::sync::atomic::Ordering::Relaxed);
         let width_header = (surface_width as u32).to_le_bytes();
         let mut framed = Vec::with_capacity(4 + pixels.len());
         framed.extend_from_slice(&width_header);
         framed.extend_from_slice(&pixels);
         let path = format!("{}/test_frame.rgba", data_dir);
         std::fs::write(&path, &framed).map_err(|e| SurfaceError::Render(e.to_string()))?;
-        log::info!("SAVED_TEST_FRAME: {} ({} bytes + 4 header)", path, pixels.len());
+        log::info!(
+            "SAVED_TEST_FRAME: {} ({} bytes + 4 header)",
+            path,
+            pixels.len()
+        );
         Ok(path)
     }
 
@@ -865,7 +915,8 @@ impl AndroidSurface {
         self.render_width = width;
         self.render_height = height;
 
-        if width != self.surface_width.load(Ordering::Relaxed) || height != self.surface_height.load(Ordering::Relaxed)
+        if width != self.surface_width.load(Ordering::Relaxed)
+            || height != self.surface_height.load(Ordering::Relaxed)
         {
             self.surface_width.store(width, Ordering::Relaxed);
             self.surface_height.store(height, Ordering::Relaxed);
@@ -1022,7 +1073,10 @@ impl AndroidSurface {
     pub fn set_font_family(&mut self, family_name: &str) -> bool {
         let previous_name = self.font_pipeline.current_font_family_name();
         if !self.font_pipeline.set_font_family(family_name) {
-            log::warn!("FONT_FAMILY: '{}' not found, restoring previous", family_name);
+            log::warn!(
+                "FONT_FAMILY: '{}' not found, restoring previous",
+                family_name
+            );
             if let Some(ref prev) = previous_name {
                 self.font_pipeline.set_font_family(prev);
                 self.font_pipeline.rasterize_ascii();
@@ -1042,7 +1096,9 @@ impl AndroidSurface {
             let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
             gpu.upload_atlas(&atlas_data, aw, ah);
         }
-        if self.surface_width.load(Ordering::Relaxed) > 0 && self.surface_height.load(Ordering::Relaxed) > 0 {
+        if self.surface_width.load(Ordering::Relaxed) > 0
+            && self.surface_height.load(Ordering::Relaxed) > 0
+        {
             let new_cols = (self.surface_width.load(Ordering::Relaxed) as f32 / cw)
                 .floor()
                 .clamp(MIN_COLS, MAX_COLS) as u32;
@@ -1098,7 +1154,9 @@ impl AndroidSurface {
             gpu.upload_atlas(&atlas_data, aw, ah);
         }
 
-        if self.surface_width.load(Ordering::Relaxed) > 0 && self.surface_height.load(Ordering::Relaxed) > 0 {
+        if self.surface_width.load(Ordering::Relaxed) > 0
+            && self.surface_height.load(Ordering::Relaxed) > 0
+        {
             let new_cols = (self.surface_width.load(Ordering::Relaxed) as f32 / actual_cw)
                 .floor()
                 .clamp(MIN_COLS, MAX_COLS) as u32;
@@ -1126,7 +1184,8 @@ impl AndroidSurface {
 
     pub fn apply_font_settings(&mut self, font_size: f32, family_name: &str) {
         let font_size_changed = (self.font_pipeline.font_size() - font_size).abs() >= 0.001;
-        let family_changed = self.font_pipeline.current_font_family_name().as_deref() != Some(family_name);
+        let family_changed =
+            self.font_pipeline.current_font_family_name().as_deref() != Some(family_name);
 
         if !font_size_changed && !family_changed {
             return;
@@ -1255,7 +1314,8 @@ impl AndroidSurface {
         use std::fs;
         use torvox_core::snapshot::SessionSnapshot;
 
-        let data = fs::read(path).map_err(|e| SurfaceError::Session(format!("read failed: {e}")))?;
+        let data =
+            fs::read(path).map_err(|e| SurfaceError::Session(format!("read failed: {e}")))?;
         let snapshot = rkyv::from_bytes::<SessionSnapshot, rancor::Error>(&data)
             .map_err(|e| SurfaceError::Session(format!("rkyv deserialize: {e}")))?;
 
@@ -1543,13 +1603,19 @@ mod tests {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
         let theme = torvox_core::config::Theme::catppuccin_mocha();
         surface.set_theme(theme);
-        assert!(surface.render_requested(), "flag should be true after set_theme");
+        assert!(
+            surface.render_requested(),
+            "flag should be true after set_theme"
+        );
         // render() with no session returns Err(NoSession), but the flag
         // should not be consumed on error
         let result = surface.render(0);
         assert!(result.is_err(), "render with no session should fail");
         // Flag should remain true on error (not cleared)
-        assert!(surface.render_requested(), "flag should persist after render error");
+        assert!(
+            surface.render_requested(),
+            "flag should persist after render error"
+        );
     }
 
     #[test]
@@ -1557,11 +1623,17 @@ mod tests {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
         let theme = torvox_core::config::Theme::catppuccin_mocha();
         surface.set_theme(theme);
-        assert!(surface.render_requested(), "flag should be true after set_theme");
+        assert!(
+            surface.render_requested(),
+            "flag should be true after set_theme"
+        );
         // render() will error with NoSession since no session is set up
         let result = surface.render(0);
         assert!(result.is_err(), "render with no session should fail");
         // Flag should still be true after error (not cleared early)
-        assert!(surface.render_requested(), "flag should remain true on render error");
+        assert!(
+            surface.render_requested(),
+            "flag should remain true on render error"
+        );
     }
 }

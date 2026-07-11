@@ -196,18 +196,30 @@ fn vt_alt_screen() {
 #[test]
 fn vt_cursor_visibility() {
     let mut terminal = GhosttyTerminal::new(ROWS, COLS, 1000).unwrap();
-    assert!(terminal.cursor_visible(), "cursor should be visible by default");
+    assert!(
+        terminal.cursor_visible(),
+        "cursor should be visible by default"
+    );
     terminal.vt_write(b"\x1b[?25l");
     terminal.flush();
-    assert!(!terminal.cursor_visible(), "cursor should be hidden after \x1b[?25l");
+    assert!(
+        !terminal.cursor_visible(),
+        "cursor should be hidden after \x1b[?25l"
+    );
     terminal.vt_write(b"\x1b[?25h");
     terminal.flush();
-    assert!(terminal.cursor_visible(), "cursor should be visible after \x1b[?25h");
+    assert!(
+        terminal.cursor_visible(),
+        "cursor should be visible after \x1b[?25h"
+    );
 }
 
 // ── GPU render tests (require Lavapipe / Vulkan) ──
 
-fn setup_gpu_env() -> (torvox_renderer::gpu::GpuContext, torvox_renderer::font::FontPipeline) {
+fn setup_gpu_env() -> (
+    torvox_renderer::gpu::GpuContext,
+    torvox_renderer::font::FontPipeline,
+) {
     let mut ctx = torvox_renderer::gpu::GpuContext::new_with_no_surface();
     ctx.surface_config = Some(wgpu::SurfaceConfiguration {
         width: 800,
@@ -221,7 +233,10 @@ fn setup_gpu_env() -> (torvox_renderer::gpu::GpuContext, torvox_renderer::font::
     });
     ctx.set_bg_color([0, 0, 0]);
     ctx.initialize_pipeline_and_bind_group(256, 256, 800, 600);
-    (ctx, torvox_renderer::font::FontPipeline::new(256, 256, 14.0))
+    (
+        ctx,
+        torvox_renderer::font::FontPipeline::new(256, 256, 14.0),
+    )
 }
 
 fn render_or_die(
@@ -316,10 +331,18 @@ fn gpu_render_text_nonzero_output() {
     terminal.flush();
     let snap = terminal.take_snapshot();
     let pixels = render_or_die(&mut ctx, &mut font_pipeline, &snap);
-    assert!(pixels.len() >= 4, "pixel buffer should have at least 1 pixel");
+    assert!(
+        pixels.len() >= 4,
+        "pixel buffer should have at least 1 pixel"
+    );
     assert_eq!(pixels[3], 255, "top-left alpha should be 255 (opaque)");
-    let has_text = pixels.chunks_exact(4).any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
-    assert!(has_text, "render should produce non-zero pixel values (text visible)");
+    let has_text = pixels
+        .chunks_exact(4)
+        .any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
+    assert!(
+        has_text,
+        "render should produce non-zero pixel values (text visible)"
+    );
 }
 
 #[test]
@@ -466,7 +489,10 @@ fn cjk_double_width_gpu_occupancy() {
         .chunks_exact(4)
         .filter(|c| c[0] > 0 || c[1] > 0 || c[2] > 0)
         .count();
-    assert!(b_non_zero > 0, "'b' should produce non-zero pixels at col 3");
+    assert!(
+        b_non_zero > 0,
+        "'b' should produce non-zero pixels at col 3"
+    );
     // CJK columns (1-2) should also have content
     let cjk_start = (cell_w * 4) as usize;
     let cjk_pixels = &pixels[cjk_start..cjk_start + (cell_w as usize * 2 * 4)];
@@ -490,7 +516,9 @@ fn gpu_atlas_glyph_packing() {
     let snap = terminal.take_snapshot();
     let pixels = render_or_die(&mut ctx, &mut font_pipeline, &snap);
     assert!(pixels.len() >= 4, "pixel buffer non-empty");
-    let has_content = pixels.chunks_exact(4).any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
+    let has_content = pixels
+        .chunks_exact(4)
+        .any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
     assert!(has_content, "ASCII glyphs should render visible output");
 }
 
@@ -570,7 +598,11 @@ fn window_resize_gpu_pixel_identity_on_shrink() {
     let visible_height = (ROWS / 2) * cell_h;
     let before_top = &pixels_before[..(visible_height as usize * COLS as usize * 4)];
     let after_all = &pixels_after[..(visible_height as usize * COLS as usize * 4)];
-    let diff_count = before_top.iter().zip(after_all.iter()).filter(|(a, b)| a != b).count();
+    let diff_count = before_top
+        .iter()
+        .zip(after_all.iter())
+        .filter(|(a, b)| a != b)
+        .count();
     let diff_ratio = diff_count as f64 / before_top.len() as f64;
     assert!(
         diff_ratio < 0.01,
@@ -622,7 +654,11 @@ fn auto_scroll_visible_when_filling_terminal() {
     // After 10 writes with \n to a 5-row terminal, the last \n triggers a scroll
     // that pushes the last char up one row. Row 4 may be blank (codepoint 0).
     // But at minimum row 3 should contain 'J'.
-    assert_eq!(snap.cell_at(3, 0).codepoint, u32::from(b'J'), "row 3 should be 'J'");
+    assert_eq!(
+        snap.cell_at(3, 0).codepoint,
+        u32::from(b'J'),
+        "row 3 should be 'J'"
+    );
 }
 
 // ========== OSC 133 Shell Integration ==========
@@ -693,7 +729,11 @@ fn cjk_double_width_grid_correctness() {
     terminal.vt_write(b"a\xe4\xb8\xad"); // 'a' + '中' (U+4E2D, CJK)
     terminal.flush();
     let snap = terminal.take_snapshot();
-    assert_eq!(snap.cell_at(0, 0).codepoint, u32::from(b'a'), "cell(0,0) = 'a'");
+    assert_eq!(
+        snap.cell_at(0, 0).codepoint,
+        u32::from(b'a'),
+        "cell(0,0) = 'a'"
+    );
     assert_eq!(snap.cell_at(0, 1).codepoint, 0x4e2d, "cell(0,1) = U+4E2D");
     // The CJK character should occupy 2 columns: cell(0,1) and cell(0,2)
     // Next printable character should be at col 3
@@ -724,7 +764,10 @@ fn kitty_image_apc_sequence_no_crash() {
             cp == u32::from(b'b') || cp == u32::from(b'a')
         })
     });
-    assert!(found_text, "text before/after Kitty APC should remain on grid");
+    assert!(
+        found_text,
+        "text before/after Kitty APC should remain on grid"
+    );
 }
 
 // ========== TUI / Alternate Screen Interactions ==========
@@ -745,7 +788,10 @@ fn tui_alt_screen_main_content_preserved() {
         let c = idx % COLS;
         snap.cell_at(r, c).codepoint == u32::from(b'T')
     });
-    assert!(!has_tui_content, "alt screen content should not leak to main screen");
+    assert!(
+        !has_tui_content,
+        "alt screen content should not leak to main screen"
+    );
 }
 
 #[test]
@@ -858,8 +904,13 @@ fn window_resize_shrink_overflow_gpu_pixels() {
         "both big (nz={nz_big}) and small (nz={nz_small}) should render pixels"
     );
     // Verify small terminal has non-zero pixels (content visible, not black)
-    let has_content = pixels_small.chunks_exact(4).any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
-    assert!(has_content, "shrunken terminal should have visible pixel content");
+    let has_content = pixels_small
+        .chunks_exact(4)
+        .any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
+    assert!(
+        has_content,
+        "shrunken terminal should have visible pixel content"
+    );
 }
 
 #[test]
@@ -920,7 +971,10 @@ fn auto_scroll_dirty_mask_triggers_repaint() {
     terminal.pty_write(b"AAAAA\nBBBBB\nCCCCC\nDDDDD\nEEEEE\nFFFFF");
     terminal.flush();
     let snap = terminal.take_snapshot();
-    assert!(snap.dirty.iter().any(|&d| d), "after scroll, some rows should be dirty");
+    assert!(
+        snap.dirty.iter().any(|&d| d),
+        "after scroll, some rows should be dirty"
+    );
     // Dirty-masked render must equal full render
     let full_pixels = render_or_die(&mut ctx, &mut font_pipeline, &snap);
     let dirty_pixels = render_dirty_or_die(&mut ctx, &mut font_pipeline, &snap, &snap.dirty);
@@ -944,7 +998,8 @@ fn tui_alt_screen_gpu_isolated_render() {
     terminal.flush();
     let snap_alt = terminal.take_snapshot();
     // Verify alt screen has content: at least one non-empty cell
-    let has_alt_content = (0..(ROWS * COLS)).any(|idx| snap_alt.cell_at(idx / COLS, idx % COLS).codepoint != 0);
+    let has_alt_content =
+        (0..(ROWS * COLS)).any(|idx| snap_alt.cell_at(idx / COLS, idx % COLS).codepoint != 0);
     assert!(
         has_alt_content,
         "alt screen should have some content after writing to it"
@@ -965,8 +1020,13 @@ fn tui_alt_screen_gpu_isolated_render() {
     );
     let pixels_main = render_or_die(&mut ctx, &mut font_pipeline, &snap_after);
     // Alt screen render should contain non-black pixels
-    let has_pixels = pixels_alt.chunks_exact(4).any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
-    assert!(has_pixels, "alt screen GPU render should have visible pixels");
+    let has_pixels = pixels_alt
+        .chunks_exact(4)
+        .any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
+    assert!(
+        has_pixels,
+        "alt screen GPU render should have visible pixels"
+    );
     // Restored main screen should match original main screen
     let pixels_main_before = render_or_die(&mut ctx, &mut font_pipeline, &snap_main);
     assert!(
@@ -1060,8 +1120,13 @@ fn osc133_gpu_render_with_semantic_marks() {
     terminal.flush();
     let snap = terminal.take_snapshot();
     let pixels = render_or_die(&mut ctx, &mut font_pipeline, &snap);
-    let has_content = pixels.chunks_exact(4).any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
-    assert!(has_content, "OSC 133 content should render visible GPU pixels");
+    let has_content = pixels
+        .chunks_exact(4)
+        .any(|c| c[0] > 0 || c[1] > 0 || c[2] > 0);
+    assert!(
+        has_content,
+        "OSC 133 content should render visible GPU pixels"
+    );
 }
 
 // ── Bootstrap / Environment Correctness ──
@@ -1069,12 +1134,14 @@ fn osc133_gpu_render_with_semantic_marks() {
 #[test]
 fn bootstrap_vulkan_icd_available() {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
-    let adapter = futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: None,
-        force_fallback_adapter: false,
-    }));
-    let adapter = adapter.expect("No Vulkan adapter — GPU tests need Lavapipe. Check VK_ICD_FILENAMES.");
+    let adapter =
+        futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::HighPerformance,
+            compatible_surface: None,
+            force_fallback_adapter: false,
+        }));
+    let adapter =
+        adapter.expect("No Vulkan adapter — GPU tests need Lavapipe. Check VK_ICD_FILENAMES.");
     let info = adapter.get_info();
     assert_eq!(
         info.backend,

@@ -13,7 +13,10 @@ struct TestPty {
 impl Pty for TestPty {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if *self.exited.lock().unwrap() {
-            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "exited"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "exited",
+            ));
         }
         self.written.lock().unwrap().extend_from_slice(buf);
         Ok(buf.len())
@@ -39,7 +42,10 @@ impl Pty for TestPty {
 
     fn wait(&self) -> nix::Result<nix::sys::wait::WaitStatus> {
         if *self.exited.lock().unwrap() {
-            Ok(nix::sys::wait::WaitStatus::Exited(nix::unistd::Pid::from_raw(-1), 0))
+            Ok(nix::sys::wait::WaitStatus::Exited(
+                nix::unistd::Pid::from_raw(-1),
+                0,
+            ))
         } else {
             Ok(nix::sys::wait::WaitStatus::StillAlive)
         }
@@ -73,17 +79,32 @@ impl Pty for TestPty {
 /// 10.4.1 Spawn → process_output returns false (no data yet)
 #[test]
 fn session_spawn_no_data() {
-    let pty = TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty spawn");
+    let pty = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty spawn");
     let mut session = Session::with_pty(pty, 24, 80).expect("Session with_pty");
     // No data in channel yet → process_output returns false
     let alive = session.process_output();
-    assert!(!alive, "process_output should return false with empty channel");
+    assert!(
+        !alive,
+        "process_output should return false with empty channel"
+    );
 }
 
 /// 10.4.2 Write → terminal snapshot contains data
 #[test]
 fn session_write_snapshot_contains_data() {
-    let pty = TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty spawn");
+    let pty = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty spawn");
     let mut session = Session::with_pty(pty, 24, 80).expect("Session with_pty");
     session.write(b"hello world").expect("write should succeed");
     let term = session.terminal_mut();
@@ -94,7 +115,13 @@ fn session_write_snapshot_contains_data() {
 /// 10.4.3 Resize → dimensions updated
 #[test]
 fn session_resize_dimensions_updated() {
-    let pty = TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty spawn");
+    let pty = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty spawn");
     let mut session = Session::with_pty(pty, 24, 80).expect("Session with_pty");
     session.resize(36, 120).expect("resize should succeed");
     let term = session.terminal_mut();
@@ -105,7 +132,13 @@ fn session_resize_dimensions_updated() {
 /// 10.4.6 Double close is idempotent
 #[test]
 fn session_double_close_idempotent() {
-    let pty = TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty spawn");
+    let pty = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty spawn");
     let session = Session::with_pty(pty, 24, 80).expect("Session with_pty");
     // Just drop the session and ensure no panic
     // Drop is idempotent by nature in Rust
@@ -115,7 +148,13 @@ fn session_double_close_idempotent() {
 /// 10.4.5 Drop → resources cleaned (no leak)
 #[test]
 fn session_drop_resources_cleaned() {
-    let pty = TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty spawn");
+    let pty = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty spawn");
     {
         let session = Session::with_pty(pty, 24, 80).expect("Session with_pty");
         // Session is alive inside this block
@@ -127,19 +166,38 @@ fn session_drop_resources_cleaned() {
 /// 10.4.4 Exit → is_exited starts false (true only after Drop)
 #[test]
 fn session_is_exited_false_before_drop() {
-    let pty = TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty spawn");
+    let pty = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty spawn");
     let session = Session::with_pty(pty, 24, 80).expect("Session with_pty");
-    assert!(!session.is_exited(), "is_exited should be false before drop");
+    assert!(
+        !session.is_exited(),
+        "is_exited should be false before drop"
+    );
     // Drop sets exited=true internally (verified by Drop impl)
 }
 
 /// 10.4.7 Two sessions isolated — independent state
 #[test]
 fn two_sessions_isolated() {
-    let pty_a =
-        TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty A spawn");
-    let pty_b =
-        TestPty::spawn("sh", 24, 80, &torvox_terminal::shell_env::ShellEnv::default()).expect("TestPty B spawn");
+    let pty_a = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty A spawn");
+    let pty_b = TestPty::spawn(
+        "sh",
+        24,
+        80,
+        &torvox_terminal::shell_env::ShellEnv::default(),
+    )
+    .expect("TestPty B spawn");
     let mut session_a = Session::with_pty(pty_a, 24, 80).expect("Session A");
     let mut session_b = Session::with_pty(pty_b, 24, 80).expect("Session B");
 

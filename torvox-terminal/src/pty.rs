@@ -83,7 +83,8 @@ impl PtyPair {
             ws_ypixel: 0,
         };
 
-        let result = nix::pty::openpty(Some(&winsize), None).map_err(|e| PtyError::Open(std::io::Error::other(e)))?;
+        let result = nix::pty::openpty(Some(&winsize), None)
+            .map_err(|e| PtyError::Open(std::io::Error::other(e)))?;
         let master_fd = result.master;
         let slave_fd = result.slave;
 
@@ -104,11 +105,12 @@ impl PtyPair {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let working_directory_cstr = std::ffi::CString::new(env.working_directory.as_str()).map_err(|e| {
-            let msg = format!("working directory contains null byte: {e}");
-            log::error!("{msg}");
-            PtyError::Fork(nix::errno::Errno::EINVAL)
-        })?;
+        let working_directory_cstr = std::ffi::CString::new(env.working_directory.as_str())
+            .map_err(|e| {
+                let msg = format!("working directory contains null byte: {e}");
+                log::error!("{msg}");
+                PtyError::Fork(nix::errno::Errno::EINVAL)
+            })?;
 
         // Pre-allocate argument and environment arrays before fork.
         // After fork, the child must NOT call any allocation functions.
@@ -150,7 +152,8 @@ impl PtyPair {
                 // from the parent's controlling terminal (termux.c:54-96). Only
                 // call setsid() if we are not already a session leader, since
                 // calling it again would fail with EPERM.
-                let is_session_leader = unsafe { libc::getsid(0) } == nix::unistd::getpid().as_raw();
+                let is_session_leader =
+                    unsafe { libc::getsid(0) } == nix::unistd::getpid().as_raw();
                 if !is_session_leader && nix::unistd::setsid().is_err() {
                     std::process::exit(2);
                 }
@@ -243,7 +246,11 @@ impl PtyPair {
         // the winsize to the slave side — no memory safety risk. The return
         // value is checked for errors.
         unsafe {
-            let result = libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, std::ptr::from_ref(&winsize));
+            let result = libc::ioctl(
+                self.master.as_raw_fd(),
+                libc::TIOCSWINSZ,
+                std::ptr::from_ref(&winsize),
+            );
             if result < 0 {
                 return Err(PtyError::Resize(nix::errno::Errno::last()));
             }
@@ -257,9 +264,12 @@ impl PtyPair {
     }
 
     pub fn set_nonblocking(&self) -> Result<(), PtyError> {
-        let flags = nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_GETFL).map_err(PtyError::Fcntl)?;
-        let new_flags = nix::fcntl::OFlag::from_bits_truncate(flags) | nix::fcntl::OFlag::O_NONBLOCK;
-        nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_SETFL(new_flags)).map_err(PtyError::Fcntl)?;
+        let flags = nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_GETFL)
+            .map_err(PtyError::Fcntl)?;
+        let new_flags =
+            nix::fcntl::OFlag::from_bits_truncate(flags) | nix::fcntl::OFlag::O_NONBLOCK;
+        nix::fcntl::fcntl(&self.master, nix::fcntl::FcntlArg::F_SETFL(new_flags))
+            .map_err(PtyError::Fcntl)?;
         Ok(())
     }
 
@@ -312,13 +322,15 @@ impl Pty for PtyPair {
 
 impl std::io::Read for PtyPair {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        nix::unistd::read(&self.master, buf).map_err(|e| std::io::Error::from_raw_os_error(e as i32))
+        nix::unistd::read(&self.master, buf)
+            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))
     }
 }
 
 impl std::io::Write for PtyPair {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        nix::unistd::write(&self.master, buf).map_err(|e| std::io::Error::from_raw_os_error(e as i32))
+        nix::unistd::write(&self.master, buf)
+            .map_err(|e| std::io::Error::from_raw_os_error(e as i32))
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -329,17 +341,29 @@ impl std::io::Write for PtyPair {
 impl Drop for PtyPair {
     fn drop(&mut self) {
         if let Err(e) = nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGHUP) {
-            log::warn!("failed to send SIGHUP to child {} during drop: {e}", self.child_pid);
+            log::warn!(
+                "failed to send SIGHUP to child {} during drop: {e}",
+                self.child_pid
+            );
         }
         if let Err(e) = nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGCONT) {
-            log::warn!("failed to send SIGCONT to child {} during drop: {e}", self.child_pid);
+            log::warn!(
+                "failed to send SIGCONT to child {} during drop: {e}",
+                self.child_pid
+            );
         }
         std::thread::sleep(Duration::from_millis(GRACEFUL_SHUTDOWN_TIMEOUT_MS));
         if let Err(e) = nix::sys::signal::kill(self.child_pid, nix::sys::signal::Signal::SIGKILL) {
-            log::warn!("failed to send SIGKILL to child {} during drop: {e}", self.child_pid);
+            log::warn!(
+                "failed to send SIGKILL to child {} during drop: {e}",
+                self.child_pid
+            );
         }
         if let Err(e) = nix::sys::wait::waitpid(self.child_pid, None) {
-            log::warn!("waitpid for child {} failed during drop: {e}", self.child_pid);
+            log::warn!(
+                "waitpid for child {} failed during drop: {e}",
+                self.child_pid
+            );
         }
     }
 }
@@ -484,7 +508,10 @@ mod tests {
     #[test]
     fn base_env_includes_xterm_256color() {
         let env = base_env(None);
-        assert!(env.iter().any(|(k, v)| k == "TERM" && v == "xterm-256color"));
+        assert!(
+            env.iter()
+                .any(|(k, v)| k == "TERM" && v == "xterm-256color")
+        );
     }
 
     #[test]
@@ -496,7 +523,10 @@ mod tests {
     #[test]
     fn base_env_includes_tmpdir_without_prefix() {
         let env = base_env(None);
-        assert!(env.iter().any(|(k, v)| k == "TMPDIR" && v == "/data/local/tmp"));
+        assert!(
+            env.iter()
+                .any(|(k, v)| k == "TMPDIR" && v == "/data/local/tmp")
+        );
     }
 
     #[test]
@@ -516,21 +546,33 @@ mod tests {
     fn build_env_includes_term() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(result.iter().any(|(k, v)| k == "TERM" && v == "xterm-256color"));
+        assert!(
+            result
+                .iter()
+                .any(|(k, v)| k == "TERM" && v == "xterm-256color")
+        );
     }
 
     #[test]
     fn build_env_includes_colorterm() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(result.iter().any(|(k, v)| k == "COLORTERM" && v == "truecolor"));
+        assert!(
+            result
+                .iter()
+                .any(|(k, v)| k == "COLORTERM" && v == "truecolor")
+        );
     }
 
     #[test]
     fn build_env_includes_term_program() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(result.iter().any(|(k, v)| k == "TERM_PROGRAM" && v == "torvox"));
+        assert!(
+            result
+                .iter()
+                .any(|(k, v)| k == "TERM_PROGRAM" && v == "torvox")
+        );
     }
 
     #[test]
@@ -544,7 +586,11 @@ mod tests {
     fn build_env_includes_home_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(result.iter().any(|(k, v)| k == "HOME" && v == "/tmp/test_home"));
+        assert!(
+            result
+                .iter()
+                .any(|(k, v)| k == "HOME" && v == "/tmp/test_home")
+        );
     }
 
     #[test]
@@ -565,14 +611,22 @@ mod tests {
     fn build_env_includes_path_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(result.iter().any(|(k, v)| k == "PATH" && v == "/usr/bin:/bin"));
+        assert!(
+            result
+                .iter()
+                .any(|(k, v)| k == "PATH" && v == "/usr/bin:/bin")
+        );
     }
 
     #[test]
     fn build_env_includes_pwd_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(result.iter().any(|(k, v)| k == "PWD" && v == "/tmp/test_home"));
+        assert!(
+            result
+                .iter()
+                .any(|(k, v)| k == "PWD" && v == "/tmp/test_home")
+        );
     }
 
     #[test]
@@ -589,23 +643,33 @@ mod tests {
         env.extra.push(("TERM".to_string(), "dumb".to_string()));
         let result = build_env(&env, "/bin/sh", 24, 80);
         let term_entries: Vec<_> = result.iter().filter(|(k, _)| k == "TERM").collect();
-        assert_eq!(term_entries.len(), 1, "duplicate TERM should be deduplicated");
+        assert_eq!(
+            term_entries.len(),
+            1,
+            "duplicate TERM should be deduplicated"
+        );
         assert_eq!(term_entries[0].1, "dumb", "last value should win");
     }
 
     #[test]
     fn build_env_extra_entries_present() {
         let mut env = test_env();
-        env.extra.push(("ANDROID_ROOT".to_string(), "/system".to_string()));
+        env.extra
+            .push(("ANDROID_ROOT".to_string(), "/system".to_string()));
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(result.iter().any(|(k, v)| k == "ANDROID_ROOT" && v == "/system"));
+        assert!(
+            result
+                .iter()
+                .any(|(k, v)| k == "ANDROID_ROOT" && v == "/system")
+        );
     }
 
     #[test]
     fn spawn_and_read_shell() {
         use crate::pty::Pty;
 
-        let mut pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+        let mut pty =
+            PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
         pty.set_nonblocking().expect("set_nonblocking failed");
 
         Pty::write_all(&mut pty, b"echo hello_torvox\n").expect("write failed");
@@ -621,7 +685,10 @@ mod tests {
                 }
                 Err(_) => break,
             }
-            if output.windows("hello_torvox".len()).any(|w| w == b"hello_torvox") {
+            if output
+                .windows("hello_torvox".len())
+                .any(|w| w == b"hello_torvox")
+            {
                 return;
             }
         }
@@ -645,7 +712,8 @@ mod tests {
     #[test]
     fn drop_kills_child() {
         let child = {
-            let pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+            let pty =
+                PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
             pty.child_pid()
         };
         std::thread::sleep(Duration::from_millis(200));
@@ -656,7 +724,10 @@ mod tests {
     #[test]
     fn pty_error_display_works() {
         let display = format!("{}", PtyError::Open(nix::errno::Errno::EINVAL.into()));
-        assert!(!display.is_empty(), "PtyError Display should produce non-empty string");
+        assert!(
+            !display.is_empty(),
+            "PtyError Display should produce non-empty string"
+        );
     }
 
     #[test]
@@ -747,14 +818,18 @@ mod tests {
 
         assert!(iutf8_set, "IUTF8 must be set on the PTY line discipline");
         assert!(ixon_cleared, "IXON (software flow control) must be cleared");
-        assert!(ixoff_cleared, "IXOFF (software flow control) must be cleared");
+        assert!(
+            ixoff_cleared,
+            "IXOFF (software flow control) must be cleared"
+        );
     }
 
     #[test]
     fn double_write_then_read_does_not_panic() {
         use crate::pty::Pty;
 
-        let mut pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn must succeed in test env");
+        let mut pty = PtyPair::spawn("/bin/sh", 24, 80, &ShellEnv::default())
+            .expect("spawn must succeed in test env");
         pty.set_nonblocking().expect("set_nonblocking failed");
 
         Pty::write_all(&mut pty, b"echo a\n").expect("first write must succeed");
@@ -774,7 +849,10 @@ mod tests {
                 break;
             }
         }
-        assert!(!output.is_empty(), "must read at least some output after two writes");
+        assert!(
+            !output.is_empty(),
+            "must read at least some output after two writes"
+        );
         let text = String::from_utf8_lossy(&output);
         assert!(
             text.contains('a') || text.contains('b'),

@@ -6,7 +6,10 @@ use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct TerminalConfig {
     pub rows: u32,
     pub cols: u32,
@@ -18,7 +21,10 @@ pub struct TerminalConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum BackspaceMode {
     #[default]
     DEL,
@@ -43,7 +49,10 @@ impl BackspaceMode {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum RightAltMode {
     #[default]
     CharacterModifier,
@@ -65,7 +74,10 @@ impl Default for TerminalConfig {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum Shell {
     #[default]
     SystemDefault,
@@ -74,7 +86,10 @@ pub enum Shell {
 
 /// Render configuration combining font, theme, and cursor style.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct RenderConfig {
     pub font: FontConfig,
     pub theme: Theme,
@@ -93,7 +108,10 @@ impl Default for RenderConfig {
 
 /// Font family, size, and line spacing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct FontConfig {
     pub family: String,
     pub size: u32,
@@ -112,7 +130,10 @@ impl Default for FontConfig {
 
 /// Terminal color theme with 16 ANSI palette colors.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Theme {
     pub name: String,
     pub background: [u8; 3],
@@ -1185,7 +1206,12 @@ mod tests {
     #[test]
     fn theme_built_in_colors_valid() {
         for theme in Theme::all_built_in() {
-            assert_eq!(theme.ansi.len(), 16, "theme '{}' must have 16 ANSI colors", theme.name);
+            assert_eq!(
+                theme.ansi.len(),
+                16,
+                "theme '{}' must have 16 ANSI colors",
+                theme.name
+            );
             for (i, color) in theme.ansi.iter().enumerate() {
                 assert_eq!(
                     color.len(),

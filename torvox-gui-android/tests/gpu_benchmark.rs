@@ -120,7 +120,8 @@ fn bench_noop_render_frame() {
     const N: u32 = 5;
     let s = Instant::now();
     for _ in 0..N {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let _rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -179,7 +180,8 @@ fn bench_compute_dispatch() {
     const N: u32 = 10;
     let s = Instant::now();
     for _ in 0..N {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         cpass.set_pipeline(&pipeline);
         cpass.dispatch_workgroups(64, 1, 1);

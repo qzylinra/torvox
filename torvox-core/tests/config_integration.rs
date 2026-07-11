@@ -1,7 +1,12 @@
 use torvox_core::config::{RenderConfig, TerminalConfig, Theme};
 
 fn theme_color_to_f32(rgb: [u8; 3]) -> [f32; 4] {
-    [rgb[0] as f32 / 255.0, rgb[1] as f32 / 255.0, rgb[2] as f32 / 255.0, 1.0]
+    [
+        rgb[0] as f32 / 255.0,
+        rgb[1] as f32 / 255.0,
+        rgb[2] as f32 / 255.0,
+        1.0,
+    ]
 }
 
 #[test]
@@ -36,11 +41,19 @@ fn theme_colors_convert_to_f32_array() {
 fn theme_ansi_palette_has_expected_catppuccin_mocha_values() {
     let theme = Theme::catppuccin_mocha();
     assert_eq!(theme.ansi.len(), 16);
-    assert_eq!(theme.ansi[0], [69, 71, 90], "ansi0 should be the first palette color");
+    assert_eq!(
+        theme.ansi[0],
+        [69, 71, 90],
+        "ansi0 should be the first palette color"
+    );
     assert_eq!(theme.ansi[1], [243, 139, 168], "ansi1 should be red");
     assert_eq!(theme.ansi[7], [186, 194, 222], "ansi7 should be white");
     assert_eq!(theme.ansi[8], [88, 91, 112], "ansi8 should be bright black");
-    assert_eq!(theme.ansi[15], [166, 173, 200], "ansi15 should be bright white");
+    assert_eq!(
+        theme.ansi[15],
+        [166, 173, 200],
+        "ansi15 should be bright white"
+    );
 }
 
 #[test]
@@ -67,7 +80,10 @@ fn all_built_in_themes_have_16_ansi_colors() {
 #[test]
 fn all_built_in_themes_have_non_empty_names() {
     for theme in &Theme::all_built_in() {
-        assert!(!theme.name.is_empty(), "all themes should have non-empty names");
+        assert!(
+            !theme.name.is_empty(),
+            "all themes should have non-empty names"
+        );
     }
 }
 
@@ -146,8 +162,14 @@ fn render_config_theme_has_foreground_and_background() {
     let config = RenderConfig::default();
     let fg = config.theme.foreground;
     let bg = config.theme.background;
-    assert!(fg.iter().any(|&c| c > 0), "foreground should have non-zero values");
-    assert!(bg.iter().any(|&c| c > 0), "background should have non-zero values");
+    assert!(
+        fg.iter().any(|&c| c > 0),
+        "foreground should have non-zero values"
+    );
+    assert!(
+        bg.iter().any(|&c| c > 0),
+        "background should have non-zero values"
+    );
 }
 
 #[test]
@@ -156,9 +178,18 @@ fn theme_to_f32_rendering_format() {
     let fg = theme_color_to_f32(theme.foreground);
     assert_eq!(fg.len(), 4, "f32 color should have 4 components");
     assert_eq!(fg[3], 1.0, "alpha should always be 1.0");
-    assert!(fg[0] >= 0.0 && fg[0] <= 1.0, "red channel should be normalized");
-    assert!(fg[1] >= 0.0 && fg[1] <= 1.0, "green channel should be normalized");
-    assert!(fg[2] >= 0.0 && fg[2] <= 1.0, "blue channel should be normalized");
+    assert!(
+        fg[0] >= 0.0 && fg[0] <= 1.0,
+        "red channel should be normalized"
+    );
+    assert!(
+        fg[1] >= 0.0 && fg[1] <= 1.0,
+        "green channel should be normalized"
+    );
+    assert!(
+        fg[2] >= 0.0 && fg[2] <= 1.0,
+        "blue channel should be normalized"
+    );
 }
 
 #[test]
@@ -167,7 +198,10 @@ fn theme_some_themes_have_dark_bright_differences() {
     let any_diff = themes
         .iter()
         .any(|theme| (0..8).any(|i| theme.ansi[i] != theme.ansi[i + 8]));
-    assert!(any_diff, "at least one theme should have dark/bright ANSI differences");
+    assert!(
+        any_diff,
+        "at least one theme should have dark/bright ANSI differences"
+    );
 }
 
 #[test]

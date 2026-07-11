@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::grid::Grid;
 use crate::line::Line;
 
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionSnapshot {
     pub visible_lines: Vec<Line>,
@@ -20,7 +23,11 @@ impl SessionSnapshot {
     pub fn from_grid(grid: &Grid) -> Self {
         let mut visible_lines = Vec::with_capacity(grid.rows() as usize);
         for r in 0..grid.rows() {
-            visible_lines.push(grid.get(r).cloned().unwrap_or_else(|| Line::new(grid.cols())));
+            visible_lines.push(
+                grid.get(r)
+                    .cloned()
+                    .unwrap_or_else(|| Line::new(grid.cols())),
+            );
         }
         let scrollback_length = grid.scrollback_length();
         let mut scrollback_lines = Vec::with_capacity(scrollback_length);
@@ -100,9 +107,10 @@ mod tests {
 
         let snapshot = SessionSnapshot::from_grid(&grid);
         let bytes = rkyv::to_bytes::<Error>(&snapshot).expect("rkyv serialize failed");
-        let archived =
-            rkyv::access::<<SessionSnapshot as rkyv::Archive>::Archived, Error>(&bytes).expect("rkyv access failed");
-        let restored = rkyv::deserialize::<SessionSnapshot, Error>(archived).expect("rkyv deserialize failed");
+        let archived = rkyv::access::<<SessionSnapshot as rkyv::Archive>::Archived, Error>(&bytes)
+            .expect("rkyv access failed");
+        let restored =
+            rkyv::deserialize::<SessionSnapshot, Error>(archived).expect("rkyv deserialize failed");
         assert_eq!(restored, snapshot);
     }
 
@@ -240,7 +248,10 @@ mod tests {
         );
 
         let snap3 = SessionSnapshot::from_grid(&grid1);
-        assert_eq!(snap1, snap3, "same grid state should produce equal snapshots");
+        assert_eq!(
+            snap1, snap3,
+            "same grid state should produce equal snapshots"
+        );
     }
 
     #[test]

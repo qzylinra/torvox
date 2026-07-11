@@ -16,7 +16,8 @@ pub struct MockSurface {
 
 impl MockSurface {
     pub fn new(rows: u32, cols: u32, scrollback_lines: u32, _font_size: f32) -> Self {
-        let terminal = GhosttyTerminal::new(rows, cols, scrollback_lines).expect("GhosttyTerminal::new");
+        let terminal =
+            GhosttyTerminal::new(rows, cols, scrollback_lines).expect("GhosttyTerminal::new");
         Self {
             terminal,
             rows,
@@ -45,7 +46,8 @@ impl MockSurface {
     }
 
     pub fn spawn_session(&mut self, _shell: &str, _env: &ShellEnv) -> Result<(), String> {
-        self.terminal = GhosttyTerminal::new(self.rows, self.cols, 5000).map_err(|e| format!("session: {e}"))?;
+        self.terminal = GhosttyTerminal::new(self.rows, self.cols, 5000)
+            .map_err(|e| format!("session: {e}"))?;
         Ok(())
     }
 
@@ -94,7 +96,12 @@ impl MockSurface {
                     let alpha = (cell.foreground[3] * 255.0) as u8;
                     (red, green, blue, alpha)
                 } else {
-                    (background_color[0], background_color[1], background_color[2], 255)
+                    (
+                        background_color[0],
+                        background_color[1],
+                        background_color[2],
+                        255,
+                    )
                 };
 
                 let pixel_y = row as usize * cell_h;
@@ -162,7 +169,10 @@ mod tests {
         assert!(ms.render().is_ok());
         // foreground pixels should exist because text was written
         let has_non_bg = ms.pixels().chunks(4).any(|p| p != [0, 0, 0, 0]);
-        assert!(has_non_bg, "render should produce non-zero pixels after text");
+        assert!(
+            has_non_bg,
+            "render should produce non-zero pixels after text"
+        );
     }
 
     #[test]
@@ -234,7 +244,10 @@ mod tests {
         assert!(ms.poll_sync_active(), "should be in sync after DECSET 2026");
         ms.write_to_pty(b"\x1b[?2026l");
         ms.terminal().flush();
-        assert!(!ms.poll_sync_active(), "should not be in sync after DECRST 2026");
+        assert!(
+            !ms.poll_sync_active(),
+            "should not be in sync after DECRST 2026"
+        );
     }
 
     #[test]
@@ -280,7 +293,11 @@ mod tests {
         ms.write_to_pty(b"\x1b[1;33mBOLD YELLOW\x1b[0m\n");
         ms.render().ok();
         let non_bg = ms.pixels().chunks(4).filter(|p| p[3] > 0).count();
-        assert!(non_bg > 0, "bold text should produce non-bg pixels, got {}", non_bg);
+        assert!(
+            non_bg > 0,
+            "bold text should produce non-bg pixels, got {}",
+            non_bg
+        );
     }
 
     #[test]
@@ -291,7 +308,11 @@ mod tests {
         ms.render().ok();
         let non_bg = ms.pixels().chunks(4).filter(|p| p[3] > 0).count();
         // At minimum, the cursor and text should produce non-bg pixels
-        assert!(non_bg > 0, "cursor+text should produce non-bg pixels, got {}", non_bg);
+        assert!(
+            non_bg > 0,
+            "cursor+text should produce non-bg pixels, got {}",
+            non_bg
+        );
     }
 
     #[test]
@@ -332,10 +353,13 @@ mod tests {
             // Find any non-bg pixel in the right general area
             for row in 4..6 {
                 for col in 9..11 {
-                    let check_px = (row * cell_h as usize) * ms.surface_width() as usize + (col * cell_w as usize);
+                    let check_px = (row * cell_h as usize) * ms.surface_width() as usize
+                        + (col * cell_w as usize);
                     let check_pi = check_px * 4;
                     if check_pi + 3 < pixels.len() {
-                        let has_color = pixels[check_pi] > 0 || pixels[check_pi + 1] > 0 || pixels[check_pi + 2] > 0;
+                        let has_color = pixels[check_pi] > 0
+                            || pixels[check_pi + 1] > 0
+                            || pixels[check_pi + 2] > 0;
                         if has_color {
                             return; // found non-bg pixel near expected position
                         }
@@ -344,7 +368,10 @@ mod tests {
             }
             // Fail: no non-bg pixel found in the '.' area
             let total_nz = pixels.chunks(4).filter(|p| p[3] > 0).count();
-            let all_nz = pixels.chunks(4).filter(|p| p[0] > 0 || p[1] > 0 || p[2] > 0).count();
+            let all_nz = pixels
+                .chunks(4)
+                .filter(|p| p[0] > 0 || p[1] > 0 || p[2] > 0)
+                .count();
             panic!(
                 "No non-bg pixel at '.' position (row 5, col 10). p={}x{} cell={}x{}. total_nz={} all_nz={}",
                 cell_w, cell_h, px, py, total_nz, all_nz
@@ -366,7 +393,11 @@ mod tests {
         // Verify known values: mocha bg = #1e1e2e (30,30,46)
         assert_eq!(mocha.background, [30, 30, 46], "Mocha BG should be #1e1e2e");
         // Dracula Plus bg = #212121 (33,33,33)
-        assert_eq!(dracula.background, [33, 33, 33], "Dracula BG should be #212121");
+        assert_eq!(
+            dracula.background,
+            [33, 33, 33],
+            "Dracula BG should be #212121"
+        );
     }
 
     // 4b.6: CJK text renders correctly in grid
@@ -378,6 +409,10 @@ mod tests {
         ms.write_to_pty(b"\xe4\xbd\xa0\xe5\xa5\xbd\n"); // 你好 + newline
         ms.render().ok();
         let non_bg = ms.pixels().chunks(4).filter(|p| p[3] > 0).count();
-        assert!(non_bg > 0, "CJK text should produce non-bg pixels, got {}", non_bg);
+        assert!(
+            non_bg > 0,
+            "CJK text should produce non-bg pixels, got {}",
+            non_bg
+        );
     }
 }

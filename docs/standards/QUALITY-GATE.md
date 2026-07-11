@@ -1,11 +1,5 @@
 # Quality Gate
 
-## Requirement Coverage
-
-```bash
-nix develop --command "cargo nextest run --package torvox-integration-tests requirement_coverage_is_monitored --exact"
-```
-
 ## Pre-commit
 
 ```bash

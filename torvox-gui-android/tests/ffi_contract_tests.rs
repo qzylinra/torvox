@@ -3,7 +3,9 @@
 //! Verifies that all bridge types have consistent wire sizes, deterministic
 //! encoding, and correct rejection of malformed input.
 
-use torvox_android::bridge::{BridgeAttrs, BridgeCell, BridgeTheme, Shell, TerminalConfig, TerminalEvent};
+use torvox_android::bridge::{
+    BridgeAttrs, BridgeCell, BridgeTheme, Shell, TerminalConfig, TerminalEvent,
+};
 
 // ═══════════════════════════════════════════════
 // Helper: encode a value and return (buf, wire_size)
@@ -13,7 +15,10 @@ fn wire_encode<T: boltffi::__private::wire::WireEncode>(value: &T) -> (Vec<u8>, 
     let wire_size = boltffi::__private::wire::WireEncode::wire_size(value);
     let mut buf = vec![0u8; wire_size];
     let written = boltffi::__private::wire::WireEncode::encode_to(value, &mut buf);
-    assert_eq!(written, wire_size, "encode_to must write exact wire_size bytes");
+    assert_eq!(
+        written, wire_size,
+        "encode_to must write exact wire_size bytes"
+    );
     (buf, wire_size)
 }
 
@@ -359,7 +364,10 @@ fn truncated_wire_rejects_bridge_cell() {
         match result {
             Ok(Err(_)) => {}
             Ok(Ok(_)) => {
-                assert_eq!(truncate_len, size, "decode should only succeed on complete input");
+                assert_eq!(
+                    truncate_len, size,
+                    "decode should only succeed on complete input"
+                );
             }
             Err(panic_payload) => {
                 let msg = panic_payload
@@ -391,7 +399,10 @@ fn truncated_wire_rejects_shell() {
         match result {
             Ok(Err(_)) => {}
             Ok(Ok(_)) => {
-                assert_eq!(truncate_len, size, "decode should only succeed on complete input");
+                assert_eq!(
+                    truncate_len, size,
+                    "decode should only succeed on complete input"
+                );
             }
             Err(panic_payload) => {
                 let msg = panic_payload
@@ -443,7 +454,10 @@ fn truncated_wire_rejects_bridge_theme() {
         match result {
             Ok(Err(_)) => {}
             Ok(Ok(_)) => {
-                assert_eq!(truncate_len, size, "decode should only succeed on complete input");
+                assert_eq!(
+                    truncate_len, size,
+                    "decode should only succeed on complete input"
+                );
             }
             Err(panic_payload) => {
                 let msg = panic_payload
@@ -473,7 +487,10 @@ fn truncated_wire_rejects_terminal_config() {
         match result {
             Ok(Err(_)) => {}
             Ok(Ok(_)) => {
-                assert_eq!(truncate_len, size, "decode should only succeed on complete input");
+                assert_eq!(
+                    truncate_len, size,
+                    "decode should only succeed on complete input"
+                );
             }
             Err(panic_payload) => {
                 let msg = panic_payload
@@ -505,7 +522,10 @@ fn truncated_wire_rejects_terminal_event() {
         match result {
             Ok(Err(_)) => {}
             Ok(Ok(_)) => {
-                assert_eq!(truncate_len, size, "decode should only succeed on complete input");
+                assert_eq!(
+                    truncate_len, size,
+                    "decode should only succeed on complete input"
+                );
             }
             Err(panic_payload) => {
                 let msg = panic_payload
@@ -572,7 +592,10 @@ fn bitflip_corrupted_terminal_config_does_not_panic() {
                     .map(|s| s.as_str())
                     .or_else(|| panic_payload.downcast_ref::<&str>().copied())
                     .unwrap_or("<opaque>");
-                panic!("decode_from panicked on bitflip at byte {}: {}", flip_pos, msg);
+                panic!(
+                    "decode_from panicked on bitflip at byte {}: {}",
+                    flip_pos, msg
+                );
             }
         }
     }
@@ -611,8 +634,15 @@ fn trailing_bytes_rejected_terminal_config() {
     match result {
         Ok(Err(_)) => {}
         Ok(Ok((decoded, consumed))) => {
-            assert_ne!(consumed, buf.len(), "decode must not consume trailing bytes");
-            assert_eq!(consumed, size, "decode must only consume original wire_size");
+            assert_ne!(
+                consumed,
+                buf.len(),
+                "decode must not consume trailing bytes"
+            );
+            assert_eq!(
+                consumed, size,
+                "decode must only consume original wire_size"
+            );
             let _ = decoded;
         }
         Err(panic_payload) => {
@@ -643,7 +673,11 @@ fn trailing_bytes_rejected_bridge_cell() {
     match result {
         Ok(Err(_)) => {}
         Ok(Ok((decoded, consumed))) => {
-            assert_ne!(consumed, buf.len(), "decode must not consume trailing bytes");
+            assert_ne!(
+                consumed,
+                buf.len(),
+                "decode must not consume trailing bytes"
+            );
             assert_eq!(consumed, size);
             let _ = decoded;
         }
@@ -670,7 +704,11 @@ fn trailing_bytes_rejected_shell() {
     match result {
         Ok(Err(_)) => {}
         Ok(Ok((decoded, consumed))) => {
-            assert_ne!(consumed, buf.len(), "decode must not consume trailing bytes");
+            assert_ne!(
+                consumed,
+                buf.len(),
+                "decode must not consume trailing bytes"
+            );
             assert_eq!(consumed, size);
             let _ = decoded;
         }
@@ -719,7 +757,11 @@ fn trailing_bytes_rejected_bridge_theme() {
     match result {
         Ok(Err(_)) => {}
         Ok(Ok((decoded, consumed))) => {
-            assert_ne!(consumed, buf.len(), "decode must not consume trailing bytes");
+            assert_ne!(
+                consumed,
+                buf.len(),
+                "decode must not consume trailing bytes"
+            );
             assert_eq!(consumed, size);
             let _ = decoded;
         }
@@ -769,7 +811,10 @@ fn shell_custom_long_path_encodes_correctly() {
     assert_eq!(consumed, size);
     assert_eq!(decoded, shell);
     if let Shell::Custom { path } = decoded {
-        assert_eq!(path, "/very/long/path/to/a/specific/shell/binary/that/does/not/exist");
+        assert_eq!(
+            path,
+            "/very/long/path/to/a/specific/shell/binary/that/does/not/exist"
+        );
     } else {
         panic!("expected Shell::Custom");
     }
@@ -777,7 +822,9 @@ fn shell_custom_long_path_encodes_correctly() {
 
 #[test]
 fn shell_custom_empty_path_encodes_correctly() {
-    let shell = Shell::Custom { path: String::new() };
+    let shell = Shell::Custom {
+        path: String::new(),
+    };
     let (buf, size) = wire_encode(&shell);
     let (decoded, consumed) = wire_decode::<Shell>(&buf);
     assert_eq!(consumed, size);
@@ -931,7 +978,10 @@ fn bridge_theme_u32_color_fields_are_4_bytes_in_wire() {
         ansi15: 0,
     };
     let (_, size_fg) = wire_encode(&theme2);
-    assert_eq!(size_bg, size_fg, "all u32 color fields must have same wire size");
+    assert_eq!(
+        size_bg, size_fg,
+        "all u32 color fields must have same wire size"
+    );
 }
 
 // ═══════════════════════════════════════════════
@@ -955,7 +1005,10 @@ fn bridge_cell_has_4_fields() {
         attrs: BridgeAttrs::default(),
     };
     let (_, minimal_size) = wire_encode(&minimal);
-    assert_eq!(size, minimal_size, "default BridgeCell should have minimal wire size");
+    assert_eq!(
+        size, minimal_size,
+        "default BridgeCell should have minimal wire size"
+    );
 
     let different_char = BridgeCell {
         char_code: 0x1F600,
@@ -992,7 +1045,10 @@ fn bridge_attrs_has_14_boolean_fields() {
     };
     let (_, size_max) = wire_encode(&all_true);
 
-    assert_eq!(size_min, size_max, "all-bool BridgeAttrs should have fixed wire size");
+    assert_eq!(
+        size_min, size_max,
+        "all-bool BridgeAttrs should have fixed wire size"
+    );
 
     let roundtripped = wire_decode::<BridgeAttrs>(&wire_encode(&all_true).0);
     assert_eq!(roundtripped.0, all_true);

@@ -190,7 +190,11 @@ mod tests {
     #[test]
     fn ansi_16_indexed_match() {
         for i in 0..=15u8 {
-            assert_eq!(ansi_to_rgb(i), ANSI_16[i as usize], "ANSI 16 color {i} mismatch");
+            assert_eq!(
+                ansi_to_rgb(i),
+                ANSI_16[i as usize],
+                "ANSI 16 color {i} mismatch"
+            );
         }
     }
 
@@ -199,9 +203,18 @@ mod tests {
         let valid_values = [0, 51, 102, 153, 204, 255];
         for i in 16u8..=231 {
             let [r, g, b] = ansi_to_rgb(i);
-            assert!(valid_values.contains(&r), "Red {r} not in valid set for index {i}");
-            assert!(valid_values.contains(&g), "Green {g} not in valid set for index {i}");
-            assert!(valid_values.contains(&b), "Blue {b} not in valid set for index {i}");
+            assert!(
+                valid_values.contains(&r),
+                "Red {r} not in valid set for index {i}"
+            );
+            assert!(
+                valid_values.contains(&g),
+                "Green {g} not in valid set for index {i}"
+            );
+            assert!(
+                valid_values.contains(&b),
+                "Blue {b} not in valid set for index {i}"
+            );
         }
     }
 

@@ -35,7 +35,10 @@ fn is_url_safe(character: char) -> bool {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub enum SelectionMode {
     #[default]
     Char,
@@ -46,7 +49,10 @@ pub enum SelectionMode {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// A single endpoint of a selection (row, col).
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct SelectionAnchor {
     /// Anchor row position (0-indexed).
     pub row: u32,
@@ -56,7 +62,10 @@ pub struct SelectionAnchor {
 
 /// A selection with start, end anchors and mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 pub struct Selection {
     pub start: SelectionAnchor,
     pub end: SelectionAnchor,
@@ -101,7 +110,9 @@ impl Selection {
                 }
             }
             SelectionMode::Line => row >= lo.row && row <= hi.row,
-            SelectionMode::Block => row >= lo.row && row <= hi.row && col >= lo.col && col <= hi.col,
+            SelectionMode::Block => {
+                row >= lo.row && row <= hi.row && col >= lo.col && col <= hi.col
+            }
         }
     }
 
@@ -117,7 +128,11 @@ impl Selection {
                             continue;
                         }
                         let start_col = if row == lo.row { lo.col } else { 0 };
-                        let end_col = if row == hi.row { hi.col } else { cells.len() as u32 - 1 };
+                        let end_col = if row == hi.row {
+                            hi.col
+                        } else {
+                            cells.len() as u32 - 1
+                        };
                         let mut row_str = alloc::string::String::new();
                         for col in start_col..=end_col {
                             if let Some(cell) = cells.get(col as usize)
@@ -616,7 +631,10 @@ mod tests {
         let result = s.text(&grid);
         // Grid default cells have char=' ' (0x20). With trailing-space preservation
         // and null filtering, spaces pass through. Contains newline between rows.
-        assert!(result.contains('\n'), "empty rows should have newline: {result:?}");
+        assert!(
+            result.contains('\n'),
+            "empty rows should have newline: {result:?}"
+        );
     }
 
     // ── Expansion tests ──
@@ -674,7 +692,8 @@ mod tests {
 
     #[test]
     fn expand_url_cross_row_wrap() {
-        let grid = make_grid_with_text(&["https://example.com/long-", "url-continuation more text"]);
+        let grid =
+            make_grid_with_text(&["https://example.com/long-", "url-continuation more text"]);
         let s = Selection::new(
             SelectionAnchor { row: 0, col: 10 },
             SelectionAnchor { row: 0, col: 10 },

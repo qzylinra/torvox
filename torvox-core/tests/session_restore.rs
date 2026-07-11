@@ -88,7 +88,10 @@ fn snapshot_preserves_scrollback_content() {
     grid.fill_cells(0, 'C', 0, 10);
 
     let snap = SessionSnapshot::from_grid(&grid);
-    assert!(snap.scrollback_lines.len() >= 2, "should have scrollback lines");
+    assert!(
+        snap.scrollback_lines.len() >= 2,
+        "should have scrollback lines"
+    );
 
     let mut restored_grid = Grid::new(2, 10);
     snap.apply_to_scrollback(&mut restored_grid, 1000);
@@ -118,7 +121,12 @@ fn snapshot_serde_roundtrip_preserves_content() {
     assert_eq!(back.visible_lines.len(), snap.visible_lines.len());
     assert_eq!(back.scrollback_lines.len(), snap.scrollback_lines.len());
 
-    for (i, (orig, restored)) in snap.visible_lines.iter().zip(back.visible_lines.iter()).enumerate() {
+    for (i, (orig, restored)) in snap
+        .visible_lines
+        .iter()
+        .zip(back.visible_lines.iter())
+        .enumerate()
+    {
         for j in 0..snap.cols as usize {
             let o = orig.cells().get(j).unwrap();
             let r = restored.cells().get(j).unwrap();
@@ -162,8 +170,14 @@ fn snapshot_cell_by_cell_equality() {
     for row in 0..3 {
         for col in 0..10 {
             let orig = grid.cell(row, col).unwrap();
-            let restored_cell = back.visible_lines[row as usize].cells().get(col as usize).unwrap();
-            assert_eq!(orig.char, restored_cell.char, "char mismatch at [{row},{col}]");
+            let restored_cell = back.visible_lines[row as usize]
+                .cells()
+                .get(col as usize)
+                .unwrap();
+            assert_eq!(
+                orig.char, restored_cell.char,
+                "char mismatch at [{row},{col}]"
+            );
             assert_eq!(
                 orig.foreground, restored_cell.foreground,
                 "fg mismatch at [{row},{col}]"
@@ -224,7 +238,10 @@ fn snapshot_preserves_strikethrough() {
     }
     let snap = SessionSnapshot::from_grid(&grid);
     let cell = snap.visible_lines[0].cells().first().unwrap();
-    assert!(cell.attrs.strikethrough, "strikethrough should be preserved");
+    assert!(
+        cell.attrs.strikethrough,
+        "strikethrough should be preserved"
+    );
 }
 
 #[test]
@@ -258,7 +275,10 @@ fn snapshot_large_grid_content_equality() {
     for row in 0..50 {
         for col in 0..120 {
             let orig = grid.cell(row, col).unwrap();
-            let restored = back.visible_lines[row as usize].cells().get(col as usize).unwrap();
+            let restored = back.visible_lines[row as usize]
+                .cells()
+                .get(col as usize)
+                .unwrap();
             assert_eq!(orig.char, restored.char, "char mismatch at [{row},{col}]");
             assert_eq!(
                 orig.foreground.r, restored.foreground.r,

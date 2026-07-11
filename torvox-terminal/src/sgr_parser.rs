@@ -33,8 +33,12 @@ impl SgrEffects {
             hidden: cell.hidden,
             strikethrough: cell.strikethrough,
             overline: cell.overline,
-            fg_set: cell.foreground[0] > 0.0 || cell.foreground[1] > 0.0 || cell.foreground[2] > 0.0,
-            bg_set: cell.background[0] > 0.0 || cell.background[1] > 0.0 || cell.background[2] > 0.0,
+            fg_set: cell.foreground[0] > 0.0
+                || cell.foreground[1] > 0.0
+                || cell.foreground[2] > 0.0,
+            bg_set: cell.background[0] > 0.0
+                || cell.background[1] > 0.0
+                || cell.background[2] > 0.0,
             underline_set: cell.underline,
         }
     }
@@ -84,7 +88,11 @@ pub fn assert_sgr0_clears_all(t: &mut GhosttyTerminal) {
 pub fn assert_sgr_idempotent(t: &mut GhosttyTerminal, params: &[u8]) {
     let first = apply_sgr_and_read(t, params);
     let second = apply_sgr_and_read(t, params);
-    assert_eq!(first.bold, second.bold, "SGR {:?} bold not idempotent", params);
+    assert_eq!(
+        first.bold, second.bold,
+        "SGR {:?} bold not idempotent",
+        params
+    );
     assert_eq!(
         first.underline, second.underline,
         "SGR {:?} underline not idempotent",

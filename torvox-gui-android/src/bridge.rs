@@ -368,14 +368,24 @@ impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
                 end_row: 0,
             },
             torvox_core::event::TerminalEvent::Bell => TerminalEvent::Bell,
-            torvox_core::event::TerminalEvent::TitleChanged(title) => TerminalEvent::TitleChanged { title },
-            torvox_core::event::TerminalEvent::ClipboardRequest(text) => TerminalEvent::ClipboardRequest { text },
-            torvox_core::event::TerminalEvent::HyperlinkHover(url) => TerminalEvent::HyperlinkHover { url },
-            torvox_core::event::TerminalEvent::ProcessExited(exit_code) => TerminalEvent::ProcessExited { exit_code },
-            torvox_core::event::TerminalEvent::CursorChanged(cursor) => TerminalEvent::CursorChanged {
-                row: cursor.row,
-                col: cursor.col,
-            },
+            torvox_core::event::TerminalEvent::TitleChanged(title) => {
+                TerminalEvent::TitleChanged { title }
+            }
+            torvox_core::event::TerminalEvent::ClipboardRequest(text) => {
+                TerminalEvent::ClipboardRequest { text }
+            }
+            torvox_core::event::TerminalEvent::HyperlinkHover(url) => {
+                TerminalEvent::HyperlinkHover { url }
+            }
+            torvox_core::event::TerminalEvent::ProcessExited(exit_code) => {
+                TerminalEvent::ProcessExited { exit_code }
+            }
+            torvox_core::event::TerminalEvent::CursorChanged(cursor) => {
+                TerminalEvent::CursorChanged {
+                    row: cursor.row,
+                    col: cursor.col,
+                }
+            }
             torvox_core::event::TerminalEvent::SelectionChanged(sel) => match sel {
                 Some(selection) => {
                     let (start, end) = selection.ordered();
@@ -428,7 +438,9 @@ pub enum TerminalError {
 pub struct TorvoxBridge {
     config: TerminalConfig,
     surface: std::sync::Mutex<Option<crate::surface::AndroidSurface>>,
-    session: std::sync::Mutex<Option<std::sync::Arc<std::sync::Mutex<torvox_terminal::session::Session>>>>,
+    session: std::sync::Mutex<
+        Option<std::sync::Arc<std::sync::Mutex<torvox_terminal::session::Session>>>,
+    >,
     scroll_offset: std::sync::atomic::AtomicU32,
     surface_ready: std::sync::atomic::AtomicBool,
     cell_width: std::sync::atomic::AtomicU32,
@@ -543,7 +555,11 @@ impl TorvoxBridge {
 
     pub fn ping(&self) -> Result<String, TerminalError> {
         let ptr = self as *const TorvoxBridge;
-        log::info!("ping: self={:p}, aligned={}", ptr, (ptr as usize).is_multiple_of(8));
+        log::info!(
+            "ping: self={:p}, aligned={}",
+            ptr,
+            (ptr as usize).is_multiple_of(8)
+        );
         Ok("pong".to_string())
     }
 
@@ -560,9 +576,12 @@ impl TorvoxBridge {
             detail: "no surface — call set_native_window first".to_string(),
         })?;
         let env = self.shell_env();
-        let session_arc = surface
-            .spawn_session(shell_path, &env)
-            .map_err(|e| TerminalError::PtyError { detail: e.to_string() })?;
+        let session_arc =
+            surface
+                .spawn_session(shell_path, &env)
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
         match self.session.lock() {
             Ok(mut session_guard) => *session_guard = Some(session_arc),
             Err(poisoned) => {
@@ -574,7 +593,12 @@ impl TorvoxBridge {
         Ok(0)
     }
 
-    pub fn set_native_window(&self, window_ptr: i64, width: u32, height: u32) -> Result<(), TerminalError> {
+    pub fn set_native_window(
+        &self,
+        window_ptr: i64,
+        width: u32,
+        height: u32,
+    ) -> Result<(), TerminalError> {
         log::debug!(
             "set_native_window: window_ptr={:#x}, width={}, height={}",
             window_ptr,
@@ -587,7 +611,9 @@ impl TorvoxBridge {
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .update_native_window(window_ptr as *mut std::ffi::c_void, width, height)
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() })?;
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
         } else {
             let mut surface = crate::surface::AndroidSurface::new(
                 self.config.rows,
@@ -602,7 +628,9 @@ impl TorvoxBridge {
                     height,
                     self.config.font_size_tenths,
                 )
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() })?;
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
             surface.set_theme(self.config.theme.clone().into());
             *surface_guard = Some(surface);
         }
@@ -610,7 +638,8 @@ impl TorvoxBridge {
         if let Some(surface) = surface_guard.as_ref() {
             self.store_cell_metrics(surface);
         }
-        self.surface_ready.store(true, std::sync::atomic::Ordering::Release);
+        self.surface_ready
+            .store(true, std::sync::atomic::Ordering::Release);
         Ok(())
     }
 
@@ -633,10 +662,14 @@ impl TorvoxBridge {
             detail: format!("lock failed: {}", e),
         })?;
         if let Some(surface) = surface_guard.as_mut() {
-            let scroll_offset = self.scroll_offset.load(std::sync::atomic::Ordering::Relaxed);
+            let scroll_offset = self
+                .scroll_offset
+                .load(std::sync::atomic::Ordering::Relaxed);
             let result = surface
                 .render(scroll_offset)
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() });
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                });
             self.store_cell_metrics(surface);
             result
         } else {
@@ -651,7 +684,9 @@ impl TorvoxBridge {
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .save_test_frame(data_dir)
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() })
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })
         } else {
             Err(TerminalError::PtyError {
                 detail: "No surface".to_string(),
@@ -698,7 +733,9 @@ impl TorvoxBridge {
             }
             surface
                 .save_test_frame(data_dir)
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() })
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })
         } else {
             Err(TerminalError::PtyError {
                 detail: "No surface".to_string(),
@@ -714,7 +751,10 @@ impl TorvoxBridge {
                 poisoned.into_inner()
             }
         };
-        surface_guard.as_mut().map(|s| s.poll_bel()).unwrap_or(false)
+        surface_guard
+            .as_mut()
+            .map(|s| s.poll_bel())
+            .unwrap_or(false)
     }
 
     pub fn poll_clipboard(&self) -> Option<String> {
@@ -747,7 +787,10 @@ impl TorvoxBridge {
                 poisoned.into_inner()
             }
         };
-        surface_guard.as_mut().map(|s| s.poll_shell_integration()).unwrap_or(0)
+        surface_guard
+            .as_mut()
+            .map(|s| s.poll_shell_integration())
+            .unwrap_or(0)
     }
 
     pub fn poll_sync_active(&self) -> bool {
@@ -758,7 +801,10 @@ impl TorvoxBridge {
                 poisoned.into_inner()
             }
         };
-        surface_guard.as_mut().map(|s| s.poll_sync_active()).unwrap_or(false)
+        surface_guard
+            .as_mut()
+            .map(|s| s.poll_sync_active())
+            .unwrap_or(false)
     }
 
     pub fn cwd(&self) -> String {
@@ -807,22 +853,31 @@ impl TorvoxBridge {
         Ok(())
     }
 
-    pub fn update_native_window(&self, window_ptr: i64, width: u32, height: u32) -> Result<(), TerminalError> {
+    pub fn update_native_window(
+        &self,
+        window_ptr: i64,
+        width: u32,
+        height: u32,
+    ) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .update_native_window(window_ptr as *mut std::ffi::c_void, width, height)
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() })?;
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
             self.store_cell_metrics(surface);
         }
-        self.surface_ready.store(true, std::sync::atomic::Ordering::Release);
+        self.surface_ready
+            .store(true, std::sync::atomic::Ordering::Release);
         Ok(())
     }
 
     pub fn release_surface(&self) {
-        self.surface_ready.store(false, std::sync::atomic::Ordering::Release);
+        self.surface_ready
+            .store(false, std::sync::atomic::Ordering::Release);
         if let Ok(mut guard) = self.surface.lock() {
             *guard = None;
         }
@@ -837,7 +892,8 @@ impl TorvoxBridge {
     }
 
     pub fn set_scroll_offset(&self, offset: u32) {
-        self.scroll_offset.store(offset, std::sync::atomic::Ordering::Relaxed);
+        self.scroll_offset
+            .store(offset, std::sync::atomic::Ordering::Relaxed);
         // Wake the render thread and force one present so the scrolled rows
         // become visible. `render()` skips idle frames, so without this the
         // viewport never moves on scroll/fling/jump-to-line.
@@ -850,7 +906,11 @@ impl TorvoxBridge {
 
     pub fn wait_until_ready_for_render(&self) {
         let mut attempts = 0u32;
-        while !self.surface_ready.load(std::sync::atomic::Ordering::Acquire) && attempts < 50 {
+        while !self
+            .surface_ready
+            .load(std::sync::atomic::Ordering::Acquire)
+            && attempts < 50
+        {
             std::thread::sleep(std::time::Duration::from_millis(1));
             attempts += 1;
         }
@@ -915,7 +975,8 @@ impl TorvoxBridge {
     pub fn set_extra_font_paths(&self, _paths: Vec<String>) {
         #[cfg(target_os = "android")]
         {
-            let path_bufs: Vec<std::path::PathBuf> = _paths.into_iter().map(std::path::PathBuf::from).collect();
+            let path_bufs: Vec<std::path::PathBuf> =
+                _paths.into_iter().map(std::path::PathBuf::from).collect();
             torvox_renderer::font::set_extra_font_paths(path_bufs);
         }
     }
@@ -970,7 +1031,13 @@ impl TorvoxBridge {
     /// Get the text of a selected region as a single String. Reads from
     /// scrollback cache lines on the Rust side in one FFI call, instead of
     /// N+1 calls from Kotlin. Returns an empty string if no session.
-    pub fn get_selected_text(&self, start_row: u32, start_col: u32, end_row: u32, end_col: u32) -> String {
+    pub fn get_selected_text(
+        &self,
+        start_row: u32,
+        start_col: u32,
+        end_row: u32,
+        end_col: u32,
+    ) -> String {
         if let Ok(guard) = self.session.lock()
             && let Some(session_arc) = guard.as_ref()
             && let Ok(session) = session_arc.lock()
@@ -979,7 +1046,11 @@ impl TorvoxBridge {
             let mut result = String::new();
             for row in start_row..=end_row {
                 if let Some(line) = terminal.read_line_text(row) {
-                    let from = if row == start_row { start_col as usize } else { 0 };
+                    let from = if row == start_row {
+                        start_col as usize
+                    } else {
+                        0
+                    };
                     let to = if row == end_row {
                         (end_col as usize).min(line.len())
                     } else {
@@ -1027,7 +1098,10 @@ impl TorvoxBridge {
                 let cols = snapshot.cols;
                 let cell_at = |r: u32, c: u32| -> Option<char> {
                     let idx = (r * cols + c) as usize;
-                    snapshot.cells.get(idx).and_then(|s| char::from_u32(s.codepoint))
+                    snapshot
+                        .cells
+                        .get(idx)
+                        .and_then(|s| char::from_u32(s.codepoint))
                 };
 
                 let selection = torvox_core::selection::Selection::new(
@@ -1071,7 +1145,11 @@ impl TorvoxBridge {
             return Ok(());
         }
         let count = i32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-        log::info!("set_search_highlights: count={}, data.len={}", count, data.len());
+        log::info!(
+            "set_search_highlights: count={}, data.len={}",
+            count,
+            data.len()
+        );
         let mut highlights = Vec::with_capacity(count.max(0) as usize);
         let mut pos = 4usize;
         for _ in 0..count.max(0) {
@@ -1079,8 +1157,10 @@ impl TorvoxBridge {
                 break;
             }
             let row = i32::from_le_bytes([data[pos], data[pos + 1], data[pos + 2], data[pos + 3]]);
-            let start_col = i32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]]);
-            let end_col_exclusive = i32::from_le_bytes([data[pos + 8], data[pos + 9], data[pos + 10], data[pos + 11]]);
+            let start_col =
+                i32::from_le_bytes([data[pos + 4], data[pos + 5], data[pos + 6], data[pos + 7]]);
+            let end_col_exclusive =
+                i32::from_le_bytes([data[pos + 8], data[pos + 9], data[pos + 10], data[pos + 11]]);
             let red = data[pos + 12];
             let green = data[pos + 13];
             let blue = data[pos + 14];
@@ -1151,14 +1231,20 @@ impl TorvoxBridge {
         None
     }
 
-    pub fn search_all_in_scrollback(&self, query: String, case_sensitive: bool, fuzzy: bool) -> String {
+    pub fn search_all_in_scrollback(
+        &self,
+        query: String,
+        case_sensitive: bool,
+        fuzzy: bool,
+    ) -> String {
         if let Ok(guard) = self.session.lock()
             && let Some(session_arc) = guard.as_ref()
             && let Ok(session) = session_arc.lock()
         {
-            let matches = session
-                .terminal()
-                .search_all_in_scrollback(&query, case_sensitive, fuzzy);
+            let matches =
+                session
+                    .terminal()
+                    .search_all_in_scrollback(&query, case_sensitive, fuzzy);
             if matches.is_empty() {
                 return String::new();
             }
@@ -1185,7 +1271,11 @@ impl TorvoxBridge {
         };
         guard
             .as_ref()
-            .map(|s| s.font_pipeline().list_monospace_fonts().join(LIST_SEPARATOR))
+            .map(|s| {
+                s.font_pipeline()
+                    .list_monospace_fonts()
+                    .join(LIST_SEPARATOR)
+            })
             .unwrap_or_default()
     }
 
@@ -1272,7 +1362,9 @@ impl TorvoxBridge {
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .save_session(&path)
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() })?;
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
         }
         Ok(())
     }
@@ -1284,7 +1376,9 @@ impl TorvoxBridge {
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .restore_session(&path)
-                .map_err(|e| TerminalError::PtyError { detail: e.to_string() })?;
+                .map_err(|e| TerminalError::PtyError {
+                    detail: e.to_string(),
+                })?;
         }
         Ok(())
     }
@@ -1329,7 +1423,11 @@ impl TorvoxBridge {
             .nth(TEXT_PREVIEW_MAX_CHARS)
             .map(|(i, _)| i)
             .unwrap_or(text.len());
-        log::debug!("get_terminal_text: len={}, text={:?}", text.len(), &text[..preview_end]);
+        log::debug!(
+            "get_terminal_text: len={}, text={:?}",
+            text.len(),
+            &text[..preview_end]
+        );
         text
     }
 
@@ -1371,9 +1469,12 @@ impl TorvoxBridge {
 
     pub fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
         let session_arc = {
-            let guard = self.session.lock().map_err(|_| TerminalError::SessionUnavailable {
-                detail: "session mutex poisoned".to_string(),
-            })?;
+            let guard = self
+                .session
+                .lock()
+                .map_err(|_| TerminalError::SessionUnavailable {
+                    detail: "session mutex poisoned".to_string(),
+                })?;
             match guard.as_ref() {
                 Some(session_arc) => session_arc.clone(),
                 None => {
@@ -1383,9 +1484,11 @@ impl TorvoxBridge {
                 }
             }
         };
-        let mut session = session_arc.lock().map_err(|_| TerminalError::SessionUnavailable {
-            detail: "session inner mutex poisoned".to_string(),
-        })?;
+        let mut session = session_arc
+            .lock()
+            .map_err(|_| TerminalError::SessionUnavailable {
+                detail: "session inner mutex poisoned".to_string(),
+            })?;
         session.write(&data).map_err(|error| {
             log::error!("bridge: PTY write failed: {error}");
             TerminalError::PtyError {
@@ -1403,9 +1506,12 @@ impl TorvoxBridge {
         unshifted_char: u32,
     ) -> Result<(), TerminalError> {
         let session_arc = {
-            let guard = self.session.lock().map_err(|_| TerminalError::SessionUnavailable {
-                detail: "session mutex poisoned".to_string(),
-            })?;
+            let guard = self
+                .session
+                .lock()
+                .map_err(|_| TerminalError::SessionUnavailable {
+                    detail: "session mutex poisoned".to_string(),
+                })?;
             match guard.as_ref() {
                 Some(session_arc) => session_arc.clone(),
                 None => {
@@ -1415,11 +1521,18 @@ impl TorvoxBridge {
                 }
             }
         };
-        let mut session = session_arc.lock().map_err(|_| TerminalError::SessionUnavailable {
-            detail: "session inner mutex poisoned".to_string(),
-        })?;
-        if let Some(encoded) = session.key_encode(key_code, modifiers as u16, action, unicode_char, unshifted_char)
-            && !encoded.is_empty()
+        let mut session = session_arc
+            .lock()
+            .map_err(|_| TerminalError::SessionUnavailable {
+                detail: "session inner mutex poisoned".to_string(),
+            })?;
+        if let Some(encoded) = session.key_encode(
+            key_code,
+            modifiers as u16,
+            action,
+            unicode_char,
+            unshifted_char,
+        ) && !encoded.is_empty()
         {
             log::debug!(
                 "bridge: process_key_event key_code={key_code} modifiers={modifiers} action={action} unicode={unicode_char} encoded_len={}",
@@ -1435,7 +1548,12 @@ impl TorvoxBridge {
         Ok(())
     }
 
-    pub fn set_background_image(&self, rgba_data: Vec<u8>, width: u32, height: u32) -> Result<(), TerminalError> {
+    pub fn set_background_image(
+        &self,
+        rgba_data: Vec<u8>,
+        width: u32,
+        height: u32,
+    ) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
@@ -1455,7 +1573,11 @@ impl TorvoxBridge {
         Ok(())
     }
 
-    pub fn set_background_params(&self, blur_radius: i32, alpha_tenths: i32) -> Result<(), TerminalError> {
+    pub fn set_background_params(
+        &self,
+        blur_radius: i32,
+        alpha_tenths: i32,
+    ) -> Result<(), TerminalError> {
         let blur = blur_radius as f32;
         let alpha = alpha_tenths as f32 / 10.0;
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
@@ -1523,10 +1645,15 @@ pub unsafe extern "C" fn torvox_bridge_set_native_window(
         "set_native_window_ffi: handle={handle}, low={window_ptr_low:#x}, high={window_ptr_high:#x}, width={width}, height={height}"
     );
     let window_ptr = ((window_ptr_high as i64) << 32) | (window_ptr_low as i64);
-    log::debug!("set_native_window_ffi: reconstructed window_ptr={:#x}", window_ptr);
-    with_bridge(handle, |bridge| bridge.set_native_window(window_ptr, width, height))
-        .map(|_| 0)
-        .unwrap_or(-1)
+    log::debug!(
+        "set_native_window_ffi: reconstructed window_ptr={:#x}",
+        window_ptr
+    );
+    with_bridge(handle, |bridge| {
+        bridge.set_native_window(window_ptr, width, height)
+    })
+    .map(|_| 0)
+    .unwrap_or(-1)
 }
 
 /// # Safety
@@ -1549,9 +1676,11 @@ pub unsafe extern "C" fn torvox_bridge_update_native_window(
     height: u32,
 ) -> i32 {
     let window_ptr = ((window_ptr_high as i64) << 32) | (window_ptr_low as i64);
-    with_bridge(handle, |bridge| bridge.update_native_window(window_ptr, width, height))
-        .map(|_| 0)
-        .unwrap_or(-1)
+    with_bridge(handle, |bridge| {
+        bridge.update_native_window(window_ptr, width, height)
+    })
+    .map(|_| 0)
+    .unwrap_or(-1)
 }
 
 /// # Safety
@@ -1610,7 +1739,10 @@ fn safe_cstring(string: String) -> Option<std::ffi::CString> {
             string.len()
         );
     }
-    let stripped: String = string.chars().filter(|&character| character != '\0').collect();
+    let stripped: String = string
+        .chars()
+        .filter(|&character| character != '\0')
+        .collect();
     if stripped.is_empty() {
         None
     } else {
@@ -1664,7 +1796,10 @@ pub unsafe extern "C" fn torvox_bridge_release_gpu_surface(handle: i64) {
         } else {
             "panic in FFI call".to_string()
         };
-        log::error!("FFI panic in torvox_bridge_release_gpu_surface: {}", message);
+        log::error!(
+            "FFI panic in torvox_bridge_release_gpu_surface: {}",
+            message
+        );
     }
 }
 
@@ -1694,7 +1829,11 @@ pub unsafe extern "C" fn torvox_bridge_release_surface(handle: i64) {
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
 /// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_save_path(handle: i64, path_ptr: *const u8, path_len: i32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_set_save_path(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> i32 {
     let path = read_string(path_ptr, path_len);
     with_bridge(handle, |bridge| bridge.set_save_path(path))
         .map(|_| 0)
@@ -1705,13 +1844,19 @@ pub unsafe extern "C" fn torvox_bridge_set_save_path(handle: i64, path_ptr: *con
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
 /// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_has_saved_session(handle: i64, path_ptr: *const u8, path_len: i32) -> bool {
+pub unsafe extern "C" fn torvox_bridge_has_saved_session(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> bool {
     let path = read_string(path_ptr, path_len);
     let bridge = match unsafe { bridge_from_handle(handle) } {
         Some(b) => b,
         None => return false,
     };
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.has_saved_session(path))) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.has_saved_session(path)
+    })) {
         Ok(result) => result,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -1731,7 +1876,11 @@ pub unsafe extern "C" fn torvox_bridge_has_saved_session(handle: i64, path_ptr: 
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
 /// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_save_session(handle: i64, path_ptr: *const u8, path_len: i32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_save_session(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> i32 {
     let path = read_string(path_ptr, path_len);
     with_bridge(handle, |bridge| bridge.save_session(path))
         .map(|_| 0)
@@ -1742,7 +1891,11 @@ pub unsafe extern "C" fn torvox_bridge_save_session(handle: i64, path_ptr: *cons
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
 /// `path_ptr` must be valid for reads of `path_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_restore_session(handle: i64, path_ptr: *const u8, path_len: i32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_restore_session(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> i32 {
     let path = read_string(path_ptr, path_len);
     with_bridge(handle, |bridge| bridge.restore_session(path))
         .map(|_| 0)
@@ -1753,7 +1906,11 @@ pub unsafe extern "C" fn torvox_bridge_restore_session(handle: i64, path_ptr: *c
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
 /// `data_ptr` must be valid for reads of `data_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_write_to_pty(handle: i64, data_ptr: *const u8, data_len: i32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_write_to_pty(
+    handle: i64,
+    data_ptr: *const u8,
+    data_len: i32,
+) -> i32 {
     let data = if data_ptr.is_null() || data_len <= 0 {
         Vec::new()
     } else {
@@ -1804,20 +1961,22 @@ pub unsafe extern "C" fn torvox_bridge_get_terminal_text(handle: i64) -> i64 {
         Some(b) => b,
         None => return 0,
     };
-    let text = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.get_terminal_text())) {
-        Ok(t) => t,
-        Err(panic_info) => {
-            let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "panic in FFI call".to_string()
-            };
-            log::error!("FFI panic in torvox_bridge_get_terminal_text: {}", message);
-            return 0;
-        }
-    };
+    let text =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.get_terminal_text()))
+        {
+            Ok(t) => t,
+            Err(panic_info) => {
+                let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "panic in FFI call".to_string()
+                };
+                log::error!("FFI panic in torvox_bridge_get_terminal_text: {}", message);
+                return 0;
+            }
+        };
     match safe_cstring(text) {
         Some(c_str) => c_str.into_raw() as i64,
         None => 0,
@@ -1832,7 +1991,9 @@ pub unsafe extern "C" fn torvox_bridge_get_active_session_title(handle: i64) -> 
         Some(b) => b,
         None => return 0,
     };
-    let title = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.get_active_session_title())) {
+    let title = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.get_active_session_title()
+    })) {
         Ok(t) => t,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -1842,7 +2003,10 @@ pub unsafe extern "C" fn torvox_bridge_get_active_session_title(handle: i64) -> 
             } else {
                 "panic in FFI call".to_string()
             };
-            log::error!("FFI panic in torvox_bridge_get_active_session_title: {}", message);
+            log::error!(
+                "FFI panic in torvox_bridge_get_active_session_title: {}",
+                message
+            );
             return 0;
         }
     };
@@ -1860,7 +2024,9 @@ pub unsafe extern "C" fn torvox_bridge_get_default_font_name(handle: i64) -> i64
         Some(b) => b,
         None => return 0,
     };
-    let name = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.get_default_font_name())) {
+    let name = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.get_default_font_name()
+    })) {
         Ok(n) => n,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -1870,7 +2036,10 @@ pub unsafe extern "C" fn torvox_bridge_get_default_font_name(handle: i64) -> i64
             } else {
                 "panic in FFI call".to_string()
             };
-            log::error!("FFI panic in torvox_bridge_get_default_font_name: {}", message);
+            log::error!(
+                "FFI panic in torvox_bridge_get_default_font_name: {}",
+                message
+            );
             return 0;
         }
     };
@@ -1891,20 +2060,21 @@ pub unsafe extern "C" fn torvox_bridge_get_font_info(handle: i64) -> i64 {
         Some(b) => b,
         None => return 0,
     };
-    let info = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.get_font_info())) {
-        Ok(i) => i,
-        Err(panic_info) => {
-            let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "panic in FFI call".to_string()
-            };
-            log::error!("FFI panic in torvox_bridge_get_font_info: {}", message);
-            return 0;
-        }
-    };
+    let info =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.get_font_info())) {
+            Ok(i) => i,
+            Err(panic_info) => {
+                let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "panic in FFI call".to_string()
+                };
+                log::error!("FFI panic in torvox_bridge_get_font_info: {}", message);
+                return 0;
+            }
+        };
     match safe_cstring(info) {
         Some(c_str) => c_str.into_raw() as i64,
         None => 0,
@@ -1915,7 +2085,10 @@ pub unsafe extern "C" fn torvox_bridge_get_font_info(handle: i64) -> i64 {
 /// `handle` must be a valid surface handle, or zero.
 /// `locale_ptr` must be a valid null-terminated UTF-8 C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_system_locale(handle: i64, locale_ptr: *const std::os::raw::c_char) {
+pub unsafe extern "C" fn torvox_bridge_set_system_locale(
+    handle: i64,
+    locale_ptr: *const std::os::raw::c_char,
+) {
     if locale_ptr.is_null() {
         return;
     }
@@ -1942,7 +2115,9 @@ pub unsafe extern "C" fn torvox_bridge_list_font_families(handle: i64) -> i64 {
         Some(b) => b,
         None => return 0,
     };
-    let families = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.list_font_families())) {
+    let families = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.list_font_families()
+    })) {
         Ok(f) => f,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -2070,7 +2245,10 @@ pub unsafe extern "C" fn torvox_bridge_set_font_size(handle: i64, size_tenths: u
 /// # Safety
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_font_size_in_place(handle: i64, size_tenths: u32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_set_font_size_in_place(
+    handle: i64,
+    size_tenths: u32,
+) -> i32 {
     with_bridge(handle, |bridge| bridge.set_font_size_in_place(size_tenths))
         .map(|_| 0)
         .unwrap_or(-1)
@@ -2119,7 +2297,14 @@ pub unsafe extern "C" fn torvox_bridge_set_selection(
     mode: i32,
 ) -> i32 {
     with_bridge(handle, |bridge| {
-        bridge.set_selection(start_row, start_col, end_row, end_col, active != 0, mode as u8)
+        bridge.set_selection(
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+            active != 0,
+            mode as u8,
+        )
     })
     .map(|_| 0)
     .unwrap_or(-1)
@@ -2128,15 +2313,22 @@ pub unsafe extern "C" fn torvox_bridge_set_selection(
 /// # Safety
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_expand_and_set_selection(handle: i64, row: u32, col: u32, mode: i32) -> i64 {
-    with_bridge(handle, |bridge| bridge.expand_and_set_selection(row, col, mode as u8))
-        .map(|(sr, sc, er, ec)| {
-            (sr as i64 & 0xFFFF)
-                | ((sc as i64 & 0xFFFF) << 16)
-                | ((er as i64 & 0xFFFF) << 32)
-                | ((ec as i64 & 0xFFFF) << 48)
-        })
-        .unwrap_or(-1)
+pub unsafe extern "C" fn torvox_bridge_expand_and_set_selection(
+    handle: i64,
+    row: u32,
+    col: u32,
+    mode: i32,
+) -> i64 {
+    with_bridge(handle, |bridge| {
+        bridge.expand_and_set_selection(row, col, mode as u8)
+    })
+    .map(|(sr, sc, er, ec)| {
+        (sr as i64 & 0xFFFF)
+            | ((sc as i64 & 0xFFFF) << 16)
+            | ((er as i64 & 0xFFFF) << 32)
+            | ((ec as i64 & 0xFFFF) << 48)
+    })
+    .unwrap_or(-1)
 }
 
 /// # Safety
@@ -2145,7 +2337,11 @@ pub unsafe extern "C" fn torvox_bridge_expand_and_set_selection(handle: i64, row
 /// Wire format: [count: i32 LE] then for each:
 ///   [row: i32 LE][start_col: i32 LE][end_col_exclusive: i32 LE][r: u8][g: u8][b: u8][a: u8]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_search_highlights(handle: i64, data_ptr: *const u8, data_len: i32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_set_search_highlights(
+    handle: i64,
+    data_ptr: *const u8,
+    data_len: i32,
+) -> i32 {
     if data_ptr.is_null() || data_len <= 0 {
         return with_bridge(handle, |bridge| bridge.set_search_highlights(Vec::new()))
             .map(|_| 0)
@@ -2154,16 +2350,22 @@ pub unsafe extern "C" fn torvox_bridge_set_search_highlights(handle: i64, data_p
     // SAFETY: The caller guarantees data_ptr is valid for reads of data_len bytes.
     // The slice is immediately copied to an owned Vec, so no aliasing issues.
     let bytes = unsafe { std::slice::from_raw_parts(data_ptr, data_len as usize) };
-    with_bridge(handle, |bridge| bridge.set_search_highlights(bytes.to_vec()))
-        .map(|_| 0)
-        .unwrap_or(-1)
+    with_bridge(handle, |bridge| {
+        bridge.set_search_highlights(bytes.to_vec())
+    })
+    .map(|_| 0)
+    .unwrap_or(-1)
 }
 
 /// # Safety
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
 /// `family_ptr` must be valid for reads of `family_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_font_family(handle: i64, family_ptr: *const u8, family_len: i32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_set_font_family(
+    handle: i64,
+    family_ptr: *const u8,
+    family_len: i32,
+) -> i32 {
     let family = read_string(family_ptr, family_len);
     with_bridge(handle, |bridge| bridge.set_font_family(family))
         .map(|_| 0)
@@ -2174,7 +2376,11 @@ pub unsafe extern "C" fn torvox_bridge_set_font_family(handle: i64, family_ptr: 
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
 /// `theme_ptr` must be valid for reads of `theme_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_theme(handle: i64, theme_ptr: *const u8, theme_len: i32) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_set_theme(
+    handle: i64,
+    theme_ptr: *const u8,
+    theme_len: i32,
+) -> i32 {
     if theme_ptr.is_null() || theme_len <= 0 {
         return -1;
     }
@@ -2238,7 +2444,9 @@ pub unsafe extern "C" fn torvox_bridge_scrollback_line(handle: i64, index: u32) 
         Some(b) => b,
         None => return 0,
     };
-    let line = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.scrollback_line(index))) {
+    let line = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.scrollback_line(index)
+    })) {
         Ok(l) => l,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -2344,7 +2552,9 @@ pub unsafe extern "C" fn torvox_bridge_poll_shell_integration(handle: i64) -> i3
         Some(b) => b,
         None => return 0,
     };
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.poll_shell_integration())) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.poll_shell_integration()
+    })) {
         Ok(val) => val as i32,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -2354,7 +2564,10 @@ pub unsafe extern "C" fn torvox_bridge_poll_shell_integration(handle: i64) -> i3
             } else {
                 "panic in FFI call".to_string()
             };
-            log::error!("FFI panic in torvox_bridge_poll_shell_integration: {}", message);
+            log::error!(
+                "FFI panic in torvox_bridge_poll_shell_integration: {}",
+                message
+            );
             0
         }
     }
@@ -2396,7 +2609,10 @@ pub unsafe extern "C" fn torvox_bridge_poll_sync_active(handle: i64) -> i32 {
 /// # Safety
 /// `handle` must be a valid surface handle. `data_dir` must be a valid C string.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_save_test_frame(handle: i64, data_dir: *const std::ffi::c_char) -> i32 {
+pub unsafe extern "C" fn torvox_bridge_save_test_frame(
+    handle: i64,
+    data_dir: *const std::ffi::c_char,
+) -> i32 {
     if data_dir.is_null() {
         return -1;
     }
@@ -2407,7 +2623,9 @@ pub unsafe extern "C" fn torvox_bridge_save_test_frame(handle: i64, data_dir: *c
         Some(b) => b,
         None => return -1,
     };
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.save_test_frame(&dir))) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.save_test_frame(&dir)
+    })) {
         Ok(result) => match result {
             Ok(_) => 0,
             Err(e) => {
@@ -2455,7 +2673,15 @@ pub unsafe extern "C" fn torvox_bridge_save_test_frame_with_selection(
         None => return -1,
     };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        bridge.save_test_frame_with_selection(&dir, start_row, start_col, end_row, end_col, active != 0, mode as u8)
+        bridge.save_test_frame_with_selection(
+            &dir,
+            start_row,
+            start_col,
+            end_row,
+            end_col,
+            active != 0,
+            mode as u8,
+        )
     })) {
         Ok(result) => match result {
             Ok(_) => 0,
@@ -2472,7 +2698,10 @@ pub unsafe extern "C" fn torvox_bridge_save_test_frame_with_selection(
             } else {
                 "panic in FFI call".to_string()
             };
-            log::error!("FFI panic in torvox_bridge_save_test_frame_with_selection: {}", message);
+            log::error!(
+                "FFI panic in torvox_bridge_save_test_frame_with_selection: {}",
+                message
+            );
             -1
         }
     }
@@ -2487,20 +2716,21 @@ pub unsafe extern "C" fn torvox_bridge_poll_clipboard(handle: i64) -> i64 {
         Some(b) => b,
         None => return 0,
     };
-    let clipboard = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.poll_clipboard())) {
-        Ok(c) => c,
-        Err(panic_info) => {
-            let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = panic_info.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "panic in FFI call".to_string()
-            };
-            log::error!("FFI panic in torvox_bridge_poll_clipboard: {}", message);
-            return 0;
-        }
-    };
+    let clipboard =
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.poll_clipboard())) {
+            Ok(c) => c,
+            Err(panic_info) => {
+                let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "panic in FFI call".to_string()
+                };
+                log::error!("FFI panic in torvox_bridge_poll_clipboard: {}", message);
+                return 0;
+            }
+        };
     match clipboard {
         Some(text) => match safe_cstring(text) {
             Some(c_str) => c_str.into_raw() as i64,
@@ -2520,7 +2750,9 @@ pub unsafe extern "C" fn torvox_bridge_poll_notification(handle: i64) -> i64 {
         Some(b) => b,
         None => return 0,
     };
-    let notification = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.poll_notification_raw())) {
+    let notification = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.poll_notification_raw()
+    })) {
         Ok(n) => n,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -2676,13 +2908,19 @@ pub unsafe extern "C" fn torvox_bridge_scrollback_len(handle: i64) -> u32 {
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`, or zero.
 /// `query_ptr` must be valid for reads of `query_len` bytes, and must not be aliased.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_search_in_scrollback(handle: i64, query_ptr: *const u8, query_len: i32) -> i64 {
+pub unsafe extern "C" fn torvox_bridge_search_in_scrollback(
+    handle: i64,
+    query_ptr: *const u8,
+    query_len: i32,
+) -> i64 {
     let query = read_string(query_ptr, query_len);
     let bridge = match unsafe { bridge_from_handle(handle) } {
         Some(b) => b,
         None => return 0,
     };
-    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| bridge.search_in_scrollback(query))) {
+    let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        bridge.search_in_scrollback(query)
+    })) {
         Ok(r) => r,
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
@@ -2692,7 +2930,10 @@ pub unsafe extern "C" fn torvox_bridge_search_in_scrollback(handle: i64, query_p
             } else {
                 "panic in FFI call".to_string()
             };
-            log::error!("FFI panic in torvox_bridge_search_in_scrollback: {}", message);
+            log::error!(
+                "FFI panic in torvox_bridge_search_in_scrollback: {}",
+                message
+            );
             return 0;
         }
     };
@@ -2737,7 +2978,10 @@ pub unsafe extern "C" fn torvox_bridge_search_all_in_scrollback(
             } else {
                 "panic in FFI call".to_string()
             };
-            log::error!("FFI panic in torvox_bridge_search_all_in_scrollback: {}", message);
+            log::error!(
+                "FFI panic in torvox_bridge_search_all_in_scrollback: {}",
+                message
+            );
             return 0;
         }
     };
@@ -2803,7 +3047,10 @@ pub unsafe extern "C" fn torvox_bridge_wait_until_ready_for_render(handle: i64) 
         } else {
             "panic in FFI call".to_string()
         };
-        log::error!("FFI panic in torvox_bridge_wait_until_ready_for_render: {}", message);
+        log::error!(
+            "FFI panic in torvox_bridge_wait_until_ready_for_render: {}",
+            message
+        );
     }
 }
 
@@ -2819,7 +3066,9 @@ pub unsafe extern "C" fn torvox_bridge_set_background_image(
     height: i32,
 ) {
     if data.is_null() || len <= 0 || width <= 0 || height <= 0 {
-        log::warn!("set_background_image: invalid args data={data:?} len={len} w={width} h={height}");
+        log::warn!(
+            "set_background_image: invalid args data={data:?} len={len} w={width} h={height}"
+        );
         return;
     }
     // SAFETY: The caller guarantees data is valid for reads of len bytes.
@@ -2835,8 +3084,14 @@ pub unsafe extern "C" fn torvox_bridge_set_background_image(
 /// # Safety
 /// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_background_params(handle: i64, blur_radius: i32, alpha_tenths: i32) {
-    if let Err(error) = with_bridge(handle, |bridge| bridge.set_background_params(blur_radius, alpha_tenths)) {
+pub unsafe extern "C" fn torvox_bridge_set_background_params(
+    handle: i64,
+    blur_radius: i32,
+    alpha_tenths: i32,
+) {
+    if let Err(error) = with_bridge(handle, |bridge| {
+        bridge.set_background_params(blur_radius, alpha_tenths)
+    }) {
         log::error!("bridge: torvox_bridge_set_background_params failed: {error}");
     }
 }
@@ -2863,7 +3118,11 @@ pub unsafe extern "C" fn torvox_bridge_set_cursor_visible(handle: i64, visible: 
 /// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
 /// `style_ptr` must point to a valid UTF-8 byte array of length `style_len`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_cursor_style(handle: i64, style_ptr: *const u8, style_len: i32) {
+pub unsafe extern "C" fn torvox_bridge_set_cursor_style(
+    handle: i64,
+    style_ptr: *const u8,
+    style_len: i32,
+) {
     let style = read_string(style_ptr, style_len);
     if let Err(error) = with_bridge(handle, |bridge| bridge.set_cursor_style(style)) {
         log::error!("bridge: torvox_bridge_set_cursor_style failed: {error}");
@@ -2971,8 +3230,14 @@ mod tests {
         let core = bridge.to_core_config();
         assert_eq!(core.rows, 48, "rows must be copied");
         assert_eq!(core.cols, 160, "cols must be copied");
-        assert_eq!(core.scrollback_lines, 12_000, "scrollback_lines must be copied");
-        assert_eq!(core.font_size_tenths, 200, "font_size_tenths must be copied");
+        assert_eq!(
+            core.scrollback_lines, 12_000,
+            "scrollback_lines must be copied"
+        );
+        assert_eq!(
+            core.font_size_tenths, 200,
+            "font_size_tenths must be copied"
+        );
         assert!(matches!(
             core.shell,
             torvox_core::config::Shell::Custom(path) if path == "/bin/zsh"
@@ -3008,7 +3273,10 @@ mod tests {
         assert_eq!(bridge.home, "", "home must be left empty");
         assert_eq!(bridge.user, "", "user must be left empty");
         assert_eq!(bridge.path, "", "path must be left empty");
-        assert_eq!(bridge.working_directory, "", "working_directory must be left empty");
+        assert_eq!(
+            bridge.working_directory, "",
+            "working_directory must be left empty"
+        );
         assert_eq!(bridge.prefix, "", "prefix must be left empty");
         // Theme resets to the documented default.
         assert_eq!(
@@ -3060,7 +3328,10 @@ mod tests {
     fn poll_bel_idempotent() {
         let bridge = TorvoxBridge::new(TerminalConfig::default());
         assert!(!bridge.poll_bel());
-        assert!(!bridge.poll_bel(), "repeated poll_bel should still be false");
+        assert!(
+            !bridge.poll_bel(),
+            "repeated poll_bel should still be false"
+        );
     }
 
     #[test]
@@ -3119,7 +3390,11 @@ mod tests {
     #[test]
     fn scrollback_length_zero_without_surface() {
         let bridge = TorvoxBridge::new(TerminalConfig::default());
-        assert_eq!(bridge.scrollback_length(), 0, "scrollback should be 0 without surface");
+        assert_eq!(
+            bridge.scrollback_length(),
+            0,
+            "scrollback should be 0 without surface"
+        );
     }
 
     #[test]
@@ -3127,7 +3402,11 @@ mod tests {
         let bridge = TorvoxBridge::new(TerminalConfig::default());
         let temp_dir = std::env::temp_dir().join("torvox_test_save");
         let result = bridge.set_save_path(temp_dir.to_string_lossy().to_string());
-        assert!(result.is_ok(), "set_save_path should succeed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "set_save_path should succeed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -3156,7 +3435,10 @@ mod tests {
     fn null_handle_poll_shell_integration_returns_zero() {
         unsafe {
             let result = torvox_bridge_poll_shell_integration(0);
-            assert_eq!(result, 0, "null handle poll_shell_integration should return 0");
+            assert_eq!(
+                result, 0,
+                "null handle poll_shell_integration should return 0"
+            );
         }
     }
 
@@ -3611,7 +3893,8 @@ mod tests {
         let title_ptr = title.into_raw();
         // Manually create a pointer to a C string containing interior NULs
         let body_raw: &[u8] = b"Body\0with\0nul\0";
-        let body_ptr = unsafe { std::ffi::CString::from_vec_unchecked(body_raw.to_vec()) }.into_raw();
+        let body_ptr =
+            unsafe { std::ffi::CString::from_vec_unchecked(body_raw.to_vec()) }.into_raw();
         let buf = Box::new([title_ptr, body_ptr]);
         let ptr = Box::into_raw(buf) as i64;
         unsafe {

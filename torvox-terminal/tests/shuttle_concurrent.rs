@@ -98,7 +98,9 @@ mod shuttle_tests_impl {
     fn g1_pty_reader_after_drop() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let reader = std::thread::spawn(move || {
                     let t = t1.lock().unwrap();
@@ -148,7 +150,9 @@ mod shuttle_tests_impl {
     fn g1_pty_reader_write_ordering() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(3, 80, 10000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(3, 80, 10000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let h1 = std::thread::spawn(move || {
@@ -187,7 +191,11 @@ mod shuttle_tests_impl {
                 });
                 h.join().unwrap();
                 let snap = terminal.lock().unwrap().take_snapshot();
-                let chars: String = snap.cells.iter().filter_map(|c| char::from_u32(c.codepoint)).collect();
+                let chars: String = snap
+                    .cells
+                    .iter()
+                    .filter_map(|c| char::from_u32(c.codepoint))
+                    .collect();
                 assert!(
                     chars.contains("text before") || chars.contains("text after"),
                     "Ctrl+C should not erase text, got: {:?}",
@@ -207,7 +215,9 @@ mod shuttle_tests_impl {
     fn g2_input_writer_while_reader_active() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let writer = std::thread::spawn(move || {
@@ -235,7 +245,9 @@ mod shuttle_tests_impl {
     fn g2_input_writer_burst_keystrokes() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(3, 20, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(3, 20, 1000).expect("term"),
+                ));
                 let t = terminal.clone();
                 let writer = std::thread::spawn(move || {
                     let mut guard = t.lock().unwrap();
@@ -244,7 +256,11 @@ mod shuttle_tests_impl {
                 });
                 writer.join().unwrap();
                 let snap = terminal.lock().unwrap().take_snapshot();
-                let chars: String = snap.cells.iter().filter_map(|c| char::from_u32(c.codepoint)).collect();
+                let chars: String = snap
+                    .cells
+                    .iter()
+                    .filter_map(|c| char::from_u32(c.codepoint))
+                    .collect();
                 // All keys content should appear in screen
                 assert!(chars.len() >= 1, "buffered keys visible");
             },
@@ -282,7 +298,9 @@ mod shuttle_tests_impl {
     fn g2_input_writer_while_dropping() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t = terminal.clone();
                 let writer = std::thread::spawn(move || {
                     let mut guard = t.lock().unwrap();
@@ -467,7 +485,9 @@ mod shuttle_tests_impl {
     fn g4_waiter_child_exit_during_write() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let writer = std::thread::spawn(move || {
@@ -517,7 +537,9 @@ mod shuttle_tests_impl {
     fn g4_waiter_session_dropped() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t = terminal.clone();
                 let waiter = std::thread::spawn(move || {
                     let guard = t.lock();
@@ -537,7 +559,9 @@ mod shuttle_tests_impl {
     fn g4_waiter_exit_then_new_session() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 // Simulate session 1 activity
                 {
                     let mut t = terminal.lock().unwrap();
@@ -673,7 +697,11 @@ mod shuttle_tests_impl {
                     h.join().unwrap();
                 }
                 let snap = terminal.lock().unwrap().take_snapshot();
-                let count = snap.cells.iter().filter(|c| c.codepoint == b'X' as u32).count();
+                let count = snap
+                    .cells
+                    .iter()
+                    .filter(|c| c.codepoint == b'X' as u32)
+                    .count();
                 assert_eq!(count, 500, "all 500 writes should appear, got {count}");
             },
             1000,
@@ -688,7 +716,9 @@ mod shuttle_tests_impl {
                 let mut sessions = Vec::new();
                 for _ in 0..20 {
                     let t = GhosttyTerminal::new(24, 80, 1000).expect("term");
-                    let mut guard = sessions.last().map(|_| GhosttyTerminal::new(24, 80, 1000).unwrap());
+                    let mut guard = sessions
+                        .last()
+                        .map(|_| GhosttyTerminal::new(24, 80, 1000).unwrap());
                     if let Some(ref mut g) = guard {
                         g.vt_write(b"test\n");
                     }
@@ -710,7 +740,9 @@ mod shuttle_tests_impl {
     fn shuttle_flume_writer_reader() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {
@@ -739,7 +771,9 @@ mod shuttle_tests_impl {
     fn shuttle_concurrent_vt_write_and_snapshot() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {
@@ -768,8 +802,12 @@ mod shuttle_tests_impl {
     fn shuttle_multi_session_write_read() {
         shuttle::check(
             || {
-                let t1 = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(10, 20, 500).expect("term1")));
-                let t2 = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(10, 20, 500).expect("term2")));
+                let t1 = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(10, 20, 500).expect("term1"),
+                ));
+                let t2 = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(10, 20, 500).expect("term2"),
+                ));
                 let t1a = t1.clone();
                 let t2a = t2.clone();
                 let j1 = std::thread::spawn(move || {
@@ -802,7 +840,9 @@ mod shuttle_tests_impl {
     fn shuttle_resize_write_interleaved() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {
@@ -872,7 +912,9 @@ mod shuttle_tests_impl {
     fn shuttle_session_drop_concurrent_access() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(5, 10, 100).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(5, 10, 100).expect("term"),
+                ));
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {
                     let _ = t2.lock().unwrap().take_snapshot();
@@ -889,7 +931,9 @@ mod shuttle_tests_impl {
     fn shuttle_signal_pty_read_race() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {
@@ -917,7 +961,9 @@ mod shuttle_tests_impl {
     fn shuttle_scrollback_read_vt_write_race() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(3, 20, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(3, 20, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {
@@ -945,7 +991,9 @@ mod shuttle_tests_impl {
     fn shuttle_config_hot_reload_render_race() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {
@@ -973,7 +1021,9 @@ mod shuttle_tests_impl {
     fn session_write_read_bridge() {
         shuttle::check(
             || {
-                let terminal = Arc::new(std::sync::Mutex::new(GhosttyTerminal::new(24, 80, 1000).expect("term")));
+                let terminal = Arc::new(std::sync::Mutex::new(
+                    GhosttyTerminal::new(24, 80, 1000).expect("term"),
+                ));
                 let t1 = terminal.clone();
                 let t2 = terminal.clone();
                 let j1 = std::thread::spawn(move || {

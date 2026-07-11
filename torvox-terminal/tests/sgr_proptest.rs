@@ -29,7 +29,8 @@ fn sgr_256_seq() -> impl Strategy<Value = Vec<u8>> {
 
 #[allow(dead_code)]
 fn sgr_truecolor_seq() -> impl Strategy<Value = Vec<u8>> {
-    (0u8..=255u8, 0u8..=255u8, 0u8..=255u8).prop_map(|(r, g, b)| format!("\x1b[38;2;{};{};{}mX", r, g, b).into_bytes())
+    (0u8..=255u8, 0u8..=255u8, 0u8..=255u8)
+        .prop_map(|(r, g, b)| format!("\x1b[38;2;{};{};{}mX", r, g, b).into_bytes())
 }
 
 proptest! {
@@ -173,7 +174,10 @@ fn sgr_attr_4way_combinations() {
             for k in j + 1..n {
                 for l in k + 1..n {
                     let mut t = make_term(5, 40);
-                    t.vt_write(format!("\x1b[{};{};{};{}mX", attrs[i], attrs[j], attrs[k], attrs[l]).as_bytes());
+                    t.vt_write(
+                        format!("\x1b[{};{};{};{}mX", attrs[i], attrs[j], attrs[k], attrs[l])
+                            .as_bytes(),
+                    );
                     t.flush();
                     assert_invariants(&t.take_snapshot());
                 }
@@ -222,7 +226,10 @@ fn sgr_fg_bg_then_sgr_0_reset() {
             t.vt_write(format!("\x1b[{};{}mX\x1b[0mY", fg, bg).as_bytes());
             t.flush();
             let snap = t.take_snapshot();
-            assert!(!snap.cells[1].bold, "SGR 0: bold not reset for fg={fg},bg={bg}");
+            assert!(
+                !snap.cells[1].bold,
+                "SGR 0: bold not reset for fg={fg},bg={bg}"
+            );
         }
     }
 }

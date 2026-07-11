@@ -26,8 +26,14 @@ fn wez_csi_empty_params_restore_default() {
     t.vt_write(b"\x1b[H");
     t.flush();
     let snap = t.take_snapshot();
-    assert_eq!(snap.cursor_row, 0, "Wez CSI empty: CUP no params = home row");
-    assert_eq!(snap.cursor_col, 0, "Wez CSI empty: CUP no params = home col");
+    assert_eq!(
+        snap.cursor_row, 0,
+        "Wez CSI empty: CUP no params = home row"
+    );
+    assert_eq!(
+        snap.cursor_col, 0,
+        "Wez CSI empty: CUP no params = home col"
+    );
 }
 
 #[test]
@@ -82,7 +88,11 @@ fn wez_csi_ed_final_byte_0_1_2() {
     t.vt_write(b"\x1b[5G\x1b[0K");
     t.flush();
     let snap = t.take_snapshot();
-    assert_eq!(snap.cell_at(0, 4).codepoint, 0, "Wez EL 0: erased from col 5");
+    assert_eq!(
+        snap.cell_at(0, 4).codepoint,
+        0,
+        "Wez EL 0: erased from col 5"
+    );
 }
 
 #[test]
@@ -118,7 +128,10 @@ fn wez_sgr_single_param_bold() {
     let snap = t.take_snapshot();
     assert!(snap.cell_at(0, 0).bold, "Wez SGR 1: bold set");
     assert!(!snap.cell_at(0, 0).italic, "Wez SGR 1: italic unchanged");
-    assert!(!snap.cell_at(0, 0).underline, "Wez SGR 1: underline unchanged");
+    assert!(
+        !snap.cell_at(0, 0).underline,
+        "Wez SGR 1: underline unchanged"
+    );
 }
 
 #[test]
@@ -151,7 +164,10 @@ fn wez_sgr_multi_param_reset_all_then_set() {
     let snap = t.take_snapshot();
     assert!(!snap.cell_at(0, 1).bold, "Wez SGR 0;5: bold reset");
     assert!(!snap.cell_at(0, 1).italic, "Wez SGR 0;5: italic reset");
-    assert!(!snap.cell_at(0, 1).underline, "Wez SGR 0;5: underline reset");
+    assert!(
+        !snap.cell_at(0, 1).underline,
+        "Wez SGR 0;5: underline reset"
+    );
     assert!(snap.cell_at(0, 1).blink, "Wez SGR 0;5: blink set");
 }
 
@@ -164,7 +180,10 @@ fn wez_sgr_param_order_matters() {
     t.vt_write(b"\x1b[1;0mN\x1b[0;1mY");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(!snap.cell_at(0, 0).bold, "Wez SGR 1;0: no bold (reset wins)");
+    assert!(
+        !snap.cell_at(0, 0).bold,
+        "Wez SGR 1;0: no bold (reset wins)"
+    );
     assert!(snap.cell_at(0, 1).bold, "Wez SGR 0;1: bold (set wins)");
 }
 
@@ -272,7 +291,11 @@ fn wez_c0_bell() {
     t.flush();
     let snap = t.take_snapshot();
     assert_eq!(snap.cell_at(0, 0).codepoint, 'X' as u32);
-    assert_eq!(snap.cell_at(0, 1).codepoint, 'Y' as u32, "Wez BEL: Y placed after X");
+    assert_eq!(
+        snap.cell_at(0, 1).codepoint,
+        'Y' as u32,
+        "Wez BEL: Y placed after X"
+    );
     check_invariants(&t);
 }
 
@@ -293,7 +316,11 @@ fn wez_c0_linefeed() {
     t.flush();
     let snap = t.take_snapshot();
     assert_eq!(snap.cursor_row, 1, "Wez LF: row 2");
-    assert_eq!(snap.cell_at(1, 0).codepoint, 'R' as u32, "Wez LF: Row2 on row 2");
+    assert_eq!(
+        snap.cell_at(1, 0).codepoint,
+        'R' as u32,
+        "Wez LF: Row2 on row 2"
+    );
 }
 
 #[test]
@@ -302,7 +329,11 @@ fn wez_c0_tab() {
     t.vt_write(b"X\x09Y");
     t.flush();
     let snap = t.take_snapshot();
-    assert_eq!(snap.cell_at(0, 8).codepoint, 'Y' as u32, "Wez HT: Y at col 8");
+    assert_eq!(
+        snap.cell_at(0, 8).codepoint,
+        'Y' as u32,
+        "Wez HT: Y at col 8"
+    );
 }
 
 #[test]
@@ -370,7 +401,10 @@ fn assert_effects_set(
     assert_eq!(cell.italic, italic, "italic at ({row},{col})");
     assert_eq!(cell.underline, underline, "underline at ({row},{col})");
     assert_eq!(cell.reverse, reverse, "reverse at ({row},{col})");
-    assert_eq!(cell.strikethrough, strikethrough, "strikethrough at ({row},{col})");
+    assert_eq!(
+        cell.strikethrough, strikethrough,
+        "strikethrough at ({row},{col})"
+    );
     assert_eq!(cell.overline, overline, "overline at ({row},{col})");
     assert_eq!(cell.blink, blink, "blink at ({row},{col})");
     assert_eq!(cell.hidden, hidden, "hidden at ({row},{col})");
@@ -382,7 +416,9 @@ fn wez_sgr_bold_italic_combination() {
     t.vt_write(b"\x1b[1;3mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, true, true, false, false, false, false, false, false);
+    assert_effects_set(
+        &snap, 0, 0, true, true, false, false, false, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -392,7 +428,9 @@ fn wez_sgr_underline_reverse_combination() {
     t.vt_write(b"\x1b[4;7mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, true, true, false, false, false, false);
+    assert_effects_set(
+        &snap, 0, 0, false, false, true, true, false, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -402,7 +440,9 @@ fn wez_sgr_strikethrough_overline_combination() {
     t.vt_write(b"\x1b[9;53mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, false, false, true, true, false, false);
+    assert_effects_set(
+        &snap, 0, 0, false, false, false, false, true, true, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -412,7 +452,9 @@ fn wez_sgr_blink_hidden_combination() {
     t.vt_write(b"\x1b[5;8mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, false, false, false, false, true, true);
+    assert_effects_set(
+        &snap, 0, 0, false, false, false, false, false, false, true, true,
+    );
     check_invariants(&t);
 }
 
@@ -422,7 +464,9 @@ fn wez_sgr_bold_underline_italic_triple() {
     t.vt_write(b"\x1b[1;3;4mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, true, true, true, false, false, false, false, false);
+    assert_effects_set(
+        &snap, 0, 0, true, true, true, false, false, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -432,7 +476,9 @@ fn wez_sgr_bold_blink_reverse_underline_quad() {
     t.vt_write(b"\x1b[1;5;7;4mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, true, false, true, true, false, false, true, false);
+    assert_effects_set(
+        &snap, 0, 0, true, false, true, true, false, false, true, false,
+    );
     check_invariants(&t);
 }
 
@@ -445,7 +491,9 @@ fn wez_sgr_all_attrs_on_then_reset_all() {
     // X has all attrs
     assert_effects_set(&snap, 0, 0, true, true, true, true, true, true, true, true);
     // Y has none after reset
-    assert_effects_set(&snap, 0, 1, false, false, false, false, false, false, false, false);
+    assert_effects_set(
+        &snap, 0, 1, false, false, false, false, false, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -701,7 +749,10 @@ fn wez_decrpm_mode_1_reset_then_query() {
     let resp = t.drain_pty_write_responses();
     if !resp.is_empty() {
         let text = String::from_utf8_lossy(resp.last().unwrap());
-        assert!(text.contains("1"), "DECRPM 1 reset: response mentions mode 1");
+        assert!(
+            text.contains("1"),
+            "DECRPM 1 reset: response mentions mode 1"
+        );
     }
     check_invariants(&t);
 }
@@ -769,7 +820,9 @@ fn wez_sgr_bold_italic_underline_blink() {
     t.vt_write(b"\x1b[1;3;4;5mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, true, true, true, false, false, false, true, false);
+    assert_effects_set(
+        &snap, 0, 0, true, true, true, false, false, false, true, false,
+    );
     check_invariants(&t);
 }
 
@@ -779,7 +832,9 @@ fn wez_sgr_underline_strikethrough_blink() {
     t.vt_write(b"\x1b[4;9;5mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, true, false, true, false, true, false);
+    assert_effects_set(
+        &snap, 0, 0, false, false, true, false, true, false, true, false,
+    );
     check_invariants(&t);
 }
 
@@ -789,7 +844,9 @@ fn wez_sgr_reverse_italic_underline() {
     t.vt_write(b"\x1b[7;3;4mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, true, true, true, false, false, false, false);
+    assert_effects_set(
+        &snap, 0, 0, false, true, true, true, false, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -799,7 +856,9 @@ fn wez_sgr_faint_no_bold() {
     t.vt_write(b"\x1b[2mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, false, false, false, false, false, false);
+    assert_effects_set(
+        &snap, 0, 0, false, false, false, false, false, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -809,7 +868,9 @@ fn wez_sgr_italic_reverse_blink() {
     t.vt_write(b"\x1b[3;7;5mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, true, false, true, false, false, true, false);
+    assert_effects_set(
+        &snap, 0, 0, false, true, false, true, false, false, true, false,
+    );
     check_invariants(&t);
 }
 
@@ -819,7 +880,9 @@ fn wez_sgr_dim_italic() {
     t.vt_write(b"\x1b[2;3mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, true, false, false, false, false, false, false);
+    assert_effects_set(
+        &snap, 0, 0, false, true, false, false, false, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -829,7 +892,9 @@ fn wez_sgr_blink_strikethrough() {
     t.vt_write(b"\x1b[5;9mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, false, false, true, false, true, false);
+    assert_effects_set(
+        &snap, 0, 0, false, false, false, false, true, false, true, false,
+    );
     check_invariants(&t);
 }
 
@@ -839,7 +904,9 @@ fn wez_sgr_conceal_reveal() {
     t.vt_write(b"\x1b[8mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, false, false, false, false, false, true);
+    assert_effects_set(
+        &snap, 0, 0, false, false, false, false, false, false, false, true,
+    );
     check_invariants(&t);
 }
 
@@ -849,7 +916,9 @@ fn wez_sgr_overline_blink() {
     t.vt_write(b"\x1b[53;5mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, false, false, false, true, true, false);
+    assert_effects_set(
+        &snap, 0, 0, false, false, false, false, false, true, true, false,
+    );
     check_invariants(&t);
 }
 
@@ -859,7 +928,9 @@ fn wez_sgr_italic_strikethrough_blink() {
     t.vt_write(b"\x1b[3;9;5mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, true, false, false, true, false, true, false);
+    assert_effects_set(
+        &snap, 0, 0, false, true, false, false, true, false, true, false,
+    );
     check_invariants(&t);
 }
 
@@ -869,7 +940,9 @@ fn wez_sgr_bold_reverse_conceal() {
     t.vt_write(b"\x1b[1;7;8mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, true, false, false, true, false, false, false, true);
+    assert_effects_set(
+        &snap, 0, 0, true, false, false, true, false, false, false, true,
+    );
     check_invariants(&t);
 }
 
@@ -879,7 +952,9 @@ fn wez_sgr_underline_overline_blink_hidden() {
     t.vt_write(b"\x1b[4;53;5;8mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, false, false, true, false, false, true, true, true);
+    assert_effects_set(
+        &snap, 0, 0, false, false, true, false, false, true, true, true,
+    );
     check_invariants(&t);
 }
 
@@ -889,7 +964,9 @@ fn wez_sgr_bold_italic_strikethrough() {
     t.vt_write(b"\x1b[1;3;9mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, true, true, false, false, true, false, false, false);
+    assert_effects_set(
+        &snap, 0, 0, true, true, false, false, true, false, false, false,
+    );
     check_invariants(&t);
 }
 
@@ -899,7 +976,9 @@ fn wez_sgr_five_way_combo() {
     t.vt_write(b"\x1b[1;4;7;9;53mX");
     t.flush();
     let snap = t.take_snapshot();
-    assert_effects_set(&snap, 0, 0, true, false, true, true, true, true, false, false);
+    assert_effects_set(
+        &snap, 0, 0, true, false, true, true, true, true, false, false,
+    );
     check_invariants(&t);
 }
 

@@ -17,20 +17,22 @@ fn try_create_headless_env() -> Option<HeadlessEnv> {
         display: None,
     });
 
-    let adapter = futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::LowPower,
-        force_fallback_adapter: false,
-        compatible_surface: None,
-    }))
-    .ok()?;
+    let adapter =
+        futures::executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            force_fallback_adapter: false,
+            compatible_surface: None,
+        }))
+        .ok()?;
 
-    let (device, queue) = futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("headless test device"),
-        required_features: wgpu::Features::empty(),
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .ok()?;
+    let (device, queue) =
+        futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("headless test device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: adapter.limits(),
+            ..Default::default()
+        }))
+        .ok()?;
 
     Some(HeadlessEnv {
         _instance: instance,
@@ -41,7 +43,8 @@ fn try_create_headless_env() -> Option<HeadlessEnv> {
 }
 
 fn create_headless_env() -> HeadlessEnv {
-    try_create_headless_env().expect("no Vulkan adapter found — run in nix develop or install SwiftShader/Lavapipe")
+    try_create_headless_env()
+        .expect("no Vulkan adapter found — run in nix develop or install SwiftShader/Lavapipe")
 }
 
 #[test]
@@ -244,7 +247,9 @@ fn fs() -> @location(0) vec4f {
         let _ = img.save(screenshots_dir.join("test_gpu_headless_red.png"));
 
         if golden_path.exists() {
-            let golden = image::open(&golden_path).expect("failed to load golden").into_rgba8();
+            let golden = image::open(&golden_path)
+                .expect("failed to load golden")
+                .into_rgba8();
             let dims = golden.dimensions();
             assert_eq!(
                 dims,

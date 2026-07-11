@@ -90,8 +90,16 @@ impl GridModel {
             }
             GridOp::CursorUp(n) => {
                 let n = *n as u32;
-                let min_row = if self.origin_mode { self.scroll_region_top } else { 0 };
-                self.cursor_row = self.cursor_row.saturating_sub(n).max(min_row).min(self.rows - 1);
+                let min_row = if self.origin_mode {
+                    self.scroll_region_top
+                } else {
+                    0
+                };
+                self.cursor_row = self
+                    .cursor_row
+                    .saturating_sub(n)
+                    .max(min_row)
+                    .min(self.rows - 1);
             }
             GridOp::CursorDown(n) => {
                 let n = *n as u32;

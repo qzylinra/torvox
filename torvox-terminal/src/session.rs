@@ -83,7 +83,8 @@ impl Session {
     /// No reader/wait threads are spawned — the caller is responsible for
     /// driving PTY I/O. Primarily used for testing with `MockPty`.
     pub fn with_pty(pty: Box<dyn Pty>, rows: u32, cols: u32) -> Result<Self, SessionError> {
-        let (palette_ansi, palette_background, palette_foreground) = GhosttyTerminal::catppuccin_mocha_palette();
+        let (palette_ansi, palette_background, palette_foreground) =
+            GhosttyTerminal::catppuccin_mocha_palette();
         Self::spawn_with_theme_inner(
             pty,
             rows,
@@ -96,7 +97,8 @@ impl Session {
     }
 
     pub fn spawn(shell: &str, rows: u32, cols: u32, env: &ShellEnv) -> Result<Self, SessionError> {
-        let (palette_ansi, palette_background, palette_foreground) = GhosttyTerminal::catppuccin_mocha_palette();
+        let (palette_ansi, palette_background, palette_foreground) =
+            GhosttyTerminal::catppuccin_mocha_palette();
         Self::spawn_with_theme(
             shell,
             rows,
@@ -187,7 +189,9 @@ impl Session {
                 // `poll` only reads these inputs and writes `revents` back. This is
                 // the sole `unsafe` remaining in the reader and does not bypass the
                 // `Pty` abstraction (the fd was obtained via `try_clone_reader_fd`).
-                let poll_result = unsafe { libc::poll(&mut poll_fd as *mut libc::pollfd, 1, READ_POLL_TIMEOUT_MS) };
+                let poll_result = unsafe {
+                    libc::poll(&mut poll_fd as *mut libc::pollfd, 1, READ_POLL_TIMEOUT_MS)
+                };
                 match poll_result.cmp(&0) {
                     std::cmp::Ordering::Greater => {}
                     std::cmp::Ordering::Equal => continue,
@@ -270,9 +274,15 @@ impl Session {
         let output_notify = Arc::new((Mutex::new(false), Condvar::new()));
         let (output_tx, output_rx) = bounded::<Vec<u8>>(128);
 
-        let terminal =
-            GhosttyTerminal::new_with_theme(rows, cols, scrollback_lines, initial_bg, initial_fg, initial_ansi)
-                .map_err(SessionError::Ghostty)?;
+        let terminal = GhosttyTerminal::new_with_theme(
+            rows,
+            cols,
+            scrollback_lines,
+            initial_bg,
+            initial_fg,
+            initial_ansi,
+        )
+        .map_err(SessionError::Ghostty)?;
 
         let shell_integration = Arc::new(AtomicU8::new(0));
         let notification = Arc::new(Mutex::new(None));
@@ -350,7 +360,10 @@ impl Session {
                     }
                     OscEvent::Notification(notification_event) => {
                         if let Ok(mut guard) = self.notification.lock() {
-                            *guard = Some((notification_event.title.clone(), notification_event.body.clone()));
+                            *guard = Some((
+                                notification_event.title.clone(),
+                                notification_event.body.clone(),
+                            ));
                         }
                     }
                 }
@@ -361,7 +374,8 @@ impl Session {
                 self.bel_triggered.store(true, Ordering::Release);
             }
             if let Some(marker) = extract_osc133(filtered) {
-                self.shell_integration.store(marker as u8, Ordering::Release);
+                self.shell_integration
+                    .store(marker as u8, Ordering::Release);
             }
             self.terminal.pty_write(filtered);
             changed = true;
@@ -375,7 +389,11 @@ impl Session {
             for response in self.terminal.drain_pty_write_responses() {
                 log::info!("process_output: pty write-back {} bytes", response.len());
                 if let Err(error) = self.pty.write_all(&response) {
-                    log::error!("session: PTY write-back failed ({} bytes): {}", response.len(), error);
+                    log::error!(
+                        "session: PTY write-back failed ({} bytes): {}",
+                        response.len(),
+                        error
+                    );
                 }
             }
         }
@@ -580,7 +598,8 @@ mod tests {
 
     #[test]
     fn session_spawn_and_exit() {
-        let mut session = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+        let mut session =
+            Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
         session.write(b"exit\n").expect("write failed");
         let deadline = std::time::Instant::now() + Duration::from_secs(3);
         drain_output(&mut session, deadline);
@@ -589,7 +608,8 @@ mod tests {
 
     #[test]
     fn session_echo_hello() {
-        let mut session = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+        let mut session =
+            Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
         session.write(b"echo hello_p12\n").expect("write failed");
         let deadline = std::time::Instant::now() + Duration::from_secs(3);
         let mut found = false;
@@ -614,7 +634,8 @@ mod tests {
 
     #[test]
     fn session_resize() {
-        let mut session = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+        let mut session =
+            Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
         session.resize(40, 120).expect("resize failed");
         assert_eq!(session.terminal().rows(), 40);
         assert_eq!(session.terminal().cols(), 120);
@@ -622,7 +643,8 @@ mod tests {
 
     #[test]
     fn session_after_exit_returns_error() {
-        let mut session = Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
+        let mut session =
+            Session::spawn("/bin/sh", 24, 80, &ShellEnv::default()).expect("spawn failed");
         session.write(b"exit\n").expect("write failed");
         let deadline = std::time::Instant::now() + Duration::from_secs(3);
         drain_output(&mut session, deadline);
@@ -632,9 +654,18 @@ mod tests {
     #[test]
     fn extract_osc133_all_markers() {
         // Each marker tested independently to avoid slice-index confusion.
-        assert_eq!(extract_osc133(b"\x1b]133;A\x07"), Some(ShellIntegration::PromptStart));
-        assert_eq!(extract_osc133(b"\x1b]133;B\x1b\\"), Some(ShellIntegration::PromptEnd));
-        assert_eq!(extract_osc133(b"\x1b]133;C\x07"), Some(ShellIntegration::CommandStart));
+        assert_eq!(
+            extract_osc133(b"\x1b]133;A\x07"),
+            Some(ShellIntegration::PromptStart)
+        );
+        assert_eq!(
+            extract_osc133(b"\x1b]133;B\x1b\\"),
+            Some(ShellIntegration::PromptEnd)
+        );
+        assert_eq!(
+            extract_osc133(b"\x1b]133;C\x07"),
+            Some(ShellIntegration::CommandStart)
+        );
         assert_eq!(
             extract_osc133(b"\x1b]133;D\x1b\\"),
             Some(ShellIntegration::CommandExecuted)
@@ -659,19 +690,40 @@ mod tests {
     #[test]
     fn session_new_creates_pty() {
         let (pty, _handle) = crate::mock_pty::MockPty::new(24, 80);
-        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
-        assert_eq!(session.terminal().rows(), 24, "terminal rows must be 24 after creation");
-        assert_eq!(session.terminal().cols(), 80, "terminal cols must be 80 after creation");
-        assert!(!session.is_exited(), "new session must not be in exited state");
+        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
+        assert_eq!(
+            session.terminal().rows(),
+            24,
+            "terminal rows must be 24 after creation"
+        );
+        assert_eq!(
+            session.terminal().cols(),
+            80,
+            "terminal cols must be 80 after creation"
+        );
+        assert!(
+            !session.is_exited(),
+            "new session must not be in exited state"
+        );
     }
 
     #[test]
     fn session_resize_sends_signal() {
         let (pty, handle) = crate::mock_pty::MockPty::new(24, 80);
-        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         session.resize(40, 120).expect("resize must succeed");
-        assert_eq!(session.terminal().rows(), 40, "terminal rows must update after resize");
-        assert_eq!(session.terminal().cols(), 120, "terminal cols must update after resize");
+        assert_eq!(
+            session.terminal().rows(),
+            40,
+            "terminal rows must update after resize"
+        );
+        assert_eq!(
+            session.terminal().cols(),
+            120,
+            "terminal cols must update after resize"
+        );
         assert_eq!(handle.rows(), 40, "PTY rows must update after resize");
         assert_eq!(handle.cols(), 120, "PTY cols must update after resize");
     }
@@ -679,7 +731,8 @@ mod tests {
     #[test]
     fn session_write_input() {
         let (pty, handle) = crate::mock_pty::MockPty::new(24, 80);
-        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         session.write(b"hello world").expect("write must succeed");
         let written = handle.written();
         assert_eq!(
@@ -694,28 +747,32 @@ mod tests {
         // accidentally set the BEL flag. BEL is only set when output data
         // processed by process_output() contains 0x07.
         let (pty, _handle) = crate::mock_pty::MockPty::new(24, 80);
-        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         assert!(!session.poll_bel(), "fresh session must not have bel set");
     }
 
     #[test]
     fn session_title_default_is_empty() {
         let (pty, _handle) = crate::mock_pty::MockPty::new(24, 80);
-        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         assert_eq!(session.title(), "");
     }
 
     #[test]
     fn session_cwd_default_is_empty() {
         let (pty, _handle) = crate::mock_pty::MockPty::new(24, 80);
-        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         assert_eq!(session.cwd(), "");
     }
 
     #[test]
     fn session_mode_get_default_false() {
         let (pty, _handle) = crate::mock_pty::MockPty::new(24, 80);
-        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         // Mode 2004 (bracketed paste) should be off by default
         assert!(!session.mode_get(2004, 0));
     }
@@ -723,7 +780,8 @@ mod tests {
     #[test]
     fn session_focus_event_writes_to_terminal() {
         let (pty, _handle) = crate::mock_pty::MockPty::new(24, 80);
-        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         // focus_event writes CSI sequences to terminal; should not panic
         session.focus_event(true);
         session.focus_event(false);
@@ -732,7 +790,8 @@ mod tests {
     #[test]
     fn session_exited_flag() {
         let (pty, handle) = crate::mock_pty::MockPty::new(24, 80);
-        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         assert!(!session.is_exited(), "fresh session must not be exited");
         let flag = session.exited_flag();
         assert!(!flag.load(std::sync::atomic::Ordering::Acquire));
@@ -779,8 +838,14 @@ mod tests {
     #[test]
     fn extract_osc133_mixed_terminators() {
         // BEL and ST should both work
-        assert_eq!(extract_osc133(b"\x1b]133;A\x07"), Some(ShellIntegration::PromptStart));
-        assert_eq!(extract_osc133(b"\x1b]133;A\x1b\\"), Some(ShellIntegration::PromptStart));
+        assert_eq!(
+            extract_osc133(b"\x1b]133;A\x07"),
+            Some(ShellIntegration::PromptStart)
+        );
+        assert_eq!(
+            extract_osc133(b"\x1b]133;A\x1b\\"),
+            Some(ShellIntegration::PromptStart)
+        );
     }
 
     #[test]
@@ -796,9 +861,13 @@ mod tests {
         //
         // So even with the session state mismatch, the underlying PTY write
         // still propagates the error upward. This test asserts that error path.
-        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80).expect("with_pty must succeed");
+        let mut session = Session::with_pty(Box::new(pty) as Box<dyn Pty>, 24, 80)
+            .expect("with_pty must succeed");
         let result = session.write(b"test");
-        assert!(result.is_err(), "write to exited pty must return error, got Ok");
+        assert!(
+            result.is_err(),
+            "write to exited pty must return error, got Ok"
+        );
     }
 
     #[test]
@@ -807,7 +876,10 @@ mod tests {
         assert_eq!(ShellIntegration::from(1u8), ShellIntegration::PromptStart);
         assert_eq!(ShellIntegration::from(2u8), ShellIntegration::PromptEnd);
         assert_eq!(ShellIntegration::from(3u8), ShellIntegration::CommandStart);
-        assert_eq!(ShellIntegration::from(4u8), ShellIntegration::CommandExecuted);
+        assert_eq!(
+            ShellIntegration::from(4u8),
+            ShellIntegration::CommandExecuted
+        );
         assert_eq!(ShellIntegration::from(5u8), ShellIntegration::None);
         assert_eq!(ShellIntegration::from(255u8), ShellIntegration::None);
     }

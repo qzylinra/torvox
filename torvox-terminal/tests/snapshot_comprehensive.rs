@@ -63,9 +63,18 @@ fn snapshot_roundtrip_scroll() {
     t.pty_write(b"A\nB\nC\nD");
     t.flush();
     let s = t.take_snapshot();
-    assert_eq!(s.cells[0].codepoint, 'B' as u32, "after scroll, row 0 should be B");
-    assert_eq!(s.cells[10].codepoint, 'C' as u32, "after scroll, row 1 should be C");
-    assert_eq!(s.cells[20].codepoint, 'D' as u32, "after scroll, row 2 should be D");
+    assert_eq!(
+        s.cells[0].codepoint, 'B' as u32,
+        "after scroll, row 0 should be B"
+    );
+    assert_eq!(
+        s.cells[10].codepoint, 'C' as u32,
+        "after scroll, row 1 should be C"
+    );
+    assert_eq!(
+        s.cells[20].codepoint, 'D' as u32,
+        "after scroll, row 2 should be D"
+    );
 }
 
 #[test]
@@ -77,7 +86,10 @@ fn snapshot_roundtrip_resize_preserves_content() {
     let s = t.take_snapshot();
     assert_eq!(s.rows, 2);
     assert_eq!(s.cols, 40);
-    assert_eq!(s.cells[0].codepoint, 'P' as u32, "content should survive resize");
+    assert_eq!(
+        s.cells[0].codepoint, 'P' as u32,
+        "content should survive resize"
+    );
 }
 
 #[test]
@@ -133,7 +145,10 @@ fn snapshot_roundtrip_insert_line() {
     let s = t.take_snapshot();
     assert_eq!(s.cells[0].codepoint, 'A' as u32, "row 0 should still be A");
     assert_eq!(s.cells[10].codepoint, 0, "row 1 should be empty (inserted)");
-    assert_eq!(s.cells[20].codepoint, 'B' as u32, "row 2 should be B (pushed down)");
+    assert_eq!(
+        s.cells[20].codepoint, 'B' as u32,
+        "row 2 should be B (pushed down)"
+    );
 }
 
 #[test]
@@ -145,7 +160,10 @@ fn snapshot_roundtrip_delete_line() {
     t.flush();
     let s = t.take_snapshot();
     assert_eq!(s.cells[0].codepoint, 'A' as u32, "row 0 should still be A");
-    assert_eq!(s.cells[10].codepoint, 'C' as u32, "row 1 should be C (B deleted)");
+    assert_eq!(
+        s.cells[10].codepoint, 'C' as u32,
+        "row 1 should be C (B deleted)"
+    );
 }
 
 #[test]
@@ -168,7 +186,10 @@ fn snapshot_roundtrip_carriage_return() {
     t.vt_write(b"ABC\rXYZ");
     t.flush();
     let s = t.take_snapshot();
-    assert_eq!(s.cells[0].codepoint, 'X' as u32, "CR should return to col 0");
+    assert_eq!(
+        s.cells[0].codepoint, 'X' as u32,
+        "CR should return to col 0"
+    );
     assert_eq!(s.cells[1].codepoint, 'Y' as u32);
     assert_eq!(s.cells[2].codepoint, 'Z' as u32);
 }

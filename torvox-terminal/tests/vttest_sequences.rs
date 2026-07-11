@@ -77,7 +77,10 @@ fn vttest_cursor_up() {
     t.vt_write(b"X");
     t.flush();
     let r0 = row_text(&t, 0);
-    assert!(r0.contains('X'), "CUU after row 1 should place X on row 0: got {r0:?}");
+    assert!(
+        r0.contains('X'),
+        "CUU after row 1 should place X on row 0: got {r0:?}"
+    );
 }
 
 /// Cursor Down (ESC [B) moves cursor to next row
@@ -87,7 +90,10 @@ fn vttest_cursor_down() {
     t.vt_write(b"1\x1b[BGX");
     t.flush();
     let r1 = row_text(&t, 1);
-    assert!(!r1.is_empty(), "CUD should move cursor to row 1: got {r1:?}");
+    assert!(
+        !r1.is_empty(),
+        "CUD should move cursor to row 1: got {r1:?}"
+    );
 }
 
 /// Cursor Right (ESC [C) moves cursor right
@@ -97,7 +103,10 @@ fn vttest_cursor_right() {
     t.vt_write(b"\x1b[2CX");
     t.flush();
     let text = row_text(&t, 0);
-    assert!(text.contains('X'), "CUF should place X at col 2: got {text:?}");
+    assert!(
+        text.contains('X'),
+        "CUF should place X at col 2: got {text:?}"
+    );
 }
 
 /// Cursor Left (ESC [D) moves cursor left

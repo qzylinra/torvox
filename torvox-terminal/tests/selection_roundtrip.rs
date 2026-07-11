@@ -15,7 +15,10 @@ fn selection_char_mode_basic() {
     let snap = t.take_snapshot();
     assert_invariants(&snap);
     let text = t.read_visible_text();
-    assert!(text.contains("CDEF"), "expected 'CDEF' in visible text, got: {text:?}");
+    assert!(
+        text.contains("CDEF"),
+        "expected 'CDEF' in visible text, got: {text:?}"
+    );
 }
 
 #[test]
@@ -39,9 +42,18 @@ fn selection_word_mode() {
     t.vt_write(b"hello world foo");
     t.flush();
     let text = t.read_visible_text();
-    assert!(text.contains("hello"), "expected 'hello' in text, got: {text:?}");
-    assert!(text.contains("world"), "expected 'world' in text, got: {text:?}");
-    assert!(text.contains("foo"), "expected 'foo' in text, got: {text:?}");
+    assert!(
+        text.contains("hello"),
+        "expected 'hello' in text, got: {text:?}"
+    );
+    assert!(
+        text.contains("world"),
+        "expected 'world' in text, got: {text:?}"
+    );
+    assert!(
+        text.contains("foo"),
+        "expected 'foo' in text, got: {text:?}"
+    );
     let snap = t.take_snapshot();
     assert_invariants(&snap);
 }

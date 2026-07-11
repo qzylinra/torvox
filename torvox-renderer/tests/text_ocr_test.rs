@@ -41,7 +41,11 @@ fn text_render_ocr_verify() {
             for x in 0..glyph.width {
                 let img_x = (glyph.x_offset + x as f32) as i32;
                 let img_y = (glyph.y_offset + y as f32) as i32;
-                if img_x >= 0 && img_x < total_width as i32 && img_y >= 0 && img_y < total_height as i32 {
+                if img_x >= 0
+                    && img_x < total_width as i32
+                    && img_y >= 0
+                    && img_y < total_height as i32
+                {
                     let src = ((y * glyph.width + x) * 4) as usize;
                     let dst = ((img_y as u32 * total_width + img_x as u32) * 4) as usize;
                     if dst + 3 < buf.len() && src + 3 < glyph.pixels.len() {
@@ -150,19 +154,32 @@ fn render_text_with_swash(text: &str, font_size: f32) -> Option<RenderResult> {
     None
 }
 
-fn render_with_swash(font_data: &[u8], face_index: usize, text: &str, font_size: f32) -> Option<RenderResult> {
+fn render_with_swash(
+    font_data: &[u8],
+    face_index: usize,
+    text: &str,
+    font_size: f32,
+) -> Option<RenderResult> {
     let font_ref = swash::FontRef::from_index(font_data, face_index)?;
     Some(render_from_font_ref(font_ref, text, font_size))
 }
 
 fn render_from_font_ref(font_ref: swash::FontRef<'_>, text: &str, font_size: f32) -> RenderResult {
     let mut scale_ctx = ScaleContext::new();
-    let mut scaler = scale_ctx.builder(font_ref).size(font_size).hint(false).build();
+    let mut scaler = scale_ctx
+        .builder(font_ref)
+        .size(font_size)
+        .hint(false)
+        .build();
 
     let charmap = font_ref.charmap();
     let metrics = font_ref.metrics(&[]);
     let upem = metrics.units_per_em as f32;
-    let scale = if upem > 0.0 { font_size / upem } else { font_size };
+    let scale = if upem > 0.0 {
+        font_size / upem
+    } else {
+        font_size
+    };
     let baseline = (metrics.ascent * scale).abs();
 
     let mut glyphs = Vec::new();

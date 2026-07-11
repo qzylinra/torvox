@@ -37,8 +37,14 @@ fn color_from_ansi_3bit_exact_values() {
     for i in 0u8..8u8 {
         let c = Color::from_ansi(i);
         assert_eq!(c.r, expected[i as usize][0], "ANSI color {i} red component");
-        assert_eq!(c.g, expected[i as usize][1], "ANSI color {i} green component");
-        assert_eq!(c.b, expected[i as usize][2], "ANSI color {i} blue component");
+        assert_eq!(
+            c.g, expected[i as usize][1],
+            "ANSI color {i} green component"
+        );
+        assert_eq!(
+            c.b, expected[i as usize][2],
+            "ANSI color {i} blue component"
+        );
     }
 }
 

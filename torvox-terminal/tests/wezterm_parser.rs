@@ -65,8 +65,18 @@ fn layer2_cup_params() {
         t.vt_write(seq);
         t.flush();
         let snap = t.take_snapshot();
-        assert_eq!(snap.cursor_row, *exp_row, "CUP {:?}: row", String::from_utf8_lossy(seq));
-        assert_eq!(snap.cursor_col, *exp_col, "CUP {:?}: col", String::from_utf8_lossy(seq));
+        assert_eq!(
+            snap.cursor_row,
+            *exp_row,
+            "CUP {:?}: row",
+            String::from_utf8_lossy(seq)
+        );
+        assert_eq!(
+            snap.cursor_col,
+            *exp_col,
+            "CUP {:?}: col",
+            String::from_utf8_lossy(seq)
+        );
     }
 }
 
@@ -147,7 +157,10 @@ fn layer2_sgr_unknown_params_ignored() {
     t.vt_write(b"\x1b[4;55;99;1mB");
     t.flush();
     let snap = t.take_snapshot();
-    assert!(snap.cells[0].bold, "SGR with unknown params: bold should be set");
+    assert!(
+        snap.cells[0].bold,
+        "SGR with unknown params: bold should be set"
+    );
     assert!(
         snap.cells[0].underline,
         "SGR with unknown params: underline should be set"
@@ -196,7 +209,10 @@ fn layer3_cursor_left() {
     let snap = t.take_snapshot();
     assert_eq!(snap.cells[0].codepoint, 'A' as u32);
     assert_eq!(snap.cells[1].codepoint, 'B' as u32, "col preserved on CUB");
-    assert_eq!(snap.cells[2].codepoint, 'A' as u32, "CUB to col 2, overwrite C");
+    assert_eq!(
+        snap.cells[2].codepoint, 'A' as u32,
+        "CUB to col 2, overwrite C"
+    );
 }
 
 #[test]

@@ -44,7 +44,11 @@ fn vt5_tab_screen() {
     g.vt_write(b"\x1b[10G\x1bH\x1b[H\x09X");
     g.flush();
     let col = g.cursor_x();
-    assert!(col >= 8, "tab should advance cursor to at least col 8, got {}", col);
+    assert!(
+        col >= 8,
+        "tab should advance cursor to at least col 8, got {}",
+        col
+    );
 }
 #[test]
 fn vt6_erase_screen() {
