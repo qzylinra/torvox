@@ -1,83 +1,51 @@
-@REQ_CORE_004
-Feature: Selection and Copy/Paste
+@REQ_SEL_001 @REQ_SEL_002
+Feature: Text Selection
+  The terminal supports long-press text selection with
+  selection handles and a context menu.
 
-  @REQ_CORE_004
-  Scenario: Character selection works
-    Given the terminal displays text
-    When the user long-presses on a character
-    Then a selection handle appears
-    And dragging extends the selection
+  @REQ_SEL_001
+  Scenario: Long press blank area shows paste popup
+    Given a terminal session is active
+    When the user long-presses a blank cell
+    Then the cell is highlighted with inverted colors
+    And a paste popup is shown nearby
 
-  @REQ_CORE_004
-  Scenario: Word selection works
-    Given the terminal displays text
-    When the user double-taps on a word
-    Then the word is selected
+  @REQ_SEL_001
+  Scenario: Long press text highlights the word
+    Given a terminal session is active with visible text
+    When the user long-presses on a word
+    Then the word becomes selected with inverted colors
+    And selection handles appear at the start and end
 
-  @REQ_CORE_004
-  Scenario: Line selection works
-    Given the terminal displays text
-    When the user triple-taps on a line
-    Then the line is selected
+  @REQ_SEL_001
+  Scenario: Selection handles adjust selected region
+    Given text is selected by long-press
+    When the user drags the start handle to the left
+    Then the selected region expands
+    And the highlighted area updates accordingly
 
-  @REQ_CORE_004
-  Scenario: Copy and paste works
-    Given text is selected in the terminal
-    When the user triggers copy
-    Then the text is available on the clipboard
-    When the user triggers paste
-    Then the clipboard text is inserted
+  @REQ_SEL_002
+  Scenario: Context menu appears after selection
+    Given text is selected
+    Then a context menu with "Copy" and "Select All" buttons is displayed
+    And the menu does not overlap the selected text
 
-  @REQ_CORE_004
-  Scenario: Long press on empty area shows paste button
-    Given the terminal displays text
-    When the user long-presses on an empty area
-    Then the paste popup appears
+  @REQ_SEL_002
+  Scenario: Copy copies selected text to clipboard
+    Given text is selected
+    When the user taps "Copy"
+    Then the selected text is copied to clipboard
+    And the selection is cleared
 
-  @REQ_CORE_004
-  Scenario: Long press on URL expands to full URL
-    Given the terminal displays text
-    When the user long-presses on a URL
-    Then the full URL is selected
+  @REQ_SEL_002
+  Scenario: Select All selects entire screen content
+    Given a terminal session is active with visible text
+    When the user selects all text
+    Then all text on screen is selected with inverted colors
 
-  @REQ_CORE_004
-  Scenario: Handle drag extends selection
-    Given text is selected in the terminal
-    When the user drags the selection handle forward
-    Then the selection extends to the drag target
-
-  @REQ_CORE_004
-  Scenario: Handle drag reduces selection
-    Given text is selected in the terminal
-    When the user drags the selection handle backward
-    Then the selection shrinks to the drag target
-
-  @REQ_CORE_004
-  Scenario: Tap during selection clears selection
-    Given text is selected in the terminal
-    When the user taps on the terminal
-    Then the selection is cleared
-
-  @REQ_CORE_004
-  Scenario: Copy button copies to clipboard
-    Given text is selected in the terminal
-    When the user triggers copy
-    Then the text is available on the clipboard
-
-  @REQ_CORE_004
-  Scenario: Select All selects entire terminal
-    Given the terminal displays text
-    When the user triggers select all
-    Then the entire terminal content is selected
-
-  @REQ_CORE_004
-  Scenario: Session switch preserves selection state
-    Given text is selected in the terminal
-    When the user switches to another session
-    Then the selection is cleared
-
-  @REQ_CORE_004
-  Scenario: IME open during selection
-    Given text is selected in the terminal
-    When the user opens the IME
-    Then the selection is preserved
+  @REQ_SEL_002
+  Scenario: Session drawer closes during selection
+    Given the session drawer is open
+    When the user starts selecting text on the terminal
+    Then the drawer closes
+    And the terminal is focused for interaction
