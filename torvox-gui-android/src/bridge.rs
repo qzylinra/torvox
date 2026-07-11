@@ -615,12 +615,16 @@ impl TorvoxBridge {
     }
 
     fn store_cell_metrics(&self, surface: &crate::surface::AndroidSurface) {
-        let (cw, ch) = surface.font_pipeline().cell_metrics();
-        log::info!("store_cell_metrics: cw={} ch={}", cw, ch);
+        let (cell_width, cell_height) = surface.font_pipeline().cell_metrics();
+        log::info!(
+            "store_cell_metrics: cell_width={} cell_height={}",
+            cell_width,
+            cell_height
+        );
         self.cell_width
-            .store(cw.to_bits(), std::sync::atomic::Ordering::Relaxed);
+            .store(cell_width.to_bits(), std::sync::atomic::Ordering::Relaxed);
         self.cell_height
-            .store(ch.to_bits(), std::sync::atomic::Ordering::Relaxed);
+            .store(cell_height.to_bits(), std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Returns `Ok(true)` if new data was rendered, `Ok(false)` if idle.
@@ -860,8 +864,11 @@ impl TorvoxBridge {
             && let Some(session_arc) = guard.as_ref()
             && let Ok(session) = session_arc.lock()
         {
-            return session.terminal().scrollback_length();
+            let len = session.terminal().scrollback_length();
+            log::info!("SCROLLBACK_LEN: {}", len);
+            return len;
         }
+        log::warn!("SCROLLBACK_LEN: session not available, returning 0");
         0
     }
 
@@ -958,6 +965,36 @@ impl TorvoxBridge {
             }
         }
         Ok(())
+    }
+
+    /// Get the text of a selected region as a single String. Reads from
+    /// scrollback cache lines on the Rust side in one FFI call, instead of
+    /// N+1 calls from Kotlin. Returns an empty string if no session.
+    pub fn get_selected_text(&self, start_row: u32, start_col: u32, end_row: u32, end_col: u32) -> String {
+        if let Ok(guard) = self.session.lock()
+            && let Some(session_arc) = guard.as_ref()
+            && let Ok(session) = session_arc.lock()
+        {
+            let terminal = session.terminal();
+            let mut result = String::new();
+            for row in start_row..=end_row {
+                if let Some(line) = terminal.read_line_text(row) {
+                    let from = if row == start_row { start_col as usize } else { 0 };
+                    let to = if row == end_row {
+                        (end_col as usize).min(line.len())
+                    } else {
+                        line.len()
+                    };
+                    if from < to {
+                        result.push_str(&line[from..to]);
+                        result.push('\n');
+                    }
+                }
+            }
+            let trimmed = result.trim_end_matches('\n').to_string();
+            return trimmed;
+        }
+        String::new()
     }
 
     /// Expand the selection anchor (row, col) according to mode, then set the
@@ -1080,10 +1117,13 @@ impl TorvoxBridge {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
-        for surface in surface_guard.iter_mut() {
-            if !surface.set_font_family(&family_name) {
-                log::warn!("FONT_FAMILY: '{}' not found, using bundled font", family_name);
-            }
+        let surface = surface_guard.as_mut().ok_or(TerminalError::InvalidConfig {
+            detail: "no surface available".to_string(),
+        })?;
+        if !surface.set_font_family(&family_name) {
+            return Err(TerminalError::InvalidConfig {
+                detail: format!("font family '{}' not found", family_name),
+            });
         }
         Ok(())
     }
@@ -1111,12 +1151,14 @@ impl TorvoxBridge {
         None
     }
 
-    pub fn search_all_in_scrollback(&self, query: String, case_sensitive: bool) -> String {
+    pub fn search_all_in_scrollback(&self, query: String, case_sensitive: bool, fuzzy: bool) -> String {
         if let Ok(guard) = self.session.lock()
             && let Some(session_arc) = guard.as_ref()
             && let Ok(session) = session_arc.lock()
         {
-            let matches = session.terminal().search_all_in_scrollback(&query, case_sensitive);
+            let matches = session
+                .terminal()
+                .search_all_in_scrollback(&query, case_sensitive, fuzzy);
             if matches.is_empty() {
                 return String::new();
             }
@@ -1186,22 +1228,31 @@ impl TorvoxBridge {
     }
 
     pub fn load_font_file(&self, path: String) -> Option<String> {
-        let mut surface_guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in load_font_file");
-                poisoned.into_inner()
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut surface_guard = match self.surface.lock() {
+                Ok(g) => g,
+                Err(poisoned) => {
+                    log::error!("surface mutex poisoned in load_font_file");
+                    poisoned.into_inner()
+                }
+            };
+            let surface = surface_guard.as_mut()?;
+            let std_path = std::path::PathBuf::from(&path);
+            let family = surface.load_font_file(&std_path);
+            if let Some(ref name) = family {
+                log::info!("FONT_LOAD_FILE: loaded '{}' -> family '{}'", path, name);
+            } else {
+                log::warn!("FONT_LOAD_FILE: failed to load '{}'", path);
             }
-        };
-        let surface = surface_guard.as_mut()?;
-        let std_path = std::path::PathBuf::from(&path);
-        let family = surface.load_font_file(&std_path);
-        if let Some(ref name) = family {
-            log::info!("FONT_LOAD_FILE: loaded '{}' -> family '{}'", path, name);
-        } else {
-            log::warn!("FONT_LOAD_FILE: failed to load '{}'", path);
+            family
+        }));
+        match result {
+            Ok(family) => family,
+            Err(_) => {
+                log::error!("FONT_LOAD_FILE: panic in load_font_file for '{}'", path);
+                None
+            }
         }
-        family
     }
 
     pub fn set_save_path(&self, path: String) -> Result<(), TerminalError> {
@@ -2665,15 +2716,17 @@ pub unsafe extern "C" fn torvox_bridge_search_all_in_scrollback(
     query_ptr: *const u8,
     query_len: i32,
     case_sensitive: u8,
+    fuzzy: u8,
 ) -> i64 {
     let query = read_string(query_ptr, query_len);
     let case_sensitive = case_sensitive != 0;
+    let fuzzy = fuzzy != 0;
     let bridge = match unsafe { bridge_from_handle(handle) } {
         Some(b) => b,
         None => return 0,
     };
     let result = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        bridge.search_all_in_scrollback(query, case_sensitive)
+        bridge.search_all_in_scrollback(query, case_sensitive, fuzzy)
     })) {
         Ok(r) => r,
         Err(panic_info) => {

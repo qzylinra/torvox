@@ -1,6 +1,7 @@
 package io.torvox.installer
 
 import android.content.Context
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -63,6 +64,7 @@ class BootstrapDownloader(
             }
             Result.success(cachedDir)
         } catch (exception: Exception) {
+            Log.e("BootstrapDownloader", "Download failed", exception)
             Result.failure(exception)
         }
     }

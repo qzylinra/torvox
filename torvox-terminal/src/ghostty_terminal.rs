@@ -57,8 +57,27 @@ pub struct KgpImageData {
 }
 
 impl GridSnapshot {
+    pub fn fallback(rows: u32, cols: u32) -> Self {
+        let count = (rows * cols) as usize;
+        Self {
+            rows,
+            cols,
+            cells: vec![CellSnapshot::default(); count],
+            dirty: vec![true; count],
+            cursor_row: DISCONNECTED_CURSOR_Y,
+            cursor_col: DISCONNECTED_CURSOR_X,
+            cursor_visible: DISCONNECTED_CURSOR_VISIBLE,
+            cursor_style: Default::default(),
+            kgp_placements: Vec::new(),
+            title: String::new(),
+            scrollback_length: 0,
+        }
+    }
     pub fn cell_at(&self, row: u32, col: u32) -> &CellSnapshot {
         let idx = (row * self.cols + col) as usize;
+        if idx >= self.cells.len() {
+            return &DEFAULT_CELL;
+        }
         &self.cells[idx]
     }
     pub fn uri_at(&self, row: u32, col: u32) -> Option<&str> {
@@ -106,7 +125,8 @@ pub struct CellSnapshot {
     pub width: u8,
 }
 
-const COMMAND_CHANNEL_CAPACITY: usize = 256;
+const COMMAND_CHANNEL_CAPACITY: usize = 1024;
+const QUERY_TIMEOUT_MS: u64 = 500;
 const DISCONNECTED_ROWS: u32 = 24;
 const DISCONNECTED_COLS: u32 = 80;
 const DISCONNECTED_CURSOR_X: u32 = 0;
@@ -116,6 +136,25 @@ const DISCONNECTED_MODE_ORIGIN: bool = false;
 const DISCONNECTED_MODE_AUTOWRAP: bool = false;
 const DISCONNECTED_TITLE: &str = "";
 const DISCONNECTED_SCROLLBACK: u32 = 0;
+static DEFAULT_CELL: CellSnapshot = CellSnapshot {
+    codepoint: 0,
+    graphemes: Vec::new(),
+    foreground: [0.0; 4],
+    background: [0.0; 4],
+    bold: false,
+    dim: false,
+    italic: false,
+    underline: false,
+    reverse: false,
+    strikethrough: false,
+    blink: false,
+    hidden: false,
+    uri: None,
+    semantic: SemanticContent::Output,
+    overline: false,
+    double_underline: false,
+    width: 1,
+};
 const KGP_STORAGE_LIMIT: u64 = 64 * 1024 * 1024;
 const MAX_GRAPHEME_CLUSTERS: usize = 8;
 const DEFAULT_CELL_WIDTH: u32 = 8;
@@ -125,8 +164,8 @@ enum Command {
     Write(Vec<u8>),
     FlushAck(Sender<()>),
     SetTheme {
-        bg: [u8; 3],
-        fg: [u8; 3],
+        background: [u8; 3],
+        foreground: [u8; 3],
         ansi: [[u8; 3]; 16],
     },
     Resize {
@@ -150,6 +189,7 @@ enum Command {
     SearchInScrollbackAll {
         query: String,
         case_sensitive: bool,
+        fuzzy: bool,
         tx: Sender<Vec<SearchMatch>>,
     },
     DumpGrid {
@@ -183,6 +223,7 @@ enum Command {
 
 struct RunConfig {
     command_receiver: Receiver<Command>,
+    query_receiver: Receiver<Command>,
     rows: u32,
     cols: u32,
     scrollback_lines: u32,
@@ -197,6 +238,7 @@ struct RunConfig {
 /// No unsafe Send/Sync impl needed — GhosttyTerminal only holds `Sender<Command>` (Send + Sync).
 pub struct GhosttyTerminal {
     cmd_tx: Sender<Command>,
+    query_tx: Sender<Command>,
     handle: Option<thread::JoinHandle<()>>,
     pty_write_responses: Arc<Mutex<Vec<Vec<u8>>>>,
     key_encode_rx: Receiver<Vec<u8>>,
@@ -205,8 +247,8 @@ pub struct GhosttyTerminal {
 
 impl GhosttyTerminal {
     pub fn new(rows: u32, cols: u32, scrollback_lines: u32) -> Result<Self, String> {
-        let (ansi, bg, fg) = Self::catppuccin_mocha_palette();
-        Self::new_with_theme(rows, cols, scrollback_lines, bg, fg, ansi)
+        let (ansi, background, foreground) = Self::catppuccin_mocha_palette();
+        Self::new_with_theme(rows, cols, scrollback_lines, background, foreground, ansi)
     }
 
     pub fn catppuccin_mocha_palette() -> ([[u8; 3]; 16], [u8; 3], [u8; 3]) {
@@ -240,6 +282,7 @@ impl GhosttyTerminal {
         initial_ansi: [[u8; 3]; 16],
     ) -> Result<Self, String> {
         let (cmd_tx, cmd_rx) = bounded::<Command>(COMMAND_CHANNEL_CAPACITY);
+        let (query_tx, query_rx) = flume::unbounded::<Command>();
         let pty_write_responses = Arc::new(Mutex::new(Vec::<Vec<u8>>::new()));
         let pty_for_run = pty_write_responses.clone();
         let handle = thread::Builder::new()
@@ -247,6 +290,7 @@ impl GhosttyTerminal {
             .spawn(move || {
                 Self::run(RunConfig {
                     command_receiver: cmd_rx,
+                    query_receiver: query_rx,
                     rows,
                     cols,
                     scrollback_lines,
@@ -262,6 +306,7 @@ impl GhosttyTerminal {
 
         Ok(Self {
             cmd_tx,
+            query_tx,
             handle: Some(handle),
             pty_write_responses,
             key_encode_rx,
@@ -276,6 +321,99 @@ impl GhosttyTerminal {
 
     fn osc_sequence(command: u8, r: u8, g: u8, b: u8) -> Vec<u8> {
         format!("\x1b]{};rgb:{:02x}/{:02x}/{:02x}\x1b\\", command, r, g, b).into_bytes()
+    }
+
+    fn process_query(query: Command, terminal: &mut Terminal) {
+        match query {
+            Command::Rows(tx) => {
+                if let Err(error) = tx.send(terminal.rows().unwrap_or(DISCONNECTED_ROWS as u16) as u32) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::Cols(tx) => {
+                if let Err(error) = tx.send(terminal.cols().unwrap_or(DISCONNECTED_COLS as u16) as u32) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::CursorX(tx) => {
+                if let Err(error) = tx.send(terminal.cursor_x().unwrap_or(DISCONNECTED_CURSOR_X as u16) as u32) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::CursorY(tx) => {
+                if let Err(error) = tx.send(terminal.cursor_y().unwrap_or(DISCONNECTED_CURSOR_Y as u16) as u32) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::CursorVisible(tx) => {
+                if let Err(error) = tx.send(terminal.is_cursor_visible().unwrap_or(true)) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::OriginMode(tx) => {
+                if let Err(error) = tx.send(terminal.mode(Mode::new(6, ModeKind::Dec)).unwrap_or(false)) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::Autowrap(tx) => {
+                if let Err(error) = tx.send(terminal.mode(Mode::new(7, ModeKind::Dec)).unwrap_or(false)) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::AltScreen(tx) => {
+                let is_alt = terminal
+                    .active_screen()
+                    .is_ok_and(|s| s == libghostty_vt::screen::Screen::Alternate);
+                if let Err(error) = tx.send(is_alt) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::Title(tx) => {
+                if let Err(error) = tx.send(terminal.title().unwrap_or("").to_string()) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::Cwd(tx) => {
+                if let Err(error) = tx.send(terminal.pwd().map(|p| p.to_string()).unwrap_or_default()) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::ModeGet(num, kind, tx) => {
+                let mode_kind = match kind {
+                    0 => ModeKind::Dec,
+                    _ => ModeKind::Ansi,
+                };
+                if let Err(error) = tx.send(terminal.mode(Mode::new(num, mode_kind)).unwrap_or(false)) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::ScrollbackLength(tx) => {
+                let len = terminal.scrollback_rows().unwrap_or(0) as u32;
+                log::debug!("ghostty_terminal: scrollback_rows query returned {len}");
+                if let Err(error) = tx.send(len) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::ReadLineText { row, tx } => {
+                if let Err(error) = tx.send(Self::read_line_text_impl(terminal, row)) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            Command::ReadVisibleText(tx) => {
+                let rows = terminal.rows().unwrap_or(24) as u32;
+                let mut text = String::new();
+                for row in 0..rows {
+                    if let Some(line) = Self::read_line_text_impl(terminal, row) {
+                        text.push_str(&line);
+                        text.push('\n');
+                    }
+                }
+                if let Err(error) = tx.send(text) {
+                    log::error!("ghostty_terminal: query channel send failed: {error}");
+                }
+            }
+            _ => {}
+        }
     }
 
     fn run(config: RunConfig) {
@@ -316,8 +454,20 @@ impl GhosttyTerminal {
         // terminal (instead of per keystroke) matches the reference
         // implementation and avoids losing per-encoder state between keys.
         // `set_options_from_terminal` still re-syncs encoder modes each key.
-        let mut encoder = key::Encoder::new().ok();
-        let mut event = key::Event::new().ok();
+        let mut encoder = match key::Encoder::new() {
+            Ok(enc) => Some(enc),
+            Err(error) => {
+                log::warn!("ghostty_terminal: key::Encoder::new() failed: {error} — keyboard protocol disabled");
+                None
+            }
+        };
+        let mut event = match key::Event::new() {
+            Ok(evt) => Some(evt),
+            Err(error) => {
+                log::warn!("ghostty_terminal: key::Event::new() failed: {error} — keyboard protocol disabled");
+                None
+            }
+        };
 
         terminal.vt_write(&Self::osc_sequence(
             11,
@@ -332,7 +482,29 @@ impl GhosttyTerminal {
             config.foreground_color[2],
         ));
 
-        while let Ok(command) = config.command_receiver.recv() {
+        let query_receiver = config.query_receiver;
+        loop {
+            // Wait for the next command from the bounded channel. Use a
+            // timeout so we periodically check the query channel even when
+            // no commands are pending (e.g., queries sent between writes).
+            let command = match config
+                .command_receiver
+                .recv_timeout(std::time::Duration::from_millis(50))
+            {
+                Ok(cmd) => cmd,
+                Err(flume::RecvTimeoutError::Timeout) => {
+                    // No bounded commands pending — drain query channel so
+                    // queries sent between commands don't wait indefinitely.
+                    while let Ok(query) = query_receiver.try_recv() {
+                        Self::process_query(query, &mut terminal);
+                    }
+                    continue;
+                }
+                Err(flume::RecvTimeoutError::Disconnected) => break,
+            };
+            // Process the bounded command first so state mutations (resize,
+            // theme change, font change) take effect before queries check the
+            // updated terminal state.
             match command {
                 Command::Write(data) => terminal.vt_write(&data),
                 Command::FlushAck(tx) => {
@@ -341,8 +513,8 @@ impl GhosttyTerminal {
                     }
                 }
                 Command::SetTheme {
-                    bg: background,
-                    fg: foreground,
+                    background,
+                    foreground,
                     ansi,
                 } => {
                     default_bg = Self::byte_color_to_float(background);
@@ -368,7 +540,7 @@ impl GhosttyTerminal {
                     if let Err(error) =
                         terminal.resize(cols as u16, rows as u16, DEFAULT_CELL_WIDTH, DEFAULT_CELL_HEIGHT)
                     {
-                        log::error!("ghostty_terminal: pty write to ghostty failed: {error}");
+                        log::error!("ghostty_terminal: resize failed: {error}");
                     }
                 }
                 Command::TakeSnapshot { tx, scroll_offset } => {
@@ -411,9 +583,10 @@ impl GhosttyTerminal {
                 Command::SearchInScrollbackAll {
                     query,
                     case_sensitive,
+                    fuzzy,
                     tx,
                 } => {
-                    let results = Self::search_in_scrollback_all_impl(&terminal, &query, case_sensitive);
+                    let results = Self::search_in_scrollback_all_impl(&terminal, &query, case_sensitive, fuzzy);
                     if let Err(error) = tx.send(results) {
                         log::error!("ghostty_terminal: command channel send failed: {error}");
                     }
@@ -589,6 +762,11 @@ impl GhosttyTerminal {
                 }
                 Command::Terminate => break,
             }
+            // After processing the bounded command, drain any pending queries
+            // so they see the updated terminal state.
+            while let Ok(query) = query_receiver.try_recv() {
+                Self::process_query(query, &mut terminal);
+            }
         }
     }
 
@@ -609,8 +787,13 @@ impl GhosttyTerminal {
     /// into one buffer and pass it here in a single call. Plain text and
     /// complete sequences may be concatenated freely.
     pub fn vt_write(&mut self, data: &[u8]) {
-        let mut buf = Vec::with_capacity(data.len() + 2);
+        let mut buf = Vec::with_capacity(data.len() + 4);
         buf.extend_from_slice(data);
+        // Append ST + SGR reset to close any incomplete escape sequence
+        // (OSC, DCS, SOS, PM, APC) that may have been truncated at the end
+        // of this chunk. vt_write is only used for programmatic VT data
+        // (settings, OSC sequences, test data), not for streaming PTY output,
+        // so SGR reset here does NOT break colored output.
         buf.extend_from_slice(b"\x1b\\\x1b[0m");
         if let Err(error) = self.cmd_tx.send(Command::Write(buf)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
@@ -626,7 +809,7 @@ impl GhosttyTerminal {
     /// suitable for PTY output. VT control sequences, DEC rectangle operations,
     /// and binary VT data should use [`vt_write`] instead.
     pub fn pty_write(&mut self, data: &[u8]) {
-        let mut buf = Vec::with_capacity(data.len() + 2);
+        let mut buf = Vec::with_capacity(data.len() + 4);
         let mut prev: u8 = 0;
         for &b in data {
             // Convert a bare LF to CRLF, but only when the LF is not already
@@ -639,6 +822,10 @@ impl GhosttyTerminal {
             buf.push(b);
             prev = b;
         }
+        // Append ST (String Terminator) and SGR reset to close any incomplete
+        // escape sequence that may have been truncated at the end of this chunk.
+        // This prevents the Ghostty parser from staying in string mode and
+        // consuming the next chunk as sequence data.
         buf.extend_from_slice(b"\x1b\\\x1b[0m");
         if let Err(error) = self.cmd_tx.send(Command::Write(buf)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
@@ -662,12 +849,10 @@ impl GhosttyTerminal {
     /// disconnection and returning `fallback` if the thread is dead.
     /// Each method label is logged once per session to avoid log spam.
     fn recv_or_fallback<T: core::fmt::Debug>(rx: flume::Receiver<T>, fallback: T, method: &str) -> T {
-        match rx.recv() {
+        match rx.recv_timeout(std::time::Duration::from_millis(QUERY_TIMEOUT_MS)) {
             Ok(value) => value,
             Err(_) => {
-                log::warn!(
-                    "ghostty_terminal: terminal thread disconnected — returning fallback for {method}: {fallback:?}"
-                );
+                log::warn!("ghostty_terminal: {method} timed out — returning fallback: {fallback:?}");
                 fallback
             }
         }
@@ -685,8 +870,8 @@ impl GhosttyTerminal {
 
     pub fn set_theme(&self, background: [u8; 3], foreground: [u8; 3], ansi: [[u8; 3]; 16]) {
         if let Err(error) = self.cmd_tx.send(Command::SetTheme {
-            bg: background,
-            fg: foreground,
+            background,
+            foreground,
             ansi,
         }) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
@@ -701,7 +886,7 @@ impl GhosttyTerminal {
 
     pub fn rows(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::Rows(tx)) {
+        if let Err(error) = self.query_tx.send(Command::Rows(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_ROWS, "rows")
@@ -709,7 +894,7 @@ impl GhosttyTerminal {
 
     pub fn cols(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::Cols(tx)) {
+        if let Err(error) = self.query_tx.send(Command::Cols(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_COLS, "cols")
@@ -724,23 +909,13 @@ impl GhosttyTerminal {
         if let Err(error) = self.cmd_tx.send(Command::TakeSnapshot { tx, scroll_offset }) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        Self::recv_or_fallback(
-            rx,
-            GridSnapshot {
-                rows: DISCONNECTED_ROWS,
-                cols: DISCONNECTED_COLS,
-                cursor_row: DISCONNECTED_CURSOR_Y,
-                cursor_col: DISCONNECTED_CURSOR_X,
-                cursor_visible: DISCONNECTED_CURSOR_VISIBLE,
-                cursor_style: Default::default(),
-                cells: Vec::new(),
-                dirty: Vec::new(),
-                kgp_placements: Vec::new(),
-                title: String::new(),
-                scrollback_length: 0,
-            },
-            "take_snapshot",
-        )
+        match rx.recv_timeout(std::time::Duration::from_millis(QUERY_TIMEOUT_MS)) {
+            Ok(snapshot) => snapshot,
+            Err(_) => {
+                log::warn!("ghostty_terminal: take_snapshot_with_scroll timed out");
+                GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS)
+            }
+        }
     }
 
     pub fn take_kgp_image(&self, image_id: u32) -> Option<KgpImageData> {
@@ -759,7 +934,7 @@ impl GhosttyTerminal {
 
     pub fn cursor_x(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::CursorX(tx)) {
+        if let Err(error) = self.query_tx.send(Command::CursorX(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_CURSOR_X, "cursor_x")
@@ -767,7 +942,7 @@ impl GhosttyTerminal {
 
     pub fn cursor_y(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::CursorY(tx)) {
+        if let Err(error) = self.query_tx.send(Command::CursorY(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_CURSOR_Y, "cursor_y")
@@ -775,7 +950,7 @@ impl GhosttyTerminal {
 
     pub fn cursor_visible(&self) -> bool {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::CursorVisible(tx)) {
+        if let Err(error) = self.query_tx.send(Command::CursorVisible(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_CURSOR_VISIBLE, "cursor_visible")
@@ -783,10 +958,16 @@ impl GhosttyTerminal {
 
     pub fn cwd(&self) -> String {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::Cwd(tx)) {
+        if let Err(error) = self.query_tx.send(Command::Cwd(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or_default()
+        match rx.recv() {
+            Ok(cwd) => cwd,
+            Err(_) => {
+                log::warn!("ghostty_terminal: terminal thread disconnected — returning empty cwd");
+                String::new()
+            }
+        }
     }
 
     pub fn key_encode(
@@ -817,15 +998,23 @@ impl GhosttyTerminal {
 
     pub fn mode_get(&self, mode_num: u16, kind: u8) -> bool {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::ModeGet(mode_num, kind, tx)) {
+        if let Err(error) = self.query_tx.send(Command::ModeGet(mode_num, kind, tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or(false)
+        match rx.recv() {
+            Ok(mode) => mode,
+            Err(_) => {
+                log::warn!(
+                    "ghostty_terminal: terminal thread disconnected — returning false for mode_get({mode_num}, {kind})"
+                );
+                false
+            }
+        }
     }
 
     pub fn origin_mode(&self) -> bool {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::OriginMode(tx)) {
+        if let Err(error) = self.query_tx.send(Command::OriginMode(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_MODE_ORIGIN, "origin_mode")
@@ -833,7 +1022,7 @@ impl GhosttyTerminal {
 
     pub fn autowrap(&self) -> bool {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::Autowrap(tx)) {
+        if let Err(error) = self.query_tx.send(Command::Autowrap(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_MODE_AUTOWRAP, "autowrap")
@@ -841,10 +1030,16 @@ impl GhosttyTerminal {
 
     pub fn alt_screen(&self) -> bool {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::AltScreen(tx)) {
+        if let Err(error) = self.query_tx.send(Command::AltScreen(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or(false)
+        match rx.recv() {
+            Ok(alt) => alt,
+            Err(_) => {
+                log::warn!("ghostty_terminal: terminal thread disconnected — returning false for alt_screen");
+                false
+            }
+        }
     }
 
     pub fn is_mouse_tracking_active(&self) -> bool {
@@ -873,7 +1068,7 @@ impl GhosttyTerminal {
 
     pub fn title(&self) -> String {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::Title(tx)) {
+        if let Err(error) = self.query_tx.send(Command::Title(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
         Self::recv_or_fallback(rx, DISCONNECTED_TITLE.to_string(), "title")
@@ -881,10 +1076,16 @@ impl GhosttyTerminal {
 
     pub fn scrollback_length(&self) -> u32 {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::ScrollbackLength(tx)) {
+        if let Err(error) = self.query_tx.send(Command::ScrollbackLength(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        Self::recv_or_fallback(rx, DISCONNECTED_SCROLLBACK, "scrollback_length")
+        match rx.recv_timeout(std::time::Duration::from_millis(QUERY_TIMEOUT_MS)) {
+            Ok(len) => len,
+            Err(_) => {
+                log::warn!("ghostty_terminal: scrollback_length timed out, returning cached value");
+                DISCONNECTED_SCROLLBACK
+            }
+        }
     }
 
     pub fn read_line_text(&self, row: u32) -> Option<String> {
@@ -892,15 +1093,29 @@ impl GhosttyTerminal {
         if let Err(error) = self.cmd_tx.send(Command::ReadLineText { row, tx }) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or(None)
+        match rx.recv_timeout(std::time::Duration::from_millis(QUERY_TIMEOUT_MS)) {
+            Ok(text) => text,
+            Err(_) => {
+                log::warn!("ghostty_terminal: read_line_text({row}) timed out or disconnected");
+                None
+            }
+        }
     }
 
     pub fn read_visible_text(&self) -> String {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::ReadVisibleText(tx)) {
+        if let Err(error) = self.query_tx.send(Command::ReadVisibleText(tx)) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or_default()
+        match rx.recv() {
+            Ok(text) => text,
+            Err(_) => {
+                log::warn!(
+                    "ghostty_terminal: terminal thread disconnected — returning empty string for read_visible_text"
+                );
+                String::new()
+            }
+        }
     }
 
     pub fn search_in_scrollback(&self, query: &str) -> Option<(u32, u32)> {
@@ -911,19 +1126,34 @@ impl GhosttyTerminal {
         }) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or(None)
+        match rx.recv() {
+            Ok(result) => result,
+            Err(_) => {
+                log::warn!("ghostty_terminal: terminal thread disconnected — returning None for search_in_scrollback");
+                None
+            }
+        }
     }
 
-    pub fn search_all_in_scrollback(&self, query: &str, case_sensitive: bool) -> Vec<SearchMatch> {
+    pub fn search_all_in_scrollback(&self, query: &str, case_sensitive: bool, fuzzy: bool) -> Vec<SearchMatch> {
         let (tx, rx) = bounded(1);
         if let Err(error) = self.cmd_tx.send(Command::SearchInScrollbackAll {
             query: query.to_string(),
             case_sensitive,
+            fuzzy,
             tx,
         }) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or_default()
+        match rx.recv() {
+            Ok(result) => result,
+            Err(_) => {
+                log::warn!(
+                    "ghostty_terminal: terminal thread disconnected — returning empty results for search_all_in_scrollback"
+                );
+                Vec::new()
+            }
+        }
     }
 
     pub fn dump_grid(&self) -> DumpedGrid {
@@ -931,12 +1161,18 @@ impl GhosttyTerminal {
         if let Err(error) = self.cmd_tx.send(Command::DumpGrid { tx }) {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
         }
-        rx.recv().unwrap_or(DumpedGrid {
-            rows: 0,
-            cols: 0,
-            visible: Vec::new(),
-            scrollback: Vec::new(),
-        })
+        match rx.recv() {
+            Ok(grid) => grid,
+            Err(_) => {
+                log::warn!("ghostty_terminal: terminal thread disconnected — returning empty grid for dump_grid");
+                DumpedGrid {
+                    rows: 0,
+                    cols: 0,
+                    visible: Vec::new(),
+                    scrollback: Vec::new(),
+                }
+            }
+        }
     }
 
     // ── DEC Rectangle Operations ──
@@ -1176,7 +1412,7 @@ impl GhosttyTerminal {
 
         // Fill from scrollback history for scrolled-up portion
         for row in 0..history_rows {
-            let history_row = scrollback_rows - history_rows + row;
+            let history_row = scrollback_rows - scroll_offset + row;
             for col in 0..cols {
                 let coord = PointCoordinate {
                     x: col as u16,
@@ -1346,7 +1582,12 @@ impl GhosttyTerminal {
         None
     }
 
-    fn search_in_scrollback_all_impl(terminal: &Terminal, query: &str, case_sensitive: bool) -> Vec<SearchMatch> {
+    fn search_in_scrollback_all_impl(
+        terminal: &Terminal,
+        query: &str,
+        case_sensitive: bool,
+        fuzzy: bool,
+    ) -> Vec<SearchMatch> {
         if query.is_empty() {
             return vec![];
         }
@@ -1364,19 +1605,67 @@ impl GhosttyTerminal {
                 } else {
                     line.to_lowercase()
                 };
-                let mut start = 0;
-                while let Some(col) = search_line[start..].find(&search_query) {
-                    let abs_col = start + col;
-                    results.push(SearchMatch {
-                        row,
-                        start_col: abs_col as u32,
-                        end_col: (abs_col + search_query.len()) as u32,
-                    });
-                    start = abs_col + 1;
+                if fuzzy {
+                    let max_distance = std::cmp::max(1, search_query.len() / 3);
+                    let mut best_col: Option<usize> = None;
+                    let mut best_distance = usize::MAX;
+                    if search_query.len() <= search_line.len() {
+                        for start in 0..=(search_line.len() - search_query.len()) {
+                            let window = &search_line[start..start + search_query.len()];
+                            let dist = Self::levenshtein_distance(&search_query, window);
+                            if dist <= max_distance && dist < best_distance {
+                                best_distance = dist;
+                                best_col = Some(start);
+                            }
+                        }
+                    }
+                    if let Some(col) = best_col {
+                        results.push(SearchMatch {
+                            row,
+                            start_col: col as u32,
+                            end_col: (col + search_query.len()) as u32,
+                        });
+                    }
+                } else {
+                    let mut start = 0;
+                    while let Some(col) = search_line[start..].find(&search_query) {
+                        let abs_col = start + col;
+                        results.push(SearchMatch {
+                            row,
+                            start_col: abs_col as u32,
+                            end_col: (abs_col + search_query.len()) as u32,
+                        });
+                        start = abs_col + 1;
+                    }
                 }
             }
         }
         results
+    }
+
+    /// Compute the Levenshtein distance (edit distance) between two strings.
+    /// Uses the classic dynamic programming approach with O(min(m,n)) memory.
+    fn levenshtein_distance(a: &str, b: &str) -> usize {
+        let a_chars: Vec<char> = a.chars().collect();
+        let b_chars: Vec<char> = b.chars().collect();
+        let m = a_chars.len();
+        let n = b_chars.len();
+        // Use the shorter string as the column vector for memory efficiency
+        if m < n {
+            return Self::levenshtein_distance(b, a);
+        }
+        let mut prev: Vec<usize> = (0..=n).collect();
+        for i in 1..=m {
+            let mut current = i;
+            for j in 1..=n {
+                let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+                let next = std::cmp::min(std::cmp::min(current + 1, prev[j] + 1), prev[j - 1] + cost);
+                prev[j - 1] = current;
+                current = next;
+            }
+            prev[n] = current;
+        }
+        prev[n]
     }
 }
 
@@ -9406,7 +9695,7 @@ mod tests_s2_fixes {
         t.vt_write(b"hello again\n");
         t.vt_write(b"goodbye\n");
         t.flush();
-        let results = t.search_all_in_scrollback("hello", true);
+        let results = t.search_all_in_scrollback("hello", true, false);
         assert!(!results.is_empty(), "must find 'hello'");
         assert_eq!(results.len(), 2, "must find 'hello' in both lines");
         for m in &results {
@@ -9422,7 +9711,7 @@ mod tests_s2_fixes {
         t.vt_write(b"HELLO world\n");
         t.vt_write(b"hello again\n");
         t.flush();
-        let results = t.search_all_in_scrollback("hello", false);
+        let results = t.search_all_in_scrollback("hello", false, false);
         assert_eq!(results.len(), 2, "must find 'hello' case-insensitively");
     }
 
@@ -9430,7 +9719,7 @@ mod tests_s2_fixes {
     #[test]
     fn search_all_in_scrollback_empty_query() {
         let t = GhosttyTerminal::new(3, 80, 100).expect("term");
-        let results = t.search_all_in_scrollback("", true);
+        let results = t.search_all_in_scrollback("", true, false);
         assert!(results.is_empty(), "empty query must return no matches");
     }
 
@@ -9440,7 +9729,7 @@ mod tests_s2_fixes {
         let mut t = GhosttyTerminal::new(3, 80, 100).expect("term");
         t.vt_write(b"abc def\n");
         t.flush();
-        let results = t.search_all_in_scrollback("xyz", true);
+        let results = t.search_all_in_scrollback("xyz", true, false);
         assert!(results.is_empty(), "no-match query must return empty vec");
     }
 }

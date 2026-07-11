@@ -165,30 +165,29 @@ data class BridgeTheme(
 
     companion object {
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): BridgeTheme =
-            BridgeTheme(
-                name = reader.readString(),
-                bg = reader.readI32(),
-                fg = reader.readI32(),
-                cursor = reader.readI32(),
-                selectionBg = reader.readI32(),
-                ansi0 = reader.readI32(),
-                ansi1 = reader.readI32(),
-                ansi2 = reader.readI32(),
-                ansi3 = reader.readI32(),
-                ansi4 = reader.readI32(),
-                ansi5 = reader.readI32(),
-                ansi6 = reader.readI32(),
-                ansi7 = reader.readI32(),
-                ansi8 = reader.readI32(),
-                ansi9 = reader.readI32(),
-                ansi10 = reader.readI32(),
-                ansi11 = reader.readI32(),
-                ansi12 = reader.readI32(),
-                ansi13 = reader.readI32(),
-                ansi14 = reader.readI32(),
-                ansi15 = reader.readI32(),
-            )
+        fun wireDecode(reader: WireReader): BridgeTheme = BridgeTheme(
+            name = reader.readString(),
+            bg = reader.readI32(),
+            fg = reader.readI32(),
+            cursor = reader.readI32(),
+            selectionBg = reader.readI32(),
+            ansi0 = reader.readI32(),
+            ansi1 = reader.readI32(),
+            ansi2 = reader.readI32(),
+            ansi3 = reader.readI32(),
+            ansi4 = reader.readI32(),
+            ansi5 = reader.readI32(),
+            ansi6 = reader.readI32(),
+            ansi7 = reader.readI32(),
+            ansi8 = reader.readI32(),
+            ansi9 = reader.readI32(),
+            ansi10 = reader.readI32(),
+            ansi11 = reader.readI32(),
+            ansi12 = reader.readI32(),
+            ansi13 = reader.readI32(),
+            ansi14 = reader.readI32(),
+            ansi15 = reader.readI32(),
+        )
     }
 }
 
@@ -228,25 +227,24 @@ data class TerminalConfig(
         private const val DEFAULT_FONT_SIZE_TENTHS = 140u
 
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): TerminalConfig =
-            TerminalConfig(
-                shell =
-                    when (reader.readI32()) {
-                        0 -> Shell.SystemDefault
-                        1 -> Shell.Custom(reader.readString())
-                        else -> Shell.SystemDefault
-                    },
-                rows = reader.readU32(),
-                cols = reader.readU32(),
-                scrollbackLines = reader.readU32(),
-                font_size_tenths = reader.readU32(),
-                theme = BridgeTheme.wireDecode(reader),
-                home = reader.readString(),
-                user = reader.readString(),
-                path = reader.readString(),
-                workingDirectory = reader.readString(),
-                prefix = reader.readString(),
-            )
+        fun wireDecode(reader: WireReader): TerminalConfig = TerminalConfig(
+            shell =
+            when (reader.readI32()) {
+                0 -> Shell.SystemDefault
+                1 -> Shell.Custom(reader.readString())
+                else -> Shell.SystemDefault
+            },
+            rows = reader.readU32(),
+            cols = reader.readU32(),
+            scrollbackLines = reader.readU32(),
+            font_size_tenths = reader.readU32(),
+            theme = BridgeTheme.wireDecode(reader),
+            home = reader.readString(),
+            user = reader.readString(),
+            path = reader.readString(),
+            workingDirectory = reader.readString(),
+            prefix = reader.readString(),
+        )
     }
 }
 
@@ -335,6 +333,7 @@ private interface TorvoxNative : Library {
         dataDir: Pointer,
     ): Int
 
+    @Suppress("LongParameterList")
     fun torvox_bridge_save_test_frame_with_selection(
         handle: Long,
         dataDir: Pointer,
@@ -502,6 +501,7 @@ private interface TorvoxNative : Library {
         query_ptr: ByteArray?,
         query_len: Int,
         case_sensitive: Byte,
+        fuzzy: Byte,
     ): Long
 
     fun torvox_bridge_set_scroll_offset(
@@ -597,6 +597,10 @@ class TorvoxBridge(
 ) : AutoCloseable {
     private var closed = false
 
+    private fun ensureOpen() {
+        if (closed) throw IllegalStateException("TorvoxBridge is closed")
+    }
+
     private fun <T> callOk(
         functionPointer: (TorvoxNative) -> Pointer?,
         decode: (WireReader) -> T,
@@ -630,22 +634,32 @@ class TorvoxBridge(
         height: Int,
     ) {
         val library = ensureLib()
-        val low = (windowPointer and LOW_32_MASK).toInt()
-        val high = ((windowPointer shr 32) and LOW_32_MASK).toInt()
-        val result = library.torvox_bridge_set_native_window(handle, low, high, width, height)
+        val result =
+            library.torvox_bridge_set_native_window(
+                handle,
+                (windowPointer and LOW_32_MASK).toInt(),
+                (
+                    (windowPointer shr 32) and
+                        LOW_32_MASK
+                    ).toInt(),
+                width,
+                height,
+            )
         if (result != 0) throw RuntimeException("setNativeWindow failed with code $result")
     }
 
-    fun render(): Int = ensureLib().torvox_bridge_render(handle)
+    fun render(): Int {
+        ensureOpen()
+        return ensureLib().torvox_bridge_render(handle)
+    }
 
     fun saveTestFrame(dataDir: String): Int {
-        val cStr =
-            com.sun.jna.Native
-                .toByteArray(dataDir)
-        com.sun.jna.Memory(cStr.size.toLong() + 1).use { mem ->
-            mem.write(0, cStr, 0, cStr.size)
-            mem.setByte(cStr.size.toLong(), 0)
-            return ensureLib().torvox_bridge_save_test_frame(handle, mem)
+        com.sun.jna.Native.toByteArray(dataDir).let { dataBytes ->
+            com.sun.jna.Memory(dataBytes.size.toLong() + 1).use { mem ->
+                mem.write(0, dataBytes, 0, dataBytes.size)
+                mem.setByte(dataBytes.size.toLong(), 0)
+                return ensureLib().torvox_bridge_save_test_frame(handle, mem)
+            }
         }
     }
 
@@ -658,22 +672,21 @@ class TorvoxBridge(
         active: Boolean,
         mode: Int = 0,
     ): Int {
-        val cStr =
-            com.sun.jna.Native
-                .toByteArray(dataDir)
-        com.sun.jna.Memory(cStr.size.toLong() + 1).use { mem ->
-            mem.write(0, cStr, 0, cStr.size)
-            mem.setByte(cStr.size.toLong(), 0)
-            return ensureLib().torvox_bridge_save_test_frame_with_selection(
-                handle,
-                mem,
-                startRow,
-                startCol,
-                endRow,
-                endCol,
-                if (active) 1 else 0,
-                mode,
-            )
+        com.sun.jna.Native.toByteArray(dataDir).let { dataBytes ->
+            com.sun.jna.Memory(dataBytes.size.toLong() + 1).use { mem ->
+                mem.write(0, dataBytes, 0, dataBytes.size)
+                mem.setByte(dataBytes.size.toLong(), 0)
+                return ensureLib().torvox_bridge_save_test_frame_with_selection(
+                    handle,
+                    mem,
+                    startRow,
+                    startCol,
+                    endRow,
+                    endCol,
+                    if (active) 1 else 0,
+                    mode,
+                )
+            }
         }
     }
 
@@ -747,9 +760,17 @@ class TorvoxBridge(
         height: Int,
     ) {
         val library = ensureLib()
-        val low = (windowPointer and LOW_32_MASK).toInt()
-        val high = ((windowPointer shr 32) and LOW_32_MASK).toInt()
-        val result = library.torvox_bridge_update_native_window(handle, low, high, width, height)
+        val result =
+            library.torvox_bridge_update_native_window(
+                handle,
+                (windowPointer and LOW_32_MASK).toInt(),
+                (
+                    (windowPointer shr 32) and
+                        LOW_32_MASK
+                    ).toInt(),
+                width,
+                height,
+            )
         if (result != 0) throw RuntimeException("updateNativeWindow failed with code $result")
     }
 
@@ -839,6 +860,7 @@ class TorvoxBridge(
         unicodeChar: Int,
         unshiftedChar: Int,
     ): Boolean {
+        ensureOpen()
         val result =
             ensureLib().torvox_bridge_process_key_event(
                 handle,
@@ -1032,6 +1054,7 @@ class TorvoxBridge(
     fun searchAllInScrollback(
         query: String,
         caseSensitive: Boolean,
+        fuzzy: Boolean = false,
     ): List<Triple<Int, Int, Int>>? {
         val queryBytes = query.toByteArray(Charsets.UTF_8)
         val ptr =
@@ -1040,6 +1063,7 @@ class TorvoxBridge(
                 queryBytes,
                 queryBytes.size,
                 if (caseSensitive) 1 else 0,
+                if (fuzzy) 1 else 0,
             )
         if (ptr == 0L) return null
         val text = Pointer(ptr).getString(0, "UTF-8")
@@ -1057,6 +1081,8 @@ class TorvoxBridge(
             nativeLib?.boltffi_torvox_bridge_free(handle)
         }
     }
+
+    fun isClosed(): Boolean = closed
 }
 
 fun createBridge(config: TerminalConfig): TorvoxBridge {

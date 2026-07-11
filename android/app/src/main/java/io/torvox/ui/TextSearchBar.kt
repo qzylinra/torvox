@@ -37,6 +37,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -118,6 +120,8 @@ fun TextSearchBar(
     caseSensitive: Boolean = false,
     onCaseSensitiveToggle: (Boolean) -> Unit = {},
     autoCaseSensitive: Boolean = false,
+    fuzzyMatch: Boolean = false,
+    onFuzzyMatchToggle: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -190,6 +194,28 @@ fun TextSearchBar(
                 text = "Aa",
                 fontSize = 13.sp,
                 color = aaColor,
+            )
+        }
+
+        IconButton(
+            onClick = { onFuzzyMatchToggle(!fuzzyMatch) },
+            modifier =
+            Modifier
+                .size(32.dp)
+                .testTag("SearchFuzzyMatch")
+                .semantics {
+                    contentDescription = if (fuzzyMatch) "Disable fuzzy match" else "Enable fuzzy match"
+                },
+        ) {
+            Text(
+                text = "~",
+                fontSize = 13.sp,
+                color =
+                if (fuzzyMatch) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
             )
         }
 

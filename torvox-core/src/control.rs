@@ -23,6 +23,7 @@ pub enum C0 {
 }
 
 impl C0 {
+    /// Parse a single byte into the corresponding C0 control code variant.
     pub fn from_byte(byte: u8) -> Self {
         match byte {
             0x00 => Self::Nul,

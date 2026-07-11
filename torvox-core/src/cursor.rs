@@ -14,9 +14,13 @@ pub enum CursorStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct CursorState {
+    /// Current cursor row position (0-indexed).
     pub row: u32,
+    /// Current cursor column position (0-indexed).
     pub col: u32,
+    /// Visual style of the cursor (Block, Underline, Bar, etc.).
     pub style: CursorStyle,
+    /// Whether the cursor is visible.
     pub visible: bool,
 }
 

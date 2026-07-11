@@ -45,7 +45,9 @@ pub enum TerminalEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct DirtyRegion {
+    /// First modified row (inclusive).
     pub start_row: u32,
+    /// Last modified row (inclusive).
     pub end_row: u32,
 }
 

@@ -93,6 +93,12 @@ termlib/
 vendor/ghostty/
 # Generated test screenshots
 screenshots/
+torvox-renderer/test-screenshots/
 !docs/screenshots/
 # Block root-level PNGs (Maestro output etc.)
 /*.png
+
+# Agent working directories
+.omo/
+.auto/log.jsonl
+.auto/checkpoint*

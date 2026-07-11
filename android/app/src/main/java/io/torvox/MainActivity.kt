@@ -72,18 +72,16 @@ class MainActivity : ComponentActivity() {
                 try {
                     val process = Runtime.getRuntime().exec(arrayOf("logcat", "-v", "time", "*:D"))
                     val reader = process.inputStream.bufferedReader()
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        val currentLine = line ?: continue
+                    for (line in reader.lineSequence()) {
                         @Suppress("ComplexCondition")
-                        if (currentLine.contains(
+                        if (line.contains(
                                 "Torvox",
-                            ) || currentLine.contains("TerminalSurface") || currentLine.contains("TorvoxRuntime") ||
-                            currentLine.contains("AndroidRuntime")
+                            ) || line.contains("TerminalSurface") || line.contains("TorvoxRuntime") ||
+                            line.contains("AndroidRuntime")
                         ) {
                             val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
                             synchronized(logLock) {
-                                logWriter?.write("$timestamp $currentLine\n")
+                                logWriter?.write("$timestamp $line\n")
                                 logWriter?.flush()
                             }
                         }
@@ -91,13 +89,15 @@ class MainActivity : ComponentActivity() {
                     Log.w("Torvox", "Logcat stream ended, restarting in 5s")
                     Thread.sleep(LOGCAT_RETRY_DELAY_MS.toLong())
                 } catch (e: InterruptedException) {
+                    Log.w("Torvox", "Logcat thread interrupted, stopping")
                     Thread.currentThread().interrupt()
                     break
                 } catch (e: Exception) {
                     Log.e("Torvox", "Logcat capture failed, retrying in 5s: ${e.message}")
                     try {
                         Thread.sleep(LOGCAT_RETRY_DELAY_MS.toLong())
-                    } catch (_: InterruptedException) {
+                    } catch (e: InterruptedException) {
+                        Log.w("Torvox", "Logcat sleep interrupted, stopping")
                         Thread.currentThread().interrupt()
                         break
                     }
@@ -177,7 +177,7 @@ class MainActivity : ComponentActivity() {
                 intent: Intent,
             ) {
                 val text = intent.getStringExtra("text") ?: return
-                terminalViewModel?.clearSelection()
+                terminalViewModel.clearSelection()
                 Thread {
                     try {
                         Log.d("Torvox", "Input received: '$text' (len=${text.length})")
@@ -199,11 +199,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    private var terminalViewModel: io.torvox.TerminalViewModel? = null
-
     private var previousNightMode: Int? = null
 
-    private val terminalVm: io.torvox.TerminalViewModel by viewModels()
+    private val terminalViewModel: io.torvox.TerminalViewModel by viewModels()
 
     private val selectAllReceiver =
         object : BroadcastReceiver() {
@@ -211,7 +209,7 @@ class MainActivity : ComponentActivity() {
                 context: Context,
                 intent: Intent,
             ) {
-                val viewModel = terminalViewModel ?: return
+                val viewModel = terminalViewModel
                 viewModel.selectAll()
                 Log.d("Torvox", "selectAll called via broadcast, active=${viewModel.state.value.selection.active}")
             }
@@ -223,7 +221,7 @@ class MainActivity : ComponentActivity() {
                 context: Context,
                 intent: Intent,
             ) {
-                val viewModel = terminalViewModel ?: return
+                val viewModel = terminalViewModel
                 val startRow = intent.getIntExtra("startRow", 0)
                 val startCol = intent.getIntExtra("startCol", 0)
                 val endRow = intent.getIntExtra("endRow", 2)
@@ -241,7 +239,7 @@ class MainActivity : ComponentActivity() {
                 context: Context,
                 intent: Intent,
             ) {
-                val viewModel = terminalViewModel ?: return
+                val viewModel = terminalViewModel
                 val row = intent.getIntExtra("row", 10)
                 val col = intent.getIntExtra("col", 0)
                 viewModel.showPastePopup(row, col)
@@ -286,16 +284,15 @@ class MainActivity : ComponentActivity() {
         )
         io.torvox.service.TerminalForegroundService
             .start(this)
-        terminalViewModel = terminalVm
         setContent {
-            TorvoxNavHost(viewModelReady = { terminalViewModel = it })
+            TorvoxNavHost()
         }
     }
 
     override fun onDestroy() {
         lifecycleScope.launch {
             try {
-                terminalViewModel?.runtime?.saveAllSessions()
+                terminalViewModel.runtime.saveAllSessions()
             } catch (exception: Exception) {
                 Log.e(TAG, "Failed to save sessions during destroy", exception)
             }
@@ -322,7 +319,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val handled = terminalViewModel?.handleLayoutAwareHardwareKey(event) ?: false
+        val handled = terminalViewModel.handleLayoutAwareHardwareKey(event)
         if (handled) {
             Log.d(TAG, "dispatchKeyEvent: consumed physical-key layout-aware char")
             return true
@@ -338,26 +335,20 @@ class MainActivity : ComponentActivity() {
         if (event != null && isVolumeKeyMappingEnabled()) {
             when (keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP -> {
-                    val viewModel = terminalViewModel
-                    if (viewModel != null) {
-                        val ctrlLocked = viewModel.state.value.ctrlState == io.torvox.ui.ModifierState.Locked
-                        val altLocked = viewModel.state.value.altState == io.torvox.ui.ModifierState.Locked
-                        if (!ctrlLocked && !altLocked) {
-                            viewModel.setModifierKeys(listOf(io.torvox.ui.ModifierKey("ctrl", "CTRL", ctrl = true)))
-                        }
-                        return true
+                    val ctrlLocked = terminalViewModel.state.value.ctrlState == io.torvox.ui.ModifierState.Locked
+                    val altLocked = terminalViewModel.state.value.altState == io.torvox.ui.ModifierState.Locked
+                    if (!ctrlLocked && !altLocked) {
+                        terminalViewModel.setModifierKeys(listOf(io.torvox.ui.ModifierKey("ctrl", "CTRL", ctrl = true)))
                     }
+                    return true
                 }
 
                 KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                    val viewModel = terminalViewModel
-                    if (viewModel != null) {
-                        val ctrlLocked = viewModel.state.value.ctrlState == io.torvox.ui.ModifierState.Locked
-                        if (!ctrlLocked) {
-                            viewModel.setModifierKeys(listOf(io.torvox.ui.ModifierKey("alt", "ALT", alt = true)))
-                        }
-                        return true
+                    val ctrlLocked = terminalViewModel.state.value.ctrlState == io.torvox.ui.ModifierState.Locked
+                    if (!ctrlLocked) {
+                        terminalViewModel.setModifierKeys(listOf(io.torvox.ui.ModifierKey("alt", "ALT", alt = true)))
                     }
+                    return true
                 }
             }
         }
@@ -372,13 +363,10 @@ class MainActivity : ComponentActivity() {
         if (event != null && isVolumeKeyMappingEnabled()) {
             when (keyCode) {
                 KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                    val viewModel = terminalViewModel
-                    if (viewModel != null) {
-                        val ctrlOnce = viewModel.state.value.ctrlState == io.torvox.ui.ModifierState.Once
-                        val altOnce = viewModel.state.value.altState == io.torvox.ui.ModifierState.Once
-                        if (ctrlOnce || altOnce) {
-                            viewModel.consumeOneShotModifiers()
-                        }
+                    val ctrlOnce = terminalViewModel.state.value.ctrlState == io.torvox.ui.ModifierState.Once
+                    val altOnce = terminalViewModel.state.value.altState == io.torvox.ui.ModifierState.Once
+                    if (ctrlOnce || altOnce) {
+                        terminalViewModel.consumeOneShotModifiers()
                     }
                     return true
                 }
@@ -387,10 +375,7 @@ class MainActivity : ComponentActivity() {
         return super.onKeyUp(keyCode, event)
     }
 
-    private fun isVolumeKeyMappingEnabled(): Boolean {
-        val viewModel = terminalViewModel
-        return viewModel?.volumeKeyMap?.value == true
-    }
+    private fun isVolumeKeyMappingEnabled(): Boolean = terminalViewModel.volumeKeyMap.value == true
 }
 
 @Composable

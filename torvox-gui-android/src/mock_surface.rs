@@ -230,8 +230,10 @@ mod tests {
         let _ = ms.spawn_session("/bin/cat", &ShellEnv::default());
         assert!(!ms.poll_sync_active(), "should not be in sync initially");
         ms.write_to_pty(b"\x1b[?2026h");
+        ms.terminal().flush();
         assert!(ms.poll_sync_active(), "should be in sync after DECSET 2026");
         ms.write_to_pty(b"\x1b[?2026l");
+        ms.terminal().flush();
         assert!(!ms.poll_sync_active(), "should not be in sync after DECRST 2026");
     }
 

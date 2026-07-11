@@ -572,6 +572,7 @@ mod config_driven_session {
         t.resize(50, 100);
         t.resize(1, 1);
         t.resize(100, 200);
+        t.flush();
         assert_eq!(t.rows(), 100);
         assert_eq!(t.cols(), 200);
     }
@@ -856,6 +857,7 @@ mod linux_signal_handling {
         }
         // Resize should send SIGWINCH to the child
         s.resize(40, 120).expect("resize");
+        s.terminal_mut().flush();
         assert_eq!(s.terminal().rows(), 40);
         assert_eq!(s.terminal().cols(), 120);
         // Write a command after resize to verify shell is still alive
@@ -880,6 +882,7 @@ mod linux_signal_handling {
         s.resize(30, 90).expect("resize 1");
         s.resize(50, 140).expect("resize 2");
         s.resize(10, 40).expect("resize 3");
+        s.terminal_mut().flush();
         assert_eq!(s.terminal().rows(), 10);
         assert_eq!(s.terminal().cols(), 40);
         s.write(b"echo after_resizes\n").expect("write");
@@ -901,9 +904,11 @@ mod linux_signal_handling {
             std::thread::sleep(Duration::from_millis(5));
         }
         s.resize(1, 1).expect("resize to 1x1");
+        s.terminal_mut().flush();
         assert_eq!(s.terminal().rows(), 1);
         assert_eq!(s.terminal().cols(), 1);
         s.resize(24, 80).expect("resize back");
+        s.terminal_mut().flush();
         assert_eq!(s.terminal().rows(), 24);
         assert_eq!(s.terminal().cols(), 80);
         s.write(b"echo recovered\n").expect("write");

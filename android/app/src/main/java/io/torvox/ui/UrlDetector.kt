@@ -12,7 +12,7 @@ object UrlDetector {
         val matcher = URL_PATTERN.matcher(text)
         val urls = mutableListOf<String>()
         while (matcher.find()) {
-            var url = matcher.group(1) ?: continue
+            var url = matcher.group() ?: continue
             url = trimTrailingPunctuation(url)
             url = percentDecode(url)
             if (url.isNotBlank()) {

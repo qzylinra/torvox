@@ -1224,7 +1224,13 @@ impl GpuContext {
         }
     }
 
-    pub fn update_bind_group(&mut self, atlas_width: f32, atlas_height: f32) {
+    pub fn update_bind_group(
+        &mut self,
+        atlas_width: f32,
+        atlas_height: f32,
+        projection_width: f32,
+        projection_height: f32,
+    ) {
         let pipeline = match self.cell_pipeline.as_ref() {
             Some(p) => p,
             None => return,
@@ -1239,11 +1245,7 @@ impl GpuContext {
             }));
         }
 
-        let (proj_w, proj_h) = match self.surface_config.as_ref() {
-            Some(c) => (c.width as f32, c.height as f32),
-            None => (self.projection_width as f32, self.projection_height as f32),
-        };
-        let proj = orthographic_projection(proj_w, proj_h);
+        let proj = orthographic_projection(projection_width, projection_height);
 
         let uniforms = GpuUniforms {
             projection: proj,
@@ -1490,17 +1492,6 @@ impl GpuContext {
         config.height = height.max(1);
         surface.configure(&self.device, config);
 
-        let aw = self.atlas_texture.as_ref().map_or(0, |t| t.width());
-        let ah = self.atlas_texture.as_ref().map_or(0, |t| t.height());
-        let proj = orthographic_projection(width as f32, height as f32);
-        let uniforms = GpuUniforms {
-            projection: proj,
-            atlas_size: [aw as f32, ah as f32],
-            _padding: [0.0; 2],
-        };
-        if let Some(buf) = &self.cell_uniform_buffer {
-            self.queue.write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
-        }
         log::info!("RECONFIGURE_SWAPCHAIN: {}x{}", width, height);
     }
 
@@ -2311,6 +2302,7 @@ fn blend_highlight(base: [f32; 4], hl_rgba: [u8; 4]) -> [f32; 4] {
 pub struct CellInstanceConfig<'a> {
     pub atlas_width: f32,
     pub atlas_height: f32,
+    pub projection_height: f32,
     pub dirty_rows: Option<&'a [bool]>,
     pub selection: Option<SelectionRange>,
     pub selection_bg: Option<[f32; 4]>,
@@ -2341,6 +2333,7 @@ pub fn build_cell_instances_into(
 ) {
     let atlas_width = config.atlas_width;
     let atlas_height = config.atlas_height;
+    let projection_height = config.projection_height;
     let dirty_rows = config.dirty_rows;
     let selection = config.selection;
     let selection_bg = config.selection_bg;
@@ -2351,6 +2344,17 @@ pub fn build_cell_instances_into(
     let cols = snapshot.cols;
     let (cell_w, cell_h) = font_pipeline.cell_metrics();
     let ascent_pixels = font_pipeline.ascent_pixels();
+    let expected = (snapshot.rows * snapshot.cols) as usize;
+    if snapshot.cells.len() < expected {
+        log::warn!(
+            "build_cell_instances_into: snapshot cells too short ({} < {}), skipping render",
+            snapshot.cells.len(),
+            expected,
+        );
+        instances.clear();
+        return;
+    }
+
     instances.clear();
     instances.reserve((rows * cols) as usize);
 
@@ -2373,6 +2377,9 @@ pub fn build_cell_instances_into(
     }
 
     for row in 0..rows {
+        if projection_height > 0.0 && (row as f32 * cell_h) >= projection_height {
+            break;
+        }
         if let Some(dirty) = dirty_rows
             && row < dirty.len() as u32
             && !dirty[row as usize]
@@ -2395,6 +2402,8 @@ pub fn build_cell_instances_into(
                     }
                 }
                 if let Some(hl) = cell_highlight(row, col, &highlights_by_row) {
+                    // Invert fg and bg for search highlighted cells (反色效果)
+                    std::mem::swap(&mut fg, &mut bg);
                     bg = blend_highlight(bg, *hl);
                 }
                 let (fg, bg, quad_origin, quad_size) = if is_cursor {
@@ -2469,6 +2478,8 @@ pub fn build_cell_instances_into(
                     }
                 }
                 if let Some(hl) = cell_highlight(row, col, &highlights_by_row) {
+                    // Invert fg and bg for search highlighted cells (反色效果)
+                    std::mem::swap(&mut fg, &mut bg);
                     bg = blend_highlight(bg, *hl);
                 }
                 let base_x = col as f32 * cell_w;
@@ -2604,13 +2615,15 @@ pub fn build_cell_instances_into(
                         }
                     }
                     if let Some(hl) = cell_highlight(row, gcol, &highlights_by_row) {
+                        // Invert fg and bg for search highlighted cells
+                        std::mem::swap(&mut gfg, &mut gbg);
                         gbg = blend_highlight(gbg, *hl);
                     }
                     let (gfg_scoped, gbg_scoped) = if g_cursor {
                         let raw_cursor_bg = cursor_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
-                        let cursor_alpha = match cursor_style {
-                            torvox_core::cursor::CursorStyle::Block => CURSOR_BLOCK_ALPHA,
-                            _ => CURSOR_LINE_ALPHA,
+                        let (cursor_alpha, gfg_override) = match cursor_style {
+                            torvox_core::cursor::CursorStyle::Block => (CURSOR_BLOCK_ALPHA, gbg),
+                            _ => (CURSOR_LINE_ALPHA, gfg),
                         };
                         let cursor_bg = [
                             raw_cursor_bg[0],
@@ -2618,7 +2631,7 @@ pub fn build_cell_instances_into(
                             raw_cursor_bg[2],
                             raw_cursor_bg[3] * cursor_alpha,
                         ];
-                        (gbg, cursor_bg)
+                        (gfg_override, cursor_bg)
                     } else {
                         (gfg, gbg)
                     };
@@ -2695,14 +2708,16 @@ pub fn build_cell_instances_into(
                 }
             }
             if let Some(hl) = cell_highlight(row, col, &highlights_by_row) {
+                // Invert fg and bg for search highlighted cells
+                std::mem::swap(&mut fg, &mut bg);
                 bg = blend_highlight(bg, *hl);
             }
 
             let (fg, bg) = if is_cursor {
                 let raw_cursor_bg = cursor_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
-                let cursor_alpha = match cursor_style {
-                    torvox_core::cursor::CursorStyle::Block => CURSOR_BLOCK_ALPHA,
-                    _ => CURSOR_LINE_ALPHA,
+                let (cursor_alpha, fg_override) = match cursor_style {
+                    torvox_core::cursor::CursorStyle::Block => (CURSOR_BLOCK_ALPHA, bg),
+                    _ => (CURSOR_LINE_ALPHA, fg),
                 };
                 let cursor_bg = [
                     raw_cursor_bg[0],
@@ -2710,7 +2725,7 @@ pub fn build_cell_instances_into(
                     raw_cursor_bg[2],
                     raw_cursor_bg[3] * cursor_alpha,
                 ];
-                (bg, cursor_bg)
+                (fg_override, cursor_bg)
             } else {
                 (fg, bg)
             };
@@ -2720,13 +2735,11 @@ pub fn build_cell_instances_into(
             let (cursor_quad_size, cursor_quad_origin) = if is_cursor {
                 match cursor_style {
                     torvox_core::cursor::CursorStyle::Block => ([cell_w * cell_span, cell_h], [base_x, base_y]),
-                    torvox_core::cursor::CursorStyle::Bar => {
-                        ([cell_w * CURSOR_BAR_WIDTH_RATIO, cell_h], [base_x, base_y])
+                    // Bar/Underline on text cells: use full cell so text is not clipped;
+                    // cursor indicator color provides the positional highlight.
+                    torvox_core::cursor::CursorStyle::Bar | torvox_core::cursor::CursorStyle::Underline => {
+                        ([cell_w * cell_span, cell_h], [base_x, base_y])
                     }
-                    torvox_core::cursor::CursorStyle::Underline => (
-                        [cell_w * cell_span, cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO],
-                        [base_x, base_y + cell_h - cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO],
-                    ),
                 }
             } else {
                 ([cell_w * cell_span, cell_h], [base_x, base_y])
@@ -3422,6 +3435,7 @@ mod tests {
         ];
         let snapshot = GridSnapshot {
             rows: 1,
+            cols: 2,
             cursor_visible: true,
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             cells,
@@ -3435,6 +3449,7 @@ mod tests {
             CellInstanceConfig {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
+                projection_height: 0.0,
                 dirty_rows: None,
                 selection: None,
                 selection_bg: None,
@@ -3470,6 +3485,7 @@ mod tests {
         }];
         let snapshot = GridSnapshot {
             rows: 1,
+            cols: 1,
             cells,
             ..Default::default()
         };
@@ -3479,6 +3495,7 @@ mod tests {
             CellInstanceConfig {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
+                projection_height: 0.0,
                 dirty_rows: None,
                 selection: None,
                 selection_bg: None,
@@ -3512,6 +3529,7 @@ mod tests {
         }];
         let snapshot = GridSnapshot {
             rows: 1,
+            cols: 1,
             cursor_visible: false,
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             dirty: vec![true],
@@ -3524,6 +3542,7 @@ mod tests {
             CellInstanceConfig {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
+                projection_height: 768.0,
                 dirty_rows: None,
                 selection: None,
                 selection_bg: None,
@@ -3560,6 +3579,7 @@ mod tests {
         }];
         let snapshot = GridSnapshot {
             rows: 1,
+            cols: 1,
             cursor_visible: false,
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             dirty: vec![true],
@@ -3581,6 +3601,7 @@ mod tests {
             CellInstanceConfig {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
+                projection_height: 768.0,
                 dirty_rows: None,
                 selection,
                 selection_bg: None,
@@ -4092,6 +4113,7 @@ mod tests {
         }];
         let snapshot = GridSnapshot {
             rows: 1,
+            cols: 1,
             cursor_visible: false,
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             dirty: vec![true],
@@ -4110,6 +4132,7 @@ mod tests {
             CellInstanceConfig {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
+                projection_height: 768.0,
                 dirty_rows: None,
                 selection: None,
                 selection_bg: None,
@@ -4140,6 +4163,7 @@ mod tests {
         }];
         let snapshot = GridSnapshot {
             rows: 1,
+            cols: 1,
             cursor_visible: true,
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             dirty: vec![true],
@@ -4158,6 +4182,7 @@ mod tests {
             CellInstanceConfig {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
+                projection_height: 0.0,
                 dirty_rows: None,
                 selection: None,
                 selection_bg: None,

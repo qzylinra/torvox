@@ -12,13 +12,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
 
 @Composable
+@Suppress("LongParameterList")
 fun PasteChipOverlay(
     row: Int,
     col: Int,
@@ -29,7 +29,6 @@ fun PasteChipOverlay(
     accentColor: Color,
     backgroundColor: Color,
 ) {
-    val density = LocalDensity.current
     val visibleRow = (row - scrollOffset).coerceAtLeast(0)
     val chipX = col * cellWidth
     val chipY = (visibleRow + 1) * cellHeight + 4f

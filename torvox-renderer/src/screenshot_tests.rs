@@ -34,7 +34,6 @@ fn theme_ansi(i: usize) -> [f32; 4] {
     [c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0, 1.0]
 }
 
-
 fn run_ocr(png_path: &std::path::Path) -> String {
     let output = std::process::Command::new("rapidocr")
         .args(["-img", png_path.to_str().unwrap()])
@@ -81,8 +80,8 @@ fn render_grid(
     let Some((instance, adapter, device, queue)) = create_test_device() else {
         panic!("no GPU for {test_name}");
     };
-    let atlas_dim: u32 = 256;
-    let mut font_pipeline = crate::font::FontPipeline::new(atlas_dim as i32, atlas_dim as i32, 14.0);
+    let atlas_dim: u32 = 512;
+    let mut font_pipeline = crate::font::FontPipeline::new(atlas_dim as i32, atlas_dim as i32, 20.0);
     let (cell_w, cell_h) = font_pipeline.cell_metrics();
     let width = (grid.cols as f32 * cell_w).round() as u32 + TEST_PADDING_X;
     let height = (grid.rows as f32 * cell_h).round() as u32 + TEST_PADDING_Y;
@@ -424,7 +423,7 @@ fn ocr_search_highlight_reverses_colors() {
     }
     grid.selected[0..5].fill(true);
 
-    let (pixels, w, h) = render_grid("SEARCH_HIGHLIGHT", &grid, Some("HELLO"), Some(theme_clear_color()));
+    let (pixels, w, h) = render_grid("SEARCH_HIGHLIGHT", &grid, Some("TEXT"), Some(theme_clear_color()));
 
     let cols = grid.cols;
     let rows = grid.rows;
@@ -434,10 +433,35 @@ fn ocr_search_highlight_reverses_colors() {
     // Layer 2: auto-detect reverse-color region, verify region found
     let regions = find_reverse_color_regions(&pixels, w, h, cols, rows, 400, 5);
     assert!(!regions.is_empty(), "SEARCH_HIGHLIGHT: no reverse-color region found");
-    // For 1-row grids the reversed region is a small fraction of the image width;
-    // rapidocr needs the full line context to detect word boundaries reliably.
-    // The full-image OCR in render_grid already verifies the text is readable,
-    // and the swap proof below verifies the color inversion is correct.
+    assert_eq!(
+        regions.len(),
+        1,
+        "SEARCH_HIGHLIGHT: expected 1 merged region, got {}",
+        regions.len()
+    );
+
+    // Crop the reversed (selected) region and OCR it directly. Full-image OCR
+    // truncates a reversed word at the line start (drops the trailing glyph),
+    // but cropping to the reversed region gives rapidocr a clean single-word
+    // image so the highlighted text stays legible/verifiable.
+    let (rx, ry, rw, rh) = regions[0];
+    let pad_x = cell_w;
+    let pad_y = 5u32;
+    let crop_x = rx.saturating_sub(pad_x);
+    let crop_w = (rw + 2 * pad_x).min(w - crop_x);
+    let crop_y = ry.saturating_sub(pad_y);
+    let crop_h = (rh + 2 * pad_y).max(32).min(h - crop_y);
+    extract_and_ocr_region(
+        &pixels,
+        w,
+        h,
+        "SEARCH_HIGHLIGHT_REGION",
+        crop_x,
+        crop_y,
+        crop_w,
+        crop_h,
+        "HELLO",
+    );
 
     // Layer 3: pixel swap proof — selected cols 0-4 vs unselected cols 6-10 (5 cells each)
     assert_search_row_swap_proof(&pixels, w, cell_w, cell_h, "SEARCH_HIGHLIGHT", 0, 0, 6, 5, 15_000);

@@ -296,18 +296,25 @@ use std::time::{Duration, Instant};
 /// JSON-RPC 2.0 request envelope.
 #[derive(Clone, Debug, Deserialize)]
 pub struct JsonRpcRequest {
+    /// JSON-RPC protocol version string.
     pub jsonrpc: String,
+    /// Name of the method to invoke on the server.
     pub method: String,
+    /// Parameters for the method call.
     #[serde(default)]
     pub params: Value,
+    /// Request identifier used to correlate responses.
     pub id: Value,
 }
 
 /// JSON-RPC 2.0 response envelope.
 #[derive(Clone, Debug, Serialize)]
 pub struct JsonRpcResponse {
+    /// JSON-RPC protocol version string.
     pub jsonrpc: &'static str,
+    /// Request identifier matching the originating request.
     pub id: Value,
+    /// Result of the method invocation.
     pub result: Value,
 }
 
@@ -323,11 +330,17 @@ pub struct InputQueue {
 
 #[derive(Clone)]
 struct QueuedEntry {
+    /// Unique identifier for this queued entry.
     entry_id: String,
+    /// Session ID to monitor for the prompt pattern.
     session_id: u32,
+    /// Text to inject when the prompt pattern matches.
     text: String,
+    /// Key sequence to send after the text (e.g., Enter).
     submit_key: String,
+    /// Regex pattern to watch for in scrollback output.
     prompt_pattern: String,
+    /// Instant after which this entry expires.
     deadline: Instant,
 }
 

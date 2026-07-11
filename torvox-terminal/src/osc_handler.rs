@@ -86,11 +86,17 @@ pub enum OscEvent {
 /// borrow the filtered output via [`OscHandler::output`] after [`OscHandler::process`].
 #[derive(Debug)]
 pub struct OscHandler {
+    /// Current state machine state.
     state: OscState,
+    /// OSC number being parsed (e.g., 7, 8, 52).
     osc_number: u32,
+    /// Accumulated sequence bytes.
     seq_buf: Vec<u8>,
+    /// Payload accumulator for the current sequence.
     payload_buf: Vec<u8>,
+    /// Output buffer (bytes that pass through unhandled).
     output_buf: Vec<u8>,
+    /// Decoded events from handled OSC sequences.
     events_buf: Vec<OscEvent>,
 }
 

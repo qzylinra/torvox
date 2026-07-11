@@ -175,7 +175,7 @@ impl Color {
         }
     }
 
-    /// Create a color from an ANSI 256-color palette index.
+    /// Construct a Color from an ANSI 256-color palette index.
     pub fn from_ansi(index: u8) -> Self {
         let [r, g, b] = crate::ansi::ansi_to_rgb(index);
         Self { r, g, b, a: 255 }

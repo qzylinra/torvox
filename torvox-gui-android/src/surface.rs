@@ -93,6 +93,7 @@ pub struct AndroidSurface {
     gpu: Option<GpuContext>,
     font_pipeline: FontPipeline,
     session: Option<Arc<Mutex<Session>>>,
+    scrollback_lines: u32,
     atlas_width: u32,
     atlas_height: u32,
     theme: torvox_core::config::Theme,
@@ -105,6 +106,8 @@ pub struct AndroidSurface {
     last_hovered_url: Option<String>,
     surface_width: AtomicU32,
     surface_height: AtomicU32,
+    render_width: u32,
+    render_height: u32,
     native_window: Option<NativeWindow>,
     frame_count: u64,
     title: String,
@@ -159,7 +162,7 @@ fn line_to_text(line: &Line) -> String {
 }
 
 impl AndroidSurface {
-    pub fn new(rows: u32, cols: u32, _scrollback_lines: u32, font_size: f32) -> Self {
+    pub fn new(rows: u32, cols: u32, scrollback_lines: u32, font_size: f32) -> Self {
         let atlas_width = ATLAS_WIDTH;
         let atlas_height = ATLAS_HEIGHT;
         let font_pipeline = FontPipeline::new(atlas_width as i32, atlas_height as i32, font_size);
@@ -169,6 +172,7 @@ impl AndroidSurface {
             gpu,
             font_pipeline,
             session: None,
+            scrollback_lines,
             atlas_width,
             atlas_height,
             theme: torvox_core::config::Theme::catppuccin_mocha(),
@@ -181,6 +185,8 @@ impl AndroidSurface {
             last_hovered_url: None,
             surface_width: AtomicU32::new(0),
             surface_height: AtomicU32::new(0),
+            render_width: 0,
+            render_height: 0,
             native_window: None,
             frame_count: 0,
             title: String::new(),
@@ -208,8 +214,17 @@ impl AndroidSurface {
     pub fn spawn_session(&mut self, shell: &str, env: &ShellEnv) -> Result<Arc<Mutex<Session>>, SurfaceError> {
         let (background, foreground) = (self.theme.background, self.theme.foreground);
         let ansi = self.theme.ansi;
-        let session = Session::spawn_with_theme(shell, self.rows, self.cols, env, background, foreground, ansi)
-            .map_err(|e| SurfaceError::Session(e.to_string()))?;
+        let session = Session::spawn_with_theme(
+            shell,
+            self.rows,
+            self.cols,
+            env,
+            background,
+            foreground,
+            ansi,
+            self.scrollback_lines,
+        )
+        .map_err(|e| SurfaceError::Session(e.to_string()))?;
         let session_arc = Arc::new(Mutex::new(session));
         {
             let mut guard = match session_arc.lock() {
@@ -227,13 +242,6 @@ impl AndroidSurface {
         }
         self.session = Some(session_arc.clone());
 
-        #[cfg(target_os = "android")]
-        // SAFETY: ATrace functions are thread-safe, the C strings used in
-        // beginSection calls are static string literals, and the begin/end
-        // calls were properly paired when this function was entered.
-        unsafe {
-            ATrace_endSection();
-        }
         Ok(session_arc)
     }
     pub fn update_native_window(
@@ -300,7 +308,11 @@ impl AndroidSurface {
             gpu.configure_android_surface(ptr, width.max(1), height.max(1))
                 .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
         }
-        self.recompute_grid(width.max(1), height.max(1));
+        // Do NOT call recompute_grid here — update_native_window is called during
+        // IME show/hide animation where the height changes frame-by-frame, and
+        // recomputing the grid on every intermediate frame causes visible text
+        // stretch/squash as the row count oscillates. Grid is recomputed once
+        // during set_native_window (initial setup) and when the font size changes.
         self.render_requested = true;
         Ok(())
     }
@@ -315,6 +327,8 @@ impl AndroidSurface {
         self.native_window = std::ptr::NonNull::new(window_ptr).map(NativeWindow);
         self.surface_width.store(width, Ordering::Relaxed);
         self.surface_height.store(height, Ordering::Relaxed);
+        self.render_width = width;
+        self.render_height = height;
 
         // Use configured font size, fall back to geometry-based calc
         let font_size = if font_size_tenths > 0 {
@@ -408,7 +422,12 @@ impl AndroidSurface {
                 let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
                 gpu.create_atlas_texture(aw, ah);
                 gpu.upload_atlas(&atlas_data, aw, ah);
-                gpu.update_bind_group(aw as f32, ah as f32);
+                gpu.update_bind_group(
+                    aw as f32,
+                    ah as f32,
+                    self.render_width as f32,
+                    self.render_height as f32,
+                );
             }
 
             // Android: no-surface path uses device-only pipeline.
@@ -486,6 +505,14 @@ impl AndroidSurface {
                 } // AndroidSurface::render
                 return Ok(false);
             }
+            log::info!(
+                "RENDER_PROCEED: had_output={} frame_count={} highlights={} render_requested={}",
+                had_output,
+                self.frame_count,
+                has_search_highlights,
+                self.render_requested,
+            );
+
             snapshot = session.terminal().take_snapshot_with_scroll(scroll_offset);
         }
 
@@ -512,19 +539,26 @@ impl AndroidSurface {
         }
 
         // Always rasterize glyphs so the atlas is populated for GPU rendering.
-        // Sync mode is polled later inside the Android swapchain block
-        // after `instance_buffer` borrow is released.
+        // Poll sync mode before the instance_buffer borrow starts.
+        #[cfg(target_os = "android")]
+        let sync_active = self.poll_sync_active();
         let gen_before = self.font_pipeline.atlas_generation();
         let tc = self.theme.cursor;
         let cursor_color = Some([tc[0] as f32 / 255.0, tc[1] as f32 / 255.0, tc[2] as f32 / 255.0, 1.0]);
-        let sb = self.theme.selection_bg;
-        let selection_bg = Some([sb[0] as f32 / 255.0, sb[1] as f32 / 255.0, sb[2] as f32 / 255.0, 1.0]);
+        let selection_bg = self.theme.selection_bg;
+        let selection_bg = Some([
+            selection_bg[0] as f32 / 255.0,
+            selection_bg[1] as f32 / 255.0,
+            selection_bg[2] as f32 / 255.0,
+            1.0,
+        ]);
         torvox_renderer::gpu::build_cell_instances_into(
             &snapshot,
             &mut self.font_pipeline,
             torvox_renderer::gpu::CellInstanceConfig {
                 atlas_width: self.atlas_width as f32,
                 atlas_height: self.atlas_height as f32,
+                projection_height: self.render_height as f32,
                 dirty_rows: Some(&snapshot.dirty),
                 selection: self.selection,
                 selection_bg,
@@ -670,7 +704,6 @@ impl AndroidSurface {
         // return Ok(false) so the caller retries the next frame.
         #[cfg(target_os = "android")]
         let swapchain_ok = {
-            let sync_active = self.poll_sync_active();
             if sync_active {
                 log::trace!("sync active — skipping GPU frame");
                 // SAFETY: Paired ATrace_endSection calls closing the
@@ -772,14 +805,20 @@ impl AndroidSurface {
         );
         let tc = self.theme.cursor;
         let cursor_color = Some([tc[0] as f32 / 255.0, tc[1] as f32 / 255.0, tc[2] as f32 / 255.0, 1.0]);
-        let sb = self.theme.selection_bg;
-        let selection_bg = Some([sb[0] as f32 / 255.0, sb[1] as f32 / 255.0, sb[2] as f32 / 255.0, 1.0]);
+        let selection_bg = self.theme.selection_bg;
+        let selection_bg = Some([
+            selection_bg[0] as f32 / 255.0,
+            selection_bg[1] as f32 / 255.0,
+            selection_bg[2] as f32 / 255.0,
+            1.0,
+        ]);
         torvox_renderer::gpu::build_cell_instances_into(
             &snapshot,
             &mut self.font_pipeline,
             torvox_renderer::gpu::CellInstanceConfig {
                 atlas_width: self.atlas_width as f32,
                 atlas_height: self.atlas_height as f32,
+                projection_height: self.render_height as f32,
                 dirty_rows: None,
                 selection: self.selection,
                 selection_bg,
@@ -822,6 +861,9 @@ impl AndroidSurface {
         let (cw, ch) = self.font_pipeline.cell_metrics();
         let new_cols = (width as f32 / cw).floor().clamp(MIN_COLS, MAX_COLS) as u32;
         let new_rows = (height as f32 / ch).floor().clamp(MIN_ROWS, MAX_ROWS) as u32;
+
+        self.render_width = width;
+        self.render_height = height;
 
         if width != self.surface_width.load(Ordering::Relaxed) || height != self.surface_height.load(Ordering::Relaxed)
         {
@@ -978,14 +1020,25 @@ impl AndroidSurface {
     }
 
     pub fn set_font_family(&mut self, family_name: &str) -> bool {
+        let previous_name = self.font_pipeline.current_font_family_name();
         if !self.font_pipeline.set_font_family(family_name) {
+            log::warn!("FONT_FAMILY: '{}' not found, restoring previous", family_name);
+            if let Some(ref prev) = previous_name {
+                self.font_pipeline.set_font_family(prev);
+                self.font_pipeline.rasterize_ascii();
+            }
             return false;
         }
         self.font_pipeline.rasterize_ascii();
         let (aw, ah) = self.font_pipeline.atlas_dimensions();
         let (cw, ch) = self.font_pipeline.cell_metrics();
         if let Some(gpu) = &mut self.gpu {
-            gpu.update_bind_group(aw as f32, ah as f32);
+            gpu.update_bind_group(
+                aw as f32,
+                ah as f32,
+                self.render_width as f32,
+                self.render_height as f32,
+            );
             let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
             gpu.upload_atlas(&atlas_data, aw, ah);
         }
@@ -1035,7 +1088,12 @@ impl AndroidSurface {
 
         if let Some(gpu) = &mut self.gpu {
             let (aw, ah) = self.font_pipeline.atlas_dimensions();
-            gpu.update_bind_group(aw as f32, ah as f32);
+            gpu.update_bind_group(
+                aw as f32,
+                ah as f32,
+                self.render_width as f32,
+                self.render_height as f32,
+            );
             let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
             gpu.upload_atlas(&atlas_data, aw, ah);
         }
@@ -1257,7 +1315,6 @@ impl AndroidSurface {
 
     pub fn set_cursor_visible(&mut self, visible: bool) {
         self.cursor_override = Some(visible);
-        self.last_cursor_visible = visible;
         self.render_requested = true;
     }
 

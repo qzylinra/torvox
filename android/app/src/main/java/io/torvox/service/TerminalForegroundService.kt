@@ -105,9 +105,9 @@ class TerminalForegroundService : Service() {
 
     private fun acquireWakeLockIfNeeded() {
         if (wakeLock?.isHeld == true) return
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock =
-            pm
+            powerManager
                 .newWakeLock(
                     PowerManager.PARTIAL_WAKE_LOCK,
                     WAKE_LOCK_TAG,

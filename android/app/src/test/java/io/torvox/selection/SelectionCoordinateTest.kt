@@ -3,7 +3,6 @@ package io.torvox.selection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 class SelectionCoordinateTest {
@@ -15,7 +14,6 @@ class SelectionCoordinateTest {
         private const val SURFACE_WIDTH = GRID_COLS * CELL_WIDTH.toInt()
         private const val SURFACE_HEIGHT = GRID_ROWS * CELL_HEIGHT.toInt()
         private const val HANDLE_WIDTH = 24
-        private const val SCROLL_OFFSET = 0
         private const val ORIENTATION_LEFT = 0
         private const val ORIENTATION_RIGHT = 1
     }
@@ -191,7 +189,6 @@ class SelectionCoordinateTest {
     @Test
     fun toolbarContentRect_boundariesWithinSurface() {
         val selStartRow = 10
-        val selEndRow = 12
         val toolbarHeight = 40
         val toolbarY = maxOf(0, (selStartRow * CELL_HEIGHT).roundToInt() - toolbarHeight)
         assertTrue("Toolbar should be above selection", selStartRow * CELL_HEIGHT.roundToInt() > toolbarY)

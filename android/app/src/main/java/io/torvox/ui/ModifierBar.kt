@@ -110,6 +110,7 @@ fun ModifierBar(
     onCopy: (() -> Unit)? = null,
     onSelectAll: (() -> Unit)? = null,
     onPaste: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
     onDismiss: (() -> Unit)? = null,
 ) {
     fun label(key: String): String = if (useNerdFontGlyphs) NerdKeyLabels.label(key) else key
@@ -120,6 +121,7 @@ fun ModifierBar(
             onCopy = onCopy,
             onSelectAll = onSelectAll,
             onPaste = onPaste,
+            onShare = onShare,
             onDismiss = onDismiss,
             textColor = textColor,
             backgroundColor = backgroundColor,
@@ -256,6 +258,7 @@ private fun SelectionActionsBar(
     onCopy: (() -> Unit)?,
     onSelectAll: (() -> Unit)?,
     onPaste: (() -> Unit)?,
+    onShare: (() -> Unit)?,
     onDismiss: (() -> Unit)?,
     textColor: Color,
     backgroundColor: Color,
@@ -266,6 +269,7 @@ private fun SelectionActionsBar(
     if (onCopy != null) actions.add("Copy" to onCopy)
     if (onSelectAll != null) actions.add("Select All" to onSelectAll)
     if (onPaste != null) actions.add("Paste" to onPaste)
+    if (onShare != null) actions.add("Share" to onShare)
 
     Row(
         modifier =
@@ -319,39 +323,6 @@ private fun ConfigurableModifierBar(
     val row1 = allKeys.take(midpoint)
     val row2 = allKeys.drop(midpoint)
 
-    fun handleKeyClick(item: ToolbarItem) {
-        when (item) {
-            is ToolbarItem.Default -> {
-                when (item.key) {
-                    ToolbarKey.CTRL -> {
-                        onToggleCtrl()
-                    }
-
-                    ToolbarKey.ALT -> {
-                        onToggleAlt()
-                    }
-
-                    ToolbarKey.DRAWER -> {
-                        onDrawerClick()
-                    }
-
-                    ToolbarKey.SCROLL -> {
-                        onScrollClick()
-                    }
-
-                    else -> {
-                        val seq = item.key.sequence
-                        if (seq.isNotEmpty()) onKeyClick(seq)
-                    }
-                }
-            }
-
-            is ToolbarItem.Custom -> {
-                if (item.sequence.isNotEmpty()) onKeyClick(item.sequence)
-            }
-        }
-    }
-
     fun getModifierState(item: ToolbarItem): ModifierState? = when (item) {
         is ToolbarItem.Default -> {
             when (item.key) {
@@ -364,10 +335,6 @@ private fun ConfigurableModifierBar(
         is ToolbarItem.Custom -> {
             null
         }
-    }
-
-    fun getOnClick(item: ToolbarItem): () -> Unit = {
-        handleKeyClick(item)
     }
 
     fun getOnRepeat(item: ToolbarItem): (() -> Unit)? = when (item) {

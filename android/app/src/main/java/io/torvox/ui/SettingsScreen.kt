@@ -13,6 +13,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,7 +70,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.torvox.R
 import io.torvox.TerminalViewModel
-import io.torvox.ui.KeyboardMode
 import io.torvox.ui.theme.TerminalTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -85,374 +85,445 @@ private val WARNING_ORANGE = Color(0xFFFF9800)
 
 @OptIn(ExperimentalMaterial3Api::class) // Material3 experimental API used intentionally
 @Composable
+@Suppress("LongMethod")
 fun SettingsScreen(
     viewModel: TerminalViewModel,
     onBack: () -> Unit,
 ) {
-    val fontSize by viewModel.fontSize.collectAsState()
-    val fontFamily by viewModel.fontFamily.collectAsState()
-    val dayThemeName by viewModel.dayThemeName.collectAsState()
-    val nightThemeName by viewModel.nightThemeName.collectAsState()
-    val themeMode by viewModel.themeMode.collectAsState()
-    val appThemeMode by viewModel.appThemeMode.collectAsState()
-    val selectedShell by viewModel.shell.collectAsState()
-    val scrollbackLines by viewModel.scrollbackLines.collectAsState()
-    val themeName by viewModel.themeName.collectAsState()
-    val useNerdFontGlyphs by viewModel.useNerdFontGlyphs.collectAsState()
-    val useSemanticSelection by viewModel.useSemanticSelection.collectAsState()
-    val sessionRestore by viewModel.sessionRestore.collectAsState()
-    val cursorBlinkEnabled by viewModel.cursorBlink.collectAsState()
-    val cursorSpeedMs by viewModel.cursorSpeed.collectAsState()
-    val cursorStyleValue by viewModel.cursorStyle.collectAsState()
-
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val isSmallScreen = screenWidthDp < SMALL_SCREEN_WIDTH_DP
     val horizontalPadding = if (isSmallScreen) 8.dp else 16.dp
-
     val backgroundColor = MaterialTheme.colorScheme.surface
     val textColor = MaterialTheme.colorScheme.onSurface
     val secondaryText = MaterialTheme.colorScheme.onSurfaceVariant
     val cardBackground = MaterialTheme.colorScheme.surfaceContainerLow
     val accentColor = MaterialTheme.colorScheme.primary
     val sectionTitleColor = MaterialTheme.colorScheme.primary
-
-    val availableFonts by viewModel.availableFonts.collectAsState()
-    val defaultFontName by viewModel.defaultFontName.collectAsState()
-    val fontInfo by viewModel.fontInfo.collectAsState()
-
     val customFontLauncher =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.OpenDocument(),
         ) { uri: Uri? ->
-            if (uri != null) {
-                viewModel.installFontFile(uri)
-            }
+            if (uri != null) viewModel.installFontFile(uri)
         }
-
-    BackHandler(enabled = true) {
-        onBack()
-    }
-
+    BackHandler(enabled = true) { onBack() }
     Surface(
         modifier =
-        Modifier
-            .fillMaxSize()
-            .testTag("SettingsScreen")
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick = {},
-            ),
+        Modifier.fillMaxSize().testTag("SettingsScreen").clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() },
+            onClick = {},
+        ),
         color = backgroundColor,
     ) {
-        Column(
-            modifier =
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
-        ) {
+        Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = horizontalPadding).testTag("SettingsLazyColumn"),
                 verticalArrangement = Arrangement.spacedBy(if (isSmallScreen) 8.dp else 12.dp),
-                contentPadding =
-                androidx.compose.foundation.layout
-                    .PaddingValues(bottom = 32.dp),
+                contentPadding = PaddingValues(bottom = 32.dp),
             ) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = onBack, modifier = Modifier.testTag("SettingsBackButton")) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.back),
-                                tint = textColor,
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = stringResource(R.string.settings),
-                            style = if (isSmallScreen) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
-                            color = textColor,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-
+                item { SettingsHeader(onBack, textColor, isSmallScreen) }
                 item {
                     SectionHeader(stringResource(R.string.appearance), sectionTitleColor)
                     SettingsCard(cardBackground, isSmallScreen) {
-                        FontSizeSlider(
-                            modifier = Modifier.testTag("FontSizeSlider"),
-                            value = fontSize,
-                            onValueChange = { viewModel.setFontSize(it) },
-                            textColor = textColor,
-                            secondaryText = secondaryText,
-                            accentColor = accentColor,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        SystemFontSelector(
-                            selectedFamily = fontFamily,
-                            onFamilySelected = { viewModel.setFontFamily(it) },
-                            textColor = textColor,
-                            cardBackground = backgroundColor,
-                            accentColor = accentColor,
-                            fonts = availableFonts,
-                            defaultFontName = defaultFontName,
-                            fontInfo = fontInfo,
-                            onPickFontFile = { customFontLauncher.launch(arrayOf("font/*", "application/octet-stream")) },
-                        )
-                        if (fontInfo.isNotEmpty() || defaultFontName.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            FontInfoSection(
-                                fontInfo =
-                                fontInfo.ifEmpty {
-                                    "Active: $defaultFontName\n(CJK fallback info available after session starts)\nFont size: ${fontSize.toInt()}"
-                                },
-                                textColor = textColor,
-                                secondaryText = secondaryText,
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        CursorBlinkToggle(
-                            enabled = cursorBlinkEnabled,
-                            onToggle = { viewModel.setCursorBlink(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            cardBackground = backgroundColor,
-                        )
-                        if (cursorBlinkEnabled) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            CursorSpeedSlider(
-                                value = cursorSpeedMs.toFloat(),
-                                onValueChange = { viewModel.setCursorSpeed(it.toInt()) },
-                                textColor = textColor,
-                                secondaryText = secondaryText,
-                                accentColor = accentColor,
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        CursorStyleSelector(
-                            selectedStyle = cursorStyleValue,
-                            onStyleSelected = { viewModel.setCursorStyle(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            cardBackground = backgroundColor,
-                        )
+                        AppearanceSectionContent(viewModel, customFontLauncher, textColor, secondaryText, accentColor, backgroundColor)
                     }
                 }
-
+                item { AppThemeSection(viewModel, cardBackground, textColor, accentColor, sectionTitleColor, isSmallScreen) }
+                item { TerminalThemeSection(viewModel, textColor, secondaryText, cardBackground, sectionTitleColor, isSmallScreen) }
                 item {
-                    SectionHeader(stringResource(R.string.software_theme), sectionTitleColor)
-                    SettingsCard(cardBackground, isSmallScreen) {
-                        AppThemeSelector(
-                            selectedMode = appThemeMode,
-                            onModeSelected = { viewModel.setAppThemeMode(it) },
-                            textColor = textColor,
-                            cardBackground = backgroundColor,
-                            accentColor = accentColor,
-                        )
-                    }
+                    BackgroundSection(
+                        viewModel,
+                        textColor,
+                        secondaryText,
+                        accentColor,
+                        cardBackground,
+                        sectionTitleColor,
+                        isSmallScreen,
+                    )
                 }
-
                 item {
-                    SectionHeader(stringResource(R.string.theme), sectionTitleColor)
-                    SettingsCard(cardBackground, isSmallScreen) {
-                        TerminalThemeModeSelector(
-                            selectedMode = themeMode,
-                            onModeSelected = { viewModel.setThemeMode(it) },
-                            textColor = textColor,
-                            cardBackground = backgroundColor,
-                            accentColor = accentColor,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        when (themeMode) {
-                            "follow_system", "day", "night" -> {
-                                Column(modifier = Modifier.testTag("DayNightThemeSection")) {
-                                    ThemeSelector(
-                                        label = stringResource(R.string.day_theme),
-                                        selectedTheme = dayThemeName,
-                                        themes = io.torvox.ui.theme.BuiltInThemes.all,
-                                        onThemeSelected = { viewModel.setDayThemeName(it) },
-                                        textColor = textColor,
-                                        secondaryText = secondaryText,
-                                        cardBackground = backgroundColor,
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    ThemeSelector(
-                                        label = stringResource(R.string.night_theme),
-                                        selectedTheme = nightThemeName,
-                                        themes = io.torvox.ui.theme.BuiltInThemes.all,
-                                        onThemeSelected = { viewModel.setNightThemeName(it) },
-                                        textColor = textColor,
-                                        secondaryText = secondaryText,
-                                        cardBackground = backgroundColor,
-                                    )
-                                }
-                            }
-
-                            "fixed" -> {
-                                ThemeSelector(
-                                    label = "",
-                                    selectedTheme = themeName,
-                                    themes = io.torvox.ui.theme.BuiltInThemes.all,
-                                    onThemeSelected = { viewModel.setThemeName(it) },
-                                    textColor = textColor,
-                                    secondaryText = secondaryText,
-                                    cardBackground = backgroundColor,
-                                )
-                            }
-                        }
-                    }
+                    TerminalConfigSection(
+                        viewModel,
+                        textColor,
+                        secondaryText,
+                        accentColor,
+                        cardBackground,
+                        backgroundColor,
+                        sectionTitleColor,
+                        isSmallScreen,
+                    )
                 }
-
                 item {
-                    SectionHeader("Background", sectionTitleColor)
-                    SettingsCard(cardBackground, isSmallScreen) {
-                        val bgImagePath by viewModel.bgImagePath.collectAsState()
-                        val bgBlurRadius by viewModel.bgBlurRadius.collectAsState()
-                        val bgAlpha by viewModel.bgAlpha.collectAsState()
-
-                        val imagePickerLauncher =
-                            rememberLauncherForActivityResult(
-                                contract = ActivityResultContracts.GetContent(),
-                            ) { uri: Uri? ->
-                                uri?.let { viewModel.setBgImagePath(it.toString()) }
-                            }
-
-                        Text(
-                            text = if (bgImagePath.isNotEmpty()) "Background image set" else "No background image",
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.testTag("BackgroundImageStatus"),
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { imagePickerLauncher.launch("image/*") },
-                                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-                                modifier = Modifier.testTag("ChooseImageButton"),
-                            ) {
-                                Text("Choose Image", color = MaterialTheme.colorScheme.onPrimary)
-                            }
-                            if (bgImagePath.isNotEmpty()) {
-                                TextButton(onClick = { viewModel.setBgImagePath("") }) {
-                                    Text("Clear", color = accentColor)
-                                }
-                            }
-                        }
-                        if (bgImagePath.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Blur: $bgBlurRadius", color = secondaryText, style = MaterialTheme.typography.bodySmall)
-                            Slider(
-                                value = bgBlurRadius.toFloat(),
-                                onValueChange = { viewModel.setBgBlurRadius(it.toInt()) },
-                                valueRange = 0f..20f,
-                                colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Opacity: ${(bgAlpha * 100).toInt()}%", color = secondaryText, style = MaterialTheme.typography.bodySmall)
-                            Slider(
-                                value = bgAlpha,
-                                onValueChange = { viewModel.setBgAlpha(it) },
-                                valueRange = 0.1f..1.0f,
-                                colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
-                            )
-                        }
-                    }
+                    BootstrapSectionFromSettings(
+                        viewModel,
+                        textColor,
+                        secondaryText,
+                        accentColor,
+                        cardBackground,
+                        sectionTitleColor,
+                        isSmallScreen,
+                    )
                 }
-
-                item {
-                    SectionHeader(stringResource(R.string.terminal), sectionTitleColor)
-                    SettingsCard(cardBackground, isSmallScreen) {
-                        ShellInput(
-                            shellPath = selectedShell,
-                            onShellChanged = { viewModel.setShell(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        ScrollbackSlider(
-                            value = scrollbackLines.toFloat(),
-                            onValueChange = { viewModel.setScrollbackLines(it.toInt()) },
-                            textColor = textColor,
-                            secondaryText = secondaryText,
-                            accentColor = accentColor,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        SessionRestoreToggle(
-                            enabled = sessionRestore,
-                            onToggle = { viewModel.setSessionRestore(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            cardBackground = backgroundColor,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        KeyboardModeSelector(
-                            selectedMode = viewModel.keyboardMode.collectAsState().value,
-                            onModeSelected = { viewModel.setKeyboardMode(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            cardBackground = backgroundColor,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        UsbSerialToggle(
-                            enabled = viewModel.usbSerialEnabled.collectAsState().value,
-                            onToggle = { viewModel.setUsbSerialEnabled(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            cardBackground = backgroundColor,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        McpServerToggle(
-                            enabled = viewModel.mcpServerEnabled.collectAsState().value,
-                            onToggle = { viewModel.setMcpServerEnabled(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            cardBackground = backgroundColor,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        VolumeKeyMapToggle(
-                            enabled = viewModel.volumeKeyMap.collectAsState().value,
-                            onToggle = { viewModel.setVolumeKeyMap(it) },
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            cardBackground = backgroundColor,
-                        )
-                    }
-                }
-
-                item {
-                    SectionHeader(stringResource(R.string.bootstrap), sectionTitleColor)
-                    SettingsCard(cardBackground, isSmallScreen, Modifier.testTag("BootstrapSection")) {
-                        BootstrapSection(
-                            bootstrapUrl = viewModel.bootstrapUrl.collectAsState().value,
-                            onUrlChanged = { viewModel.setBootstrapUrl(it) },
-                            onRunBootstrap = { viewModel.runBootstrap() },
-                            bootstrapRunning = viewModel.bootstrapRunning.collectAsState().value,
-                            bootstrapResult = viewModel.bootstrapResult.collectAsState().value,
-                            textColor = textColor,
-                            accentColor = accentColor,
-                            secondaryText = secondaryText,
-                        )
-                    }
-                }
-
-                item {
-                    SectionHeader(stringResource(R.string.clear_app_data), sectionTitleColor)
-                    SettingsCard(cardBackground, isSmallScreen) {
-                        ClearAppDataSection(textColor = textColor)
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
+                item { ClearAppDataSectionItem(textColor, cardBackground, sectionTitleColor, isSmallScreen) }
+                item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsHeader(
+    onBack: () -> Unit,
+    textColor: Color,
+    isSmallScreen: Boolean,
+) {
+    Spacer(modifier = Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onBack, modifier = Modifier.testTag("SettingsBackButton")) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = stringResource(R.string.back),
+                tint = textColor,
+            )
+        }
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = stringResource(R.string.settings),
+            style = if (isSmallScreen) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+            color = textColor,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun AppearanceSectionContent(
+    viewModel: TerminalViewModel,
+    customFontLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
+    textColor: Color,
+    secondaryText: Color,
+    accentColor: Color,
+    backgroundColor: Color,
+) {
+    val fontSize by viewModel.fontSize.collectAsState()
+    val fontFamily by viewModel.fontFamily.collectAsState()
+    val cursorBlinkEnabled by viewModel.cursorBlink.collectAsState()
+    val cursorSpeedMs by viewModel.cursorSpeed.collectAsState()
+    val cursorStyleValue by viewModel.cursorStyle.collectAsState()
+    val availableFonts by viewModel.availableFonts.collectAsState()
+    val defaultFontName by viewModel.defaultFontName.collectAsState()
+    val fontInfo by viewModel.fontInfo.collectAsState()
+    FontSizeSlider(
+        modifier = Modifier.testTag("FontSizeSlider"),
+        value = fontSize,
+        onValueChange = { viewModel.setFontSize(it) },
+        textColor = textColor,
+        secondaryText = secondaryText,
+        accentColor = accentColor,
+    )
+    Spacer(modifier = Modifier.height(12.dp))
+    SystemFontSelector(
+        selectedFamily = fontFamily,
+        onFamilySelected = { viewModel.setFontFamily(it) },
+        textColor = textColor,
+        cardBackground = backgroundColor,
+        accentColor = accentColor,
+        fonts = availableFonts,
+        defaultFontName = defaultFontName,
+        fontInfo = fontInfo,
+        onPickFontFile = { customFontLauncher.launch(arrayOf("font/*", "application/octet-stream")) },
+    )
+    if (fontInfo.isNotEmpty() || defaultFontName.isNotEmpty()) {
+        Spacer(modifier = Modifier.height(8.dp))
+        FontInfoSection(
+            fontInfo =
+            fontInfo.ifEmpty {
+                "Active: $defaultFontName\n(CJK fallback info available after session starts)\nFont size: ${fontSize.toInt()}"
+            },
+            textColor = textColor,
+            secondaryText = secondaryText,
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    CursorBlinkToggle(
+        enabled = cursorBlinkEnabled,
+        onToggle = { viewModel.setCursorBlink(it) },
+        textColor = textColor,
+        accentColor = accentColor,
+        cardBackground = backgroundColor,
+    )
+    if (cursorBlinkEnabled) {
+        Spacer(modifier = Modifier.height(8.dp))
+        CursorSpeedSlider(
+            value = cursorSpeedMs.toFloat(),
+            onValueChange = { viewModel.setCursorSpeed(it.toInt()) },
+            textColor = textColor,
+            secondaryText = secondaryText,
+            accentColor = accentColor,
+        )
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    CursorStyleSelector(
+        selectedStyle = cursorStyleValue,
+        onStyleSelected = { viewModel.setCursorStyle(it) },
+        textColor = textColor,
+        accentColor = accentColor,
+        cardBackground = backgroundColor,
+    )
+}
+
+@Composable
+private fun AppThemeSection(
+    viewModel: TerminalViewModel,
+    cardBackground: Color,
+    textColor: Color,
+    accentColor: Color,
+    sectionTitleColor: Color,
+    isSmallScreen: Boolean,
+) {
+    val appThemeMode by viewModel.appThemeMode.collectAsState()
+    SectionHeader(stringResource(R.string.software_theme), sectionTitleColor)
+    SettingsCard(cardBackground, isSmallScreen) {
+        AppThemeSelector(
+            selectedMode = appThemeMode,
+            onModeSelected = { viewModel.setAppThemeMode(it) },
+            textColor = textColor,
+            cardBackground = cardBackground,
+            accentColor = accentColor,
+        )
+    }
+}
+
+@Composable
+private fun TerminalThemeSection(
+    viewModel: TerminalViewModel,
+    textColor: Color,
+    secondaryText: Color,
+    cardBackground: Color,
+    sectionTitleColor: Color,
+    isSmallScreen: Boolean,
+) {
+    val themeMode by viewModel.themeMode.collectAsState()
+    val dayThemeName by viewModel.dayThemeName.collectAsState()
+    val nightThemeName by viewModel.nightThemeName.collectAsState()
+    val themeName by viewModel.themeName.collectAsState()
+    SectionHeader(stringResource(R.string.theme), sectionTitleColor)
+    SettingsCard(cardBackground, isSmallScreen) {
+        TerminalThemeModeSelector(
+            selectedMode = themeMode,
+            onModeSelected = { viewModel.setThemeMode(it) },
+            textColor = textColor,
+            cardBackground = cardBackground,
+            accentColor = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        when (themeMode) {
+            "follow_system", "day", "night" -> {
+                Column(modifier = Modifier.testTag("DayNightThemeSection")) {
+                    ThemeSelector(
+                        label = stringResource(R.string.day_theme),
+                        selectedTheme = dayThemeName,
+                        themes = io.torvox.ui.theme.BuiltInThemes.all,
+                        onThemeSelected = { viewModel.setDayThemeName(it) },
+                        textColor = textColor,
+                        secondaryText = secondaryText,
+                        cardBackground = cardBackground,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ThemeSelector(
+                        label = stringResource(R.string.night_theme),
+                        selectedTheme = nightThemeName,
+                        themes = io.torvox.ui.theme.BuiltInThemes.all,
+                        onThemeSelected = { viewModel.setNightThemeName(it) },
+                        textColor = textColor,
+                        secondaryText = secondaryText,
+                        cardBackground = cardBackground,
+                    )
+                }
+            }
+
+            "fixed" -> {
+                ThemeSelector(
+                    label = "",
+                    selectedTheme = themeName,
+                    themes = io.torvox.ui.theme.BuiltInThemes.all,
+                    onThemeSelected = { viewModel.setThemeName(it) },
+                    textColor = textColor,
+                    secondaryText = secondaryText,
+                    cardBackground = cardBackground,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackgroundSection(
+    viewModel: TerminalViewModel,
+    textColor: Color,
+    secondaryText: Color,
+    accentColor: Color,
+    cardBackground: Color,
+    sectionTitleColor: Color,
+    isSmallScreen: Boolean,
+) {
+    val backgroundImagePath by viewModel.backgroundImagePath.collectAsState()
+    val backgroundBlurRadius by viewModel.backgroundBlurRadius.collectAsState()
+    val backgroundAlpha by viewModel.backgroundAlpha.collectAsState()
+    val imagePickerLauncher =
+        rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) { uri: Uri? ->
+            uri?.let { viewModel.setBackgroundImagePath(it.toString()) }
+        }
+    SectionHeader("Background", sectionTitleColor)
+    SettingsCard(cardBackground, isSmallScreen) {
+        Text(
+            text = if (backgroundImagePath.isNotEmpty()) "Background image set" else "No background image",
+            color = textColor,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.testTag("BackgroundImageStatus"),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { imagePickerLauncher.launch("image/*") },
+                colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                modifier = Modifier.testTag("ChooseImageButton"),
+            ) { Text("Choose Image", color = MaterialTheme.colorScheme.onPrimary) }
+            if (backgroundImagePath.isNotEmpty()) {
+                TextButton(onClick = { viewModel.setBackgroundImagePath("") }) { Text("Clear", color = accentColor) }
+            }
+        }
+        if (backgroundImagePath.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Blur: $backgroundBlurRadius", color = secondaryText, style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = backgroundBlurRadius.toFloat(),
+                onValueChange = { viewModel.setBackgroundBlurRadius(it.toInt()) },
+                valueRange = 0f..20f,
+                colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("Opacity: ${(backgroundAlpha * 100).toInt()}%", color = secondaryText, style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = backgroundAlpha,
+                onValueChange = { viewModel.setBackgroundAlpha(it) },
+                valueRange = 0.1f..1.0f,
+                colors = SliderDefaults.colors(thumbColor = accentColor, activeTrackColor = accentColor),
+            )
+        }
+    }
+}
+
+@Composable
+@Suppress("LongParameterList")
+private fun TerminalConfigSection(
+    viewModel: TerminalViewModel,
+    textColor: Color,
+    secondaryText: Color,
+    accentColor: Color,
+    cardBackground: Color,
+    backgroundColor: Color,
+    sectionTitleColor: Color,
+    isSmallScreen: Boolean,
+) {
+    val selectedShell by viewModel.shell.collectAsState()
+    val scrollbackLines by viewModel.scrollbackLines.collectAsState()
+    val sessionRestore by viewModel.sessionRestore.collectAsState()
+    SectionHeader(stringResource(R.string.terminal), sectionTitleColor)
+    SettingsCard(cardBackground, isSmallScreen) {
+        ShellInput(shellPath = selectedShell, onShellChanged = { viewModel.setShell(it) }, textColor = textColor, accentColor = accentColor)
+        Spacer(modifier = Modifier.height(12.dp))
+        ScrollbackSlider(
+            value = scrollbackLines.toFloat(),
+            onValueChange = { viewModel.setScrollbackLines(it.toInt()) },
+            textColor = textColor,
+            secondaryText = secondaryText,
+            accentColor = accentColor,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SessionRestoreToggle(
+            enabled = sessionRestore,
+            onToggle = { viewModel.setSessionRestore(it) },
+            textColor = textColor,
+            accentColor = accentColor,
+            cardBackground = backgroundColor,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        KeyboardModeSelector(
+            selectedMode = viewModel.keyboardMode.collectAsState().value,
+            onModeSelected = { viewModel.setKeyboardMode(it) },
+            textColor = textColor,
+            accentColor = accentColor,
+            cardBackground = backgroundColor,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        UsbSerialToggle(
+            enabled = viewModel.usbSerialEnabled.collectAsState().value,
+            onToggle = { viewModel.setUsbSerialEnabled(it) },
+            textColor = textColor,
+            accentColor = accentColor,
+            cardBackground = backgroundColor,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        McpServerToggle(
+            enabled = viewModel.mcpServerEnabled.collectAsState().value,
+            onToggle = { viewModel.setMcpServerEnabled(it) },
+            textColor = textColor,
+            accentColor = accentColor,
+            cardBackground = backgroundColor,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        VolumeKeyMapToggle(
+            enabled = viewModel.volumeKeyMap.collectAsState().value,
+            onToggle = { viewModel.setVolumeKeyMap(it) },
+            textColor = textColor,
+            accentColor = accentColor,
+            cardBackground = backgroundColor,
+        )
+    }
+}
+
+@Composable
+private fun BootstrapSectionFromSettings(
+    viewModel: TerminalViewModel,
+    textColor: Color,
+    secondaryText: Color,
+    accentColor: Color,
+    cardBackground: Color,
+    sectionTitleColor: Color,
+    isSmallScreen: Boolean,
+) {
+    val bootstrapUrl by viewModel.bootstrapUrl.collectAsState()
+    val bootstrapRunning by viewModel.bootstrapRunning.collectAsState()
+    val bootstrapResult by viewModel.bootstrapResult.collectAsState()
+    SectionHeader(stringResource(R.string.bootstrap), sectionTitleColor)
+    SettingsCard(cardBackground, isSmallScreen, Modifier.testTag("BootstrapSection")) {
+        BootstrapSection(
+            bootstrapUrl = bootstrapUrl,
+            onUrlChanged = { viewModel.setBootstrapUrl(it) },
+            onRunBootstrap = { viewModel.runBootstrap() },
+            bootstrapRunning = bootstrapRunning,
+            bootstrapResult = bootstrapResult,
+            textColor = textColor,
+            accentColor = accentColor,
+            secondaryText = secondaryText,
+        )
+    }
+}
+
+@Composable
+private fun ClearAppDataSectionItem(
+    textColor: Color,
+    cardBackground: Color,
+    sectionTitleColor: Color,
+    isSmallScreen: Boolean,
+) {
+    SectionHeader(stringResource(R.string.clear_app_data), sectionTitleColor)
+    SettingsCard(cardBackground, isSmallScreen) {
+        ClearAppDataSection(textColor = textColor)
     }
 }
 

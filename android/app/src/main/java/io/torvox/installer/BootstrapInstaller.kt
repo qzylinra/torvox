@@ -1,6 +1,7 @@
 package io.torvox.installer
 
 import android.system.Os
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -38,6 +39,7 @@ class BootstrapInstaller(
             ensureHomeAndTmp()
             Result.success(Unit)
         } catch (exception: Exception) {
+            Log.e("BootstrapInstaller", "Install failed", exception)
             Result.failure(exception)
         }
     }

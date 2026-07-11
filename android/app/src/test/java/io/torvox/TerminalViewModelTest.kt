@@ -189,9 +189,9 @@ class TerminalViewModelThemeTest {
         coEvery { settingsRepository.usbSerialEnabled } returns flowOf(false)
         coEvery { settingsRepository.mcpServerEnabled } returns flowOf(false)
         coEvery { settingsRepository.volumeKeyMap } returns flowOf(false)
-        coEvery { settingsRepository.bgImagePath } returns flowOf("")
-        coEvery { settingsRepository.bgBlurRadius } returns flowOf(0)
-        coEvery { settingsRepository.bgAlpha } returns flowOf(0.8f)
+        coEvery { settingsRepository.backgroundImagePath } returns flowOf("")
+        coEvery { settingsRepository.backgroundBlurRadius } returns flowOf(0)
+        coEvery { settingsRepository.backgroundAlpha } returns flowOf(0.8f)
         coEvery { settingsRepository.setThemeName(any()) } returns Unit
         coEvery { settingsRepository.setDayThemeName(any()) } returns Unit
         coEvery { settingsRepository.setNightThemeName(any()) } returns Unit

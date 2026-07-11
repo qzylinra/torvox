@@ -121,7 +121,7 @@ impl SgrAttribute {
     }
 }
 
-/// Parse SGR parameters from a CSI sequence
+/// Parse SGR (Select Graphic Rendition) parameters into a list of attributes.
 pub fn parse_sgr(params: &[u16]) -> Vec<SgrAttribute> {
     let mut attrs = Vec::new();
     let mut i = 0;

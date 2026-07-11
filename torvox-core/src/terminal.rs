@@ -14,12 +14,13 @@ pub struct TerminalState {
     /// Cursor position (row, col) - 0-indexed
     pub cursor_row: u16,
     pub cursor_col: u16,
-    /// Saved cursor positions for DECSC/DECRC
+    /// Saved cursor row for the DECSC/DECRC save/restore sequence.
     pub saved_cursor_row: u16,
+    /// Saved cursor column for the DECSC/DECRC save/restore sequence.
     pub saved_cursor_col: u16,
-    /// Tab stops (column positions)
+    /// Tab stop positions across the terminal width.
     pub tab_stops: Vec<bool>,
-    /// DEC private modes
+    /// DEC private mode flags (e.g., DEC cursor keys mode, autowrap, origin mode, etc.).
     pub dec_modes: Vec<u16>,
     /// Origin mode (DECOM) - cursor constrained to scrolling region
     pub origin_mode: bool,
@@ -31,13 +32,13 @@ pub struct TerminalState {
     pub alternate_screen: bool,
     /// Bracketed paste mode
     pub bracketed_paste: bool,
-    /// Scrolling region (top, bottom) - None means full screen
+    /// Scrolling region defined as (top, bottom) row boundaries.
     pub scrolling_region: Option<(u16, u16)>,
-    /// Window title
+    /// Terminal window title, set by OSC 0 or OSC 2.
     pub title: Option<String>,
-    /// Icon title
+    /// Terminal icon title, set by OSC 1.
     pub icon_title: Option<String>,
-    /// Current SGR attributes
+    /// Current SGR attributes (bold, italic, underline, colors, etc.).
     pub sgr_attributes: Vec<SgrAttribute>,
 }
 
@@ -161,16 +162,27 @@ impl TerminalState {
         self.cursor_col = target_col;
     }
 
+    /// When origin mode (DECOM) is active, clamp `row` to the scrolling region.
+    /// When origin mode is inactive or no region is set, clamp to valid screen bounds.
+    fn clamp_row_for_origin(&self, row: u16, total_rows: u16) -> u16 {
+        if self.origin_mode
+            && let Some((top, bottom)) = self.scrolling_region
+        {
+            return row.clamp(top, bottom);
+        }
+        row.min(total_rows.saturating_sub(1))
+    }
+
     /// Move cursor up by `count` rows.
-    pub fn cursor_up(&mut self, count: u16, _total_rows: u16) {
+    pub fn cursor_up(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.cursor_row.saturating_sub(count);
+        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_sub(count), total_rows);
     }
 
     /// Move cursor down by `count` rows.
     pub fn cursor_down(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.cursor_row.saturating_add(count).min(total_rows.saturating_sub(1));
+        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_add(count), total_rows);
     }
 
     /// Move cursor forward by `count` columns.
@@ -191,14 +203,14 @@ impl TerminalState {
     /// Move cursor to next line (column 0), down by `count` rows.
     pub fn cursor_next_line(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.cursor_row.saturating_add(count).min(total_rows.saturating_sub(1));
+        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_add(count), total_rows);
         self.cursor_col = 0;
     }
 
     /// Move cursor to previous line, up by `count` rows.
-    pub fn cursor_prev_line(&mut self, count: u16) {
+    pub fn cursor_prev_line(&mut self, count: u16, total_rows: u16) {
         let count = count.max(1);
-        self.cursor_row = self.cursor_row.saturating_sub(count);
+        self.cursor_row = self.clamp_row_for_origin(self.cursor_row.saturating_sub(count), total_rows);
     }
 
     /// Set cursor horizontal absolute position
@@ -208,10 +220,7 @@ impl TerminalState {
 
     /// Set cursor position (1-indexed per VT spec, converted to 0-indexed).
     pub fn cursor_position(&mut self, row: u16, col: u16, rows: u16, cols: u16) {
-        let row_0 = row.saturating_sub(1).min(rows.saturating_sub(1));
-        let col_0 = col.saturating_sub(1).min(cols.saturating_sub(1));
-        self.cursor_row = row_0;
-        self.cursor_col = col_0;
+        self.move_cursor(row.saturating_sub(1), col.saturating_sub(1), rows, cols);
     }
 
     /// Horizontal tab
@@ -620,7 +629,7 @@ mod tests {
     fn cursor_prev_line_at_top_does_not_underflow() {
         let mut state = TerminalState::new(24, 80);
         state.cursor_row = 0;
-        state.cursor_prev_line(1);
+        state.cursor_prev_line(1, 24);
         assert_eq!(state.cursor_row, 0, "should clamp at row 0");
     }
 
@@ -628,7 +637,8 @@ mod tests {
     fn cursor_prev_line_normal_move() {
         let mut state = TerminalState::new(24, 80);
         state.cursor_row = 10;
-        state.cursor_prev_line(3);
+        state.cursor_prev_line(3, 24);
+        assert_eq!(state.cursor_row, 7, "should move up by 3");
         assert_eq!(state.cursor_row, 7, "should move up by 3");
     }
 
@@ -906,7 +916,7 @@ mod tests {
     fn cursor_prev_line_large_count_clamps() {
         let mut state = TerminalState::new(24, 80);
         state.cursor_row = 3;
-        state.cursor_prev_line(100);
+        state.cursor_prev_line(100, 24);
         assert_eq!(state.cursor_row, 0, "should clamp to 0 with large count");
     }
 
@@ -982,7 +992,7 @@ mod tests {
         state.cursor_next_line(1, 24);
         assert_eq!(state.cursor_row, 11);
         assert_eq!(state.cursor_col, 0, "next_line resets col");
-        state.cursor_prev_line(1);
+        state.cursor_prev_line(1, 24);
         assert_eq!(state.cursor_row, 10, "prev_line returns to row");
     }
 }

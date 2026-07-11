@@ -1,6 +1,5 @@
 package io.torvox.bridge
 
-import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class BridgeDataTest {
@@ -11,7 +10,7 @@ class BridgeDataTest {
         val g = 0
         val b = 0
         val packed = (a shl 24) or (r shl 16) or (g shl 8) or b
-        assertEquals(0xFF000000.toInt(), packed)
+        org.junit.Assert.assertEquals(0xFF000000.toInt(), packed)
     }
 
     @Test
@@ -21,19 +20,19 @@ class BridgeDataTest {
         val g = 255
         val b = 255
         val packed = (a shl 24) or (r shl 16) or (g shl 8) or b
-        assertEquals(-1, packed)
+        org.junit.Assert.assertEquals(-1, packed)
     }
 
     @Test
     fun argbFromPrimaryColors() {
         val packedRed = (255 shl 24) or (255 shl 16)
-        assertEquals(0xFFFF0000.toInt(), packedRed)
+        org.junit.Assert.assertEquals(0xFFFF0000.toInt(), packedRed)
 
         val packedGreen = (255 shl 24) or (255 shl 8)
-        assertEquals(0xFF00FF00.toInt(), packedGreen)
+        org.junit.Assert.assertEquals(0xFF00FF00.toInt(), packedGreen)
 
         val packedBlue = (255 shl 24) or 255
-        assertEquals(0xFF0000FF.toInt(), packedBlue)
+        org.junit.Assert.assertEquals(0xFF0000FF.toInt(), packedBlue)
     }
 
     @Test
@@ -43,10 +42,10 @@ class BridgeDataTest {
         val red = (color ushr 16) and 0xFF
         val green = (color ushr 8) and 0xFF
         val blue = color and 0xFF
-        assertEquals(0xAA, alpha)
-        assertEquals(0xBB, red)
-        assertEquals(0xCC, green)
-        assertEquals(0xDD, blue)
+        org.junit.Assert.assertEquals(0xAA, alpha)
+        org.junit.Assert.assertEquals(0xBB, red)
+        org.junit.Assert.assertEquals(0xCC, green)
+        org.junit.Assert.assertEquals(0xDD, blue)
     }
 
     @Test
@@ -60,10 +59,10 @@ class BridgeDataTest {
         val extractedR = (packed ushr 16) and 0xFF
         val extractedG = (packed ushr 8) and 0xFF
         val extractedB = packed and 0xFF
-        assertEquals(0, extractedA)
-        assertEquals(128, extractedR)
-        assertEquals(64, extractedG)
-        assertEquals(32, extractedB)
+        org.junit.Assert.assertEquals(0, extractedA)
+        org.junit.Assert.assertEquals(128, extractedR)
+        org.junit.Assert.assertEquals(64, extractedG)
+        org.junit.Assert.assertEquals(32, extractedB)
     }
 
     @Test
@@ -76,12 +75,16 @@ class BridgeDataTest {
                 intArrayOf(128, 64, 32, 16),
                 intArrayOf(200, 100, 50, 25),
             )
-        for ((a, r, g, b) in components) {
+        for (component in components) {
+            val a = component[0]
+            val r = component[1]
+            val g = component[2]
+            val b = component[3]
             val packed = (a shl 24) or (r shl 16) or (g shl 8) or b
-            assertEquals(a, (packed ushr 24) and 0xFF)
-            assertEquals(r, (packed ushr 16) and 0xFF)
-            assertEquals(g, (packed ushr 8) and 0xFF)
-            assertEquals(b, packed and 0xFF)
+            org.junit.Assert.assertEquals(a, (packed ushr 24) and 0xFF)
+            org.junit.Assert.assertEquals(r, (packed ushr 16) and 0xFF)
+            org.junit.Assert.assertEquals(g, (packed ushr 8) and 0xFF)
+            org.junit.Assert.assertEquals(b, packed and 0xFF)
         }
     }
 
@@ -96,10 +99,10 @@ class BridgeDataTest {
             )
         val bytes = original.wireEncodeBytes()
         val decoded = BridgeTheme.wireDecode(WireReader(bytes))
-        assertEquals(original.bg, decoded.bg)
-        assertEquals(original.fg, decoded.fg)
-        assertEquals(original.cursor, decoded.cursor)
-        assertEquals(original.selectionBg, decoded.selectionBg)
+        org.junit.Assert.assertEquals(original.bg, decoded.bg)
+        org.junit.Assert.assertEquals(original.fg, decoded.fg)
+        org.junit.Assert.assertEquals(original.cursor, decoded.cursor)
+        org.junit.Assert.assertEquals(original.selectionBg, decoded.selectionBg)
     }
 
     @Test
@@ -107,8 +110,8 @@ class BridgeDataTest {
         val startRow: UShort = 5u
         val startCol: UShort = 42u
         val lowPart = (startRow.toUInt()) or (startCol.toUInt() shl 16)
-        assertEquals(5u, lowPart and 0xFFFFu)
-        assertEquals(42u, (lowPart shr 16) and 0xFFFFu)
+        org.junit.Assert.assertEquals(5u, lowPart and 0xFFFFu)
+        org.junit.Assert.assertEquals(42u, (lowPart shr 16) and 0xFFFFu)
     }
 
     @Test
@@ -116,8 +119,8 @@ class BridgeDataTest {
         val endRow: UShort = 100u
         val endCol: UShort = 200u
         val highPart = (endRow.toULong()) or (endCol.toULong() shl 16)
-        assertEquals(100uL, highPart and 0xFFFFuL)
-        assertEquals(200uL, (highPart shr 16) and 0xFFFFuL)
+        org.junit.Assert.assertEquals(100uL, highPart and 0xFFFFuL)
+        org.junit.Assert.assertEquals(200uL, (highPart shr 16) and 0xFFFFuL)
     }
 
     @Test
@@ -135,10 +138,10 @@ class BridgeDataTest {
         val decodedStartCol = ((encoded shr 16) and 0xFFFFL).toUInt()
         val decodedEndRow = ((encoded shr 32) and 0xFFFFL).toUInt()
         val decodedEndCol = ((encoded shr 48) and 0xFFFFL).toUInt()
-        assertEquals(5u, decodedStartRow)
-        assertEquals(42u, decodedStartCol)
-        assertEquals(100u, decodedEndRow)
-        assertEquals(200u, decodedEndCol)
+        org.junit.Assert.assertEquals(5u, decodedStartRow)
+        org.junit.Assert.assertEquals(42u, decodedStartCol)
+        org.junit.Assert.assertEquals(100u, decodedEndRow)
+        org.junit.Assert.assertEquals(200u, decodedEndCol)
     }
 
     @Test
@@ -156,9 +159,9 @@ class BridgeDataTest {
         val decodedStartCol = ((encoded shr 16) and 0xFFFFL).toUShort()
         val decodedEndRow = ((encoded shr 32) and 0xFFFFL).toUShort()
         val decodedEndCol = ((encoded shr 48) and 0xFFFFL).toUShort()
-        assertEquals(65535u, decodedStartRow.toUInt())
-        assertEquals(65535u, decodedStartCol.toUInt())
-        assertEquals(65535u, decodedEndRow.toUInt())
-        assertEquals(65535u, decodedEndCol.toUInt())
+        org.junit.Assert.assertEquals(65535u, decodedStartRow.toUInt())
+        org.junit.Assert.assertEquals(65535u, decodedStartCol.toUInt())
+        org.junit.Assert.assertEquals(65535u, decodedEndRow.toUInt())
+        org.junit.Assert.assertEquals(65535u, decodedEndCol.toUInt())
     }
 }

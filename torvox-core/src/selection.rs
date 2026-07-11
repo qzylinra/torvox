@@ -48,7 +48,9 @@ pub enum SelectionMode {
 /// A single endpoint of a selection (row, col).
 #[cfg_attr(feature = "rkyv", derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize))]
 pub struct SelectionAnchor {
+    /// Anchor row position (0-indexed).
     pub row: u32,
+    /// Anchor column position (0-indexed).
     pub col: u32,
 }
 

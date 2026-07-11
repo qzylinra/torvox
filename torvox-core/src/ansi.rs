@@ -63,6 +63,7 @@ const ANSI_16: [[u8; 3]; 16] = [
     [255, 255, 255],
 ];
 
+/// Map an ANSI 256-color index (0-255) to an RGBA byte triple.
 pub fn ansi_to_rgb(index: u8) -> [u8; 3] {
     ANSI_256[index as usize]
 }

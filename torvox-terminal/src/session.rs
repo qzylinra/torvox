@@ -84,7 +84,15 @@ impl Session {
     /// driving PTY I/O. Primarily used for testing with `MockPty`.
     pub fn with_pty(pty: Box<dyn Pty>, rows: u32, cols: u32) -> Result<Self, SessionError> {
         let (palette_ansi, palette_background, palette_foreground) = GhosttyTerminal::catppuccin_mocha_palette();
-        Self::spawn_with_theme_inner(pty, rows, cols, palette_background, palette_foreground, palette_ansi)
+        Self::spawn_with_theme_inner(
+            pty,
+            rows,
+            cols,
+            DEFAULT_SCROLLBACK_LINES,
+            palette_background,
+            palette_foreground,
+            palette_ansi,
+        )
     }
 
     pub fn spawn(shell: &str, rows: u32, cols: u32, env: &ShellEnv) -> Result<Self, SessionError> {
@@ -97,6 +105,7 @@ impl Session {
             palette_background,
             palette_foreground,
             palette_ansi,
+            DEFAULT_SCROLLBACK_LINES,
         )
     }
 
@@ -108,6 +117,7 @@ impl Session {
         initial_bg: [u8; 3],
         initial_fg: [u8; 3],
         initial_ansi: [[u8; 3]; 16],
+        scrollback_lines: u32,
     ) -> Result<Self, SessionError> {
         log::info!("Session::spawn: shell='{shell}', rows={rows}, cols={cols}");
         let pty = match PtyPair::spawn(shell, rows as u16, cols as u16, env) {
@@ -140,6 +150,7 @@ impl Session {
             Box::new(pty) as Box<dyn Pty>,
             rows,
             cols,
+            scrollback_lines,
             initial_bg,
             initial_fg,
             initial_ansi,
@@ -166,17 +177,17 @@ impl Session {
                     log::info!("reader thread: exiting due to exited flag");
                     break;
                 }
-                let mut pfd = libc::pollfd {
+                let mut poll_fd = libc::pollfd {
                     fd: poll_fd,
                     events: libc::POLLIN,
                     revents: 0,
                 };
-                // SAFETY: `poll` is a POSIX syscall; `pfd` is a valid, initialized
+                // SAFETY: `poll` is a POSIX syscall; `poll_fd` is a valid, initialized
                 // `pollfd` whose `fd` is the live reader fd owned by `read_file`.
                 // `poll` only reads these inputs and writes `revents` back. This is
                 // the sole `unsafe` remaining in the reader and does not bypass the
                 // `Pty` abstraction (the fd was obtained via `try_clone_reader_fd`).
-                let poll_result = unsafe { libc::poll(&mut pfd as *mut libc::pollfd, 1, READ_POLL_TIMEOUT_MS) };
+                let poll_result = unsafe { libc::poll(&mut poll_fd as *mut libc::pollfd, 1, READ_POLL_TIMEOUT_MS) };
                 match poll_result.cmp(&0) {
                     std::cmp::Ordering::Greater => {}
                     std::cmp::Ordering::Equal => continue,
@@ -247,6 +258,7 @@ impl Session {
         pty: Box<dyn Pty>,
         rows: u32,
         cols: u32,
+        scrollback_lines: u32,
         initial_bg: [u8; 3],
         initial_fg: [u8; 3],
         initial_ansi: [[u8; 3]; 16],
@@ -258,15 +270,9 @@ impl Session {
         let output_notify = Arc::new((Mutex::new(false), Condvar::new()));
         let (output_tx, output_rx) = bounded::<Vec<u8>>(128);
 
-        let terminal = GhosttyTerminal::new_with_theme(
-            rows,
-            cols,
-            DEFAULT_SCROLLBACK_LINES,
-            initial_bg,
-            initial_fg,
-            initial_ansi,
-        )
-        .map_err(SessionError::Ghostty)?;
+        let terminal =
+            GhosttyTerminal::new_with_theme(rows, cols, scrollback_lines, initial_bg, initial_fg, initial_ansi)
+                .map_err(SessionError::Ghostty)?;
 
         let shell_integration = Arc::new(AtomicU8::new(0));
         let notification = Arc::new(Mutex::new(None));

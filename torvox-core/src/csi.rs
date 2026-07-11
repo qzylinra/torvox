@@ -17,7 +17,7 @@ impl CsiHandler {
             b'C' => terminal.cursor_forward(sequence.first_param_or(1), cols),
             b'D' => terminal.cursor_back(sequence.first_param_or(1)),
             b'E' => terminal.cursor_next_line(sequence.first_param_or(1), rows),
-            b'F' => terminal.cursor_prev_line(sequence.first_param_or(1)),
+            b'F' => terminal.cursor_prev_line(sequence.first_param_or(1), rows),
             b'G' => terminal.cursor_horizontal_absolute(sequence.first_param_or(1), cols),
             b'H' => terminal.cursor_position(sequence.first_param_or(1), sequence.second_param_or(1), rows, cols),
             b'I' => terminal.cursor_horizontal_tab(cols),

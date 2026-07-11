@@ -62,7 +62,7 @@ const GLYPH_CACHE_EVICTION_DIVISOR: usize = 4;
 /// ligature-capable run is cached so repeated frames avoid re-shaping.
 const SHAPE_CACHE_CAPACITY: usize = 4_096;
 
-const CJK_BITMAP_PENALTY: u8 = 192;
+const CJK_BITMAP_PENALTY: u8 = 20;
 
 const PREFERRED_MONOSPACE_FONTS: &[&str] = &[
     "roboto mono",
@@ -428,7 +428,7 @@ impl FontPipeline {
 
         let db = self.font_system.db();
         let test_chars = ['中', '日', '가'];
-        let mut candidates: Vec<(fontdb::ID, f32, u8)> = Vec::new();
+        let mut candidates: Vec<(fontdb::ID, f32, i16)> = Vec::new();
         let locale_bonus: u8 = 6;
 
         for face in db.faces() {
@@ -477,7 +477,11 @@ impl FontPipeline {
                     || family_name.contains("noto sans jp")
                     || family_name.contains("noto sans kr")
                     || family_name.contains("noto sans cjk")
+                    || family_name.contains("noto serif cjk")
+                    || family_name.contains("noto sans mono cjk")
                     || family_name.contains("source han")
+                    || family_name.contains("droid sans fallback")
+                    || family_name.contains("wenquanyi")
                 {
                     5
                 } else if is_generic_cjk {
@@ -491,9 +495,9 @@ impl FontPipeline {
                 } else {
                     2
                 };
-                let priority = base_priority.saturating_add(locale_boost);
-                let (has_outline, source_quality_penalty): (bool, u8) = {
-                    let has_outline = db
+                let priority = (base_priority as i16).saturating_add(locale_boost as i16);
+                let (is_vector, source_quality_penalty): (bool, u8) = {
+                    let is_vector = db
                         .with_face_data(face.id, |font_data, face_index| {
                             let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
                             let mut scaler = self
@@ -507,19 +511,24 @@ impl FontPipeline {
                             if gid == 0 {
                                 return Some(false);
                             }
-                            let image = Render::new(&[Source::Outline]).render(&mut scaler, gid);
-                            Some(image.is_some())
+                            let image = Render::new(&[]).render(&mut scaler, gid);
+                            Some(image.is_some_and(|img| {
+                                matches!(
+                                    img.content,
+                                    swash::scale::image::Content::Mask | swash::scale::image::Content::SubpixelMask
+                                )
+                            }))
                         })
                         .unwrap_or(Some(false))
                         .unwrap_or(false);
-                    if has_outline {
+                    if is_vector {
                         (true, 0u8)
                     } else {
                         (false, CJK_BITMAP_PENALTY)
                     }
                 };
-                let outline_bonus = if has_outline { OUTLINE_BONUS } else { 0u8 };
-                let effective_priority = priority.saturating_sub(source_quality_penalty) + outline_bonus;
+                let outline_bonus = if is_vector { OUTLINE_BONUS as i16 } else { 0i16 };
+                let effective_priority = priority.saturating_sub(source_quality_penalty as i16) + outline_bonus;
                 candidates.push((face.id, advance_px, effective_priority));
             }
         }
@@ -544,7 +553,7 @@ impl FontPipeline {
             self.cjk_fallback_ids.len(),
             MAX_CJK_FALLBACK_FONTS
         );
-        if candidates.is_empty() || candidates.last().map_or(0, |c| c.2) == 0 {
+        if candidates.is_empty() || candidates.iter().all(|c| c.2 <= 0i16) {
             log::warn!("CJK_FALLBACK: no font with vector outlines found; CJK may render as bitmap");
         }
     }
@@ -712,21 +721,35 @@ impl FontPipeline {
 
     pub fn glyph_information(&mut self, ch: char) -> Option<GlyphInfo> {
         let primary_font_id = self.font_id?;
-        let db = self.font_system.db();
 
-        let glyph_id = db.with_face_data(primary_font_id, |font_data, face_index| {
-            let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
-            let charmap = font_ref.charmap();
-            Some(charmap.map(ch))
-        })??;
+        let glyph_id = {
+            let db = self.font_system.db();
+            db.with_face_data(primary_font_id, |font_data, face_index| {
+                let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
+                let charmap = font_ref.charmap();
+                Some(charmap.map(ch))
+            })?
+        }?;
 
-        if glyph_id == 0 && !self.cjk_fallback_ids.is_empty() {
+        let has_cjk_fallback = !self.cjk_fallback_ids.is_empty();
+
+        if glyph_id != 0 && (ch as u32) >= 0x2E80 && has_cjk_fallback {
+            let is_outline = self.glyph_source_is_outline(primary_font_id, glyph_id);
+            if !is_outline && let Some(fallback_info) = self.try_cjk_outline_fallback(ch) {
+                return Some(fallback_info);
+            }
+        }
+
+        if glyph_id == 0 && has_cjk_fallback {
             for &fallback_id in &self.cjk_fallback_ids {
-                let fallback_glyph = db.with_face_data(fallback_id, |font_data, face_index| {
-                    let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
-                    let charmap = font_ref.charmap();
-                    Some(charmap.map(ch))
-                });
+                let fallback_glyph = {
+                    let db = self.font_system.db();
+                    db.with_face_data(fallback_id, |font_data, face_index| {
+                        let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
+                        let charmap = font_ref.charmap();
+                        Some(charmap.map(ch))
+                    })
+                };
                 if let Some(Some(fid)) = fallback_glyph
                     && fid != 0
                 {
@@ -736,6 +759,48 @@ impl FontPipeline {
         }
 
         self.glyph_information_from_font(primary_font_id, ch, glyph_id)
+    }
+
+    fn glyph_source_is_outline(&mut self, font_id: fontdb::ID, glyph_id: swash::GlyphId) -> bool {
+        let scaler_context = &mut self.scaler_context;
+        let font_size = self.font_size;
+        let db = self.font_system.db();
+        let result = db.with_face_data(font_id, |font_data, face_index| {
+            let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
+            let mut scaler = scaler_context.builder(font_ref).size(font_size).hint(true).build();
+            let image = Render::new(&[]).render(&mut scaler, glyph_id);
+            Some(image.is_some_and(|img| {
+                matches!(
+                    img.content,
+                    swash::scale::image::Content::Mask | swash::scale::image::Content::SubpixelMask
+                )
+            }))
+        });
+        result.unwrap_or(Some(false)).unwrap_or(false)
+    }
+
+    fn try_cjk_outline_fallback(&mut self, ch: char) -> Option<GlyphInfo> {
+        let glyphs: Vec<(fontdb::ID, swash::GlyphId)> = {
+            let db = self.font_system.db();
+            self.cjk_fallback_ids
+                .iter()
+                .filter_map(|&fallback_id| {
+                    let gid = db.with_face_data(fallback_id, |font_data, face_index| {
+                        let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
+                        let charmap = font_ref.charmap();
+                        let gid = charmap.map(ch);
+                        if gid != 0 { Some(gid) } else { None }
+                    })??;
+                    Some((fallback_id, gid))
+                })
+                .collect()
+        };
+        for (fallback_id, fid) in &glyphs {
+            if self.glyph_source_is_outline(*fallback_id, *fid) {
+                return self.glyph_information_from_font(*fallback_id, ch, *fid);
+            }
+        }
+        None
     }
 
     fn glyph_information_from_font(
@@ -1066,7 +1131,14 @@ impl FontPipeline {
     pub fn load_font_file(&mut self, path: &std::path::Path) -> Option<String> {
         let db = self.font_system.db_mut();
         let source = fontdb::Source::File(path.into());
-        let ids = db.load_font_source(source);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| db.load_font_source(source)));
+        let ids = match result {
+            Ok(ids) => ids,
+            Err(_) => {
+                log::error!("FONT_LOAD_FILE: panic loading font source, file may be corrupt");
+                return None;
+            }
+        };
         let first_id = ids.first()?;
         let face = db.face(*first_id)?;
         face.families.first().map(|(name, _)| name.clone())
@@ -1239,7 +1311,25 @@ impl FontPipeline {
         };
         let attrs = cosmic_text::Attrs::new().family(family);
 
+        let has_cjk = text.chars().any(|c| (c as u32) >= 0x2E80);
         buffer.set_text(text, &attrs, cosmic_text::Shaping::Advanced, None);
+        if has_cjk && !self.cjk_fallback_ids.is_empty() {
+            let db = self.font_system.db();
+            let mut list = cosmic_text::AttrsList::new(&attrs);
+            for &fallback_id in &self.cjk_fallback_ids {
+                if let Some(face) = db.face(fallback_id)
+                    && let Some((fallback_name, _)) = face.families.first()
+                {
+                    list.add_span(
+                        0..text.len(),
+                        &cosmic_text::Attrs::new().family(cosmic_text::Family::Name(fallback_name)),
+                    );
+                }
+            }
+            for line in &mut buffer.lines {
+                line.set_attrs_list(list.clone());
+            }
+        }
         buffer.shape_until_scroll(&mut self.font_system, false);
 
         let result: Vec<ShapedGlyphInfo> = buffer
@@ -2367,8 +2457,8 @@ mod tests {
         try_load_cjk_fonts(pipeline.font_system.db_mut());
         pipeline.set_system_locale("zh-CN");
         assert!(
-            pipeline.cjk_fallback_ids.len() <= 1,
-            "MAX_CJK_FALLBACK_FONTS=1, got {} IDs",
+            pipeline.cjk_fallback_ids.len() <= 3,
+            "MAX_CJK_FALLBACK_FONTS=3, got {} IDs",
             pipeline.cjk_fallback_ids.len()
         );
     }

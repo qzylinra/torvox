@@ -235,6 +235,7 @@ fn render_or_die(
         torvox_renderer::gpu::CellInstanceConfig {
             atlas_width: 256.0,
             atlas_height: 256.0,
+            projection_height: 768.0,
             dirty_rows: None,
             selection: None,
             selection_bg: None,
@@ -259,6 +260,7 @@ fn render_with_selection(
         torvox_renderer::gpu::CellInstanceConfig {
             atlas_width: 256.0,
             atlas_height: 256.0,
+            projection_height: 768.0,
             dirty_rows: None,
             selection: Some(selection),
             selection_bg: None,
@@ -293,6 +295,7 @@ fn render_dirty_or_die(
         torvox_renderer::gpu::CellInstanceConfig {
             atlas_width: 256.0,
             atlas_height: 256.0,
+            projection_height: 768.0,
             dirty_rows: Some(dirty_rows),
             selection: None,
             selection_bg: None,
@@ -358,6 +361,7 @@ fn gpu_render_cursor_visible() {
         torvox_renderer::gpu::CellInstanceConfig {
             atlas_width: 256.0,
             atlas_height: 256.0,
+            projection_height: 768.0,
             dirty_rows: None,
             selection: None,
             selection_bg: None,

@@ -9,7 +9,6 @@ import io.mockk.verify
 import io.torvox.bridge.TorvoxBridge
 import io.torvox.runtime.TorvoxRuntime
 import io.torvox.ui.ModifierState
-import io.torvox.ui.TerminalInputEncoder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

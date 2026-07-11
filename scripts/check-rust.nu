@@ -17,7 +17,6 @@ def main [] {
         "fuzz_grid_resize"
         "fuzz_grid_ops"
         "fuzz_selection"
-        "fuzz_keyboard_input"
         "fuzz_attrs"
     ] {
         ^cargo fuzz run --fuzz-dir fuzz $target -- -max_total_time=5

@@ -6,7 +6,6 @@ import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,8 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -51,10 +48,28 @@ import kotlin.math.min
 
 private const val FONT_SIZE_MIN = 8f
 private const val FONT_SIZE_MAX = 48f
-private const val SEARCH_MATCH_ALPHA = 0.9f
+private const val SEARCH_MATCH_ALPHA = 0.25f
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class) // Material3 experimental API used intentionally
-@Suppress("DEPRECATION")
+/**
+ * Consolidated search state for text search within the terminal.
+ * Replaces 6 independent remember variables.
+ */
+private data class SearchState(
+    val query: String = "",
+    val results: List<SearchResult> = emptyList(),
+    val currentIndex: Int = 0,
+    val caseSensitive: Boolean = false,
+    val fuzzyMatch: Boolean = false,
+    val previousQuery: String = "",
+    val highlightsActive: Boolean = false,
+) {
+    val hasResults: Boolean get() = results.isNotEmpty()
+    val resultCount: Int get() = results.size
+    val currentMatch: SearchResult? get() = results.getOrNull(currentIndex)
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION", "CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun TerminalScreen(
     modifier: Modifier = Modifier,
@@ -114,6 +129,7 @@ fun TerminalScreen(
     var composeScrollOffset by remember { mutableIntStateOf(0) }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val view = LocalView.current
+    val surfaceRef = remember { mutableStateOf<TerminalSurface?>(null) }
     DisposableEffect(lifecycleOwner) {
         val observer =
             LifecycleEventObserver { _, event ->
@@ -171,6 +187,7 @@ fun TerminalScreen(
                     },
                     onSearch = {
                         showTextSearch = true
+                        surfaceRef.value?.searchActive = true
                     },
                     onClose = {
                         scope.launch { drawerState.close() }
@@ -184,77 +201,73 @@ fun TerminalScreen(
 
         Box(
             modifier =
-                Modifier
-                    .fillMaxSize()
-                    .testTag("TerminalScreen")
-                    .background(terminalBg)
-                    .statusBarsPadding(),
+            Modifier
+                .fillMaxSize()
+                .testTag("TerminalScreen")
+                .background(terminalBg)
+                .statusBarsPadding(),
         ) {
-            val surfaceRef = remember { mutableStateOf<TerminalSurface?>(null) }
             LaunchedEffect(drawerState.isOpen) {
                 surfaceRef.value?.drawerOpen = drawerState.isOpen
             }
             val selection = state.selection
             val selectionActive = selection.active && selection.start != null && selection.end != null
 
-            // Text search state
-            var searchQuery by remember { mutableStateOf("") }
-            var searchResults by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
-            var currentResultIndex by remember { mutableStateOf(0) }
-            var searchCaseSensitive by remember { mutableStateOf(false) }
-            var previousSearchQuery by remember { mutableStateOf("") }
-            var highlightsActive by remember { mutableStateOf(false) }
+            // Consolidated text search state
+            var searchState by remember { mutableStateOf(SearchState()) }
 
             LaunchedEffect(state.activeSessionId) {
                 showTextSearch = false
-                searchQuery = ""
-                searchResults = emptyList()
-                currentResultIndex = 0
-                previousSearchQuery = ""
-                highlightsActive = false
+                searchState = SearchState()
+                surfaceRef.value?.searchActive = false
             }
 
             suspend fun performSearch() {
-                val query = searchQuery
+                val query = searchState.query
                 if (query.isEmpty()) {
-                    searchResults = emptyList()
+                    searchState = searchState.copy(results = emptyList())
                     return
                 }
                 val bridge =
                     viewModel.runtime.bridge() ?: run {
-                        searchResults = emptyList()
+                        searchState = searchState.copy(results = emptyList())
                         return
                     }
-                val effectiveCaseSensitive = searchCaseSensitive || query.any { it.isUpperCase() }
+                val effectiveCaseSensitive = searchState.caseSensitive || (query.any { it.isUpperCase() } && !searchState.fuzzyMatch)
                 val matches =
-                    bridge.searchAllInScrollback(query, effectiveCaseSensitive) ?: run {
-                        searchResults = emptyList()
+                    bridge.searchAllInScrollback(query, effectiveCaseSensitive, searchState.fuzzyMatch) ?: run {
+                        searchState = searchState.copy(results = emptyList())
                         return
                     }
                 val results =
                     matches.map { (row, startCol, endCol) ->
                         SearchResult(lineIndex = row, startIndex = startCol, endIndex = endCol)
                     }
-                searchResults = results
                 val isNarrowing =
-                    query.isNotEmpty() && previousSearchQuery.isNotEmpty() &&
-                        query.length < previousSearchQuery.length && previousSearchQuery.startsWith(query)
-                if (isNarrowing && searchResults.isNotEmpty()) {
-                    currentResultIndex = currentResultIndex.coerceIn(0, searchResults.size - 1)
-                } else {
-                    currentResultIndex = 0
-                }
-                previousSearchQuery = query
-                if (searchResults.isNotEmpty()) {
-                    val match = searchResults[currentResultIndex]
+                    query.isNotEmpty() && searchState.previousQuery.isNotEmpty() &&
+                        query.length < searchState.previousQuery.length && searchState.previousQuery.startsWith(query)
+                val newIndex =
+                    if (isNarrowing && results.isNotEmpty()) {
+                        searchState.currentIndex.coerceIn(0, results.size - 1)
+                    } else {
+                        0
+                    }
+                searchState =
+                    searchState.copy(
+                        results = results,
+                        currentIndex = newIndex,
+                        previousQuery = query,
+                    )
+                if (results.isNotEmpty()) {
+                    val match = results[newIndex]
                     val visibleRows = surfaceRef.value?.getRows() ?: 24
                     val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
                     surfaceRef.value?.scrollToRow(centeredRow)
                 }
             }
 
-            LaunchedEffect(searchCaseSensitive) {
-                if (searchQuery.isNotEmpty()) {
+            LaunchedEffect(searchState.caseSensitive, searchState.fuzzyMatch) {
+                if (searchState.query.isNotEmpty()) {
                     searchJob?.cancel()
                     searchJob = scope.launch { performSearch() }
                 }
@@ -273,9 +286,9 @@ fun TerminalScreen(
 
             Box(
                 modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .testTag("TerminalContent"),
+                Modifier
+                    .fillMaxSize()
+                    .testTag("TerminalContent"),
             ) {
                 AndroidView(
                     factory = { context ->
@@ -287,6 +300,7 @@ fun TerminalScreen(
                                 surface.onScrollChanged = { offset ->
                                     composeScrollOffset = offset
                                     viewModel.runtime.setScrollOffset(offset.toUInt())
+                                    viewModel.runtime.bridge()?.render()
                                 }
                             }.apply {
                                 initialize(viewModel)
@@ -355,13 +369,12 @@ fun TerminalScreen(
                     }
                     val themeAccent = if (state.selectionAccent != 0) Color(state.selectionAccent) else resolvedTerminalTheme.foreground
 
-                    fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int =
-                        android.graphics.Color.argb(
-                            (color.alpha * 255).toInt(),
-                            (color.red * 255).toInt(),
-                            (color.green * 255).toInt(),
-                            (color.blue * 255).toInt(),
-                        )
+                    fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int = android.graphics.Color.argb(
+                        (color.alpha * 255).toInt(),
+                        (color.red * 255).toInt(),
+                        (color.green * 255).toInt(),
+                        (color.blue * 255).toInt(),
+                    )
                     val themeAccentArgb = colorToArgb(themeAccent)
 
                     if (selection.dragging) {
@@ -399,99 +412,116 @@ fun TerminalScreen(
                     }
                 }
 
-                if (showTextSearch && searchResults.isNotEmpty()) {
+                if (showTextSearch && searchState.hasResults) {
                     val surface = surfaceRef.value
                     if (surface != null) {
                         val rows = surface.getRows()
                         val scrollbackCount = surface.getMaxScrollOffset()
                         val scrollOffset = surface.getScrollOffset()
-                        val matchColor = resolvedTerminalTheme.ansi.getOrElse(2) { Color(0xFF4CAF50) }
-                        val currentMatchColor = resolvedTerminalTheme.ansi.getOrElse(1) { Color(0xFFFF9800) }
+                        val themeForeground = resolvedTerminalTheme.foreground
+                        val themeSelectionBg = resolvedTerminalTheme.selectionBg
 
                         val writer = io.torvox.bridge.WireWriter()
-                        writer.writeI32(searchResults.size)
-                        for ((index, match) in searchResults.withIndex()) {
+                        writer.writeI32(searchState.resultCount)
+                        for ((index, match) in searchState.results.withIndex()) {
                             val gridRow = match.lineIndex - scrollbackCount + scrollOffset
                             if (gridRow < 0 || gridRow >= rows) continue
-                            val color =
-                                if (index == currentResultIndex) currentMatchColor else matchColor
+                            val isCurrent = index == searchState.currentIndex
                             writer.writeI32(gridRow)
                             writer.writeI32(match.startIndex)
                             writer.writeI32(match.endIndex.coerceAtLeast(match.startIndex + 1))
-                            writer.writeByte((color.red * 255).toInt().toByte())
-                            writer.writeByte((color.green * 255).toInt().toByte())
-                            writer.writeByte((color.blue * 255).toInt().toByte())
-                            writer.writeByte((SEARCH_MATCH_ALPHA * 255).toInt().toByte())
+                            if (isCurrent) {
+                                // Current match: use foreground color at moderate opacity
+                                // so the text appears "lit up" — distinctly different from
+                                // the subtle selectionBg overlay of other matches.
+                                writer.writeByte((themeForeground.red * 255).toInt().toByte())
+                                writer.writeByte((themeForeground.green * 255).toInt().toByte())
+                                writer.writeByte((themeForeground.blue * 255).toInt().toByte())
+                                writer.writeByte(160.toByte()) // ~63% opacity
+                            } else {
+                                // Other matches: selection_bg semi-transparent overlay
+                                writer.writeByte((themeSelectionBg.red * 255).toInt().toByte())
+                                writer.writeByte((themeSelectionBg.green * 255).toInt().toByte())
+                                writer.writeByte((themeSelectionBg.blue * 255).toInt().toByte())
+                                writer.writeByte((SEARCH_MATCH_ALPHA * 255).toInt().toByte()) // 25%
+                            }
                         }
                         val highlightBytes = writer.toByteArray()
+                        // Single call: surface.setSearchHighlights internally calls bridge.setSearchHighlights + bridge.render
                         surface.setSearchHighlights(highlightBytes)
-                        viewModel.runtime.bridge()?.setSearchHighlights(highlightBytes)
-                        viewModel.runtime.bridge()?.render()
-                        highlightsActive = true
+                        searchState = searchState.copy(highlightsActive = true)
                     }
-                } else if (highlightsActive) {
+                } else if (searchState.highlightsActive) {
                     surfaceRef.value?.clearSearchHighlights()
-                    viewModel.runtime.bridge()?.clearSearchHighlights()
-                    viewModel.runtime.bridge()?.render()
-                    highlightsActive = false
+                    searchState = searchState.copy(highlightsActive = false)
                 }
             }
 
             Box(
                 modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .imePadding()
-                        .windowInsetsPadding(WindowInsets.navigationBars),
+                Modifier
+                    .fillMaxWidth()
+                    .imePadding(),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 if (showTextSearch) {
                     TextSearchBar(
-                        query = searchQuery,
+                        query = searchState.query,
                         onQueryChange = { query ->
-                            searchQuery = query
+                            searchState = searchState.copy(query = query)
                             searchJob?.cancel()
                             searchJob =
                                 scope.launch { performSearch() }
                         },
-                        resultCount = searchResults.size,
-                        currentResultIndex = currentResultIndex,
+                        resultCount = searchState.resultCount,
+                        currentResultIndex = searchState.currentIndex,
                         onPrevious = {
-                            if (searchResults.isNotEmpty()) {
-                                currentResultIndex =
-                                    if (currentResultIndex > 0) {
-                                        currentResultIndex - 1
+                            if (searchState.hasResults) {
+                                val newIndex =
+                                    if (searchState.currentIndex > 0) {
+                                        searchState.currentIndex - 1
                                     } else {
-                                        searchResults.size - 1
+                                        searchState.resultCount - 1
                                     }
-                                val match = searchResults[currentResultIndex]
+                                val match = searchState.results[newIndex]
                                 val visibleRows = surfaceRef.value?.getRows() ?: 24
+                                val scrollbackLen = surfaceRef.value?.getMaxScrollOffset() ?: 0
                                 val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
+                                val targetScroll = (scrollbackLen - centeredRow).coerceIn(0, scrollbackLen)
                                 surfaceRef.value?.scrollToRow(centeredRow)
+                                Log.d("TerminalScreen", "Search prev: match row=${match.lineIndex} scroll=$targetScroll")
+                                searchState = searchState.copy(currentIndex = newIndex)
                             }
                         },
                         onNext = {
-                            if (searchResults.isNotEmpty()) {
-                                currentResultIndex =
-                                    if (currentResultIndex < searchResults.size - 1) {
-                                        currentResultIndex + 1
+                            if (searchState.hasResults) {
+                                val newIndex =
+                                    if (searchState.currentIndex < searchState.resultCount - 1) {
+                                        searchState.currentIndex + 1
                                     } else {
                                         0
                                     }
-                                val match = searchResults[currentResultIndex]
+                                val match = searchState.results[newIndex]
                                 val visibleRows = surfaceRef.value?.getRows() ?: 24
+                                val scrollbackLen = surfaceRef.value?.getMaxScrollOffset() ?: 0
                                 val centeredRow = (match.lineIndex - visibleRows / 2).coerceAtLeast(0)
+                                val targetScroll = (scrollbackLen - centeredRow).coerceIn(0, scrollbackLen)
                                 surfaceRef.value?.scrollToRow(centeredRow)
+                                Log.d("TerminalScreen", "Search next: match row=${match.lineIndex} scroll=$targetScroll")
+                                searchState = searchState.copy(currentIndex = newIndex)
                             }
                         },
                         onClose = {
                             showTextSearch = false
-                            searchQuery = ""
-                            searchResults = emptyList()
+                            searchState = SearchState()
+                            surfaceRef.value?.clearSearchHighlights()
+                            surfaceRef.value?.searchActive = false
                         },
-                        caseSensitive = searchCaseSensitive,
-                        onCaseSensitiveToggle = { searchCaseSensitive = it },
-                        autoCaseSensitive = !searchCaseSensitive && searchQuery.any { it.isUpperCase() },
+                        caseSensitive = searchState.caseSensitive,
+                        onCaseSensitiveToggle = { searchState = searchState.copy(caseSensitive = it) },
+                        fuzzyMatch = searchState.fuzzyMatch,
+                        onFuzzyMatchToggle = { searchState = searchState.copy(fuzzyMatch = it) },
+                        autoCaseSensitive = !searchState.caseSensitive && searchState.query.any { it.isUpperCase() },
                         modifier = Modifier.testTag("TextSearchBar"),
                     )
                 } else {
@@ -508,8 +538,8 @@ fun TerminalScreen(
 
                     ModifierBar(
                         modifier =
-                            Modifier
-                                .testTag("ModifierBar"),
+                        Modifier
+                            .testTag("ModifierBar"),
                         onKeyClick = { data ->
                             viewModel.writeToPty(data.toByteArray())
                         },
@@ -533,32 +563,38 @@ fun TerminalScreen(
                         toolbarLayout = rememberToolbarLayout(),
                         barMode = barMode,
                         onCopy =
-                            if (selectionActive) {
-                                {
-                                    viewModel.copySelectionToClipboard()
-                                    viewModel.clearSelection()
-                                }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            {
+                                viewModel.copySelectionToClipboard()
+                                viewModel.clearSelection()
+                            }
+                        } else {
+                            null
+                        },
                         onSelectAll =
-                            if (selectionActive) {
-                                { viewModel.selectAll() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.selectAll() }
+                        } else {
+                            null
+                        },
                         onPaste =
-                            if (selectionActive && hasClipboard) {
-                                { viewModel.pasteFromClipboard() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive && hasClipboard) {
+                            { viewModel.pasteFromClipboard() }
+                        } else {
+                            null
+                        },
+                        onShare =
+                        if (selectionActive) {
+                            { viewModel.shareSelection() }
+                        } else {
+                            null
+                        },
                         onDismiss =
-                            if (selectionActive) {
-                                { viewModel.clearSelection() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.clearSelection() }
+                        } else {
+                            null
+                        },
                     )
                 }
             }

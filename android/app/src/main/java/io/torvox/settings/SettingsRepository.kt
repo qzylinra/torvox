@@ -35,9 +35,9 @@ constructor(
         val USB_SERIAL_ENABLED = booleanPreferencesKey("usb_serial_enabled")
         val MCP_SERVER_ENABLED = booleanPreferencesKey("mcp_server_enabled")
         val VOLUME_KEY_MAP = booleanPreferencesKey("volume_key_map")
-        val BG_IMAGE_PATH = stringPreferencesKey("bg_image_path")
-        val BG_BLUR_RADIUS = intPreferencesKey("bg_blur_radius")
-        val BG_ALPHA = floatPreferencesKey("bg_alpha")
+        val BACKGROUND_IMAGE_PATH = stringPreferencesKey("bg_image_path")
+        val BACKGROUND_BLUR_RADIUS = intPreferencesKey("bg_blur_radius")
+        val BACKGROUND_ALPHA = floatPreferencesKey("bg_alpha")
         val CURSOR_BLINK = booleanPreferencesKey("cursor_blink")
         val CURSOR_STYLE = stringPreferencesKey("cursor_style")
         val CURSOR_SPEED = intPreferencesKey("cursor_speed")
@@ -53,8 +53,8 @@ constructor(
         const val DEFAULT_TOUCH_BEHAVIOR = "right_click"
         const val DEFAULT_KEYBOARD_MODE = "secure"
         const val DEFAULT_SHELL = "/system/bin/sh"
-        const val DEFAULT_BG_BLUR_RADIUS = 0
-        const val DEFAULT_BG_ALPHA = 0.8f
+        const val DEFAULT_BACKGROUND_BLUR_RADIUS = 0
+        const val DEFAULT_BACKGROUND_ALPHA = 0.8f
         const val DEFAULT_CURSOR_SPEED_MS = 530
     }
 
@@ -76,9 +76,13 @@ constructor(
     val usbSerialEnabled: Flow<Boolean> = provider.dataStore.data.map { it[Keys.USB_SERIAL_ENABLED] ?: false }
     val mcpServerEnabled: Flow<Boolean> = provider.dataStore.data.map { it[Keys.MCP_SERVER_ENABLED] ?: false }
     val volumeKeyMap: Flow<Boolean> = provider.dataStore.data.map { it[Keys.VOLUME_KEY_MAP] ?: false }
-    val bgImagePath: Flow<String> = provider.dataStore.data.map { it[Keys.BG_IMAGE_PATH] ?: "" }
-    val bgBlurRadius: Flow<Int> = provider.dataStore.data.map { it[Keys.BG_BLUR_RADIUS] ?: DEFAULT_BG_BLUR_RADIUS }
-    val bgAlpha: Flow<Float> = provider.dataStore.data.map { it[Keys.BG_ALPHA] ?: DEFAULT_BG_ALPHA }
+    val backgroundImagePath: Flow<String> = provider.dataStore.data.map { it[Keys.BACKGROUND_IMAGE_PATH] ?: "" }
+    val backgroundBlurRadius: Flow<Int> =
+        provider.dataStore.data.map {
+            it[Keys.BACKGROUND_BLUR_RADIUS]
+                ?: DEFAULT_BACKGROUND_BLUR_RADIUS
+        }
+    val backgroundAlpha: Flow<Float> = provider.dataStore.data.map { it[Keys.BACKGROUND_ALPHA] ?: DEFAULT_BACKGROUND_ALPHA }
     val cursorBlink: Flow<Boolean> = provider.dataStore.data.map { it[Keys.CURSOR_BLINK] ?: true }
     val cursorStyle: Flow<String> = provider.dataStore.data.map { it[Keys.CURSOR_STYLE] ?: "block" }
     val cursorSpeed: Flow<Int> = provider.dataStore.data.map { it[Keys.CURSOR_SPEED] ?: DEFAULT_CURSOR_SPEED_MS }
@@ -155,16 +159,16 @@ constructor(
         provider.dataStore.edit { it[Keys.VOLUME_KEY_MAP] = enabled }
     }
 
-    suspend fun setBgImagePath(path: String) {
-        provider.dataStore.edit { it[Keys.BG_IMAGE_PATH] = path }
+    suspend fun setBackgroundImagePath(path: String) {
+        provider.dataStore.edit { it[Keys.BACKGROUND_IMAGE_PATH] = path }
     }
 
-    suspend fun setBgBlurRadius(radius: Int) {
-        provider.dataStore.edit { it[Keys.BG_BLUR_RADIUS] = radius }
+    suspend fun setBackgroundBlurRadius(radius: Int) {
+        provider.dataStore.edit { it[Keys.BACKGROUND_BLUR_RADIUS] = radius }
     }
 
-    suspend fun setBgAlpha(alpha: Float) {
-        provider.dataStore.edit { it[Keys.BG_ALPHA] = alpha }
+    suspend fun setBackgroundAlpha(alpha: Float) {
+        provider.dataStore.edit { it[Keys.BACKGROUND_ALPHA] = alpha }
     }
 
     suspend fun setCursorBlink(enabled: Boolean) {

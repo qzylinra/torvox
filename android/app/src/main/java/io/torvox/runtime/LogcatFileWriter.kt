@@ -20,7 +20,12 @@ object LogcatFileWriter {
                 val baseDir =
                     context.getExternalFilesDir(null)
                         ?: context.getDir("logs_root", Context.MODE_PRIVATE)
-                val logsDirectory = File(baseDir, "logs").also { it.mkdirs() }
+                val logsDirectory =
+                    File(baseDir, "logs").also { dir ->
+                        if (!dir.mkdirs()) {
+                            Log.w("LogcatFileWriter", "Failed to create logs directory: $dir")
+                        }
+                    }
                 if (!logsDirectory.isDirectory) {
                     Log.e("LogcatFileWriter", "Failed to create logs directory at ${logsDirectory.absolutePath}")
                     return

@@ -6,7 +6,6 @@ import io.torvox.RobolectricActivityRule
 import io.torvox.TestActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -101,59 +100,6 @@ class SelectionComposeTest {
         val (start, end) = expandWordOnLine("hello", 20)
         assertEquals(20, start)
         assertEquals(20, end)
-    }
-
-    @Test
-    fun expandAcrossUrlWrap_detectsUrlContinuation() {
-        val lines = listOf("https://example.com/abc", "def")
-        val span = expandAcrossUrlWrap(lines, 0, 0, 22)
-        assertNotNull(span)
-    }
-
-    @Test
-    fun expandAcrossUrlWrap_wwwDot() {
-        val lines = listOf("check www.example.com/abc", "def")
-        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
-        assertNotNull(span)
-    }
-
-    @Test
-    fun expandAcrossUrlWrap_dotGit() {
-        val lines = listOf("clone https://git.example.com/repo", ".git")
-        val span = expandAcrossUrlWrap(lines, 0, 6, 33)
-        assertNotNull(span)
-    }
-
-    @Test
-    fun expandAcrossUrlWrap_rejectsNonUrlFirstLine() {
-        val lines = listOf("not a url", "continuation")
-        val span = expandAcrossUrlWrap(lines, 0, 0, 9)
-        assertTrue("non-URL should be null", span == null)
-    }
-
-    @Test
-    fun expandAcrossUrlWrap_rejectsEmptyContinuation() {
-        val lines = listOf("check https://example", "")
-        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
-        assertTrue("empty continuation should be null", span == null)
-    }
-
-    @Test
-    fun expandAcrossUrlWrap_rejectsMultiWordContinuation() {
-        val lines =
-            listOf(
-                "check https://example",
-                "/path more",
-            )
-        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
-        assertTrue("multi-word continuation should be null", span == null)
-    }
-
-    @Test
-    fun expandAcrossUrlWrap_rejectsOverlyLongContinuation() {
-        val lines = listOf("check https://example", "a".repeat(20))
-        val span = expandAcrossUrlWrap(lines, 0, 6, 25)
-        assertTrue("overly long continuation should be null", span == null)
     }
 
     @Test

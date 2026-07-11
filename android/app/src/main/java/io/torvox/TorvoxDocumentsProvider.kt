@@ -7,6 +7,7 @@ import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract.Document
 import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
+import android.util.Log
 import android.webkit.MimeTypeMap
 import java.io.File
 
@@ -76,7 +77,11 @@ class TorvoxDocumentsProvider : DocumentsProvider() {
 
     override fun onCreate(): Boolean = true
 
-    private fun getRootDir(): File = java.io.File(requireNotNull(context).filesDir, "home").also { it.mkdirs() }
+    private fun getRootDir(): File = java.io.File(requireNotNull(context).filesDir, "home").also { dir ->
+        if (!dir.mkdirs()) {
+            Log.w("TorvoxDocumentsProvider", "Failed to create home directory: $dir")
+        }
+    }
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
         val cols = projection ?: ROOT_PROJECTION
