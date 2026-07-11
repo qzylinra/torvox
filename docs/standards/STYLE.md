@@ -34,7 +34,7 @@ The environment is deterministic: SDK paths, tool availability, and system state
 - For directories that SHOULD exist: check explicitly and exit with non-zero if missing
 - No intermediate variables like `let start = ... let elapsed = ...` that add no clarity
 - No `$env.ANDROID_HOME/platform-tools/adb` or hardcoded path bin usage — `adb`, `emulator`, `sdkmanager`, `avdmanager` come from nix devShell (`android-tools` package)
-- No `nu scripts/xxx.nu` inside nu scripts — use `./scripts/xxx.nu` (shebang) or `nix develop --command "nu scripts/xxx.nu"`
+- No `nu scripts/xxx.nu` inside nu scripts — use `./scripts/xxx.nu` (shebang) or `nu scripts/xxx.nu`
 - No multi-level single directories for vendored sources — clone directly to `vendor/<name>/` not `vendor/<name>/src/`
 - No `rustup target add` or cross-compilation targets in check scripts — only workspace tests
 - No silent `if ($dir | path exists)` for maestro/flows directories — let `ls` fail naturally if missing
@@ -53,7 +53,7 @@ The environment is deterministic: SDK paths, tool availability, and system state
 
 All environment management via Nix. No system shell builds.
 
-- Always: `nix develop`, `nix develop --command "cargo build"`, `nix fmt`
+- Always: `nix develop`, `cargo build`, `nix fmt`
 - No abbreviated variable names
 - ShellHook is the primary mechanism; checks and formatter defined in flake.nix
 

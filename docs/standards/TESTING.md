@@ -10,10 +10,10 @@
 ## Rust Tests
 
 ```bash
-nix develop --command "cargo nextest run --workspace --profile ci"            # Rust tests
-nix develop --command "cargo nextest --package torvox-core"                 # core only
-nix develop --command "cargo nextest --package torvox-terminal"             # terminal only
-nix develop --command "cargo nextest run --package torvox-core --test property_tests"
+cargo nextest run --workspace --profile ci            # Rust tests
+cargo nextest --package torvox-core                 # core only
+cargo nextest --package torvox-terminal             # terminal only
+cargo nextest run --package torvox-core --test property_tests
 ```
 
 ## Test File Locations
@@ -33,16 +33,16 @@ nix develop --command "cargo nextest run --package torvox-core --test property_t
 - VtSegment: Text, Csi, Esc, Osc, Control, PrivateCsi, DecPrivate, Sgr, Dcs
 - Grid state machine: WriteChar, Newline, Backspace, CursorUp/Down/Left/Right, CarriageReturn, Tab, ClearLine, ClearScreen, InsertLines, DeleteLines, ScrollUp, Resize, AlternateBuffer, SetOriginMode, ScrollRegion, OriginMode, InsertMode, ReverseIndex — ModelGrid vs real Grid
 - DST simulation: PtyOutput, UserInput, Resize, Render, SurfaceCreated, SurfaceDestroyed, Flush, WriteText — 100K ops, 10 seeds
-- Shuttle concurrency: nightly-only, enable via `RUSTFLAGS="--cfg shuttle_tests" nix develop --command "cargo +nightly test -p torvox-terminal"`
-- Structured VT fuzz: `nix develop --command "cargo fuzz run fuzz_vt_structured"` (6 target types, 20s each)
+- Shuttle concurrency: nightly-only, enable via `RUSTFLAGS="--cfg shuttle_tests" cargo +nightly test -p torvox-terminal`
+- Structured VT fuzz: `cargo fuzz run fuzz_vt_structured` (6 target types, 20s each)
 - Wire format fuzz: `cargo fuzz run fuzz_wire`
 
 ## Android Tests
 
 ```bash
-nix develop --command "cd android && ./gradlew testDebugUnitTest"            # unit tests
-nix develop --command "cd android && ./gradlew roborazziDebug"                # screenshot tests
-nix develop --command "cd android && ./gradlew connectedDebugAndroidTest"     # instrumented
+cd android && ./gradlew testDebugUnitTest            # unit tests
+cd android && ./gradlew roborazziDebug                # screenshot tests
+cd android && ./gradlew connectedDebugAndroidTest     # instrumented
 ```
 
 ### Six test types and where each lives
@@ -52,7 +52,7 @@ right type for the behavior under test — do not collapse them into one.
 
 | # | Type | Location | What it covers |
 |---|------|----------|----------------|
-| 1 | **Unit** (Rust) | `torvox-core/tests/`, `torvox-terminal/tests/`, `torvox-gui-android/tests/`, `torvox-bench/benches/` | Pure logic: VT parse, grid/scrollback, OSC, keyboard encode, bridge round-trip. Runs on host via `nix develop --command "cargo nextest"`. |
+| 1 | **Unit** (Rust) | `torvox-core/tests/`, `torvox-terminal/tests/`, `torvox-gui-android/tests/`, `torvox-bench/benches/` | Pure logic: VT parse, grid/scrollback, OSC, keyboard encode, bridge round-trip. Runs on host via `cargo nextest`. |
 | 2 | **Roborazzi** (screenshot) | `android/app/src/test/java/io/torvox/screenshot/*ScreenshotTest.kt`; goldens in `android/app/src/test/resources/roborazzi/` | Pixel-exact Compose/UI rendering under Robolectric. |
 | 3 | **Compose UI** | `android/app/src/test/java/io/torvox/ui/*ComposeTest.kt` (Robolectric) and `android/app/src/androidTest/java/io/torvox/ui/*ComposeTest.kt` (instrumented) | Compose widget state/interaction (theme switch, selection handles). |
 | 4 | **Maestro** | `android/app/src/androidTest/java/io/torvox/ui/*.yaml` flow files (e.g. `SelectionMaestroTest.yaml`) | End-to-end on-device flows driven by Maestro YAML. |
@@ -63,7 +63,7 @@ right type for the behavior under test — do not collapse them into one.
 
 Golden images live in `android/app/src/test/resources/roborazzi/` and are committed to git.
 
-- **Script runner**: `nix develop --command "nu scripts/test-android-gradle.nu"`
+- **Script runner**: `nu scripts/test-android-gradle.nu`
 
 CI fails on golden mismatch. Download `gradle-reports` artifact from the failed run
 
@@ -76,5 +76,5 @@ Used by `torvox-renderer/tests/text_ocr_test.rs` to verify font rendering end-to
 ## Emulator Tests
 
 ```bash
-nix develop --command "nu scripts/test-emulator.nu"                         # automated emulator tests
+nu scripts/test-emulator.nu                         # automated emulator tests
 ```
