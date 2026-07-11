@@ -201,11 +201,11 @@ fun TerminalScreen(
 
         Box(
             modifier =
-            Modifier
-                .fillMaxSize()
-                .testTag("TerminalScreen")
-                .background(terminalBg)
-                .statusBarsPadding(),
+                Modifier
+                    .fillMaxSize()
+                    .testTag("TerminalScreen")
+                    .background(terminalBg)
+                    .statusBarsPadding(),
         ) {
             LaunchedEffect(drawerState.isOpen) {
                 surfaceRef.value?.drawerOpen = drawerState.isOpen
@@ -286,9 +286,9 @@ fun TerminalScreen(
 
             Box(
                 modifier =
-                Modifier
-                    .fillMaxSize()
-                    .testTag("TerminalContent"),
+                    Modifier
+                        .fillMaxSize()
+                        .testTag("TerminalContent"),
             ) {
                 AndroidView(
                     factory = { context ->
@@ -369,12 +369,13 @@ fun TerminalScreen(
                     }
                     val themeAccent = if (state.selectionAccent != 0) Color(state.selectionAccent) else resolvedTerminalTheme.foreground
 
-                    fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int = android.graphics.Color.argb(
-                        (color.alpha * 255).toInt(),
-                        (color.red * 255).toInt(),
-                        (color.green * 255).toInt(),
-                        (color.blue * 255).toInt(),
-                    )
+                    fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int =
+                        android.graphics.Color.argb(
+                            (color.alpha * 255).toInt(),
+                            (color.red * 255).toInt(),
+                            (color.green * 255).toInt(),
+                            (color.blue * 255).toInt(),
+                        )
                     val themeAccentArgb = colorToArgb(themeAccent)
 
                     if (selection.dragging) {
@@ -459,9 +460,9 @@ fun TerminalScreen(
 
             Box(
                 modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .imePadding(),
+                    Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 if (showTextSearch) {
@@ -514,8 +515,8 @@ fun TerminalScreen(
                         onClose = {
                             showTextSearch = false
                             searchState = SearchState()
-                            surfaceRef.value?.clearSearchHighlights()
                             surfaceRef.value?.searchActive = false
+                            surfaceRef.value?.clearSearchHighlights()
                         },
                         caseSensitive = searchState.caseSensitive,
                         onCaseSensitiveToggle = { searchState = searchState.copy(caseSensitive = it) },
@@ -538,8 +539,8 @@ fun TerminalScreen(
 
                     ModifierBar(
                         modifier =
-                        Modifier
-                            .testTag("ModifierBar"),
+                            Modifier
+                                .testTag("ModifierBar"),
                         onKeyClick = { data ->
                             viewModel.writeToPty(data.toByteArray())
                         },
@@ -563,38 +564,38 @@ fun TerminalScreen(
                         toolbarLayout = rememberToolbarLayout(),
                         barMode = barMode,
                         onCopy =
-                        if (selectionActive) {
-                            {
-                                viewModel.copySelectionToClipboard()
-                                viewModel.clearSelection()
-                            }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                {
+                                    viewModel.copySelectionToClipboard()
+                                    viewModel.clearSelection()
+                                }
+                            } else {
+                                null
+                            },
                         onSelectAll =
-                        if (selectionActive) {
-                            { viewModel.selectAll() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.selectAll() }
+                            } else {
+                                null
+                            },
                         onPaste =
-                        if (selectionActive && hasClipboard) {
-                            { viewModel.pasteFromClipboard() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive && hasClipboard) {
+                                { viewModel.pasteFromClipboard() }
+                            } else {
+                                null
+                            },
                         onShare =
-                        if (selectionActive) {
-                            { viewModel.shareSelection() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.shareSelection() }
+                            } else {
+                                null
+                            },
                         onDismiss =
-                        if (selectionActive) {
-                            { viewModel.clearSelection() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.clearSelection() }
+                            } else {
+                                null
+                            },
                     )
                 }
             }
