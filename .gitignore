@@ -25,6 +25,9 @@ vendor/
 .slim/*
 .workflows/
 
+# Working scratch directory
+ultragoal/
+
 # boltffi
 android/app/src/main/java/io/torvox/bridge/kotlin/
 
