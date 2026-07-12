@@ -125,8 +125,8 @@ pub struct AndroidSurface {
     last_cursor_row: u32,
     last_cursor_col: u32,
     cursor_style: torvox_core::cursor::CursorStyle,
-    last_cursor_visible: bool,
-    cursor_override: Option<bool>,
+    blink_phase: bool,
+    last_blink_toggle: std::time::Instant,
     render_requested: bool,
     /// Persistent instance buffer reused across frames so the per-frame cell
     /// instance `Vec` is not reallocated on every render (see
@@ -150,6 +150,7 @@ pub struct AndroidSurface {
 
 /// Compare two CellSnapshots for equality of fields that affect rendering.
 /// Returns `true` if they differ (row should be marked dirty).
+#[allow(clippy::float_cmp)]
 fn cell_ne(a: &CellSnapshot, b: &CellSnapshot) -> bool {
     a.codepoint != b.codepoint
         || a.width != b.width
@@ -237,8 +238,8 @@ impl AndroidSurface {
             search_highlights: Vec::new(),
             last_cursor_row: 0,
             last_cursor_col: 0,
-            last_cursor_visible: true,
-            cursor_override: None,
+            blink_phase: true,
+            last_blink_toggle: std::time::Instant::now(),
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             render_requested: false,
             instance_buffer: Vec::new(),
@@ -587,15 +588,9 @@ impl AndroidSurface {
             snapshot = session.terminal().take_snapshot_with_scroll(scroll_offset);
         }
 
-        // The app-level cursor override (user setting + blink timer) is
-        // authoritative when set. Without this, the visibility was the AND of
-        // the terminal's DECTCEM state and the override, so whenever the
-        // terminal hid the cursor (e.g. during typing / redraws) the app could
-        // never show it back — the cursor appeared to vanish and not return.
-        // When the override is unset (None) we follow the terminal's DECTCEM
-        // state as before.
-        let effective_cursor_visible = self.cursor_override.unwrap_or(snapshot.cursor_visible);
-        snapshot.cursor_visible = effective_cursor_visible;
+        // Cursor visibility follows the terminal's DECTCEM state directly.
+        // No app-level override — cursor_override was removed (FR-057).
+        // Cursor blink is handled below as a phase toggle on snapshot visibility.
 
         #[cfg(target_os = "android")]
         // SAFETY: ATrace_beginSection is thread-safe. The C string is a static
@@ -638,7 +633,10 @@ impl AndroidSurface {
                 let row_off = row * snapshot.cols as usize;
                 let mut row_dirty = false;
                 for col in 0..snapshot.cols as usize {
-                    if cell_ne(&self.prev_cells[row_off + col], &snapshot.cells[row_off + col]) {
+                    if cell_ne(
+                        &self.prev_cells[row_off + col],
+                        &snapshot.cells[row_off + col],
+                    ) {
                         row_dirty = true;
                         break;
                     }
@@ -650,19 +648,20 @@ impl AndroidSurface {
             vec![true; snapshot.rows as usize]
         };
 
-        // Force-dirty cursor-related rows when cursor moved
-        if self.last_cursor_row != snapshot.cursor_row
-            || self.last_cursor_col != snapshot.cursor_col
-            || self.last_cursor_visible != snapshot.cursor_visible
-        {
-            let cr = snapshot.cursor_row as usize;
-            if cr < dirty_rows.len() {
-                dirty_rows[cr] = true;
-            }
-            let pcr = self.last_cursor_row as usize;
-            if pcr < dirty_rows.len() && pcr != cr {
-                dirty_rows[pcr] = true;
-            }
+        // Force-dirty cursor row unconditionally so blink phase changes and
+        // terminal DECTCEM state changes are always reflected on screen.
+        let cr = snapshot.cursor_row as usize;
+        if cr < dirty_rows.len() {
+            dirty_rows[cr] = true;
+        }
+        let pcr = self.last_cursor_row as usize;
+        if pcr < dirty_rows.len() && pcr != cr {
+            dirty_rows[pcr] = true;
+        }
+        // Reset blink phase when cursor moves (keyboard input→snapshot col change)
+        if snapshot.cursor_col != self.last_cursor_col {
+            self.blink_phase = true;
+            self.last_blink_toggle = std::time::Instant::now();
         }
 
         // Conservative: when scroll or search highlights change, mark all
@@ -671,9 +670,22 @@ impl AndroidSurface {
         let scroll_changed = self.prev_scroll_offset != scroll_offset;
         let highlights_present = !self.search_highlights.is_empty();
         if highlights_present || scroll_changed {
-            for d in &mut dirty_rows {
-                *d = true;
-            }
+            dirty_rows.fill(true);
+        }
+
+        // Cursor blink phase toggle at ~530 ms interval.
+        // The Kotlin blink timer guarantees a render is requested at blink period,
+        // so this runs at roughly the configured cursor blink rate.
+        const BLINK_PERIOD: std::time::Duration = std::time::Duration::from_millis(530);
+        let now = std::time::Instant::now();
+        if now - self.last_blink_toggle >= BLINK_PERIOD {
+            self.blink_phase = !self.blink_phase;
+            self.last_blink_toggle = now;
+        }
+
+        // Hide cursor during blink-off phase (applied on top of DECTCEM state).
+        if !self.blink_phase && snapshot.cursor_visible {
+            snapshot.cursor_visible = false;
         }
 
         self.prev_cells = snapshot.cells.clone();
@@ -701,7 +713,8 @@ impl AndroidSurface {
 
         // Update caches for next frame
         self.cached_instances.clear();
-        self.cached_instances.extend_from_slice(&self.instance_buffer);
+        self.cached_instances
+            .extend_from_slice(&self.instance_buffer);
         self.cached_row_ends = row_ends;
         self.prev_scroll_offset = scroll_offset;
 
@@ -825,7 +838,6 @@ impl AndroidSurface {
 
         self.last_cursor_row = snapshot.cursor_row;
         self.last_cursor_col = snapshot.cursor_col;
-        self.last_cursor_visible = snapshot.cursor_visible;
 
         // Desktop: direct wgpu swapchain presentation.
         #[cfg(not(target_os = "android"))]
@@ -1481,9 +1493,11 @@ impl AndroidSurface {
         self.render_requested = true;
     }
 
-    pub fn set_cursor_visible(&mut self, visible: bool) {
-        self.cursor_override = Some(visible);
-        self.render_requested = true;
+    #[deprecated(
+        note = "cursor visibility follows terminal DECTCEM state; blink is handled in render() via blink_phase"
+    )]
+    pub fn set_cursor_visible(&mut self, _visible: bool) {
+        log::warn!("surface: set_cursor_visible is deprecated and has no effect");
     }
 
     pub fn set_cursor_style(&mut self, style: torvox_core::cursor::CursorStyle) {

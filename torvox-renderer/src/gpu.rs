@@ -2428,7 +2428,13 @@ pub fn build_cell_instances_from_snapshot(
 ) -> Vec<CellInstance> {
     let mut instances = Vec::new();
     let mut _row_ends = Vec::new();
-    build_cell_instances_into(snapshot, font_pipeline, config, &mut instances, &mut _row_ends);
+    build_cell_instances_into(
+        snapshot,
+        font_pipeline,
+        config,
+        &mut instances,
+        &mut _row_ends,
+    );
     instances
 }
 
