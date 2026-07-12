@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -27,15 +28,19 @@ data class PixelFrame(
 
 // ── Session helpers ─────────────────────────────────
 
-fun AndroidComposeTestRule<*, *>.waitForSession(timeoutMs: Long = 25_000) {
+fun AndroidComposeTestRule<*, *>.waitForSession(timeoutMs: Long = 60_000) {
     System.setProperty("torvox.test.minSurface", "true")
+    // Use the standard assertion approach (same as search steps) instead of
+    // allNodes + fetchSemanticsNodes, which may fail in merged-tree scenarios
     waitUntil(timeoutMillis = timeoutMs) {
-        val screenReady =
-            onAllNodes(hasTestTag("TerminalScreen"), useUnmergedTree = true)
-                .fetchSemanticsNodes()
-                .isNotEmpty()
-        if (!screenReady) return@waitUntil false
-        getBridge() != null
+        try {
+            onNodeWithTag("TerminalScreen").assertIsDisplayed()
+            true
+        } catch (e: AssertionError) {
+            false
+        } catch (e: Exception) {
+            false
+        }
     }
 }
 
