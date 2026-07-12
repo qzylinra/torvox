@@ -223,6 +223,18 @@ enum Command {
     Terminate,
 }
 
+/// Non-blocking snapshot cache for the render hot path.
+/// Each frame the render thread checks for a pending response, then issues a
+/// new command. The returned snapshot is at most 1 frame behind, which is
+/// harmless for rendering (the surface diffs against `prev_cells`). Crucially
+/// the render thread never blocks on the VT thread while holding the session
+/// lock, so main-thread work (IME input, settings) is never stalled.
+struct SnapshotCache {
+    cached: GridSnapshot,
+    pending_rx: Option<Receiver<GridSnapshot>>,
+    initialized: bool,
+}
+
 struct RunConfig {
     command_receiver: Receiver<Command>,
     query_receiver: Receiver<Command>,
@@ -249,6 +261,7 @@ pub struct GhosttyTerminal {
     pty_write_responses: Arc<Mutex<Vec<Vec<u8>>>>,
     key_encode_rx: Receiver<Vec<u8>>,
     key_encode_tx_base: Sender<Vec<u8>>,
+    snapshot_cache: Mutex<SnapshotCache>,
     snapshot_rebuild_count: Arc<AtomicU64>,
 }
 
@@ -339,6 +352,11 @@ impl GhosttyTerminal {
             key_encode_rx,
             snapshot_rebuild_count,
             key_encode_tx_base,
+            snapshot_cache: Mutex::new(SnapshotCache {
+                cached: GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS),
+                pending_rx: None,
+                initialized: false,
+            }),
         })
     }
 
@@ -1067,6 +1085,47 @@ impl GhosttyTerminal {
                 GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS)
             }
         }
+    }
+
+    /// Non-blocking snapshot read for the **render hot path**.
+    ///
+    /// Returns `None` on the very first call (the cache is primed by issuing a
+    /// command, populated on the next call). Thereafter it returns the latest
+    /// available snapshot without ever blocking on the VT thread — so the
+    /// render thread can call this while holding the session lock without
+    /// stalling main-thread work (IME input, settings). The returned snapshot
+    /// is at most 1 frame behind, which is harmless because the surface diffs
+    /// against `prev_cells`.
+    pub fn try_take_snapshot_with_scroll(&self, scroll_offset: u32) -> Option<GridSnapshot> {
+        let mut cache = self.snapshot_cache.lock().expect("snapshot mutex");
+
+        // Collect any pending response from the previous command.
+        if let Some(rx) = &cache.pending_rx
+            && let Ok(snapshot) = rx.try_recv()
+        {
+            cache.cached = snapshot;
+        }
+
+        if !cache.initialized {
+            // First call: issue a command so the cache populates next frame,
+            // then return None (the surface skips this one frame).
+            let (tx, rx) = bounded(1);
+            let _ = self
+                .cmd_tx
+                .send(Command::TakeSnapshot { tx, scroll_offset });
+            cache.pending_rx = Some(rx);
+            cache.initialized = true;
+            return None;
+        }
+
+        // Issue a command for the next frame's snapshot.
+        let (tx, rx) = bounded(1);
+        let _ = self
+            .cmd_tx
+            .send(Command::TakeSnapshot { tx, scroll_offset });
+        cache.pending_rx = Some(rx);
+
+        Some(cache.cached.clone())
     }
 
     pub fn take_kgp_image(&self, image_id: u32) -> Option<KgpImageData> {

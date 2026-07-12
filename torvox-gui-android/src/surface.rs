@@ -612,7 +612,23 @@ impl AndroidSurface {
                 self.render_requested,
             );
 
-            snapshot = session.terminal().take_snapshot_with_scroll(scroll_offset);
+            // Non-blocking snapshot for the render hot path. This must NOT block
+            // on the VT thread while we hold the session lock — blocking here
+            // would stall main-thread work (IME input, settings). The returned
+            // snapshot is at most 1 frame behind, which the surface diffs
+            // against `prev_cells`. On the first call the cache is not yet
+            // primed, so skip this frame.
+            match session.terminal().try_take_snapshot_with_scroll(scroll_offset) {
+                Some(snap) => snapshot = snap,
+                None => {
+                    #[cfg(target_os = "android")]
+                    // SAFETY: Paired with the ATrace_beginSection at the top of render().
+                    unsafe {
+                        ATrace_endSection();
+                    } // AndroidSurface::render
+                    return Ok(false);
+                }
+            }
         }
 
         // Cursor visibility follows the terminal's DECTCEM state directly.
@@ -674,7 +690,7 @@ impl AndroidSurface {
             }
         } else {
             dirty_rows.resize(snapshot.rows as usize, true);
-        };
+        }
 
         // Force-dirty cursor row unconditionally so blink phase changes and
         // terminal DECTCEM state changes are always reflected on screen.
