@@ -28,14 +28,11 @@ vendor/
 # boltffi
 android/app/src/main/java/io/torvox/bridge/kotlin/
 
-# Golden images — banned. All test verification must use logical assertions
+# Golden images (*.png) — banned. All test verification must use logical assertions
 # (pixel values, OCR text output) instead of screenshot comparison.
 # See docs/standards/QUALITY-GATE.md for the full policy.
-torvox-renderer/screenshots/
-torvox-renderer/test-screenshots/
-torvox-renderer/test_data/gpu_headless_red_golden.png
-android/app/src/test/resources/roborazzi/
-tests/screenshots/
+# Suffix-only: already-tracked PNGs (app icons, logos) are unaffected.
+*.png
 
 # Font files — banned. Fonts SHALL be installed via Nix (flake.nix).
 # See docs/standards/QUALITY-GATE.md for the full policy.
