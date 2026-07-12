@@ -74,16 +74,17 @@ class BootstrapCompatibilityTest {
                 "export HOME=\$PREFIX/home" + "\n" +
                 "export SHELL=\$PREFIX/bin/bash" + "\n" +
                 "export TERM=vt100"
-            )
+        )
         testFile.writeText(env + "\n" + body + "\n")
         testFile.setExecutable(true)
         return testFile
     }
 
-    private fun runAs(cmd: String): String = exec(
-        "run-as com.termux /data/data/com.termux/files/usr/bin/bash " +
-            makeScript(cmd).absolutePath,
-    )
+    private fun runAs(cmd: String): String =
+        exec(
+            "run-as com.termux /data/data/com.termux/files/usr/bin/bash " +
+                makeScript(cmd).absolutePath,
+        )
 
     private fun runExit(cmd: String): Pair<String, Int> {
         val script = makeScript("($cmd)\necho EXITCODE=$?")
@@ -232,9 +233,11 @@ class BootstrapCompatibilityTest {
 
     @Test
     fun dpkg_query() {
-        val out = runAs("dpkg --query -L bash 2>&1")
+        val ensure = runAs("command -v dpkg || (apt update -qq && apt install -y -qq dpkg 2>&1)")
+        Log.i(TAG, "dpkg ensure: ${ensure.take(80)}")
+        val out = runAs("dpkg -L bash 2>&1")
         Assert.assertTrue(
-            "dpkg query for bash should list files",
+            "dpkg -L bash should list files",
             out.contains("bin/bash") || out.contains("/usr/bin/"),
         )
     }
@@ -257,9 +260,10 @@ class BootstrapCompatibilityTest {
     @Test
     fun bash_heredoc() {
         val script = makeScript("cat <<EOF\nhello\nworld\nEOF\n")
-        val out = exec(
-            "run-as com.termux /data/data/com.termux/files/usr/bin/bash " + script.absolutePath,
-        )
+        val out =
+            exec(
+                "run-as com.termux /data/data/com.termux/files/usr/bin/bash " + script.absolutePath,
+            )
         Assert.assertTrue("heredoc should contain hello", out.contains("hello"))
         Assert.assertTrue("heredoc should contain world", out.contains("world"))
     }

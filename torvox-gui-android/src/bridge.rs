@@ -1,6 +1,10 @@
-// @REQ_ANDR_001
-// @REQ_ANDR_002
-// @REQ_ANDR_003
+//! BoltFFI data bridge — single export location for Rust↔Kotlin bridge types.
+//!
+//! # Requirements
+//! - [FR-039](crate) — MCP: server lifecycle
+//! - [FR-049](crate) — Bridge: boltffi ↔ JNA wire format
+//! - [FR-050](crate) — Bridge: rkyv serialization
+
 const DEFAULT_GRID_ROWS: u32 = 24;
 const DEFAULT_GRID_COLS: u32 = 80;
 /// FFI-safe bridge type for a terminal cell.

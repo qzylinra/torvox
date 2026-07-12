@@ -322,8 +322,8 @@
           "session_id": { "type": "integer", "minimum": 0 },
           "signal": {
             "type": "string",
-            "enum": ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"],
-            "description": "Signal to send. Also accepts aliases: INT/TERM/HUP/QUIT, interrupt/terminate/hangup/quit"
+            "enum": ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "INT", "TERM", "HUP", "QUIT", "interrupt", "terminate", "hangup", "quit"],
+            "description": "Signal to send. Accepts full names (SIGINT, SIGTERM, SIGHUP, SIGQUIT), short aliases (INT, TERM, HUP, QUIT), or long aliases (interrupt, terminate, hangup, quit)"
           }
         },
         "required": ["session_id", "signal"],
@@ -377,9 +377,9 @@
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
           "pattern": { "type": "string", "description": "Text or regex pattern to search for" },
-          "max_matches": { "type": "integer", "minimum": 1, "maximum": 1000 }
+          "max_matches": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 50 }
         },
-        "required": ["session_id", "pattern", "max_matches"],
+        "required": ["session_id", "pattern"],
         "additionalProperties": false
       },
       "outputSchema": {
@@ -467,9 +467,9 @@
         "type": "object",
         "properties": {
           "path": { "type": "string", "description": "File or directory path" },
-          "max_lines": { "type": "integer", "minimum": 1, "maximum": 100000 }
+          "max_lines": { "type": "integer", "minimum": 1, "maximum": 100000, "default": 1000 }
         },
-        "required": ["path", "max_lines"],
+        "required": ["path"],
         "additionalProperties": false
       },
       "outputSchema": {
@@ -640,7 +640,7 @@
           "timeout_seconds": { "type": "integer", "minimum": 1, "description": "Timeout in seconds after which the queued input expires" },
           "submit_key": { "type": "string", "description": "Key sequence to send after the text (default: carriage return)", "default": "\r" }
         },
-        "required": ["session_id", "text", "prompt_pattern", "timeout_seconds"],
+        "required": ["session_id", "text", "prompt_pattern"],
         "additionalProperties": false
       },
       "outputSchema": {

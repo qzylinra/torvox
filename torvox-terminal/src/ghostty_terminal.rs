@@ -1,6 +1,7 @@
-// @REQ_TERM_004
-// @REQ_TERM_005
-// @REQ_TERM_006
+//! Ghostty VT engine wrapper — provides VT100/xterm emulation.
+//!
+//! # Requirements
+//! - [FR-020](crate) — Input: keyboard encoding (Kitty protocol)
 use std::sync::{Arc, Mutex};
 use std::thread;
 

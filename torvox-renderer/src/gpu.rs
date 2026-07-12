@@ -1,11 +1,14 @@
-// @REQ_REND_001
-// @REQ_REND_002
-// @REQ_REND_003
-// @REQ_REND_004
-// @REQ_REND_005
-// @REQ_REND_006
-// @REQ_REND_008
-// @REQ_SYS_003
+//! Wgpu GPU render pipeline — atlas, instance management, and surface rendering.
+//!
+//! # Requirements
+//! - [FR-012](crate) — Glyph: atlas allocation (guillotiere)
+//! - [FR-014](crate) — Render: threaded GPU with frame pacing
+//! - [FR-015](crate) — Font: size, family, ligatures
+//! - [FR-017](crate) — Configuration: hot-reload on SIGHUP
+//! - [FR-018](crate) — Surface: Android TextureView lifecycle
+//! - [FR-019](crate) — Render: 60 FPS on modern devices, 30 FPS on emulators
+//! - [NFR-022](crate) — Render: crash recovery
+
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use thiserror::Error;
@@ -2427,11 +2430,7 @@ pub fn build_cell_instances_from_snapshot(
 /// When alpha is < 128 (other match), only the background is tinted with
 /// the highlight color, leaving the foreground unchanged.
 #[inline]
-fn apply_search_highlight(
-    fg: &mut [f32; 4],
-    bg: &mut [f32; 4],
-    hl: [u8; 4],
-) {
+fn apply_search_highlight(fg: &mut [f32; 4], bg: &mut [f32; 4], hl: [u8; 4]) {
     if hl[3] >= 128 {
         std::mem::swap(fg, bg);
     }

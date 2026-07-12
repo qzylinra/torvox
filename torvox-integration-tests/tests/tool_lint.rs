@@ -248,6 +248,121 @@ fn doc_acceptance_links_to_srs() {
 }
 
 #[test]
+fn doc_module_has_requirements() {
+    let srs = srs_ids();
+    assert!(!srs.is_empty(), "no requirement IDs found in docs/srs.md");
+
+    // Use a BTreeMap to let us check both directions:
+    //   source → found IDs  (source has FR-xxx)
+    //   found ID → exists in SRS  (no orphan FR-xxx)
+    let mut source_to_ids: Vec<(String, Vec<String>)> = Vec::new();
+    let mut found_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+    let crates = [
+        "torvox-core/src",
+        "torvox-terminal/src",
+        "torvox-renderer/src",
+        "torvox-gui-android/src",
+        "torvox-mcp/src",
+    ];
+    let exempt_files: std::collections::BTreeSet<&str> = [
+        "lib.rs",
+        // Test/conformance modules — not production API
+        "test_helpers.rs",
+        "mock_pty.rs",
+        "mock_surface.rs",
+        "snapshot_test.rs",
+        "vt_conformance.rs",
+        "screenshot_tests.rs",
+        "action_parser.rs",
+        "cursor_cmds.rs",
+        "sgr_parser.rs",
+        // No FR mapping in SRS
+        "shell_env.rs",
+        // Thin CLI shim — module docs belong in lib.rs
+        "main.rs",
+    ]
+    .into();
+
+    let req_re = regex_lite::Regex::new(r"\b(FR-\d{3}|NFR-\d{3})\b").unwrap();
+    let doc_re = regex_lite::Regex::new(r"(?m)^//!").unwrap();
+
+    for crate_dir in &crates {
+        let dir = std::path::Path::new(WORKSPACE).join(crate_dir);
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                continue;
+            }
+            let basename = path.file_name().unwrap().to_str().unwrap().to_string();
+            if exempt_files.contains(basename.as_str()) {
+                continue;
+            }
+
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+
+            // Check that a module-level doc comment exists and contains a requirement ID
+            let has_doc_block = doc_re.is_match(&content);
+            let has_id = req_re.is_match(&content);
+
+            let rel_path = format!("{crate_dir}/{basename}");
+
+            if !has_doc_block {
+                panic!(
+                    "{} is missing a module-level `//!` doc comment. \
+                     Every public module must have `//!` docs with `# Requirements`.",
+                    rel_path
+                );
+            }
+            if !has_id {
+                panic!(
+                    "{} module doc is missing a FR-xxx or NFR-xxx requirement reference. \
+                     Add `//! # Requirements\\n//! - FR-XXX — description` to the module doc.",
+                    rel_path
+                );
+            }
+
+            // Collect all referenced requirement IDs
+            let ids: Vec<String> = req_re
+                .captures_iter(&content)
+                .map(|c| c[1].to_string())
+                .collect();
+            for id in &ids {
+                found_ids.insert(id.clone());
+            }
+            source_to_ids.push((rel_path, ids));
+        }
+    }
+
+    // Forward check: every FR-xxx/NFR-xxx referenced in source docs must exist in SRS
+    let mut orphan_ids: Vec<String> = Vec::new();
+    for id in &found_ids {
+        if !srs.contains(id.as_str()) {
+            orphan_ids.push(id.clone());
+        }
+    }
+    assert!(
+        orphan_ids.is_empty(),
+        "Source code references requirement IDs not defined in docs/srs.md:\n  {}",
+        orphan_ids.join("\n  ")
+    );
+
+    // Reverse check: every SRS ID should be referenced somewhere in source docs
+    // (not all IDs need to be — some are NFR/platform concerns — so this is a warning-only case)
+    // We do check that at least some IDs are tracked
+    assert!(
+        !source_to_ids.is_empty(),
+        "no source files with requirement IDs found"
+    );
+}
+
+#[test]
 fn cargo_llvm_cov_is_available() {
     let output = std::process::Command::new("cargo")
         .args(["llvm-cov", "--version"])

@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use flume::Sender;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use thiserror::Error;
 use torvox_core::cell::Cell;
 
@@ -779,7 +779,10 @@ impl McpServer {
                             "list_directory", "read_file",
                             "read_clipboard", "write_clipboard",
                             "raise_notification", "scroll_terminal",
-                            "feed_terminal_output"
+                            "feed_terminal_output",
+                            "queue_terminal_input",
+                            "list_queued_inputs",
+                            "cancel_queued_input"
                         ],
                         "rendering": "gpu-wgpu",
                         "font_system": "cosmic-text",
@@ -1968,12 +1971,10 @@ mod tests {
             id: json!(1),
         };
         let result = server.handle(&req).unwrap();
-        assert!(
-            result["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("50x120")
-        );
+        assert!(result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("50x120"));
     }
 
     #[test]
@@ -2065,12 +2066,10 @@ mod tests {
             id: json!(2),
         };
         let result = server.handle(&req_cancel).unwrap();
-        assert!(
-            result["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("Cancelled")
-        );
+        assert!(result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Cancelled"));
     }
 
     #[test]
