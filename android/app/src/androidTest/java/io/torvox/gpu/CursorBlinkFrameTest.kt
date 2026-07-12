@@ -1,10 +1,8 @@
-// TODO(migrate-v2-compose-rule): migrate to compose test v2 API (uses StandardTestDispatcher)
-@file:Suppress("DEPRECATION")
 
 package io.torvox.gpu
 
 import android.content.Context
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import io.torvox.MainActivity
 import io.torvox.decodeRgbaToPixels
 import io.torvox.getBridge

@@ -1,5 +1,4 @@
-// TODO(kotlin-2.4.0-false-positive)
-@file:Suppress("UNNECESSARY_NOT_NULL_ASSERTION")
+
 
 package io.torvox.gpu
 

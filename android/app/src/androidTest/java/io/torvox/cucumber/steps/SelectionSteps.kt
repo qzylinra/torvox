@@ -1,6 +1,3 @@
-// TODO(migrate-SHOW_IMPLICIT)
-@file:Suppress("DEPRECATION")
-
 package io.torvox.cucumber.steps
 
 import android.content.ClipData
@@ -180,7 +177,7 @@ constructor(
     fun userOpensIme() {
         composeRuleHolder.composeRule.activityRule.scenario.onActivity { activity ->
             val imm = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(activity.window.decorView.findFocus(), InputMethodManager.SHOW_IMPLICIT)
+            imm.showSoftInput(activity.window.decorView.findFocus(), 0)
         }
         composeRuleHolder.composeRule.waitForIdle()
     }

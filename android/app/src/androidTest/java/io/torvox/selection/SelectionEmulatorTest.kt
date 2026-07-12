@@ -1,6 +1,3 @@
-// TODO(migrate-AndroidJUnit4)
-@file:Suppress("DEPRECATION")
-
 package io.torvox.selection
 
 import android.graphics.Bitmap
@@ -8,8 +5,8 @@ import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.runner.AndroidJUnit4
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions

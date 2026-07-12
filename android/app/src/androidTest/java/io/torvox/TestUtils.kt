@@ -1,6 +1,3 @@
-// TODO(migrate-getRealMetrics)
-@file:Suppress("DEPRECATION")
-
 package io.torvox
 
 import android.app.Activity
@@ -71,16 +68,9 @@ fun AndroidComposeTestRule<*, *>.openSettings() {
 // ── GPU frame helpers ───────────────────────────────
 
 fun getDisplayWidth(): Int {
-    val metrics = android.util.DisplayMetrics()
     val context = InstrumentationRegistry.getInstrumentation().targetContext
-    val display =
-        context.getSystemService(android.content.Context.WINDOW_SERVICE)
-            as? android.view.WindowManager
-    display?.defaultDisplay?.getRealMetrics(metrics)
-    if (metrics.widthPixels <= 0) {
-        context.resources.displayMetrics.let { metrics.setTo(it) }
-    }
-    return metrics.widthPixels
+    val windowManager = context.getSystemService(android.view.WindowManager::class.java)
+    return windowManager.currentWindowMetrics.bounds.width()
 }
 
 fun decodeRgbaToPixels(file: File): PixelFrame {
