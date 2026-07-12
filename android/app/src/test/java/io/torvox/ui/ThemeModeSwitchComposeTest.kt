@@ -4,7 +4,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import com.github.takahirom.roborazzi.RoborazziRule
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.torvox.RobolectricActivityRule
@@ -34,14 +33,6 @@ class ThemeModeSwitchComposeTest {
         AndroidComposeTestRule(
             RobolectricActivityRule(TestActivity::class.java),
             activityProvider = { it.activity },
-        )
-
-    @get:Rule
-    val roborazziRule =
-        RoborazziRule(
-            RoborazziRule.Options(
-                outputDirectoryPath = "src/test/resources/roborazzi",
-            ),
         )
 
     @Test
@@ -131,26 +122,27 @@ class ThemeModeSwitchComposeTest {
     }
 
     @Test
-    fun terminalThemeResolvedCorrectlyForEachMode() = runTest {
-        val mockRepo = mockk<SettingsRepository>()
-        coEvery { mockRepo.themeMode } returns flowOf("follow_system")
-        coEvery { mockRepo.dayThemeName } returns flowOf("Catppuccin Latte")
-        coEvery { mockRepo.nightThemeName } returns flowOf("Dracula Plus")
-        coEvery { mockRepo.themeName } returns flowOf("Nord")
-        coEvery { mockRepo.appThemeMode } returns flowOf("follow_system")
+    fun terminalThemeResolvedCorrectlyForEachMode() =
+        runTest {
+            val mockRepo = mockk<SettingsRepository>()
+            coEvery { mockRepo.themeMode } returns flowOf("follow_system")
+            coEvery { mockRepo.dayThemeName } returns flowOf("Catppuccin Latte")
+            coEvery { mockRepo.nightThemeName } returns flowOf("Dracula Plus")
+            coEvery { mockRepo.themeName } returns flowOf("Nord")
+            coEvery { mockRepo.appThemeMode } returns flowOf("follow_system")
 
-        val runtime = TorvoxRuntime(RuntimeEnvironment.getApplication(), mockRepo)
+            val runtime = TorvoxRuntime(RuntimeEnvironment.getApplication(), mockRepo)
 
-        assertEquals("Catppuccin Latte", runtime.resolveThemeName())
+            assertEquals("Catppuccin Latte", runtime.resolveThemeName())
 
-        coEvery { mockRepo.appThemeMode } returns flowOf("day")
-        assertEquals("Catppuccin Latte", runtime.resolveThemeName())
+            coEvery { mockRepo.appThemeMode } returns flowOf("day")
+            assertEquals("Catppuccin Latte", runtime.resolveThemeName())
 
-        coEvery { mockRepo.appThemeMode } returns flowOf("night")
-        assertEquals("Dracula Plus", runtime.resolveThemeName())
+            coEvery { mockRepo.appThemeMode } returns flowOf("night")
+            assertEquals("Dracula Plus", runtime.resolveThemeName())
 
-        coEvery { mockRepo.appThemeMode } returns flowOf("follow_system")
-        coEvery { mockRepo.themeMode } returns flowOf("fixed")
-        assertEquals("Nord", runtime.resolveThemeName())
-    }
+            coEvery { mockRepo.appThemeMode } returns flowOf("follow_system")
+            coEvery { mockRepo.themeMode } returns flowOf("fixed")
+            assertEquals("Nord", runtime.resolveThemeName())
+        }
 }

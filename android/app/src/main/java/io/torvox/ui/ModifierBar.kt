@@ -280,7 +280,7 @@ private fun SelectionActionsBar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        for ((label, action) in actions) {
+        for ((label, action) in actionList) {
             ExtraKeyButton(
                 text = label,
                 onClick = action,

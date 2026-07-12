@@ -668,6 +668,23 @@ right-Alt mode via `TerminalConfig`.
 
 ---
 
+### FR-057: Golden Image Ban
+
+**Requirement**: The repository SHALL NOT contain golden images (reference PNG
+screenshots used for pixel-by-pixel comparison). All rendering verification
+SHALL use logical assertions (pixel-coordinate checks, OCR text detection)
+instead of image comparison.
+
+| # | Criterion | Verification |
+|---|-----------|-------------|
+| 1 | No `.png` files exist in `torvox-renderer/screenshots/` or `torvox-renderer/test-screenshots/` | `git ls-files 'torvox-renderer/screenshots/*.png' 'torvox-renderer/test-screenshots/*.png'` |
+| 2 | No `*_golden.png` files in test data | `git ls-files 'torvox-renderer/test_data/*_golden.png'` |
+| 3 | No golden images in roborazzi resources | `git ls-files 'android/app/src/test/resources/roborazzi/*.png'` |
+| 4 | All rendering tests use pixel-coordinate assertions or OCR text detection, not image comparison | Code review |
+| 5 | Golden image paths are in `.gitignore` | `.gitignore` contains the banned path patterns |
+
+---
+
 ## 11. Non-Functional: Safety
 
 ### NFR-001: Zero Unsafe in torvox-core
