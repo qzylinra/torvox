@@ -49,9 +49,31 @@ private data class SessionEntry(
     val savePath: String,
     @Volatile var blitCallback: (() -> Unit)? = null,
 ) {
-    @Volatile var dirtySignal: java.util.concurrent.CountDownLatch = java.util.concurrent.CountDownLatch(1)
+    // Reusable render-thread signaling primitive. Replaces the previous
+    // per-frame `CountDownLatch`, which had a lost-wakeup race: after
+    // `bridge.render()` the loop published a fresh latch and waited, but a
+    // producer `countDown()` on the stale latch during the render left the new
+    // latch unsignaled, so the thread waited the full timeout. A coalescing
+    // flag under a lock/condition avoids both the race and the per-frame
+    // allocation.
+    val renderLock =
+        java.util.concurrent.locks
+            .ReentrantLock()
+    val renderCondition = renderLock.newCondition()
+
+    @Volatile var renderSignaled: Boolean = false
 
     @Volatile var forceRenderRequested: Boolean = false
+
+    fun notifyRender() {
+        renderLock.lock()
+        try {
+            renderSignaled = true
+            renderCondition.signal()
+        } finally {
+            renderLock.unlock()
+        }
+    }
 
     @Volatile var scrollOffset: UInt = 0u
 }
@@ -130,7 +152,7 @@ constructor(
         // Signal the render thread (vsync-paced). The render loop already detects
         // scroll-offset changes and re-renders, so a synchronous GPU render here
         // would only block the calling thread (often the UI thread during scroll).
-        entry.dirtySignal.countDown()
+        entry.notifyRender()
     }
 
     fun getScrollOffset(): UInt = sessions[activeSessionId]?.scrollOffset ?: 0u
@@ -138,7 +160,7 @@ constructor(
     fun forceRender() {
         val entry = sessions[activeSessionId] ?: return
         entry.forceRenderRequested = true
-        entry.dirtySignal.countDown()
+        entry.notifyRender()
     }
 
     private fun sessionSavePath(id: Long): String {
@@ -775,7 +797,7 @@ constructor(
             entry.bridge?.setCursorBlinkEnabled(cursorBlinkEnabled)
             entry.bridge?.setCursorBlinkSpeedMs(cursorBlinkSpeedMs)
             entry.bridge?.resize(config.rows, config.cols)
-            entry.dirtySignal.countDown()
+            entry.notifyRender()
         }
     }
 
@@ -808,7 +830,7 @@ constructor(
         val entry = sessions[activeSessionId]
         if (entry != null && entry.running) {
             val written = entry.bridge?.writeToPty(data) ?: false
-            entry.dirtySignal.countDown()
+            entry.notifyRender()
             return written
         }
         LogUtil.w("TorvoxRuntime", "writeToPty: no active running session to receive write")
@@ -922,7 +944,7 @@ constructor(
         selectionState.set(SelectionStateSnapshot(startRow, startCol, endRow, endCol, hasSelection, mode))
         val entry = sessions[activeSessionId]
         entry?.bridge?.setSelection(startRow, startCol, endRow, endCol, hasSelection, mode)
-        entry?.dirtySignal?.countDown()
+        entry?.notifyRender()
     }
 
     fun expandAndSetSelection(
@@ -935,7 +957,7 @@ constructor(
         val bounds = entry.bridge?.expandAndSetSelection(row, col, mode) ?: return null
         val (start, end) = bounds
         selectionState.set(SelectionStateSnapshot(start.first, start.second, end.first, end.second, true, mode))
-        entry.dirtySignal.countDown()
+        entry.notifyRender()
         return bounds
     }
 
@@ -946,7 +968,7 @@ constructor(
         val entry = sessions[activeSessionId] ?: return
         entry.bridge?.resize(rows.toUInt(), cols.toUInt())
         _state.value = _state.value.copy(rows = rows, cols = cols)
-        entry.dirtySignal.countDown()
+        entry.notifyRender()
     }
 
     fun recomputeGrid(
@@ -1153,13 +1175,17 @@ constructor(
                                 LogUtil.d("TorvoxRuntime", "session ${entry.id} render alive: $diagCount")
                             }
                             if (!entry.forceRenderRequested) {
-                                val signal = java.util.concurrent.CountDownLatch(1)
-                                entry.dirtySignal = signal
+                                entry.renderLock.lock()
                                 try {
-                                    signal.await(RENDER_LATCH_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
-                                } catch (_: InterruptedException) {
-                                    Thread.currentThread().interrupt()
-                                    break
+                                    while (!entry.renderSignaled && !entry.forceRenderRequested) {
+                                        entry.renderCondition.await(
+                                            RENDER_LATCH_TIMEOUT_MS,
+                                            java.util.concurrent.TimeUnit.MILLISECONDS,
+                                        )
+                                    }
+                                    entry.renderSignaled = false
+                                } finally {
+                                    entry.renderLock.unlock()
                                 }
                             }
                             entry.forceRenderRequested = false
