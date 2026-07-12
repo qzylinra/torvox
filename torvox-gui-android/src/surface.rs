@@ -713,7 +713,21 @@ impl AndroidSurface {
             snapshot.cursor_visible = false;
         }
 
-        self.prev_cells.clone_from(&snapshot.cells);
+        // Partial clone: only copy rows that changed (dirty).
+        // Full clone is 1920 cells × Vec<String> → heap allocations.
+        // Partial: only N dirty rows × 80 cells per row.
+        if self.prev_cells.len() == total_cells && dirty_rows.iter().any(|&d| !d) {
+            let cols = snapshot.cols as usize;
+            for (row, is_dirty) in dirty_rows.iter().enumerate() {
+                if *is_dirty {
+                    let start = row * cols;
+                    let end = start + cols;
+                    self.prev_cells[start..end].clone_from_slice(&snapshot.cells[start..end]);
+                }
+            }
+        } else {
+            self.prev_cells.clone_from(&snapshot.cells);
+        }
 
         let mut row_ends = Vec::new();
         torvox_renderer::gpu::build_cell_instances_into(

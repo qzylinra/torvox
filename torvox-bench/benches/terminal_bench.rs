@@ -1,8 +1,8 @@
-use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
 use std::hint::black_box;
 use torvox_core::grid::Grid;
 use torvox_core::line::Line;
-use torvox_terminal::ghostty_terminal::GhosttyTerminal;
+use torvox_terminal::ghostty_terminal::{CellSnapshot, GhosttyTerminal};
 
 // ── B01-B09: Existing (preserved and enhanced) ────────────────────────
 
@@ -1004,7 +1004,7 @@ fn bench_sgr_parse_extended_color(c: &mut Criterion) {
 
 fn bench_sgr_apply(c: &mut Criterion) {
     use torvox_core::cell::Cell;
-    use torvox_core::sgr::{ColorSpec, SgrAttribute, UnderlineStyle, apply_sgr};
+    use torvox_core::sgr::{apply_sgr, ColorSpec, SgrAttribute, UnderlineStyle};
     c.bench_function("B57_sgr_apply_single_attr", |b| {
         b.iter_batched(
             || Cell::default(),
@@ -1033,6 +1033,47 @@ fn bench_sgr_apply(c: &mut Criterion) {
             BatchSize::SmallInput,
         );
     });
+}
+
+fn bench_prev_cells_clone(c: &mut Criterion) {
+    let cols = 80;
+    let rows = 24;
+    let total = cols * rows;
+    let cells: Vec<CellSnapshot> = vec![CellSnapshot::default(); total];
+
+    let mut group = c.benchmark_group("B28_prev_cells_clone");
+    group.throughput(Throughput::Elements(total as u64));
+
+    // Full clone: Clone all 1920 cells via clone_from
+    group.bench_function("full_clone_1920", |b| {
+        let mut prev = cells.clone();
+        b.iter(|| black_box(prev.clone_from(&cells)));
+    });
+
+    // Partial clone: 1 dirty row = 80 cells via clone_from_slice
+    group.bench_function("partial_1row_dirty", |b| {
+        let mut prev = cells.clone();
+        let start = 3 * cols;
+        let end = start + cols;
+        b.iter(|| {
+            prev[start..end].clone_from_slice(&cells[start..end]);
+            black_box(&prev);
+        });
+    });
+
+    // Partial clone: 10 dirty rows = 800 cells
+    group.bench_function("partial_10rows_dirty", |b| {
+        let mut prev = cells.clone();
+        let rows_10: Vec<(usize, usize)> = (0..10).map(|r| (r * cols, r * cols + cols)).collect();
+        b.iter(|| {
+            for &(start, end) in &rows_10 {
+                prev[start..end].clone_from_slice(&cells[start..end]);
+            }
+            black_box(&prev);
+        });
+    });
+
+    group.finish();
 }
 
 criterion_group!(
@@ -1083,6 +1124,7 @@ criterion_group!(
     bench_cpu_idle,
     bench_gpu_render_throughput,
     bench_cached_copy_vs_swap,
+    bench_prev_cells_clone,
 );
 
 criterion_group!(
