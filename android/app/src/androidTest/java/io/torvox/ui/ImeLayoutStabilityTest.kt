@@ -151,10 +151,9 @@ class ImeLayoutStabilityTest {
         return wm.currentWindowMetrics.bounds.height()
     }
 
-    private fun density(): Float =
-        InstrumentationRegistry
-            .getInstrumentation()
-            .targetContext.resources.displayMetrics.density
+    private fun density(): Float = InstrumentationRegistry
+        .getInstrumentation()
+        .targetContext.resources.displayMetrics.density
 
     private fun barBelowIme(
         tag: String,
