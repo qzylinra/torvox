@@ -1645,7 +1645,8 @@ fn xtwinops_11_report_window_state_detection() {
     t.flush();
     let responses = t.drain_pty_write_responses();
     if !responses.is_empty() {
-        let resp = String::from_utf8_lossy(responses.last().expect("expected at least one response"));
+        let resp =
+            String::from_utf8_lossy(responses.last().expect("expected at least one response"));
         assert!(
             resp.starts_with("\x1b["),
             "XTWINOPS 11: response starts with CSI"
@@ -2895,7 +2896,8 @@ fn dec_modes_exhaustive() {
         t.flush();
         let responses = t.drain_pty_write_responses();
         if !responses.is_empty() {
-            let resp = String::from_utf8_lossy(responses.last().expect("expected at least one response"));
+            let resp =
+                String::from_utf8_lossy(responses.last().expect("expected at least one response"));
             assert!(
                 resp.contains(&format!("{}", mode)),
                 "DECRQM mode {mode}: response contains mode"
@@ -2972,7 +2974,8 @@ fn osc_queries_exhaustive() {
         t.flush();
         let resp = t.drain_pty_write_responses();
         if !resp.is_empty() {
-            let text = String::from_utf8_lossy(resp.last().expect("expected at least one response"));
+            let text =
+                String::from_utf8_lossy(resp.last().expect("expected at least one response"));
             assert!(
                 text.contains(&format!("{}", q)),
                 "OSC {q} query: response mentions {q}"

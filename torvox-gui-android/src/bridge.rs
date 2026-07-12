@@ -2843,7 +2843,9 @@ pub unsafe extern "C" fn torvox_bridge_cwd(handle: i64) -> *mut std::ffi::c_char
     let cwd = if cwd.is_empty() { "unknown" } else { &cwd };
     match safe_cstring(cwd.to_string()) {
         Some(c_cwd) => c_cwd.into_raw(),
-        None => std::ffi::CString::new("unknown").expect("literal string has no null bytes").into_raw(),
+        None => std::ffi::CString::new("unknown")
+            .expect("literal string has no null bytes")
+            .into_raw(),
     }
 }
 
