@@ -70,7 +70,7 @@ requirements:
     description: "The system SHALL support 16 ANSI color palette indices plus 256-color and truecolor (24-bit RGB) foreground/background specifications."
     design:
       - "docs/architecture.md#2.2-torvox-core"
-      - "torvox-core/src/color.rs"
+      - "torvox-core/src/cell.rs"
     api: []
     tests:
       - "torvox-core/tests/terminal_colors.rs"
@@ -262,7 +262,7 @@ requirements:
     description: "The system SHALL encode physical keyboard input using the Kitty Keyboard Protocol (KBP) for extended modifier and key reporting."
     design:
       - "docs/architecture.md#2.3-torvox-terminal"
-      - "torvox-terminal/src/keyboard.rs"
+      - "torvox-terminal/src/ghostty_terminal.rs"
       - "docs/architecture.md#3.2-input-path"
     api: []
     tests:
@@ -312,7 +312,6 @@ requirements:
       - "torvox-gui-android/src/surface.rs"
     api: []
     tests:
-      - "android/app/src/androidTest/java/io/torvox/ui/TouchGestureInstrumentedTest.kt"
       - "android/app/src/test/java/io/torvox/ui/TouchGestureTest.kt"
       - "android/app/src/test/java/io/torvox/ui/GestureInteractionTest.kt"
     verification: "cd android && ./gradlew testDebugUnitTest"
@@ -429,7 +428,8 @@ requirements:
     design:
       - "docs/architecture.md#2.3-torvox-terminal"
       - "torvox-terminal/src/osc_handler.rs"
-    api: []
+    api:
+      - "mcp-tool: scroll_terminal"
     tests:
       - "torvox-terminal/tests/osc52.rs"
       - "fuzz/fuzz_targets/fuzz_osc_handler.rs"
@@ -441,7 +441,8 @@ requirements:
     design:
       - "docs/architecture.md#2.3-torvox-terminal"
       - "torvox-terminal/src/osc_handler.rs"
-    api: []
+    api:
+      - "mcp-tool: read_clipboard"
     tests:
       - "torvox-terminal/tests/osc52.rs"
       - "fuzz/fuzz_targets/fuzz_osc_handler.rs"
@@ -473,7 +474,9 @@ requirements:
     design:
       - "docs/architecture.md#2.3-torvox-terminal"
       - "torvox-terminal/src/osc_handler.rs"
-    api: []
+    api:
+      - "mcp-tool: list_directory"
+      - "mcp-tool: read_file"
     tests:
       - "fuzz/fuzz_targets/fuzz_osc_parse.rs"
     verification: "cargo test --package torvox-terminal"
@@ -483,7 +486,9 @@ requirements:
     design:
       - "docs/architecture.md#2.3-torvox-terminal"
       - "torvox-terminal/src/osc_handler.rs"
-    api: []
+    api:
+      - "mcp-tool: list_directory"
+      - "mcp-tool: read_file"
     tests:
       - "fuzz/fuzz_targets/fuzz_osc_handler.rs"
       - "fuzz/fuzz_targets/fuzz_osc_parse.rs"
@@ -500,7 +505,8 @@ requirements:
       - "docs/architecture.md#2.5-torvox-gui-android"
       - "torvox-terminal/src/session.rs"
       - "torvox-gui-android/src/bridge.rs"
-    api: []
+    api:
+      - "mcp-tool: get_app_info"
     tests:
       - "torvox-terminal/tests/bridge_roundtrip.rs"
       - "torvox-gui-android/tests/bridge_integration.rs"
@@ -521,7 +527,8 @@ requirements:
     design:
       - "docs/architecture.md#2.3-torvox-terminal"
       - "torvox-terminal/src/osc_handler.rs"
-    api: []
+    api:
+      - "mcp-tool: raise_notification"
     tests: []
     verification: "cargo test --package torvox-terminal"
 
@@ -610,8 +617,7 @@ requirements:
       - "docs/architecture.md#2.6-torvox-mcp"
       - "torvox-mcp/src/lib.rs"
     api:
-      - "mcp-tool: input_queue"
-      - "mcp-tool: watch_prompt"
+      - "mcp-tool: queue_terminal_input"
     tests:
       - "torvox-mcp/src/lib.rs"
     verification: "cargo test --package torvox-mcp"
@@ -655,7 +661,10 @@ requirements:
     design:
       - "docs/architecture.md#2.5-torvox-gui-android"
       - "torvox-gui-android/src/jni_bridge.rs"
-    api: []
+    api:
+      - "mcp-tool: feed_terminal_output"
+      - "mcp-tool: list_queued_inputs"
+      - "mcp-tool: cancel_queued_input"
     tests:
       - "torvox-gui-android/tests/ffi_contract_tests.rs"
     verification: "cargo test --package torvox-gui-android"
