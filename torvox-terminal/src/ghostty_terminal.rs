@@ -408,21 +408,8 @@ impl GhosttyTerminal {
                 }
             }
             Command::ScrollbackLength(tx) => {
-                let len = match terminal.scrollback_rows() {
-                    Ok(count) => {
-                        log::debug!("ghostty_terminal: scrollback_rows = {count}");
-                        count as u32
-                    }
-                    Err(e) => {
-                        log::error!("ghostty_terminal: scrollback_rows failed: {e:?}");
-                        let total = terminal.total_rows().ok();
-                        let visible = terminal.rows().ok();
-                        log::error!(
-                            "ghostty_terminal: total_rows={total:?} rows={visible:?}",
-                        );
-                        0_u32
-                    }
-                };
+                let len = terminal.scrollback_rows().unwrap_or(0) as u32;
+                log::debug!("ghostty_terminal: scrollback_rows query returned {len}");
                 if let Err(error) = tx.send(len) {
                     log::error!("ghostty_terminal: query channel send failed: {error}");
                 }

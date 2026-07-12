@@ -1598,12 +1598,14 @@ impl TorvoxBridge {
         Ok(())
     }
 
-    pub fn set_cursor_visible(&self, visible: bool) -> Result<(), TerminalError> {
+    pub fn set_cursor_visible(&self, _visible: bool) -> Result<(), TerminalError> {
+        #[allow(deprecated)]
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
         if let Some(surface) = surface_guard.as_mut() {
-            surface.set_cursor_visible(visible);
+            #[allow(deprecated)]
+            surface.set_cursor_visible(true);
         }
         Ok(())
     }

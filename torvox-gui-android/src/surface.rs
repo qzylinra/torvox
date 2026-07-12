@@ -688,7 +688,7 @@ impl AndroidSurface {
             snapshot.cursor_visible = false;
         }
 
-        self.prev_cells = snapshot.cells.clone();
+        self.prev_cells.clone_from(&snapshot.cells);
 
         let mut row_ends = Vec::new();
         torvox_renderer::gpu::build_cell_instances_into(
