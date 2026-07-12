@@ -112,10 +112,23 @@ fn doc_srs_requirement_format() {
     let srs_path = std::path::Path::new(WORKSPACE).join("docs/srs.md");
     let content = std::fs::read_to_string(&srs_path)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", srs_path.display()));
-    // Extract all FR-xxx / NFR-xxx IDs from the document
-    let re = regex_lite::Regex::new(r"(?m)^(?:\|?\s*)?(FR-\d{3}|NFR-\d{3})\b").unwrap();
+
+    // Only check the requirement tables (Sections 3 and 4), not the
+    // verification matrix appendix (Section 5.E) which lists IDs again.
+    let appendix_line = content
+        .lines()
+        .position(|l| l.starts_with("## 5. Appendix"))
+        .unwrap_or(content.lines().count());
+
+    // Extract all FR-xxx / NFR-xxx IDs from the requirement table lines.
+    // Match lines that start with `|` (Markdown table rows) and contain
+    // a requirement ID as the first column value.
+    let re = regex_lite::Regex::new(r"(?m)^\|\s*(FR-\d{3}|NFR-\d{3})\s+\|").unwrap();
     let mut ids: Vec<(usize, String)> = Vec::new();
     for (lineno, line) in content.lines().enumerate() {
+        if lineno >= appendix_line {
+            break;
+        }
         for cap in re.captures_iter(line) {
             ids.push((lineno + 1, cap[1].to_string()));
         }
@@ -146,7 +159,7 @@ fn doc_srs_requirement_format() {
     }
     assert!(
         dupes.is_empty(),
-        "duplicate requirement IDs found in docs/srs.md:\n{}",
+        "duplicate requirement IDs found in docs/srs.md requirement tables:\n{}",
         dupes.join("\n")
     );
 }
@@ -229,10 +242,10 @@ fn doc_acceptance_links_to_srs() {
     );
 
     // Reverse: check that every SRS ID has a matching acceptance section
-    let srs_re = regex_lite::Regex::new(r"(?m)^## FR-\d{3}|^## NFR-\d{3}").unwrap();
+    let srs_re = regex_lite::Regex::new(r"(?m)^### FR-\d{3}|^### NFR-\d{3}").unwrap();
     let acceptance_sections: std::collections::BTreeSet<String> = srs_re
         .captures_iter(&content)
-        .map(|c| c[0].trim_start_matches("## ").to_string())
+        .map(|c| c[0].trim_start_matches('#').trim().to_string())
         .collect();
 
     let missing_from_acceptance: Vec<&str> = srs
