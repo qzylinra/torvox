@@ -278,6 +278,8 @@ impl AndroidSurface {
         self.native_window = std::ptr::NonNull::new(window_ptr).map(NativeWindow);
         self.surface_width.store(width, Ordering::Relaxed);
         self.surface_height.store(height, Ordering::Relaxed);
+        self.render_width = width;
+        self.render_height = height;
         // Set ANativeWindow buffer format for wgpu swapchain.
         // Must use RGBA_8888 (format=1).
         #[cfg(target_os = "android")]
