@@ -371,10 +371,23 @@ fun TerminalScreen(
                         },
                         update = { surface ->
                             surface.touchEnabled = !isOverlayVisible
-                            if (runtimeState.rows > 0 && runtimeState.cols > 0) {
+                            // Only re-layout when the terminal grid dimensions
+                            // actually change (resize / font change). The
+                            // AndroidView update block runs on every
+                            // recomposition of TerminalScreen, so an
+                            // unconditional requestLayout() here forced a
+                            // full View layout pass on every selection drag
+                            // and scroll event — a key source of UI jank.
+                            if (runtimeState.rows > 0 &&
+                                runtimeState.cols > 0 &&
+                                (
+                                    surface.getRows() != runtimeState.rows ||
+                                        surface.getCols() != runtimeState.cols
+                                    )
+                            ) {
                                 surface.setDimensions(runtimeState.rows, runtimeState.cols)
+                                surface.requestLayout()
                             }
-                            surface.requestLayout()
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
