@@ -32,6 +32,7 @@ android/app/src/main/java/io/torvox/bridge/kotlin/
 # (pixel values, OCR text output) instead of screenshot comparison.
 # See docs/standards/QUALITY-GATE.md for the full policy.
 # Suffix-only: already-tracked files are unaffected.
+*.mp4
 *.png
 *.raw
 
