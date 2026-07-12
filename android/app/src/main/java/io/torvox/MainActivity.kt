@@ -47,6 +47,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.math.roundToInt
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -245,6 +246,38 @@ class MainActivity : ComponentActivity() {
                 val col = intent.getIntExtra("col", 0)
                 viewModel.showPastePopup(row, col)
                 Log.d("Torvox", "showPaste: row=$row col=$col")
+            }
+        }
+
+    private val cursorDebugReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                try {
+                    if (intent.getBooleanExtra("enabled", true)) {
+                        val bridge = torvoxRuntime.bridge()
+                        if (bridge != null) {
+                            bridge.setCursorBlinkEnabled(intent.getBooleanExtra("enabled", true))
+                            bridge.setCursorBlinkSpeedMs(intent.getIntExtra("speed_ms", 530))
+                            if (intent.getBooleanExtra("reset", false)) {
+                                bridge.resetCursorBlink()
+                            }
+                            Log.d(
+                                TAG,
+                                "cursorDebug: blink=${intent.getBooleanExtra(
+                                    "enabled",
+                                    true,
+                                )} speed=${intent.getIntExtra("speed_ms", 530)}",
+                            )
+                        } else {
+                            Log.w(TAG, "cursorDebug: bridge null")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "cursorDebug error: ${e.message}")
+                }
             }
         }
 
