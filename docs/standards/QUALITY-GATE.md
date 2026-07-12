@@ -130,3 +130,19 @@ and cannot be audited for correctness during code review.
 - All rendering tests must use either OCR verification (`rapidocr`) or
   pixel-coordinate assertions.
 - Any committed golden image will be rejected by code review (SRS FR-057).
+
+## Font File Ban Policy (FR-057)
+
+Font files (`.ttf`, `.otf`, `.woff`, `.woff2`, `.eot`) are **strictly banned**
+from this repository. Reason: fonts SHALL be installed via Nix (`flake.nix`),
+not bundled as binary blobs in git.
+
+- ✅ **Allowed**: Font references in `flake.nix` and Nix shell
+- ❌ **Banned**: Any `.ttf`, `.otf`, `.woff`, `.woff2`, or `.eot` file in any
+  directory of the repository
+
+### Enforcement
+
+- `*.ttf`, `*.otf`, `*.woff`, `*.woff2`, `*.eot` are in `.gitignore`.
+- CI has no local font file dependency — all fonts come from the Nix store.
+- Any committed font file will be rejected by code review (SRS FR-057).

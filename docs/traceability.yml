@@ -727,13 +727,14 @@ requirements:
     verification: "cargo test --package torvox-core"
 
   FR-057:
-    description: "The repository SHALL NOT contain golden images. All rendering verification SHALL use logical assertions (pixel-coordinate checks, OCR text detection) instead of image comparison."
+    description: "The repository SHALL NOT contain golden images or font file blobs. All rendering verification SHALL use logical assertions (pixel-coordinate checks, OCR text detection, Nix font paths) instead of image comparison or bundled binaries."
     design:
       - "docs/standards/QUALITY-GATE.md#golden-image-ban-policy"
+      - "docs/standards/QUALITY-GATE.md#font-file-ban-policy"
     api: []
     tests:
       - "tool_lint"  # git ls-files checks in CI
-    verification: "git ls-files 'torvox-renderer/screenshots/*.png' 'torvox-renderer/test-screenshots/*.png' 'torvox-renderer/test_data/*_golden.png' 'android/app/src/test/resources/roborazzi/*.png' | wc -l"
+    verification: "git ls-files 'torvox-renderer/screenshots/*.png' 'torvox-renderer/test-screenshots/*.png' 'torvox-renderer/test_data/*_golden.png' 'android/app/src/test/resources/roborazzi/*.png' '*.ttf' '*.otf' '*.woff' '*.woff2' '*.eot' | wc -l"
 
   # ==========================================================================
   # 4.1 Safety (NFR-001 — NFR-005)
