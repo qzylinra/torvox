@@ -35,6 +35,7 @@ torvox-renderer/screenshots/
 torvox-renderer/test-screenshots/
 torvox-renderer/test_data/gpu_headless_red_golden.png
 android/app/src/test/resources/roborazzi/
+tests/screenshots/
 
 # Font files — banned. Fonts SHALL be installed via Nix (flake.nix).
 # See docs/standards/QUALITY-GATE.md for the full policy.
