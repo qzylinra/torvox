@@ -145,6 +145,12 @@ pub struct AndroidSurface {
     /// Cumulative end offset per row in `cached_instances`.
     /// `cached_row_ends[row]` = exclusive end index of row `row`.
     cached_row_ends: Vec<usize>,
+    /// Reused scratch buffer for per-frame dirty-row tracking. Avoids a
+    /// `Vec<bool>` allocation on every render (mirrors `instance_buffer`
+    /// reuse for the zero-alloc hot path).
+    dirty_rows_buf: Vec<bool>,
+    /// Reused scratch buffer for per-frame row-end offsets.
+    row_ends_buf: Vec<usize>,
     /// Scroll offset used in the previous frame. When it changes, all rows
     /// are marked dirty because the grid cells shift.
     prev_scroll_offset: u32,
@@ -255,6 +261,8 @@ impl AndroidSurface {
             prev_cells: Vec::new(),
             cached_instances: Vec::new(),
             cached_row_ends: Vec::new(),
+            dirty_rows_buf: Vec::new(),
+            row_ends_buf: Vec::new(),
             prev_scroll_offset: 0,
             prev_render_height: 0,
         }
@@ -645,9 +653,11 @@ impl AndroidSurface {
         // ── COMPUTE DIRTY ROWS ──
         // Diff current vs previous snapshot cells to find changed rows.
         let total_cells = (snapshot.rows * snapshot.cols) as usize;
-        let mut dirty_rows: Vec<bool> = if self.prev_cells.len() == total_cells {
+        let mut dirty_rows = std::mem::take(&mut self.dirty_rows_buf);
+        dirty_rows.clear();
+        if self.prev_cells.len() == total_cells {
             let cap = snapshot.rows as usize;
-            let mut dr = Vec::with_capacity(cap);
+            dirty_rows.reserve(cap);
             for row in 0..snapshot.rows as usize {
                 let row_off = row * snapshot.cols as usize;
                 let mut row_dirty = false;
@@ -660,11 +670,10 @@ impl AndroidSurface {
                         break;
                     }
                 }
-                dr.push(row_dirty);
+                dirty_rows.push(row_dirty);
             }
-            dr
         } else {
-            vec![true; snapshot.rows as usize]
+            dirty_rows.resize(snapshot.rows as usize, true);
         };
 
         // Force-dirty cursor row unconditionally so blink phase changes and
@@ -729,7 +738,8 @@ impl AndroidSurface {
             self.prev_cells.clone_from(&snapshot.cells);
         }
 
-        let mut row_ends = Vec::new();
+        let mut row_ends = std::mem::take(&mut self.row_ends_buf);
+        row_ends.clear();
         torvox_renderer::gpu::build_cell_instances_into(
             &snapshot,
             &mut self.font_pipeline,
@@ -749,6 +759,8 @@ impl AndroidSurface {
             &mut self.instance_buffer,
             &mut row_ends,
         );
+        // Return the dirty-row scratch buffer for reuse next frame.
+        self.dirty_rows_buf = dirty_rows;
 
         let instances = &self.instance_buffer[..];
         let gen_after = self.font_pipeline.atlas_generation();
