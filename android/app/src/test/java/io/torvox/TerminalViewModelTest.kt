@@ -200,6 +200,9 @@ class TerminalViewModelThemeTest {
         coEvery { settingsRepository.setNightThemeName(any()) } returns Unit
         coEvery { settingsRepository.setThemeMode(any()) } returns Unit
         coEvery { settingsRepository.setAppThemeMode(any()) } returns Unit
+        coEvery { settingsRepository.setCursorBlink(any()) } returns Unit
+        coEvery { settingsRepository.setCursorStyle(any()) } returns Unit
+        coEvery { settingsRepository.setCursorSpeed(any()) } returns Unit
         coEvery { runtime.applySettings() } returns Unit
         viewModel =
             TerminalViewModel(
