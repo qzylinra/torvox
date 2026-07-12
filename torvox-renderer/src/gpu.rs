@@ -1014,14 +1014,14 @@ impl GpuContext {
     }
 
     fn select_present_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::PresentMode {
-        if caps.present_modes.contains(&wgpu::PresentMode::Immediate) {
-            wgpu::PresentMode::Immediate
-        } else if caps.present_modes.contains(&wgpu::PresentMode::AutoNoVsync) {
-            wgpu::PresentMode::AutoNoVsync
-        } else if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
+        if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
             wgpu::PresentMode::Mailbox
-        } else {
+        } else if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
             wgpu::PresentMode::Fifo
+        } else if caps.present_modes.contains(&wgpu::PresentMode::AutoVsync) {
+            wgpu::PresentMode::AutoVsync
+        } else {
+            wgpu::PresentMode::Immediate
         }
     }
 
