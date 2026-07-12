@@ -34,7 +34,7 @@ use std::sync::Arc;
 
 use flume::Sender;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use thiserror::Error;
 use torvox_core::cell::Cell;
 
@@ -1971,10 +1971,12 @@ mod tests {
             id: json!(1),
         };
         let result = server.handle(&req).unwrap();
-        assert!(result["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("50x120"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("50x120")
+        );
     }
 
     #[test]
@@ -2066,10 +2068,12 @@ mod tests {
             id: json!(2),
         };
         let result = server.handle(&req_cancel).unwrap();
-        assert!(result["content"][0]["text"]
-            .as_str()
-            .unwrap()
-            .contains("Cancelled"));
+        assert!(
+            result["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Cancelled")
+        );
     }
 
     #[test]
