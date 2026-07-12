@@ -115,12 +115,12 @@
     {
       "name": "list_sessions",
       "description": "List all active terminal sessions",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {},
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -142,7 +142,7 @@
     {
       "name": "read_grid",
       "description": "Read current grid state of a session (rows × cols cells)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 }
@@ -150,7 +150,7 @@
         "required": ["session_id"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -169,7 +169,7 @@
     {
       "name": "read_scrollback",
       "description": "Read last N lines of scrollback",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -178,7 +178,7 @@
         "required": ["session_id", "max_lines"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -201,7 +201,7 @@
     {
       "name": "read_cursor",
       "description": "Read cursor position (row, col) and visibility",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 }
@@ -209,7 +209,7 @@
         "required": ["session_id"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -228,7 +228,7 @@
     {
       "name": "read_selection",
       "description": "Read currently selected text (if any)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 }
@@ -236,7 +236,7 @@
         "required": ["session_id"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -261,7 +261,7 @@
     {
       "name": "read_title",
       "description": "Read the session title (from OSC 0/2)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 }
@@ -269,7 +269,7 @@
         "required": ["session_id"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -288,7 +288,7 @@
     {
       "name": "send_input",
       "description": "Write text to PTY (requires --mcp-allow-write consent)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -297,7 +297,7 @@
         "required": ["session_id", "data"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -316,7 +316,7 @@
     {
       "name": "send_signal",
       "description": "Send signal to child process (SIGINT/SIGTERM/SIGHUP/SIGQUIT). Requires --mcp-allow-write consent.",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -329,7 +329,7 @@
         "required": ["session_id", "signal"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -348,12 +348,12 @@
     {
       "name": "get_app_info",
       "description": "Get app version and capabilities",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {},
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -372,7 +372,7 @@
     {
       "name": "scrollback_search",
       "description": "Search scrollback buffer for a text pattern (regex)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -382,7 +382,7 @@
         "required": ["session_id", "pattern", "max_matches"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -404,7 +404,7 @@
     {
       "name": "set_terminal_size",
       "description": "Resize terminal to specified rows and cols (requires write consent)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -414,7 +414,7 @@
         "required": ["session_id", "rows", "cols"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -433,7 +433,7 @@
     {
       "name": "list_directory",
       "description": "List files in a local directory",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "path": { "type": "string", "description": "File or directory path" }
@@ -441,7 +441,7 @@
         "required": ["path"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -463,7 +463,7 @@
     {
       "name": "read_file",
       "description": "Read contents of a local file (text, limited lines)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "path": { "type": "string", "description": "File or directory path" },
@@ -472,7 +472,7 @@
         "required": ["path", "max_lines"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -491,12 +491,12 @@
     {
       "name": "read_clipboard",
       "description": "Read current clipboard content",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {},
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -515,7 +515,7 @@
     {
       "name": "write_clipboard",
       "description": "Write text to clipboard (requires write consent)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "text": { "type": "string", "description": "Text to write to clipboard" }
@@ -523,7 +523,7 @@
         "required": ["text"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -542,7 +542,7 @@
     {
       "name": "raise_notification",
       "description": "Show an Android notification (requires write consent)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "title": { "type": "string", "description": "Notification title" },
@@ -551,7 +551,7 @@
         "required": ["title", "body"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -570,7 +570,7 @@
     {
       "name": "scroll_terminal",
       "description": "Scroll terminal viewport by N lines (negative=up, positive=down). Returns new scroll offset",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -579,7 +579,7 @@
         "required": ["session_id", "lines"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -603,7 +603,7 @@
     {
       "name": "feed_terminal_output",
       "description": "Inject text into terminal as if the child process produced it (requires write consent)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -612,7 +612,7 @@
         "required": ["session_id", "text"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -631,7 +631,7 @@
     {
       "name": "queue_terminal_input",
       "description": "Queue text to be typed when a prompt pattern appears in scrollback (AI agent automation)",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "session_id": { "type": "integer", "minimum": 0 },
@@ -643,7 +643,7 @@
         "required": ["session_id", "text", "prompt_pattern", "timeout_seconds"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -662,12 +662,12 @@
     {
       "name": "list_queued_inputs",
       "description": "List all pending queued inputs",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {},
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
@@ -689,7 +689,7 @@
     {
       "name": "cancel_queued_input",
       "description": "Cancel a pending queued input by its entry_id",
-      "input": {
+      "inputSchema": {
         "type": "object",
         "properties": {
           "entry_id": { "type": "string", "description": "Unique identifier of the queued input to cancel" }
@@ -697,7 +697,7 @@
         "required": ["entry_id"],
         "additionalProperties": false
       },
-      "output": {
+      "outputSchema": {
         "type": "object",
         "properties": {
           "content": {
