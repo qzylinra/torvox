@@ -2980,6 +2980,52 @@ mod tests {
         assert!((proj[1][1] + 2.0 / 600.0).abs() < f32::EPSILON);
     }
 
+    /// Locks the vsync fix (#1): present mode must prefer a vsync-capable mode
+    /// (Mailbox/Fifo/AutoVsync) over `Immediate`, which disables vsync and lets
+    /// the render thread flood the GPU with unthrottled frames (the original
+    /// Android lag root cause).
+    #[test]
+    fn select_present_mode_prefers_vsync() {
+        let base = wgpu::SurfaceCapabilities {
+            formats: vec![wgpu::TextureFormat::Rgba8Unorm],
+            present_modes: vec![wgpu::PresentMode::Immediate],
+            alpha_modes: vec![wgpu::CompositeAlphaMode::Opaque],
+            usages: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        };
+
+        // Mailbox available -> Mailbox (vsync + drop oldest). Never Immediate.
+        let mut caps = base.clone();
+        caps.present_modes = vec![
+            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::Mailbox,
+            wgpu::PresentMode::Fifo,
+        ];
+        assert_eq!(
+            GpuContext::select_present_mode(&caps),
+            wgpu::PresentMode::Mailbox,
+            "Mailbox (vsync) must win over Immediate"
+        );
+
+        // No Mailbox -> Fifo (vsync).
+        let mut caps = base.clone();
+        caps.present_modes = vec![wgpu::PresentMode::Immediate, wgpu::PresentMode::Fifo];
+        assert_eq!(GpuContext::select_present_mode(&caps), wgpu::PresentMode::Fifo);
+
+        // No Mailbox/Fifo -> AutoVsync (still vsync).
+        let mut caps = base.clone();
+        caps.present_modes = vec![wgpu::PresentMode::Immediate, wgpu::PresentMode::AutoVsync];
+        assert_eq!(
+            GpuContext::select_present_mode(&caps),
+            wgpu::PresentMode::AutoVsync
+        );
+
+        // Only Immediate -> Immediate (last resort; the lag mode we fixed away).
+        assert_eq!(
+            GpuContext::select_present_mode(&base),
+            wgpu::PresentMode::Immediate
+        );
+    }
+
     #[test]
     fn cell_instance_buffer_layout() {
         let layout = CellInstance::buffer_layout();

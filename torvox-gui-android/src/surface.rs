@@ -902,6 +902,15 @@ impl AndroidSurface {
         self.last_cursor_row = snapshot.cursor_row;
         self.last_cursor_col = snapshot.cursor_col;
 
+        // CPU-side render work ends here (snapshot + dirty diff + instance
+        // build + atlas upload). The GPU `render_frame` call below also performs
+        // the swapchain `present`, which BLOCKS until the next vsync (≈16.6ms on
+        // a 60Hz display with Mailbox). That wait is the display refresh, not our
+        // cost — so it must NOT count toward RENDER_SLOW, or every vsync-paced
+        // frame would falsely report as slow.
+        let cpu_work_end = Instant::now();
+        let cpu_ms = cpu_work_end.duration_since(frame_start).as_secs_f64() * 1000.0;
+
         // Desktop: direct wgpu swapchain presentation.
         #[cfg(not(target_os = "android"))]
         {
@@ -989,11 +998,19 @@ impl AndroidSurface {
         }
 
         let elapsed = frame_start.elapsed();
-        let ms = elapsed.as_secs_f64() * 1000.0;
-        if ms >= FRAME_TIME_TARGET_MS {
-            log::warn!("RENDER_SLOW: {:.1}ms (≥16ms target)", ms);
+        let present_ms = elapsed.as_secs_f64() * 1000.0 - cpu_ms;
+        // RENDER_SLOW reflects only the CPU-side render cost (snapshot + diff +
+        // build + submit). The present/vsync wait is the display refresh and is
+        // logged at trace level, never as a warning — otherwise every vsync-paced
+        // frame (≈16.6ms present on 60Hz) would spuriously warn.
+        if cpu_ms >= FRAME_TIME_TARGET_MS {
+            log::warn!(
+                "RENDER_SLOW: cpu={:.1}ms present={:.1}ms (cpu ≥16ms target)",
+                cpu_ms,
+                present_ms
+            );
         } else {
-            log::trace!("RENDER_OK: {:.1}ms", ms);
+            log::trace!("RENDER_OK: cpu={:.1}ms present={:.1}ms", cpu_ms, present_ms);
         }
 
         // Swap caches for next frame — eliminates ~800KB memcpy/frame
