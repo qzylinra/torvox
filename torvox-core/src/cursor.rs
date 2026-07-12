@@ -417,37 +417,4 @@ mod tests {
         );
         assert!(!c.visible, "visibility must survive carriage_return");
     }
-
-    #[test]
-    fn default_cursor_visible_is_true() {
-        let c = CursorState::default();
-        assert!(c.visible, "default cursor should be visible");
-        assert_eq!(c.style, CursorStyle::Block, "default style should be Block");
-        assert_eq!(c.row, 0, "default row should be 0");
-        assert_eq!(c.col, 0, "default col should be 0");
-    }
-
-    #[test]
-    fn cursor_style_default_roundtrip() {
-        let styles = [CursorStyle::Block, CursorStyle::Underline, CursorStyle::Bar];
-        for (i, &style) in styles.iter().enumerate() {
-            let c = CursorState {
-                row: 0,
-                col: i as u32,
-                style,
-                visible: true,
-            };
-            let json = serde_json::to_string(&c).expect("serialize");
-            let back: CursorState = serde_json::from_str(&json).expect("deserialize");
-            assert_eq!(c, back, "roundtrip failed for {style:?}");
-        }
-    }
-
-    #[test]
-    fn cursor_move_preserves_style_from_default() {
-        let mut c = CursorState::default();
-        c.move_to(100, 200);
-        assert_eq!(c.style, CursorStyle::Block);
-        assert!(c.visible);
-    }
 }

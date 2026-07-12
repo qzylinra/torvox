@@ -621,9 +621,13 @@ impl GhosttyTerminal {
                 }
                 Command::ReadVisibleText(tx) => {
                     let rows = terminal.rows().unwrap_or(24) as u32;
+                    let scrollback_rows = terminal.scrollback_rows().unwrap_or(0) as u32;
                     let mut text = String::new();
                     for row in 0..rows {
-                        if let Some(line) = Self::read_line_text_impl(&terminal, row) {
+                        // read_line_text_impl expects an absolute row (history + viewport).
+                        if let Some(line) =
+                            Self::read_line_text_impl(&terminal, scrollback_rows + row)
+                        {
                             text.push_str(&line);
                             text.push('\n');
                         }
