@@ -523,6 +523,15 @@ impl GhosttyTerminal {
         ));
 
         let query_receiver = config.query_receiver;
+
+        // Cache the last built grid snapshot so we skip the expensive
+        // per-cell ghostty FFI rebuild when neither the grid content nor the
+        // scroll offset changed since the previous frame. The VT thread is
+        // single-threaded and processes commands sequentially, so there is no
+        // race between marking `grid_dirty` and rebuilding.
+        let mut cached_snapshot: Option<GridSnapshot> = None;
+        let mut cached_scroll_offset: u32 = u32::MAX;
+        let mut grid_dirty = true;
         loop {
             // Wait for the next command from the bounded channel. Use a
             // timeout so we periodically check the query channel even when
@@ -546,7 +555,10 @@ impl GhosttyTerminal {
             // theme change, font change) take effect before queries check the
             // updated terminal state.
             match command {
-                Command::Write(data) => terminal.vt_write(&data),
+                Command::Write(data) => {
+                    terminal.vt_write(&data);
+                    grid_dirty = true;
+                }
                 Command::FlushAck(tx) => {
                     if let Err(error) = tx.send(()) {
                         log::error!("ghostty_terminal: command channel send failed: {error}");
@@ -585,6 +597,7 @@ impl GhosttyTerminal {
                         );
                         terminal.vt_write(osc4.as_bytes());
                     }
+                    grid_dirty = true;
                 }
                 Command::Resize { rows, cols } => {
                     if let Err(error) = terminal.resize(
@@ -595,15 +608,31 @@ impl GhosttyTerminal {
                     ) {
                         log::error!("ghostty_terminal: resize failed: {error}");
                     }
+                    grid_dirty = true;
                 }
                 Command::TakeSnapshot { tx, scroll_offset } => {
-                    let snapshot = Self::build_snapshot(
-                        &terminal,
-                        default_fg,
-                        default_bg,
-                        &config.ansi_colors,
-                        scroll_offset,
-                    );
+                    let needs_rebuild = grid_dirty
+                        || scroll_offset != cached_scroll_offset
+                        || cached_snapshot.is_none();
+                    let snapshot = if needs_rebuild {
+                        let snap = Self::build_snapshot(
+                            &terminal,
+                            default_fg,
+                            default_bg,
+                            &config.ansi_colors,
+                            scroll_offset,
+                        );
+                        cached_snapshot = Some(snap.clone());
+                        cached_scroll_offset = scroll_offset;
+                        grid_dirty = false;
+                        snap
+                    } else {
+                        // INVARIANT: when `needs_rebuild` is false, `cached_snapshot`
+                        // is always `Some` (the third clause above guarantees it).
+                        cached_snapshot
+                            .clone()
+                            .expect("cached_snapshot present when not rebuilding")
+                    };
                     if let Err(error) = tx.send(snapshot) {
                         log::error!("ghostty_terminal: command channel send failed: {error}");
                     }
