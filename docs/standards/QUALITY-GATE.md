@@ -129,4 +129,4 @@ and cannot be audited for correctness during code review.
 - CI has no golden-image-comparison step.
 - All rendering tests must use either OCR verification (`rapidocr`) or
   pixel-coordinate assertions.
-- Any committed golden image will be rejected by code review (SRS FR-080).
+- Any committed golden image will be rejected by code review (SRS FR-057).
