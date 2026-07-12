@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 use torvox_core::grid::Grid;
 use torvox_core::line::Line;
@@ -1004,7 +1004,7 @@ fn bench_sgr_parse_extended_color(c: &mut Criterion) {
 
 fn bench_sgr_apply(c: &mut Criterion) {
     use torvox_core::cell::Cell;
-    use torvox_core::sgr::{apply_sgr, ColorSpec, SgrAttribute, UnderlineStyle};
+    use torvox_core::sgr::{ColorSpec, SgrAttribute, UnderlineStyle, apply_sgr};
     c.bench_function("B57_sgr_apply_single_attr", |b| {
         b.iter_batched(
             || Cell::default(),

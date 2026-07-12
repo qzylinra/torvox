@@ -1011,7 +1011,10 @@ impl GhosttyTerminal {
 
         // Initialize cache with first snapshot and pre-issue next command.
         let (tx2, rx2) = bounded(1);
-        let _ = self.cmd_tx.send(Command::TakeSnapshot { tx: tx2, scroll_offset });
+        let _ = self.cmd_tx.send(Command::TakeSnapshot {
+            tx: tx2,
+            scroll_offset,
+        });
         let mut cache = self.snapshot_cache.lock().expect("snapshot mutex");
         cache.cached = snapshot.clone();
         cache.pending_rx = Some(rx2);
@@ -1041,7 +1044,9 @@ impl GhosttyTerminal {
 
         // Issue command for next frame's snapshot
         let (tx, rx) = bounded(1);
-        let _ = self.cmd_tx.send(Command::TakeSnapshot { tx, scroll_offset });
+        let _ = self
+            .cmd_tx
+            .send(Command::TakeSnapshot { tx, scroll_offset });
         cache.pending_rx = Some(rx);
 
         Some(cache.cached.clone())

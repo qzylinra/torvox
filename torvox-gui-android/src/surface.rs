@@ -541,8 +541,7 @@ impl AndroidSurface {
     }
 
     fn blink_timer_elapsed(&self) -> bool {
-        self.blink_enabled
-            && self.last_blink_toggle.elapsed() >= self.blink_period()
+        self.blink_enabled && self.last_blink_toggle.elapsed() >= self.blink_period()
     }
 
     /// Returns `true` if new PTY data arrived and was rendered, `false` if idle.
@@ -1804,8 +1803,14 @@ mod tests {
         assert!(surface.blink_enabled, "blink should default to true");
         surface.set_blink_enabled(false);
         assert!(!surface.blink_enabled, "blink should be disabled");
-        assert!(surface.render_requested(), "set_blink_enabled should request render");
-        assert!(surface.blink_phase, "blink_phase should be true when blink disabled");
+        assert!(
+            surface.render_requested(),
+            "set_blink_enabled should request render"
+        );
+        assert!(
+            surface.blink_phase,
+            "blink_phase should be true when blink disabled"
+        );
     }
 
     #[test]
@@ -1815,7 +1820,10 @@ mod tests {
         surface.blink_phase = false;
         surface.set_blink_enabled(true);
         assert!(surface.blink_enabled, "blink should be enabled");
-        assert!(surface.render_requested(), "set_blink_enabled should request render");
+        assert!(
+            surface.render_requested(),
+            "set_blink_enabled should request render"
+        );
         // blink_phase should remain false when enabling (not reset)
         // (reset_blink is the explicit method for that)
     }
@@ -1823,24 +1831,36 @@ mod tests {
     #[test]
     fn set_blink_speed_ms_stores_value() {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
-        assert_eq!(surface.blink_speed_ms, 530, "default blink speed should be 530");
+        assert_eq!(
+            surface.blink_speed_ms, 530,
+            "default blink speed should be 530"
+        );
         surface.set_blink_speed_ms(750);
         assert_eq!(surface.blink_speed_ms, 750, "blink speed should be 750");
-        assert!(surface.render_requested(), "set_blink_speed_ms should request render");
+        assert!(
+            surface.render_requested(),
+            "set_blink_speed_ms should request render"
+        );
     }
 
     #[test]
     fn set_blink_speed_ms_clamps_low() {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
         surface.set_blink_speed_ms(25);
-        assert_eq!(surface.blink_speed_ms, 100, "blink speed should clamp to 100 minimum");
+        assert_eq!(
+            surface.blink_speed_ms, 100,
+            "blink speed should clamp to 100 minimum"
+        );
     }
 
     #[test]
     fn set_blink_speed_ms_clamps_high() {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
         surface.set_blink_speed_ms(9999);
-        assert_eq!(surface.blink_speed_ms, 1000, "blink speed should clamp to 1000 maximum");
+        assert_eq!(
+            surface.blink_speed_ms, 1000,
+            "blink speed should clamp to 1000 maximum"
+        );
     }
 
     #[test]
@@ -1848,35 +1868,53 @@ mod tests {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
         surface.blink_phase = false;
         surface.reset_blink();
-        assert!(surface.blink_phase, "reset_blink should set blink_phase to true");
-        assert!(surface.render_requested(), "reset_blink should request render");
+        assert!(
+            surface.blink_phase,
+            "reset_blink should set blink_phase to true"
+        );
+        assert!(
+            surface.render_requested(),
+            "reset_blink should request render"
+        );
     }
 
     #[test]
     fn blink_period_default_530ms() {
         let surface = AndroidSurface::new(24, 80, 1000, 14.0);
-        assert_eq!(surface.blink_period(), std::time::Duration::from_millis(530));
+        assert_eq!(
+            surface.blink_period(),
+            std::time::Duration::from_millis(530)
+        );
     }
 
     #[test]
     fn blink_period_custom_speed() {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
         surface.blink_speed_ms = 300;
-        assert_eq!(surface.blink_period(), std::time::Duration::from_millis(300));
+        assert_eq!(
+            surface.blink_period(),
+            std::time::Duration::from_millis(300)
+        );
     }
 
     #[test]
     fn blink_timer_elapsed_initially_false() {
         let surface = AndroidSurface::new(24, 80, 1000, 14.0);
         // Immediately after construction, last_blink_toggle = now → not elapsed
-        assert!(!surface.blink_timer_elapsed(), "blink timer should not be elapsed immediately");
+        assert!(
+            !surface.blink_timer_elapsed(),
+            "blink timer should not be elapsed immediately"
+        );
     }
 
     #[test]
     fn blink_timer_not_elapsed_when_disabled() {
         let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
         surface.blink_enabled = false;
-        assert!(!surface.blink_timer_elapsed(), "blink timer should not be elapsed when disabled");
+        assert!(
+            !surface.blink_timer_elapsed(),
+            "blink timer should not be elapsed when disabled"
+        );
     }
 
     #[test]
@@ -1886,6 +1924,9 @@ mod tests {
         surface.last_blink_toggle = std::time::Instant::now()
             .checked_sub(std::time::Duration::from_millis(20))
             .unwrap();
-        assert!(surface.blink_timer_elapsed(), "blink timer should be elapsed after 20ms with 10ms period");
+        assert!(
+            surface.blink_timer_elapsed(),
+            "blink timer should be elapsed after 20ms with 10ms period"
+        );
     }
 }

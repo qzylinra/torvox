@@ -3140,8 +3140,9 @@ pub unsafe extern "C" fn torvox_bridge_clear_background_image(handle: i64) {
 /// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn torvox_bridge_set_cursor_blink_enabled(handle: i64, enabled: i32) {
-    if let Err(error) = with_bridge(handle, |bridge| bridge.set_cursor_blink_enabled(enabled != 0))
-    {
+    if let Err(error) = with_bridge(handle, |bridge| {
+        bridge.set_cursor_blink_enabled(enabled != 0)
+    }) {
         log::error!("bridge: torvox_bridge_set_cursor_blink_enabled failed: {error}");
     }
 }
@@ -3150,9 +3151,9 @@ pub unsafe extern "C" fn torvox_bridge_set_cursor_blink_enabled(handle: i64, ena
 /// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn torvox_bridge_set_cursor_blink_speed_ms(handle: i64, speed_ms: i32) {
-    if let Err(error) =
-        with_bridge(handle, |bridge| bridge.set_cursor_blink_speed_ms(speed_ms as u32))
-    {
+    if let Err(error) = with_bridge(handle, |bridge| {
+        bridge.set_cursor_blink_speed_ms(speed_ms as u32)
+    }) {
         log::error!("bridge: torvox_bridge_set_cursor_blink_speed_ms failed: {error}");
     }
 }
