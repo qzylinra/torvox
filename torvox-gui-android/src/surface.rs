@@ -618,7 +618,10 @@ impl AndroidSurface {
             // snapshot is at most 1 frame behind, which the surface diffs
             // against `prev_cells`. On the first call the cache is not yet
             // primed, so skip this frame.
-            match session.terminal().try_take_snapshot_with_scroll(scroll_offset) {
+            match session
+                .terminal()
+                .try_take_snapshot_with_scroll(scroll_offset)
+            {
                 Some(snap) => snapshot = snap,
                 None => {
                     #[cfg(target_os = "android")]
