@@ -102,14 +102,14 @@ Every `cargo geiger --package torvox-core` run must report zero unsafe blocks.
 This ensures the data model cannot introduce memory corruption.
 
 **Requirement trace:**
-- `cell.rs` — @REQ_CORE_001
-- `grid.rs` — @REQ_CORE_002
-- `terminal.rs` — @REQ_CORE_003
-- `event.rs` — @REQ_CORE_004
-- `snapshot.rs` — @REQ_CORE_005
-- `config.rs` — @REQ_CORE_006
-- `cursor.rs` — @REQ_CORE_007
-- `selection.rs` — @REQ_CORE_008
+- `cell.rs` — `FR-005`
+- `grid.rs` — `FR-006`
+- `terminal.rs` — `FR-003`
+- `event.rs` — `FR-004`
+- `snapshot.rs` — `FR-042`
+- `config.rs` — `FR-052`
+- `cursor.rs` — `FR-007`
+- `selection.rs` — `FR-008`
 
 ---
 
@@ -142,8 +142,8 @@ This crate owns PTY lifecycle, VT parsing, and session orchestration.
 - `reader_handle` / `wait_handle` — spawned thread join handles
 
 **Requirement trace:**
-- `session.rs` — @REQ_TERM_001, @REQ_TERM_002
-- `ghostty_terminal.rs` — @REQ_TERM_004, @REQ_TERM_005, @REQ_TERM_006
+- `session.rs` — `FR-010`, `FR-041`
+- `ghostty_terminal.rs` — `FR-002`, `FR-033`
 
 **Design decision — Ghostty VT parser** (FR-001): Using the vendored Ghostty VT
 parser instead of a custom one avoids reimplementing decades of VT
@@ -219,8 +219,8 @@ GPU emulation. This avoids maintaining multiple rendering backends and ensures
 consistent behavior across targets.
 
 **Requirement trace:**
-- `gpu.rs` — @REQ_REND_001–006, @REQ_REND_008, @REQ_SYS_003
-- `font.rs` — @REQ_REND_007
+- `gpu.rs` — `FR-001`, `FR-015`, `FR-019`
+- `font.rs` — `FR-015`
 
 ---
 
@@ -282,8 +282,8 @@ boltffi wire format is position-sensitive with no length prefix or checksum,
 so field order and count must match exactly (lesson from memory-bank #01).
 
 **Requirement trace:**
-- `bridge.rs` — @REQ_ANDR_001, @REQ_ANDR_002, @REQ_ANDR_003
-- `surface.rs` — @REQ_ANDR_004, @REQ_ANDR_005, @REQ_ANDR_006
+- `bridge.rs` — `FR-042`, `FR-043`, `FR-044`
+- `surface.rs` — `FR-044`
 
 ---
 
