@@ -223,16 +223,6 @@ enum Command {
     Terminate,
 }
 
-/// Fast snapshot cache for non-blocking reads.
-/// Each frame the render thread checks for a pending response, then issues
-/// a new command. Snapshot is at most 1 frame behind, but the render thread
-/// never blocks on the VT thread.
-struct SnapshotCache {
-    cached: GridSnapshot,
-    pending_rx: Option<Receiver<GridSnapshot>>,
-    initialized: bool,
-}
-
 struct RunConfig {
     command_receiver: Receiver<Command>,
     query_receiver: Receiver<Command>,
@@ -259,7 +249,6 @@ pub struct GhosttyTerminal {
     pty_write_responses: Arc<Mutex<Vec<Vec<u8>>>>,
     key_encode_rx: Receiver<Vec<u8>>,
     key_encode_tx_base: Sender<Vec<u8>>,
-    snapshot_cache: Mutex<SnapshotCache>,
     snapshot_rebuild_count: Arc<AtomicU64>,
 }
 
@@ -350,11 +339,6 @@ impl GhosttyTerminal {
             key_encode_rx,
             snapshot_rebuild_count,
             key_encode_tx_base,
-            snapshot_cache: Mutex::new(SnapshotCache {
-                cached: GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS),
-                pending_rx: None,
-                initialized: false,
-            }),
         })
     }
 
@@ -1060,70 +1044,29 @@ impl GhosttyTerminal {
         self.snapshot_rebuild_count.load(Ordering::Relaxed)
     }
 
+    /// Returns a **fresh** grid snapshot for the current terminal state.
+    ///
+    /// This always blocks until the VT thread has processed the request, so
+    /// callers observe the latest grid content (never a stale cached frame).
+    /// The VT thread rebuilds the snapshot only when the grid or scroll offset
+    /// actually changed (see `snapshot_needs_rebuild`), so the blocking cost is
+    /// a single channel round-trip and is cheap when the grid is unchanged.
     pub fn take_snapshot_with_scroll(&self, scroll_offset: u32) -> GridSnapshot {
-        // Fast path: try non-blocking snapshot from cache (steady state).
-        // Only fails if cache not yet initialized (first call).
-        if let Some(snapshot) = self.try_take_snapshot_with_scroll(scroll_offset) {
-            return snapshot;
-        }
-
-        // Slow path: block until VT thread responds (first call only).
         let (tx, rx) = bounded(1);
         if let Err(error) = self
             .cmd_tx
             .send(Command::TakeSnapshot { tx, scroll_offset })
         {
             log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+            return GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS);
         }
-        let snapshot = match rx.recv_timeout(std::time::Duration::from_millis(QUERY_TIMEOUT_MS)) {
+        match rx.recv_timeout(std::time::Duration::from_millis(QUERY_TIMEOUT_MS)) {
             Ok(snapshot) => snapshot,
             Err(_) => {
                 log::warn!("ghostty_terminal: take_snapshot_with_scroll timed out");
-                return GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS);
-            }
-        };
-
-        // Initialize cache with first snapshot and pre-issue next command.
-        let (tx2, rx2) = bounded(1);
-        let _ = self.cmd_tx.send(Command::TakeSnapshot {
-            tx: tx2,
-            scroll_offset,
-        });
-        let mut cache = self.snapshot_cache.lock().expect("snapshot mutex");
-        cache.cached = snapshot.clone();
-        cache.pending_rx = Some(rx2);
-        cache.initialized = true;
-
-        snapshot
-    }
-
-    /// Non-blocking snapshot read.
-    /// Returns the cached snapshot (at most 1 frame stale) if the cache is
-    /// initialized. On each call, collects any pending response from the VT
-    /// thread, then issues a new command for the next frame.
-    /// Returns `None` on first call (cache not yet initialized).
-    pub fn try_take_snapshot_with_scroll(&self, scroll_offset: u32) -> Option<GridSnapshot> {
-        let mut cache = self.snapshot_cache.lock().expect("snapshot mutex");
-
-        // Collect pending response from previous command
-        if let Some(rx) = &cache.pending_rx {
-            if let Ok(snapshot) = rx.try_recv() {
-                cache.cached = snapshot;
+                GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS)
             }
         }
-
-        if !cache.initialized {
-            return None;
-        }
-
-        // Issue command for next frame's snapshot
-        let (tx, rx) = bounded(1);
-        let _ = self
-            .cmd_tx
-            .send(Command::TakeSnapshot { tx, scroll_offset });
-        cache.pending_rx = Some(rx);
-
-        Some(cache.cached.clone())
     }
 
     pub fn take_kgp_image(&self, image_id: u32) -> Option<KgpImageData> {
