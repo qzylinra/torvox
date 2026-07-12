@@ -1598,14 +1598,32 @@ impl TorvoxBridge {
         Ok(())
     }
 
-    pub fn set_cursor_visible(&self, _visible: bool) -> Result<(), TerminalError> {
-        #[allow(deprecated)]
+    pub fn set_cursor_blink_enabled(&self, enabled: bool) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
         if let Some(surface) = surface_guard.as_mut() {
-            #[allow(deprecated)]
-            surface.set_cursor_visible(true);
+            surface.set_blink_enabled(enabled);
+        }
+        Ok(())
+    }
+
+    pub fn set_cursor_blink_speed_ms(&self, speed_ms: u32) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.set_blink_speed_ms(speed_ms);
+        }
+        Ok(())
+    }
+
+    pub fn reset_cursor_blink(&self) -> Result<(), TerminalError> {
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            surface.reset_blink();
         }
         Ok(())
     }
@@ -3121,9 +3139,30 @@ pub unsafe extern "C" fn torvox_bridge_clear_background_image(handle: i64) {
 /// # Safety
 /// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn torvox_bridge_set_cursor_visible(handle: i64, visible: i32) {
-    if let Err(error) = with_bridge(handle, |bridge| bridge.set_cursor_visible(visible != 0)) {
-        log::error!("bridge: torvox_bridge_set_cursor_visible failed: {error}");
+pub unsafe extern "C" fn torvox_bridge_set_cursor_blink_enabled(handle: i64, enabled: i32) {
+    if let Err(error) = with_bridge(handle, |bridge| bridge.set_cursor_blink_enabled(enabled != 0))
+    {
+        log::error!("bridge: torvox_bridge_set_cursor_blink_enabled failed: {error}");
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_cursor_blink_speed_ms(handle: i64, speed_ms: i32) {
+    if let Err(error) =
+        with_bridge(handle, |bridge| bridge.set_cursor_blink_speed_ms(speed_ms as u32))
+    {
+        log::error!("bridge: torvox_bridge_set_cursor_blink_speed_ms failed: {error}");
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_reset_cursor_blink(handle: i64) {
+    if let Err(error) = with_bridge(handle, |bridge| bridge.reset_cursor_blink()) {
+        log::error!("bridge: torvox_bridge_reset_cursor_blink failed: {error}");
     }
 }
 

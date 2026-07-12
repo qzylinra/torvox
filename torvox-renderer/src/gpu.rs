@@ -4520,5 +4520,196 @@ mod tests {
         );
     }
 
+    // ── Cursor shape tests ──
+
+    #[test]
+    fn cursor_block_full_cell_size() {
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let (cell_w, cell_h) = font_pipeline.cell_metrics();
+        let cells = vec![CellSnapshot {
+            codepoint: 0x20,
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_style: torvox_core::cursor::CursorStyle::Block,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 768.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
+                cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        assert_eq!(
+            cell.quad_size[0], cell_w,
+            "Block cursor width should equal cell width"
+        );
+        assert_eq!(
+            cell.quad_size[1], cell_h,
+            "Block cursor height should equal cell height"
+        );
+    }
+
+    #[test]
+    fn cursor_bar_width_ratio() {
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let (cell_w, cell_h) = font_pipeline.cell_metrics();
+        let cells = vec![CellSnapshot {
+            codepoint: 0x20,
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_style: torvox_core::cursor::CursorStyle::Bar,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 768.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
+                cursor_style: torvox_core::cursor::CursorStyle::Bar,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        let expected_w = cell_w * 0.15;
+        assert!(
+            (cell.quad_size[0] - expected_w).abs() < 0.01,
+            "Bar cursor width should be {expected_w}, got {}",
+            cell.quad_size[0]
+        );
+        assert_eq!(
+            cell.quad_size[1], cell_h,
+            "Bar cursor height should equal cell height"
+        );
+    }
+
+    #[test]
+    fn cursor_underline_height_ratio() {
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let (cell_w, cell_h) = font_pipeline.cell_metrics();
+        let cells = vec![CellSnapshot {
+            codepoint: 0x20,
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_style: torvox_core::cursor::CursorStyle::Underline,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 768.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
+                cursor_style: torvox_core::cursor::CursorStyle::Underline,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        let expected_h = cell_h * 0.15;
+        assert!(
+            (cell.quad_size[1] - expected_h).abs() < 0.01,
+            "Underline cursor height should be {expected_h}, got {}",
+            cell.quad_size[1]
+        );
+        assert_eq!(
+            cell.quad_size[0], cell_w,
+            "Underline cursor width should equal cell width"
+        );
+    }
+
+    #[test]
+    fn cursor_not_rendered_when_visible_false() {
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let cells = vec![CellSnapshot {
+            codepoint: 0x20,
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: false,
+            cursor_style: torvox_core::cursor::CursorStyle::Block,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 768.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
+                cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        // Non-cursor blank cell uses default background, not cursor color
+        assert_ne!(
+            cell.bg_color,
+            [1.0, 1.0, 1.0, 0.7],
+            "cursor cell should not have block alpha bg when cursor_visible=false"
+        );
+    }
+
     include!("screenshot_tests.rs");
 }

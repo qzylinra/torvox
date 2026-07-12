@@ -126,6 +126,8 @@ pub struct AndroidSurface {
     last_cursor_col: u32,
     cursor_style: torvox_core::cursor::CursorStyle,
     blink_phase: bool,
+    blink_enabled: bool,
+    blink_speed_ms: u32,
     last_blink_toggle: std::time::Instant,
     render_requested: bool,
     /// Persistent instance buffer reused across frames so the per-frame cell
@@ -239,6 +241,8 @@ impl AndroidSurface {
             last_cursor_row: 0,
             last_cursor_col: 0,
             blink_phase: true,
+            blink_enabled: true,
+            blink_speed_ms: 530,
             last_blink_toggle: std::time::Instant::now(),
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             render_requested: false,
@@ -526,6 +530,15 @@ impl AndroidSurface {
         Ok(())
     }
 
+    fn blink_period(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(self.blink_speed_ms as u64)
+    }
+
+    fn blink_timer_elapsed(&self) -> bool {
+        self.blink_enabled
+            && self.last_blink_toggle.elapsed() >= self.blink_period()
+    }
+
     /// Returns `true` if new PTY data arrived and was rendered, `false` if idle.
     pub fn render(&mut self, scroll_offset: u32) -> Result<bool, SurfaceError> {
         let frame_start = Instant::now();
@@ -568,6 +581,7 @@ impl AndroidSurface {
                 && self.frame_count > 0
                 && !has_search_highlights
                 && !self.render_requested
+                && !self.blink_timer_elapsed()
             {
                 #[cfg(target_os = "android")]
                 // SAFETY: Paired with the ATrace_beginSection at the top of render().
@@ -673,18 +687,19 @@ impl AndroidSurface {
             dirty_rows.fill(true);
         }
 
-        // Cursor blink phase toggle at ~530 ms interval.
-        // The Kotlin blink timer guarantees a render is requested at blink period,
-        // so this runs at roughly the configured cursor blink rate.
-        const BLINK_PERIOD: std::time::Duration = std::time::Duration::from_millis(530);
+        // Cursor blink phase toggle at the configured interval.
+        // blink_timer_elapsed() also gates the early-return above so idle
+        // terminals still re-render when blink phase changes.
         let now = std::time::Instant::now();
-        if now - self.last_blink_toggle >= BLINK_PERIOD {
+        if self.blink_timer_elapsed() {
             self.blink_phase = !self.blink_phase;
             self.last_blink_toggle = now;
         }
 
         // Hide cursor during blink-off phase (applied on top of DECTCEM state).
-        if !self.blink_phase && snapshot.cursor_visible {
+        // When blink is disabled, blink_phase stays true and the cursor
+        // follows DECTCEM visibility directly.
+        if self.blink_enabled && !self.blink_phase && snapshot.cursor_visible {
             snapshot.cursor_visible = false;
         }
 
@@ -1493,11 +1508,23 @@ impl AndroidSurface {
         self.render_requested = true;
     }
 
-    #[deprecated(
-        note = "cursor visibility follows terminal DECTCEM state; blink is handled in render() via blink_phase"
-    )]
-    pub fn set_cursor_visible(&mut self, _visible: bool) {
-        log::warn!("surface: set_cursor_visible is deprecated and has no effect");
+    pub fn set_blink_enabled(&mut self, enabled: bool) {
+        self.blink_enabled = enabled;
+        if !enabled {
+            self.blink_phase = true;
+        }
+        self.render_requested = true;
+    }
+
+    pub fn set_blink_speed_ms(&mut self, speed_ms: u32) {
+        self.blink_speed_ms = speed_ms.clamp(100, 1000);
+        self.render_requested = true;
+    }
+
+    pub fn reset_blink(&mut self) {
+        self.blink_phase = true;
+        self.last_blink_toggle = std::time::Instant::now();
+        self.render_requested = true;
     }
 
     pub fn set_cursor_style(&mut self, style: torvox_core::cursor::CursorStyle) {
