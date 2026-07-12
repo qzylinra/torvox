@@ -1,3 +1,6 @@
+// TODO(migrate-v2-compose-rule): migrate to compose test v2 API (uses StandardTestDispatcher)
+@file:Suppress("DEPRECATION")
+
 package io.torvox.gpu
 
 import android.content.Context
@@ -39,7 +42,8 @@ class CursorBlinkFrameTest {
         Assert.assertNotNull("No frame files written", files)
         Assert.assertTrue("Need at least 2 frame files", files != null && files.size >= 2)
 
-        val sorted = files.sortedBy { it.lastModified() }
+        val nonNullFiles: Array<java.io.File> = files ?: error("No frame files written")
+        val sorted = nonNullFiles.sortedBy { it.lastModified() }
         val frame1 = decodeRgbaToPixels(sorted[sorted.size - 2])
         val frame2 = decodeRgbaToPixels(sorted.last())
 

@@ -173,6 +173,12 @@ dependencies {
     androidTestImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.68.0")
 }
 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+}
+
 val workingDirForCargo = rootProject.projectDir.parentFile!!
 check(File(workingDirForCargo, "Cargo.toml").exists()) {
     "Cargo.toml not found at $workingDirForCargo"

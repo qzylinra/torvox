@@ -1,3 +1,6 @@
+// TODO(kotlin-2.4.0-false-positive)
+@file:Suppress("UNNECESSARY_NOT_NULL_ASSERTION")
+
 package io.torvox.gpu
 
 import android.graphics.Bitmap
@@ -47,9 +50,8 @@ class BackgroundImageGpuTest {
         assertTrue("GPU frame must exist", frameFile.exists())
 
         val decodedBitmap = decodeRgbaToBitmap(frameFile)
-        assertTrue("Decoded bitmap must not be null", decodedBitmap != null)
 
-        val ratio = analyzeNonBlackRatio(decodedBitmap!!)
+        val ratio = analyzeNonBlackRatio(decodedBitmap)
         assertTrue(
             "Background image should cover significant portion (>5%) of screen, got $ratio",
             ratio > 0.05,
@@ -90,10 +92,9 @@ class BackgroundImageGpuTest {
         assertTrue("GPU frame must exist", frameFile.exists())
 
         val decodedBitmap = decodeRgbaToBitmap(frameFile)
-        assertTrue("Decoded bitmap must not be null", decodedBitmap != null)
 
         assertTrue(
-            "Frame width ($screenWidth) should match frame bitmap width (${decodedBitmap!!.width})",
+            "Frame width ($screenWidth) should match frame bitmap width (${decodedBitmap.width})",
             decodedBitmap.width >= screenWidth * 0.9,
         )
 
@@ -134,8 +135,7 @@ class BackgroundImageGpuTest {
         assertTrue("GPU frame must exist", frameFile.exists())
 
         val beforeDecoded = decodeRgbaToBitmap(frameFile)
-        assertTrue("Decoded bitmap must not be null", beforeDecoded != null)
-        val beforeRatio = analyzeNonBlackRatio(beforeDecoded!!)
+        val beforeRatio = analyzeNonBlackRatio(beforeDecoded)
 
         bridge.clearBackgroundImage()
 

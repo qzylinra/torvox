@@ -1,3 +1,6 @@
+// TODO(kotlin-2.4.0-false-positive): K2 smart-cast false positive, remove when upgrading Kotlin compiler
+@file:Suppress("UNNECESSARY_SAFE_CALL")
+
 package io.torvox.ui
 
 import android.annotation.SuppressLint
@@ -109,11 +112,7 @@ constructor(
         private const val EDGE_SCROLL_INTERVAL_MS = 50L
     }
 
-    private fun getAccentColor(): Int {
-        val viewModel = viewModel ?: return 0xFF2196F3.toInt()
-        val runtime = viewModel.runtime ?: return 0xFF2196F3.toInt()
-        return runtime.accentColor
-    }
+    private fun getAccentColor(): Int = viewModel?.runtime?.accentColor ?: 0xFF2196F3.toInt()
 
     private var viewModel: TerminalViewModel? = null
     private var rows: Int = DEFAULT_ROWS
@@ -677,7 +676,7 @@ constructor(
     private val edgeScrollHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var edgeScrollRunning = false
     private var pendingEdgeScroll: Int = 0 // +1 = up, -1 = down, 0 = none
-    private lateinit var edgeScrollRunnable: Runnable
+    private var edgeScrollRunnable: Runnable = Runnable { }
 
     val isSelectingText: Boolean
         get() =

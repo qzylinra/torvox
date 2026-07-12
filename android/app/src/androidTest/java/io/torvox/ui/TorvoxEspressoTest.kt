@@ -1,3 +1,6 @@
+// TODO(migrate-GeneralClickAction)
+@file:Suppress("DEPRECATION")
+
 package io.torvox.ui
 
 import android.view.View

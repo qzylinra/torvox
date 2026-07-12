@@ -1,3 +1,6 @@
+// TODO(migrate-SHOW_IMPLICIT)
+@file:Suppress("DEPRECATION")
+
 package io.torvox.cucumber.steps
 
 import android.content.ClipData
@@ -116,11 +119,9 @@ constructor(
         composeRuleHolder.composeRule.activityRule.scenario.onActivity { activity ->
             val surface = findTerminalSurface(activity) as TerminalSurface
             val text = surface.getSelectedText()
-            if (text != null) {
-                val context = InstrumentationRegistry.getInstrumentation().targetContext
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
-            }
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("terminal", text))
         }
     }
 

@@ -1,3 +1,6 @@
+// TODO(migrate-v2-compose-rule)
+@file:Suppress("DEPRECATION")
+
 package io.torvox.cucumber
 
 import androidx.compose.ui.test.junit4.createAndroidComposeRule

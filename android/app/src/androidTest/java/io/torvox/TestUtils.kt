@@ -1,3 +1,6 @@
+// TODO(migrate-getRealMetrics)
+@file:Suppress("DEPRECATION")
+
 package io.torvox
 
 import android.app.Activity

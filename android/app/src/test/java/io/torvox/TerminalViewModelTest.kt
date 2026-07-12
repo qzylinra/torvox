@@ -11,6 +11,7 @@ import io.torvox.settings.SettingsRepository
 import io.torvox.ui.ModifierState
 import io.torvox.ui.next
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -29,6 +30,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class TerminalViewModelTest {
     @Test
     fun testDefaultState() {
@@ -146,6 +148,7 @@ class TerminalViewModelTest {
     }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(application = android.app.Application::class)
 class TerminalViewModelThemeTest {

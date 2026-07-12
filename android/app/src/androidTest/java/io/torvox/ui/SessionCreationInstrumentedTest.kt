@@ -1,3 +1,6 @@
+// TODO(migrate-CPU_ABI)
+@file:Suppress("DEPRECATION")
+
 package io.torvox.ui
 
 import androidx.compose.ui.test.assertIsDisplayed

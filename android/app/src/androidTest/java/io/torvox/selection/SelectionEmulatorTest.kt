@@ -1,3 +1,6 @@
+// TODO(migrate-AndroidJUnit4)
+@file:Suppress("DEPRECATION")
+
 package io.torvox.selection
 
 import android.graphics.Bitmap

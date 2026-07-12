@@ -1,3 +1,6 @@
+// TODO(kotlin-2.4.0-false-positive): K2 false positive; TODO(migrate-v2-compose-rule): migrate to v2 API
+@file:Suppress("UNNECESSARY_SAFE_CALL", "DEPRECATION")
+
 package io.torvox.ui
 
 import android.graphics.Bitmap
