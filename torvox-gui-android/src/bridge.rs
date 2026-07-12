@@ -2785,7 +2785,7 @@ pub unsafe extern "C" fn torvox_bridge_poll_notification(handle: i64) -> i64 {
                 Some(c) => c,
                 None => {
                     // Body is empty but title is valid; use empty body
-                    std::ffi::CString::new("").unwrap()
+                    std::ffi::CString::new("").expect("empty string has no null bytes")
                 }
             };
             // Allocate a buffer holding both pointers: [title_ptr, body_ptr]
@@ -2843,7 +2843,7 @@ pub unsafe extern "C" fn torvox_bridge_cwd(handle: i64) -> *mut std::ffi::c_char
     let cwd = if cwd.is_empty() { "unknown" } else { &cwd };
     match safe_cstring(cwd.to_string()) {
         Some(c_cwd) => c_cwd.into_raw(),
-        None => std::ffi::CString::new("unknown").unwrap().into_raw(),
+        None => std::ffi::CString::new("unknown").expect("literal string has no null bytes").into_raw(),
     }
 }
 

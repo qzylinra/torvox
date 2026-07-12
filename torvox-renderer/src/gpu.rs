@@ -4059,7 +4059,7 @@ mod tests {
             "build_cell_instances_from_flat returned 0 instances - font/glyph load failure"
         );
         ctx.upload_atlas(font_pipeline.atlas_bitmap(), atlas_dim, atlas_dim);
-        let pixels = ctx.render_to_buffer(&instances, &[]).unwrap();
+        let pixels = ctx.render_to_buffer(&instances, &[]).expect("wgpu render must succeed");
 
         assert_eq!(
             pixels.len(),
@@ -4132,7 +4132,7 @@ mod tests {
         ctx.ensure_bg_pipeline(50, 50);
 
         // render_to_buffer must not panic — bg pipeline initialization is valid
-        let result = ctx.render_to_buffer(&[], &[]).unwrap();
+        let result = ctx.render_to_buffer(&[], &[]).expect("wgpu render must succeed");
 
         // Verify render produced valid RGBA data (50×50×4 bytes)
         assert_eq!(result.len(), 50 * 50 * 4, "bg opaque render output size");
@@ -4175,7 +4175,7 @@ mod tests {
         ctx.ensure_bg_pipeline(50, 50);
 
         // render_to_buffer must not panic
-        let result = ctx.render_to_buffer(&[], &[]).unwrap();
+        let result = ctx.render_to_buffer(&[], &[]).expect("wgpu render must succeed");
 
         assert_eq!(
             result.len(),
@@ -4212,7 +4212,7 @@ mod tests {
             return;
         };
 
-        let result = ctx.render_to_buffer(&[], &[]).unwrap();
+        let result = ctx.render_to_buffer(&[], &[]).expect("wgpu render must succeed");
 
         let idx = (25 * 50 + 25) * 4;
         assert_eq!(
@@ -4440,7 +4440,7 @@ mod tests {
         let by_row = group_highlights_by_row(&highlights);
         let hl = cell_highlight(0, 3, &by_row);
         assert!(hl.is_some(), "cell (0,3) should have highlight");
-        let color = hl.unwrap();
+        let color = hl.expect("cell must have highlight");
         assert_eq!(color[3], 160, "alpha should be preserved");
     }
 
@@ -4456,7 +4456,7 @@ mod tests {
         let by_row = group_highlights_by_row(&highlights);
         let hl = cell_highlight(0, 3, &by_row);
         assert!(hl.is_some(), "cell (0,3) should have highlight");
-        let color = hl.unwrap();
+        let color = hl.expect("cell must have highlight");
         assert_eq!(color[3], 64, "alpha should be preserved");
     }
 
@@ -4488,7 +4488,7 @@ mod tests {
         let by_row = group_highlights_by_row(&highlights);
         let hl = cell_highlight(0, 5, &by_row);
         assert!(hl.is_some(), "should find highlight at row 0 col 5");
-        assert_eq!(hl.unwrap()[3], 0);
+        assert_eq!(hl.expect("must have highlight")[3], 0);
     }
 
     #[test]
@@ -4512,7 +4512,7 @@ mod tests {
         // First highlight (other match)
         let hl = cell_highlight(0, 1, &by_row);
         assert!(hl.is_some(), "cell (0,1) should have other match highlight");
-        assert_eq!(hl.unwrap()[3], 64, "other match alpha should be 64");
+        assert_eq!(hl.expect("other match must have highlight")[3], 64, "other match alpha should be 64");
 
         // Between highlights — no highlight
         assert!(
@@ -4526,7 +4526,7 @@ mod tests {
             hl.is_some(),
             "cell (0,12) should have current match highlight"
         );
-        assert_eq!(hl.unwrap()[3], 160, "current match alpha should be 160");
+        assert_eq!(hl.expect("current match must have highlight")[3], 160, "current match alpha should be 160");
     }
 
     include!("screenshot_tests.rs");

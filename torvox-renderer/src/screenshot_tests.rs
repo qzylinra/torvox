@@ -51,7 +51,10 @@ fn theme_ansi(i: usize) -> [f32; 4] {
 
 fn run_ocr(png_path: &std::path::Path) -> String {
     let output = std::process::Command::new("rapidocr")
-        .args(["-img", png_path.to_str().unwrap()])
+        .args([
+            "-img",
+            png_path.to_str().expect("test PNG path is valid UTF-8"),
+        ])
         .output()
         .expect("rapidocr CLI must be available");
     assert!(
@@ -829,7 +832,7 @@ fn visual_long_press_text() {
         word_region.is_some(),
         "LONG_PRESS_TEXT: no region covering cols 6-9"
     );
-    let (rx, ry, rw, rh) = word_region.unwrap();
+    let (rx, ry, rw, rh) = word_region.expect("must be Some after is_some assert");
     extract_and_ocr_region(&pixels, w, h, "LONG_PRESS_TEXT_SEL", rx, ry, rw, rh, "WORD");
 
     // Layer 3: pixel proof — swap proof by total brightness
