@@ -602,7 +602,7 @@ class TorvoxBridge(
     private var closed = false
 
     private fun ensureOpen() {
-        if (closed) throw IllegalStateException("TorvoxBridge is closed")
+        check(!closed) { "TorvoxBridge is closed" }
     }
 
     private fun <T> callOk(
