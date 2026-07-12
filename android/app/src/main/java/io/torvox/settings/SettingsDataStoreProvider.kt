@@ -9,6 +9,7 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@Suppress("DataClassShouldBeImmutable") // Has computed properties, cannot be data class
 @Singleton
 class SettingsDataStoreProvider
 @Inject

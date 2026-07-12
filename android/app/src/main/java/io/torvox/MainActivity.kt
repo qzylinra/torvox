@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Inject
-    lateinit var torvoxRuntime: TorvoxRuntime
+    lateinit var torvoxRuntime: TorvoxRuntime // Dagger injection — lateinit required
 
     private var logFile: File? = null
     private var logWriter: BufferedWriter? = null

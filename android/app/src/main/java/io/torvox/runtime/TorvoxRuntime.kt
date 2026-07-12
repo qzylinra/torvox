@@ -41,7 +41,7 @@ data class RuntimeState(
     val sessionIds: List<Long> = emptyList(),
 )
 
-private class SessionEntry(
+private data class SessionEntry(
     val id: Long,
     var bridge: TorvoxBridge?,
     var renderThread: Thread?,
@@ -1206,7 +1206,7 @@ constructor(
         io.torvox.bridge.NativeWindow
             .getNativeWindowPtr(surface)
     } catch (exception: Throwable) {
-        LogUtil.w("TorvoxRuntime", "JNI getNativeWindowPtr not available, falling back to mNativeObject reflection")
+        LogUtil.w("TorvoxRuntime", "JNI getNativeWindowPtr not available, falling back to mNativeObject reflection", exception)
         getNativeWindowPtrReflection(surface)
     }
 

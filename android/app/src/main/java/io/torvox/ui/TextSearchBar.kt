@@ -46,12 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.torvox.R
 
-data class SearchResult(
-    val lineIndex: Int,
-    val startIndex: Int,
-    val endIndex: Int,
-)
-
 private fun isWideChar(ch: Char): Boolean {
     val type = Character.getType(ch)
     return type == Character.OTHER_SYMBOL.toInt() ||
