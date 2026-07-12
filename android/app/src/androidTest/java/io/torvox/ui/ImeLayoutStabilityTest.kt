@@ -2,6 +2,7 @@ package io.torvox.ui
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -35,6 +36,9 @@ import kotlin.math.min
 class ImeLayoutStabilityTest {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
+
+    private val context: Context
+        get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     private val dataDir: String
         get() =
@@ -147,10 +151,9 @@ class ImeLayoutStabilityTest {
         return wm.currentWindowMetrics.bounds.height()
     }
 
-    private fun density(): Float =
-        InstrumentationRegistry
-            .getInstrumentation()
-            .targetContext.resources.displayMetrics.density
+    private fun density(): Float = InstrumentationRegistry
+        .getInstrumentation()
+        .targetContext.resources.displayMetrics.density
 
     private fun barBelowIme(
         tag: String,
@@ -179,7 +182,23 @@ class ImeLayoutStabilityTest {
         val dir = context.getExternalFilesDir(null) ?: return
         val f = File(dir, name)
         f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        // Also copy to /data/local/tmp for easy adb pull.
+        try {
+            val tmp = File("/data/local/tmp", name)
+            tmp.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        } catch (_: Exception) {
+        }
         Log.d("ImeLayoutStabilityTest", "dumped $name -> ${f.absolutePath} ${bmp.width}x${bmp.height}")
+    }
+
+    private fun pixelDist(
+        b: Int,
+        a: Int,
+    ): Int {
+        val dr = kotlin.math.abs((b shr 16 and 0xFF) - (a shr 16 and 0xFF))
+        val dg = kotlin.math.abs((b shr 8 and 0xFF) - (a shr 8 and 0xFF))
+        val db = kotlin.math.abs((b and 0xFF) - (a and 0xFF))
+        return dr + dg + db
     }
 
     private fun debugDiffBand(
@@ -198,12 +217,7 @@ class ImeLayoutStabilityTest {
             var rowDiff = 0
             for (x in 0 until width) {
                 val i = y * width + x
-                val b = before[i]
-                val a = after[i]
-                val dr = kotlin.math.abs((b shr 16 and 0xFF) - (a shr 16 and 0xFF))
-                val dg = kotlin.math.abs((b shr 8 and 0xFF) - (a shr 8 and 0xFF))
-                val db = kotlin.math.abs((b and 0xFF) - (a and 0xFF))
-                if (dr + dg + db >= 60) {
+                if (pixelDist(before[i], after[i]) >= 60) {
                     rowDiff++
                     if (y < minY) minY = y
                     if (y > maxY) maxY = y
@@ -216,9 +230,28 @@ class ImeLayoutStabilityTest {
                 worstRow = y
             }
         }
+        // Find the vertical shift dy (rows) that best aligns after onto before.
+        var bestDy = 0
+        var bestMatch = -1
+        for (dy in -6..6) {
+            var match = 0
+            var total = 0
+            for (y in 0 until height) {
+                val ya = y + dy
+                if (ya < 0 || ya >= height) continue
+                for (x in 0 until width) {
+                    total++
+                    if (pixelDist(before[y * width + x], after[ya * width + x]) < 60) match++
+                }
+            }
+            if (match > bestMatch) {
+                bestMatch = match
+                bestDy = dy
+            }
+        }
         Log.d(
             "ImeLayoutStabilityTest",
-            "diff bbox: x[$minX,$maxX] y[$minY,$maxY] worstRow=$worstRow diffPix=$worstRowDiff",
+            "diff bbox: x[$minX,$maxX] y[$minY,$maxY] worstRow=$worstRow diffPix=$worstRowDiff | bestShiftRows=$bestDy match=${if (bestMatch >= 0) bestMatch else 0}",
         )
     }
 
@@ -235,6 +268,8 @@ class ImeLayoutStabilityTest {
 
         val before = captureTerminalBitmap()
         val beforeBottom = extractBottomBand(before, 150)
+        dumpBitmap(before, "ime_before.png")
+        val beforeText = bridge.getTerminalText() ?: ""
         before.recycle()
 
         openIme()
@@ -245,10 +280,22 @@ class ImeLayoutStabilityTest {
 
         val after = captureTerminalBitmap()
         val afterBottom = extractBottomBand(after, 150)
+        dumpBitmap(after, "ime_after.png")
+        val afterText = bridge.getTerminalText() ?: ""
         after.recycle()
 
-        dumpBitmap(before, "ime_before.png")
-        dumpBitmap(after, "ime_after.png")
+        val beforeLastLine = beforeText.trim().lines().lastOrNull() ?: ""
+        val afterLastLine = afterText.trim().lines().lastOrNull() ?: ""
+        beforeText.chunked(120).forEachIndexed { idx, chunk ->
+            Log.d("ImeLayoutStabilityTest", "BEFORE_TXT[$idx]=$chunk")
+        }
+        afterText.chunked(120).forEachIndexed { idx, chunk ->
+            Log.d("ImeLayoutStabilityTest", "AFTER_TXT[$idx]=$chunk")
+        }
+        Log.d(
+            "ImeLayoutStabilityTest",
+            "VISIBLE_BOTTOM_LINE_CHANGED=${beforeLastLine != afterLastLine} before=[$beforeLastLine] after=[$afterLastLine]",
+        )
         debugDiffBand(beforeBottom, afterBottom, beforeBottom.size / 150, 150)
 
         // Requirement: bottom portion pixel-identical across IME open (content fits OR scrolls to bottom).
