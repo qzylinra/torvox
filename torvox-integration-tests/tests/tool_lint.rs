@@ -4,6 +4,17 @@
 
 const WORKSPACE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
 
+/// Read all requirement IDs from docs/srs.md.
+fn srs_ids() -> std::collections::BTreeSet<String> {
+    let srs_path = std::path::Path::new(WORKSPACE).join("docs/srs.md");
+    let content = std::fs::read_to_string(&srs_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", srs_path.display()));
+    let re = regex_lite::Regex::new(r"\b(FR-\d{3}|NFR-\d{3})\b").unwrap();
+    re.captures_iter(&content)
+        .map(|c| c[1].to_string())
+        .collect()
+}
+
 #[test]
 fn typos_finds_no_typos() {
     let config = std::path::Path::new(WORKSPACE).join("_typos.toml");
@@ -83,6 +94,7 @@ fn vale_finds_no_violations() {
             "docs/acceptance.md",
             "docs/dependencies.md",
             "docs/adr/README.md",
+            "docs/adr/template.md",
         ])
         .current_dir(WORKSPACE)
         .output()
@@ -141,6 +153,9 @@ fn doc_srs_requirement_format() {
 
 #[test]
 fn doc_traceability_references() {
+    let srs = srs_ids();
+    assert!(!srs.is_empty(), "no requirement IDs found in docs/srs.md");
+
     let yaml_path = std::path::Path::new(WORKSPACE).join("docs/traceability.yml");
     let content = std::fs::read_to_string(&yaml_path)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", yaml_path.display()));
@@ -157,29 +172,35 @@ fn doc_traceability_references() {
     );
 
     // Check that every traceability ID exists in docs/srs.md
-    let srs_path = std::path::Path::new(WORKSPACE).join("docs/srs.md");
-    let srs_content = std::fs::read_to_string(&srs_path)
-        .unwrap_or_else(|e| panic!("failed to read {}: {e}", srs_path.display()));
-    let srs_re = regex_lite::Regex::new(r"\b(FR-\d{3}|NFR-\d{3})\b").unwrap();
-    let srs_ids: std::collections::BTreeSet<String> = srs_re
-        .captures_iter(&srs_content)
-        .map(|c| c[1].to_string())
-        .collect();
-
-    let missing: Vec<&str> = trace_ids
+    let missing_from_srs: Vec<&str> = trace_ids
         .iter()
-        .filter(|id| !srs_ids.contains(id.as_str()))
+        .filter(|id| !srs.contains(id.as_str()))
         .map(|s| s.as_str())
         .collect();
     assert!(
-        missing.is_empty(),
+        missing_from_srs.is_empty(),
         "traceability.yml references requirement IDs not found in docs/srs.md:\n  {}",
-        missing.join("\n  ")
+        missing_from_srs.join("\n  ")
+    );
+
+    // Reverse: check that every SRS ID has a traceability entry
+    let missing_from_trace: Vec<&str> = srs
+        .iter()
+        .filter(|id| !trace_ids.contains(id.as_str()))
+        .map(|s| s.as_str())
+        .collect();
+    assert!(
+        missing_from_trace.is_empty(),
+        "docs/srs.md has requirement IDs missing from traceability.yml:\n  {}",
+        missing_from_trace.join("\n  ")
     );
 }
 
 #[test]
 fn doc_acceptance_links_to_srs() {
+    let srs = srs_ids();
+    assert!(!srs.is_empty(), "no requirement IDs found in docs/srs.md");
+
     let acceptance_path = std::path::Path::new(WORKSPACE).join("docs/acceptance.md");
     let content = std::fs::read_to_string(&acceptance_path)
         .unwrap_or_else(|e| panic!("failed to read {}: {e}", acceptance_path.display()));
@@ -196,24 +217,33 @@ fn doc_acceptance_links_to_srs() {
     );
 
     // Check that every acceptance-referenced ID exists in docs/srs.md
-    let srs_path = std::path::Path::new(WORKSPACE).join("docs/srs.md");
-    let srs_content = std::fs::read_to_string(&srs_path)
-        .unwrap_or_else(|e| panic!("failed to read {}: {e}", srs_path.display()));
-    let srs_re = regex_lite::Regex::new(r"\b(FR-\d{3}|NFR-\d{3})\b").unwrap();
-    let srs_ids: std::collections::BTreeSet<String> = srs_re
-        .captures_iter(&srs_content)
-        .map(|c| c[1].to_string())
-        .collect();
-
-    let missing: Vec<&str> = acceptance_ids
+    let missing_from_srs: Vec<&str> = acceptance_ids
         .iter()
-        .filter(|id| !srs_ids.contains(id.as_str()))
+        .filter(|id| !srs.contains(id.as_str()))
         .map(|s| s.as_str())
         .collect();
     assert!(
-        missing.is_empty(),
+        missing_from_srs.is_empty(),
         "docs/acceptance.md references requirement IDs not found in docs/srs.md:\n  {}",
-        missing.join("\n  ")
+        missing_from_srs.join("\n  ")
+    );
+
+    // Reverse: check that every SRS ID has a matching acceptance section
+    let srs_re = regex_lite::Regex::new(r"(?m)^## FR-\d{3}|^## NFR-\d{3}").unwrap();
+    let acceptance_sections: std::collections::BTreeSet<String> = srs_re
+        .captures_iter(&content)
+        .map(|c| c[0].trim_start_matches("## ").to_string())
+        .collect();
+
+    let missing_from_acceptance: Vec<&str> = srs
+        .iter()
+        .filter(|id| !acceptance_sections.contains(id.as_str()))
+        .map(|s| s.as_str())
+        .collect();
+    assert!(
+        missing_from_acceptance.is_empty(),
+        "docs/srs.md has requirement IDs missing a section in docs/acceptance.md:\n  {}",
+        missing_from_acceptance.join("\n  ")
     );
 }
 
