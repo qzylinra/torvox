@@ -127,8 +127,9 @@ constructor(
         val entry = sessions[activeSessionId] ?: return
         entry.scrollOffset = offset
         entry.bridge?.setScrollOffset(offset)
-        // Call render directly to ensure immediate visual feedback
-        entry.bridge?.render()
+        // Signal the render thread (vsync-paced). The render loop already detects
+        // scroll-offset changes and re-renders, so a synchronous GPU render here
+        // would only block the calling thread (often the UI thread during scroll).
         entry.dirtySignal.countDown()
     }
 

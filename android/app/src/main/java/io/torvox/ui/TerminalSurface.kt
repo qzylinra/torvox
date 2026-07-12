@@ -135,7 +135,7 @@ constructor(
     fun setSearchHighlights(data: ByteArray) {
         val bridge = viewModel?.runtime?.bridge() ?: return
         bridge.setSearchHighlights(data)
-        bridge.render()
+        viewModel?.runtime?.forceRender()
     }
 
     fun clearSearchHighlights() {
@@ -1120,8 +1120,9 @@ constructor(
         if (targetOffset != scrollOffset) {
             scrollOffset = targetOffset
             onScrollChanged?.invoke(scrollOffset)
-            // Ensure render fires so the GPU picks up the new scroll offset
-            viewModel?.runtime?.bridge()?.render()
+            // Signal the render thread (vsync-paced) instead of blocking the UI
+            // thread with a synchronous GPU render on every scroll event.
+            viewModel?.runtime?.forceRender()
         }
     }
 
@@ -1616,7 +1617,7 @@ constructor(
                     }
                     // Flush the new selection state to the Rust renderer so it
                     // paints the selection highlight at the correct position.
-                    viewModel?.runtime?.bridge()?.render()
+                    viewModel?.runtime?.forceRender()
                 }
                 handleDragState = HandleDrag.NONE
                 try {

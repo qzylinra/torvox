@@ -202,11 +202,11 @@ fun TerminalScreen(
 
         Box(
             modifier =
-                Modifier
-                    .fillMaxSize()
-                    .testTag("TerminalScreen")
-                    .background(terminalBg)
-                    .statusBarsPadding(),
+            Modifier
+                .fillMaxSize()
+                .testTag("TerminalScreen")
+                .background(terminalBg)
+                .statusBarsPadding(),
         ) {
             LaunchedEffect(drawerState.isOpen) {
                 surfaceRef.value?.drawerOpen = drawerState.isOpen
@@ -297,24 +297,24 @@ fun TerminalScreen(
 
             Column(
                 modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .testTag("TerminalContent")
-                        .imePadding()
-                        .then(
-                            if (WindowInsets.ime.getBottom(LocalDensity.current) <= 0) {
-                                Modifier.navigationBarsPadding()
-                            } else {
-                                Modifier
-                            },
-                        ),
+                Modifier
+                    .fillMaxSize()
+                    .testTag("TerminalContent")
+                    .imePadding()
+                    .then(
+                        if (WindowInsets.ime.getBottom(LocalDensity.current) <= 0) {
+                            Modifier.navigationBarsPadding()
+                        } else {
+                            Modifier
+                        },
+                    ),
             ) {
                 // Terminal content area — fills remaining space above the bar
                 Box(
                     modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                 ) {
                     AndroidView(
                         factory = { context ->
@@ -326,7 +326,7 @@ fun TerminalScreen(
                                     surface.onScrollChanged = { offset ->
                                         composeScrollOffset = offset
                                         viewModel.runtime.setScrollOffset(offset.toUInt())
-                                        viewModel.runtime.bridge()?.render()
+                                        viewModel.runtime.forceRender()
                                     }
                                 }.apply {
                                     initialize(viewModel)
@@ -395,13 +395,12 @@ fun TerminalScreen(
                         }
                         val themeAccent = if (state.selectionAccent != 0) Color(state.selectionAccent) else resolvedTerminalTheme.foreground
 
-                        fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int =
-                            android.graphics.Color.argb(
-                                (color.alpha * 255).toInt(),
-                                (color.red * 255).toInt(),
-                                (color.green * 255).toInt(),
-                                (color.blue * 255).toInt(),
-                            )
+                        fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int = android.graphics.Color.argb(
+                            (color.alpha * 255).toInt(),
+                            (color.red * 255).toInt(),
+                            (color.green * 255).toInt(),
+                            (color.blue * 255).toInt(),
+                        )
                         val themeAccentArgb = colorToArgb(themeAccent)
 
                         if (selection.dragging) {
@@ -551,8 +550,8 @@ fun TerminalScreen(
 
                     ModifierBar(
                         modifier =
-                            Modifier
-                                .testTag("ModifierBar"),
+                        Modifier
+                            .testTag("ModifierBar"),
                         onKeyClick = { data ->
                             viewModel.writeToPty(data.toByteArray())
                         },
@@ -576,38 +575,38 @@ fun TerminalScreen(
                         toolbarLayout = rememberToolbarLayout(),
                         barMode = barMode,
                         onCopy =
-                            if (selectionActive) {
-                                {
-                                    viewModel.copySelectionToClipboard()
-                                    viewModel.clearSelection()
-                                }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            {
+                                viewModel.copySelectionToClipboard()
+                                viewModel.clearSelection()
+                            }
+                        } else {
+                            null
+                        },
                         onSelectAll =
-                            if (selectionActive) {
-                                { viewModel.selectAll() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.selectAll() }
+                        } else {
+                            null
+                        },
                         onPaste =
-                            if (selectionActive && hasClipboard) {
-                                { viewModel.pasteFromClipboard() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive && hasClipboard) {
+                            { viewModel.pasteFromClipboard() }
+                        } else {
+                            null
+                        },
                         onShare =
-                            if (selectionActive) {
-                                { viewModel.shareSelection() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.shareSelection() }
+                        } else {
+                            null
+                        },
                         onDismiss =
-                            if (selectionActive) {
-                                { viewModel.clearSelection() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.clearSelection() }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
