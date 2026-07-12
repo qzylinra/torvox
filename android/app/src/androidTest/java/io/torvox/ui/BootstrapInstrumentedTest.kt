@@ -30,23 +30,27 @@ class BootstrapInstrumentedTest {
 
     private fun scrollToBootstrapSection() {
         composeTestRule
-            .onNodeWithTag("SettingsLazyColumn", useUnmergedNode = true)
-            .performScrollToNode(hasTestTag("BootstrapSection"))
-        composeTestRule.onNodeWithTag("BootstrapSection").assertExists()
+            .onNodeWithTag("SettingsLazyColumn", useUnmergedTree = true)
+            .performScrollToNode(
+                hasTestTag("BootstrapSection"),
+            )
+        composeTestRule
+            .onNodeWithTag("BootstrapSection", useUnmergedTree = true)
+            .assertExists()
     }
 
     @Test
     fun bootstrap_section_exists_in_settings() {
         openSettings()
         scrollToBootstrapSection()
-        composeTestRule.onNodeWithTag("BootstrapSection").assertExists()
+        composeTestRule.onNodeWithTag("BootstrapSection", useUnmergedTree = true).assertExists()
     }
 
     @Test
     fun bootstrap_section_displayed_after_scroll() {
         openSettings()
         scrollToBootstrapSection()
-        composeTestRule.onNodeWithTag("BootstrapSection").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("BootstrapSection", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
@@ -76,13 +80,13 @@ class BootstrapInstrumentedTest {
     fun bootstrap_preset_termux_default_exists() {
         openSettings()
         scrollToBootstrapSection()
-        composeTestRule.onNodeWithTag("BootstrapPreset_TermuxDefault", useUnmergedNode = true).assertExists()
+        composeTestRule.onNodeWithTag("BootstrapPreset_TermuxDefault", useUnmergedTree = true).assertExists()
     }
 
     @Test
     fun bootstrap_preset_custom_empty_exists() {
         openSettings()
         scrollToBootstrapSection()
-        composeTestRule.onNodeWithTag("BootstrapPreset_CustomEmpty", useUnmergedNode = true).assertExists()
+        composeTestRule.onNodeWithTag("BootstrapPreset_CustomEmpty", useUnmergedTree = true).assertExists()
     }
 }

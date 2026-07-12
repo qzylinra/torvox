@@ -12,163 +12,163 @@ import io.torvox.cucumber.ComposeRuleHolder
 import javax.inject.Inject
 
 class SearchSteps
-    @Inject
-    constructor(
-        private val composeRuleHolder: ComposeRuleHolder,
-    ) {
-        @Given("^a terminal session is active$")
-        fun terminalSessionIsActive() {
-            composeRuleHolder.composeRule.waitForIdle()
-            composeRuleHolder.composeRule
-                .onNodeWithTag("TerminalScreen")
-                .assertIsDisplayed()
-        }
-
-        @Given("^a terminal session is active with visible text$")
-        fun terminalSessionIsActiveWithVisibleText() {
-            composeRuleHolder.composeRule.waitForIdle()
-            composeRuleHolder.composeRule
-                .onNodeWithTag("TerminalScreen")
-                .assertIsDisplayed()
-        }
-
-        @Given("^a terminal session is active with mixed case text$")
-        fun terminalSessionIsActiveWithMixedCaseText() {
-            composeRuleHolder.composeRule.waitForIdle()
-            composeRuleHolder.composeRule
-                .onNodeWithTag("TerminalScreen")
-                .assertIsDisplayed()
-        }
-
-        @When("^the user opens the search bar from the session panel$")
-        fun userOpensSearchBar() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchButton")
-                .performClick()
-            composeRuleHolder.composeRule.waitForIdle()
-        }
-
-        @When("^the user searches for \"([^\"]+)\"$")
-        fun userSearchesFor(query: String) {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchTextField")
-                .performClick()
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchTextField")
-                .performTextInput(query)
-            composeRuleHolder.composeRule.waitForIdle()
-        }
-
-        @When("^the user presses \"([^\"]+)\"$")
-        fun userPressesNavigation(nav: String) {
-            when (nav.lowercase()) {
-                "next" -> {
-                    composeRuleHolder.composeRule
-                        .onNodeWithTag("SearchNext")
-                        .performClick()
-                }
-
-                "previous" -> {
-                    composeRuleHolder.composeRule
-                        .onNodeWithTag("SearchPrevious")
-                        .performClick()
-                }
-
-                "close" -> {
-                    composeRuleHolder.composeRule
-                        .onNodeWithTag("SearchClose")
-                        .performClick()
-                }
-
-                else -> {
-                    throw IllegalArgumentException("Unknown navigation: $nav")
-                }
-            }
-            composeRuleHolder.composeRule.waitForIdle()
-        }
-
-        @When("^the user enables case-sensitive search$")
-        fun userEnablesCaseSensitive() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchCaseSensitive")
-                .performClick()
-            composeRuleHolder.composeRule.waitForIdle()
-        }
-
-        @When("^the user closes the search bar$")
-        fun userClosesSearchBar() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchClose")
-                .performClick()
-            composeRuleHolder.composeRule.waitForIdle()
-        }
-
-        @When("^the soft keyboard opens$")
-        fun softKeyboardOpens() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchTextField")
-                .performClick()
-            composeRuleHolder.composeRule.waitForIdle()
-        }
-
-        @Then("^the search bar is displayed at the bottom$")
-        fun searchBarIsDisplayedAtBottom() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("TextSearchBar")
-                .assertIsDisplayed()
-        }
-
-        @Then("^the modifier bar is hidden$")
-        fun modifierBarIsHidden() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("ModifierBar")
-                .assertIsNotDisplayed()
-        }
-
-        @Then("^the modifier bar is visible again$")
-        fun modifierBarIsVisibleAgain() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("ModifierBar")
-                .assertIsDisplayed()
-        }
-
-        @Then("^at least one match is highlighted on screen$")
-        fun atLeastOneMatchHighlighted() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchResultCount")
-                .assertIsDisplayed()
-        }
-
-        @Then("^the current match indicator changes$")
-        fun currentMatchIndicatorChanges() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchResultCount")
-                .assertIsDisplayed()
-        }
-
-        @Then("^the current match indicator returns$")
-        fun currentMatchIndicatorReturns() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchResultCount")
-                .assertIsDisplayed()
-        }
-
-        @Then("^only uppercase matches are highlighted$")
-        fun onlyUppercaseMatchesHighlighted() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchResultCount")
-                .assertIsDisplayed()
-        }
-
-        @Then("^all search highlights disappear$")
-        fun allSearchHighlightsDisappear() {
-            composeRuleHolder.composeRule.waitForIdle()
-        }
-
-        @Then("^the search bar remains visible above the keyboard$")
-        fun searchBarRemainsVisibleAboveKeyboard() {
-            composeRuleHolder.composeRule
-                .onNodeWithTag("SearchTextField")
-                .assertIsDisplayed()
-        }
+@Inject
+constructor(
+    private val composeRuleHolder: ComposeRuleHolder,
+) {
+    @Given("^a terminal session is active$")
+    fun terminalSessionIsActive() {
+        composeRuleHolder.composeRule.waitForIdle()
+        composeRuleHolder.composeRule
+            .onNodeWithTag("TerminalScreen")
+            .assertIsDisplayed()
     }
+
+    @Given("^a terminal session is active with visible text$")
+    fun terminalSessionIsActiveWithVisibleText() {
+        composeRuleHolder.composeRule.waitForIdle()
+        composeRuleHolder.composeRule
+            .onNodeWithTag("TerminalScreen")
+            .assertIsDisplayed()
+    }
+
+    @Given("^a terminal session is active with mixed case text$")
+    fun terminalSessionIsActiveWithMixedCaseText() {
+        composeRuleHolder.composeRule.waitForIdle()
+        composeRuleHolder.composeRule
+            .onNodeWithTag("TerminalScreen")
+            .assertIsDisplayed()
+    }
+
+    @When("^the user opens the search bar from the session panel$")
+    fun userOpensSearchBar() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchButton")
+            .performClick()
+        composeRuleHolder.composeRule.waitForIdle()
+    }
+
+    @When("^the user searches for \"([^\"]+)\"$")
+    fun userSearchesFor(query: String) {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchTextField")
+            .performClick()
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchTextField")
+            .performTextInput(query)
+        composeRuleHolder.composeRule.waitForIdle()
+    }
+
+    @When("^the user presses \"([^\"]+)\"$")
+    fun userPressesNavigation(nav: String) {
+        when (nav.lowercase()) {
+            "next" -> {
+                composeRuleHolder.composeRule
+                    .onNodeWithTag("SearchNext")
+                    .performClick()
+            }
+
+            "previous" -> {
+                composeRuleHolder.composeRule
+                    .onNodeWithTag("SearchPrevious")
+                    .performClick()
+            }
+
+            "close" -> {
+                composeRuleHolder.composeRule
+                    .onNodeWithTag("SearchClose")
+                    .performClick()
+            }
+
+            else -> {
+                throw IllegalArgumentException("Unknown navigation: $nav")
+            }
+        }
+        composeRuleHolder.composeRule.waitForIdle()
+    }
+
+    @When("^the user enables case-sensitive search$")
+    fun userEnablesCaseSensitive() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchCaseSensitive")
+            .performClick()
+        composeRuleHolder.composeRule.waitForIdle()
+    }
+
+    @When("^the user closes the search bar$")
+    fun userClosesSearchBar() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchClose")
+            .performClick()
+        composeRuleHolder.composeRule.waitForIdle()
+    }
+
+    @When("^the soft keyboard opens$")
+    fun softKeyboardOpens() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchTextField")
+            .performClick()
+        composeRuleHolder.composeRule.waitForIdle()
+    }
+
+    @Then("^the search bar is displayed at the bottom$")
+    fun searchBarIsDisplayedAtBottom() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("TextSearchBar")
+            .assertIsDisplayed()
+    }
+
+    @Then("^the modifier bar is hidden$")
+    fun modifierBarIsHidden() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("ModifierBar")
+            .assertIsNotDisplayed()
+    }
+
+    @Then("^the modifier bar is visible again$")
+    fun modifierBarIsVisibleAgain() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("ModifierBar")
+            .assertIsDisplayed()
+    }
+
+    @Then("^at least one match is highlighted on screen$")
+    fun atLeastOneMatchHighlighted() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchResultCount")
+            .assertIsDisplayed()
+    }
+
+    @Then("^the current match indicator changes$")
+    fun currentMatchIndicatorChanges() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchResultCount")
+            .assertIsDisplayed()
+    }
+
+    @Then("^the current match indicator returns$")
+    fun currentMatchIndicatorReturns() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchResultCount")
+            .assertIsDisplayed()
+    }
+
+    @Then("^only uppercase matches are highlighted$")
+    fun onlyUppercaseMatchesHighlighted() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchResultCount")
+            .assertIsDisplayed()
+    }
+
+    @Then("^all search highlights disappear$")
+    fun allSearchHighlightsDisappear() {
+        composeRuleHolder.composeRule.waitForIdle()
+    }
+
+    @Then("^the search bar remains visible above the keyboard$")
+    fun searchBarRemainsVisibleAboveKeyboard() {
+        composeRuleHolder.composeRule
+            .onNodeWithTag("SearchTextField")
+            .assertIsDisplayed()
+    }
+}

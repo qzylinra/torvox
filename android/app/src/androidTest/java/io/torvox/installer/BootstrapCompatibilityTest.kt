@@ -74,17 +74,16 @@ class BootstrapCompatibilityTest {
                 "export HOME=\$PREFIX/home" + "\n" +
                 "export SHELL=\$PREFIX/bin/bash" + "\n" +
                 "export TERM=vt100"
-        )
+            )
         testFile.writeText(env + "\n" + body + "\n")
         testFile.setExecutable(true)
         return testFile
     }
 
-    private fun runAs(cmd: String): String =
-        exec(
-            "run-as com.termux /data/data/com.termux/files/usr/bin/bash " +
-                makeScript(cmd).absolutePath,
-        )
+    private fun runAs(cmd: String): String = exec(
+        "run-as com.termux /data/data/com.termux/files/usr/bin/bash " +
+            makeScript(cmd).absolutePath,
+    )
 
     private fun runExit(cmd: String): Pair<String, Int> {
         val script = makeScript("($cmd)\necho EXITCODE=$?")
