@@ -4722,5 +4722,259 @@ mod tests {
         );
     }
 
+    #[test]
+    fn cursor_at_origin() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let cells = vec![CellSnapshot {
+            codepoint: 'A' as u32,
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_row: 0,
+            cursor_col: 0,
+            cursor_style: torvox_core::cursor::CursorStyle::Block,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 24.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
+                cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(
+            instances.len(),
+            1,
+            "cursor at (0,0) must produce an instance"
+        );
+        let cell = &instances[0];
+        assert_eq!(
+            cell.bg_color,
+            [1.0, 1.0, 1.0, 0.7],
+            "cursor at origin must render with block alpha"
+        );
+    }
+
+    #[test]
+    fn cursor_with_text_and_block_style() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let cells = vec![CellSnapshot {
+            codepoint: 'X' as u32,
+            foreground: [0.0, 1.0, 0.0, 1.0],
+            background: [0.0, 0.0, 1.0, 1.0],
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_style: torvox_core::cursor::CursorStyle::Block,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let cursor_color = Some([1.0, 1.0, 1.0, 1.0]);
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 24.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color,
+                cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        // Block cursor swaps fg/bg: fg becomes original bg, bg becomes cursor color×alpha
+        assert_eq!(
+            cell.fg_color,
+            [0.0, 0.0, 1.0, 1.0],
+            "block cursor on text: fg should be original bg"
+        );
+        assert_eq!(
+            cell.bg_color,
+            [1.0, 1.0, 1.0, 0.7],
+            "block cursor on text: bg should be cursor color with block alpha"
+        );
+    }
+
+    #[test]
+    fn cursor_with_text_and_bar_style() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let cells = vec![CellSnapshot {
+            codepoint: 'X' as u32,
+            foreground: [0.0, 1.0, 0.0, 1.0],
+            background: [0.0, 0.0, 1.0, 1.0],
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_style: torvox_core::cursor::CursorStyle::Bar,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let cursor_color = Some([1.0, 1.0, 1.0, 1.0]);
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 24.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color,
+                cursor_style: torvox_core::cursor::CursorStyle::Bar,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        // Bar cursor does NOT swap fg/bg — it just sets bg to cursor color
+        assert_eq!(
+            cell.fg_color,
+            [0.0, 1.0, 0.0, 1.0],
+            "bar cursor on text: fg should be original foreground"
+        );
+        assert_eq!(
+            cell.bg_color,
+            [1.0, 1.0, 1.0, 0.9],
+            "bar cursor on text: bg should be cursor color with line alpha"
+        );
+    }
+
+    #[test]
+    fn cursor_with_text_and_underline_style() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let cells = vec![CellSnapshot {
+            codepoint: 'X' as u32,
+            foreground: [0.0, 1.0, 0.0, 1.0],
+            background: [0.0, 0.0, 1.0, 1.0],
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_style: torvox_core::cursor::CursorStyle::Underline,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let cursor_color = Some([1.0, 1.0, 1.0, 1.0]);
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 24.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color,
+                cursor_style: torvox_core::cursor::CursorStyle::Underline,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        // Underline cursor does NOT swap fg/bg — it just sets bg to cursor color
+        assert_eq!(
+            cell.fg_color,
+            [0.0, 1.0, 0.0, 1.0],
+            "underline cursor on text: fg should be original foreground"
+        );
+        assert_eq!(
+            cell.bg_color,
+            [1.0, 1.0, 1.0, 0.9],
+            "underline cursor on text: bg should be cursor color with line alpha"
+        );
+    }
+
+    #[test]
+    fn cursor_color_custom_values() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
+        let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
+        font_pipeline.rasterize_ascii();
+        let cells = vec![CellSnapshot {
+            codepoint: 0x20,
+            ..Default::default()
+        }];
+        let snapshot = GridSnapshot {
+            rows: 1,
+            cols: 1,
+            cursor_visible: true,
+            cursor_style: torvox_core::cursor::CursorStyle::Block,
+            cells,
+            dirty: vec![true],
+            ..Default::default()
+        };
+        let custom_color = Some([0.5, 0.3, 0.8, 1.0]);
+        let instances = build_cell_instances_from_snapshot(
+            &snapshot,
+            &mut font_pipeline,
+            CellInstanceConfig {
+                atlas_width: 2048.0,
+                atlas_height: 2048.0,
+                projection_height: 24.0,
+                selection: None,
+                selection_bg: None,
+                search_highlights: &[],
+                cursor_color: custom_color,
+                cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
+            },
+        );
+        assert_eq!(instances.len(), 1);
+        let cell = &instances[0];
+        assert_eq!(
+            cell.bg_color,
+            [0.5, 0.3, 0.8, 0.7],
+            "custom cursor color should be reflected with block alpha multiplier"
+        );
+    }
+
     include!("screenshot_tests.rs");
 }

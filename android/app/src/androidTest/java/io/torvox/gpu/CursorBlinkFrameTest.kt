@@ -47,9 +47,9 @@ class CursorBlinkFrameTest {
     fun bridge_cursorStyleMethods_areReachable() {
         val bridge = composeTestRule.getBridge() ?: throw AssertionError("bridge null")
 
-        bridge.setCursorStyle(0) // Block
-        bridge.setCursorStyle(1) // Underline
-        bridge.setCursorStyle(2) // Bar
+        bridge.setCursorStyle("block")
+        bridge.setCursorStyle("underline")
+        bridge.setCursorStyle("bar")
     }
 
     @Test

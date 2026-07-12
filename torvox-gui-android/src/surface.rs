@@ -1809,6 +1809,80 @@ mod tests {
         );
     }
 
+    // ── Cursor visibility invariants ──
+
+    #[test]
+    fn blink_phase_default_is_true() {
+        let surface = AndroidSurface::new(24, 80, 1000, 14.0);
+        assert!(
+            surface.blink_phase,
+            "blink_phase should default to true so cursor is visible"
+        );
+    }
+
+    #[test]
+    fn blink_phase_toggles_after_timer() {
+        let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
+        surface.blink_speed_ms = 10;
+        surface.last_blink_toggle = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_millis(20))
+            .expect("subtract 20ms");
+        let before = surface.blink_phase;
+        assert!(surface.blink_timer_elapsed(), "timer should be elapsed");
+        // Simulate the toggle that render_frame does
+        if surface.blink_timer_elapsed() {
+            surface.blink_phase = !surface.blink_phase;
+            surface.last_blink_toggle = std::time::Instant::now();
+        }
+        assert_eq!(
+            surface.blink_phase, !before,
+            "blink_phase should toggle timer"
+        );
+    }
+
+    #[test]
+    fn blink_phase_toggles_repeatedly() {
+        let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
+        surface.blink_speed_ms = 10;
+        let mut phase = true;
+        for _ in 0..10 {
+            surface.last_blink_toggle = std::time::Instant::now()
+                .checked_sub(std::time::Duration::from_millis(20))
+                .expect("subtract 20ms");
+            if surface.blink_timer_elapsed() {
+                surface.blink_phase = !surface.blink_phase;
+                surface.last_blink_toggle = std::time::Instant::now();
+            }
+            assert_eq!(
+                surface.blink_phase, !phase,
+                "phase should toggle every cycle"
+            );
+            phase = !phase;
+        }
+    }
+
+    #[test]
+    fn blink_phase_stays_true_when_blink_disabled() {
+        let mut surface = AndroidSurface::new(24, 80, 1000, 14.0);
+        surface.set_blink_enabled(false);
+        surface.blink_phase = true;
+        // Simulate many blink cycles
+        surface.blink_speed_ms = 10;
+        for _ in 0..5 {
+            surface.last_blink_toggle = std::time::Instant::now()
+                .checked_sub(std::time::Duration::from_millis(50))
+                .expect("subtract 50ms");
+            if surface.blink_timer_elapsed() {
+                surface.blink_phase = !surface.blink_phase;
+                surface.last_blink_toggle = std::time::Instant::now();
+            }
+        }
+        assert!(
+            surface.blink_phase,
+            "blink_phase should stay true when blink disabled"
+        );
+    }
+
     // ── Cursor blink tests ──
 
     #[test]

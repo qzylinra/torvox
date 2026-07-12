@@ -1,0 +1,325 @@
+package io.torvox.ui
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.view.inputmethod.InputMethodManager
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.core.view.WindowInsetsCompat
+import androidx.test.platform.app.InstrumentationRegistry
+import io.torvox.MainActivity
+import io.torvox.decodeRgbaToBitmap
+import io.torvox.findTerminalSurface
+import io.torvox.getBridge
+import io.torvox.waitForSession
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import java.io.File
+import kotlin.math.abs
+import kotlin.math.min
+
+/**
+ * Automated emulator tests proving the IME (soft keyboard) layout is pixel-stable:
+ *  - The assist bar (ModifierBar / TextSearchBar) sits just above the IME.
+ *  - The terminal bottom rows are pixel-identical before/after the IME opens.
+ *  - Frame-by-frame capture during the IME-open animation converges.
+ *  - Closing the IME restores the pre-IME pixel state (round-trip).
+ *
+ * Terminal pixels are captured via the GPU frame bridge (bridge.saveTestFrame) because the
+ * terminal is a TextureView rendered by wgpu/Lavapipe and is not part of the Compose pixel tree.
+ */
+class ImeLayoutStabilityTest {
+    @get:Rule
+    val composeTestRule = createAndroidComposeRule<MainActivity>()
+
+    private val dataDir: String
+        get() =
+            InstrumentationRegistry
+                .getInstrumentation()
+                .targetContext.filesDir.absolutePath
+
+    @Before
+    fun setUp() {
+        composeTestRule.waitForSession()
+        getBridgeOrWait().setCursorBlinkEnabled(false)
+    }
+
+    private fun getBridgeOrWait(timeoutMs: Long = 15_000): io.torvox.bridge.TorvoxBridge {
+        var bridge: io.torvox.bridge.TorvoxBridge? = null
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (bridge == null && System.currentTimeMillis() < deadline) {
+            bridge = composeTestRule.getBridge()
+            if (bridge == null) Thread.sleep(200)
+        }
+        return bridge ?: throw AssertionError("Bridge is null after ${timeoutMs}ms")
+    }
+
+    private fun waitForIme(timeoutMs: Long = 10_000): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (imeBottomPx() > 0) return true
+            Thread.sleep(200)
+        }
+        return false
+    }
+
+    // ── Capture helpers ───────────────────────────────
+
+    private fun captureTerminalBitmap(): Bitmap {
+        val bridge = getBridgeOrWait()
+        bridge.saveTestFrame(dataDir)
+        val file = File(dataDir, "test_frame.rgba")
+        assertTrue("test_frame.rgba should exist", file.exists())
+        assertTrue("test_frame.rgba size should be > 1000 bytes, got ${file.length()}", file.length() > 1000)
+        return decodeRgbaToBitmap(file)
+    }
+
+    private fun extractBottomBand(
+        bitmap: Bitmap,
+        bandHeightPx: Int,
+    ): IntArray {
+        val w = bitmap.width
+        val h = bitmap.height
+        val band = bandHeightPx.coerceAtMost(h).coerceAtLeast(1)
+        val pixels = IntArray(w * band)
+        bitmap.getPixels(pixels, 0, w, 0, h - band, w, band)
+        return pixels
+    }
+
+    private fun bottomBandConfidence(
+        a: IntArray,
+        b: IntArray,
+    ): Double {
+        val len = min(a.size, b.size)
+        if (len == 0) return 0.0
+        var matching = 0
+        for (i in 0 until len) {
+            val dr = abs(((a[i] shr 16) and 0xFF) - ((b[i] shr 16) and 0xFF))
+            val dg = abs(((a[i] shr 8) and 0xFF) - ((b[i] shr 8) and 0xFF))
+            val db = abs((a[i] and 0xFF) - (b[i] and 0xFF))
+            if (dr + dg + db < 60) matching++
+        }
+        return matching.toDouble() / len.toDouble()
+    }
+
+    // ── IME control helpers ───────────────────────────
+
+    private fun openIme() {
+        composeTestRule.onNodeWithTag("TerminalScreen").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.activityRule.scenario.onActivity { activity: android.app.Activity ->
+            val imm = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            val surface = findTerminalSurface(activity)
+            imm.showSoftInput(surface, 0)
+        }
+        composeTestRule.waitForIdle()
+    }
+
+    private fun closeIme() {
+        composeTestRule.activityRule.scenario.onActivity { activity: android.app.Activity ->
+            val imm = activity.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            val surface = findTerminalSurface(activity)
+            imm.hideSoftInputFromWindow(surface.windowToken, 0)
+        }
+        composeTestRule.waitForIdle()
+    }
+
+    private fun imeBottomPx(): Int {
+        var bottom = 0
+        composeTestRule.activityRule.scenario.onActivity { activity: android.app.Activity ->
+            val decor = activity.window.decorView
+            val insets = WindowInsetsCompat.toWindowInsetsCompat(decor.rootWindowInsets)
+            bottom = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+        }
+        return bottom
+    }
+
+    private fun screenHeightPx(): Int {
+        val wm =
+            InstrumentationRegistry
+                .getInstrumentation()
+                .targetContext
+                .getSystemService(android.view.WindowManager::class.java)
+        return wm.currentWindowMetrics.bounds.height()
+    }
+
+    private fun density(): Float =
+        InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext.resources.displayMetrics.density
+
+    private fun barBelowIme(
+        tag: String,
+        toleranceDp: Float = 4f,
+    ) {
+        val d = density()
+        val imeDp = imeBottomPx() / d
+        val screenDp = screenHeightPx() / d
+        val barBottomDp =
+            composeTestRule
+                .onNodeWithTag(tag)
+                .getUnclippedBoundsInRoot()
+                .bottom.value
+        assertTrue("IME should be visible when open (imeBottomPx=${imeBottomPx()})", imeBottomPx() > 0)
+        assertTrue("Bar '$tag' must be visible on screen (bottom=$barBottomDp dp > 0)", barBottomDp > 0f)
+        assertTrue(
+            "Bar '$tag' bottom=$barBottomDp dp must be <= screen=$screenDp dp - ime=$imeDp dp (+$toleranceDp tol)",
+            barBottomDp <= screenDp - imeDp + toleranceDp,
+        )
+    }
+
+    private fun dumpBitmap(
+        bmp: Bitmap,
+        name: String,
+    ) {
+        val dir = context.getExternalFilesDir(null) ?: return
+        val f = File(dir, name)
+        f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        Log.d("ImeLayoutStabilityTest", "dumped $name -> ${f.absolutePath} ${bmp.width}x${bmp.height}")
+    }
+
+    private fun debugDiffBand(
+        before: IntArray,
+        after: IntArray,
+        width: Int,
+        height: Int,
+    ) {
+        var minY = height
+        var maxY = -1
+        var minX = width
+        var maxX = -1
+        var worstRow = -1
+        var worstRowDiff = -1
+        for (y in 0 until height) {
+            var rowDiff = 0
+            for (x in 0 until width) {
+                val i = y * width + x
+                val b = before[i]
+                val a = after[i]
+                val dr = kotlin.math.abs((b shr 16 and 0xFF) - (a shr 16 and 0xFF))
+                val dg = kotlin.math.abs((b shr 8 and 0xFF) - (a shr 8 and 0xFF))
+                val db = kotlin.math.abs((b and 0xFF) - (a and 0xFF))
+                if (dr + dg + db >= 60) {
+                    rowDiff++
+                    if (y < minY) minY = y
+                    if (y > maxY) maxY = y
+                    if (x < minX) minX = x
+                    if (x > maxX) maxX = x
+                }
+            }
+            if (rowDiff > worstRowDiff) {
+                worstRowDiff = rowDiff
+                worstRow = y
+            }
+        }
+        Log.d(
+            "ImeLayoutStabilityTest",
+            "diff bbox: x[$minX,$maxX] y[$minY,$maxY] worstRow=$worstRow diffPix=$worstRowDiff",
+        )
+    }
+
+    // ── Tests ─────────────────────────────────────────
+
+    @Test
+    fun ime_opens_bar_above_keyboard_and_terminal_bottom_stable() {
+        val bridge = getBridgeOrWait()
+        // Fill the terminal with scrollback so the bottom-anchored viewport is meaningful.
+        bridge.writeToPty(
+            "i=1; while [ \$i -le 60 ]; do echo \"IME_TEST_LINE_\$i\"; i=\$((i+1)); done\n".toByteArray(),
+        )
+        Thread.sleep(2500)
+
+        val before = captureTerminalBitmap()
+        val beforeBottom = extractBottomBand(before, 150)
+        before.recycle()
+
+        openIme()
+        Thread.sleep(3000)
+
+        // Requirement: assist bar sits just above the IME.
+        barBelowIme("ModifierBar")
+
+        val after = captureTerminalBitmap()
+        val afterBottom = extractBottomBand(after, 150)
+        after.recycle()
+
+        dumpBitmap(before, "ime_before.png")
+        dumpBitmap(after, "ime_after.png")
+        debugDiffBand(beforeBottom, afterBottom, beforeBottom.size / 150, 150)
+
+        // Requirement: bottom portion pixel-identical across IME open (content fits OR scrolls to bottom).
+        val confidence = bottomBandConfidence(beforeBottom, afterBottom)
+        assertTrue(
+            "Terminal bottom band must be pixel-stable across IME open (confidence=$confidence < 0.99)",
+            confidence >= 0.99,
+        )
+
+        // Requirement: closing the IME restores the pre-IME pixel state (round-trip).
+        closeIme()
+        Thread.sleep(2000)
+        val closed = captureTerminalBitmap()
+        val closedBottom = extractBottomBand(closed, 150)
+        closed.recycle()
+        val roundTrip = bottomBandConfidence(beforeBottom, closedBottom)
+        assertTrue(
+            "Terminal bottom band must return to pre-IME state after close (confidence=$roundTrip < 0.99)",
+            roundTrip >= 0.99,
+        )
+    }
+
+    @Test
+    fun ime_open_animation_frames_converge() {
+        val bridge = getBridgeOrWait()
+        bridge.writeToPty(
+            "i=1; while [ \$i -le 60 ]; do echo \"IME_FRAME_\$i\"; i=\$((i+1)); done\n".toByteArray(),
+        )
+        Thread.sleep(2000)
+
+        openIme()
+
+        // Record frames during the IME-open animation ("video"), compare each frame's bottom band.
+        val frames = mutableListOf<IntArray>()
+        repeat(12) {
+            Thread.sleep(250)
+            val bmp = captureTerminalBitmap()
+            frames.add(extractBottomBand(bmp, 150))
+            bmp.recycle()
+        }
+
+        // Settled after-capture must match the final animation frame.
+        val after = captureTerminalBitmap()
+        val afterBottom = extractBottomBand(after, 150)
+        after.recycle()
+        val finalConf = bottomBandConfidence(frames.last(), afterBottom)
+        assertTrue(
+            "Final IME-open animation frame must match settled after-capture (confidence=$finalConf < 0.99)",
+            finalConf >= 0.99,
+        )
+
+        // The last few frames must be mutually stable (animation converged, no jitter).
+        val tailStable =
+            bottomBandConfidence(frames[9], frames[10]) >= 0.98 &&
+                bottomBandConfidence(frames[10], frames[11]) >= 0.98
+        assertTrue("IME-open animation should converge (tail frames stable)", tailStable)
+
+        closeIme()
+    }
+
+    @Test
+    fun search_bar_above_keyboard_when_ime_open() {
+        composeTestRule.onNodeWithTag("Key_DRAWER").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithTag("SearchButton").performClick()
+        composeTestRule.waitForIdle()
+        // Opening search shows the search bar; the field auto-focuses and raises the IME.
+        composeTestRule.onNodeWithTag("TextSearchBar").assertExists()
+        assertTrue("IME should open when search field focused", waitForIme(8000))
+        // Requirement: search bar sits just above the IME.
+        barBelowIme("TextSearchBar")
+        closeIme()
+    }
+}
