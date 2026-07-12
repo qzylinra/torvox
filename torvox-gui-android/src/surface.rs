@@ -133,6 +133,40 @@ pub struct AndroidSurface {
     /// `build_cell_instances_into`). `CellInstance` is `Copy`/`Pod`, so reuse
     /// via `clear` + `reserve` is safe.
     instance_buffer: Vec<torvox_renderer::gpu::CellInstance>,
+    /// Cached CellSnapshot cells from the previous frame for cell-level
+    /// dirty tracking. When empty (first frame), all rows are dirty.
+    prev_cells: Vec<CellSnapshot>,
+    /// Cached CellInstances from the previous frame. Clean rows are copied
+    /// from this cache instead of rebuilding them through the shaping/color
+    /// atlas-lookup hot path.
+    cached_instances: Vec<torvox_renderer::gpu::CellInstance>,
+    /// Cumulative end offset per row in `cached_instances`.
+    /// `cached_row_ends[row]` = exclusive end index of row `row`.
+    cached_row_ends: Vec<usize>,
+    /// Scroll offset used in the previous frame. When it changes, all rows
+    /// are marked dirty because the grid cells shift.
+    prev_scroll_offset: u32,
+}
+
+/// Compare two CellSnapshots for equality of fields that affect rendering.
+/// Returns `true` if they differ (row should be marked dirty).
+fn cell_ne(a: &CellSnapshot, b: &CellSnapshot) -> bool {
+    a.codepoint != b.codepoint
+        || a.width != b.width
+        || a.bold != b.bold
+        || a.dim != b.dim
+        || a.italic != b.italic
+        || a.underline != b.underline
+        || a.double_underline != b.double_underline
+        || a.reverse != b.reverse
+        || a.strikethrough != b.strikethrough
+        || a.overline != b.overline
+        || a.hidden != b.hidden
+        || a.foreground != b.foreground
+        || a.background != b.background
+        || a.uri != b.uri
+        || a.graphemes.len() != b.graphemes.len()
+        || (!a.graphemes.is_empty() && a.graphemes != b.graphemes)
 }
 
 fn cell_to_line(cells: &[CellSnapshot], cols: u32) -> Line {
@@ -208,6 +242,10 @@ impl AndroidSurface {
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             render_requested: false,
             instance_buffer: Vec::new(),
+            prev_cells: Vec::new(),
+            cached_instances: Vec::new(),
+            cached_row_ends: Vec::new(),
+            prev_scroll_offset: 0,
         }
     }
 
@@ -590,6 +628,57 @@ impl AndroidSurface {
             selection_bg[2] as f32 / 255.0,
             1.0,
         ]);
+        // ── COMPUTE DIRTY ROWS ──
+        // Diff current vs previous snapshot cells to find changed rows.
+        let total_cells = (snapshot.rows * snapshot.cols) as usize;
+        let mut dirty_rows: Vec<bool> = if self.prev_cells.len() == total_cells {
+            let cap = snapshot.rows as usize;
+            let mut dr = Vec::with_capacity(cap);
+            for row in 0..snapshot.rows as usize {
+                let row_off = row * snapshot.cols as usize;
+                let mut row_dirty = false;
+                for col in 0..snapshot.cols as usize {
+                    if cell_ne(&self.prev_cells[row_off + col], &snapshot.cells[row_off + col]) {
+                        row_dirty = true;
+                        break;
+                    }
+                }
+                dr.push(row_dirty);
+            }
+            dr
+        } else {
+            vec![true; snapshot.rows as usize]
+        };
+
+        // Force-dirty cursor-related rows when cursor moved
+        if self.last_cursor_row != snapshot.cursor_row
+            || self.last_cursor_col != snapshot.cursor_col
+            || self.last_cursor_visible != snapshot.cursor_visible
+        {
+            let cr = snapshot.cursor_row as usize;
+            if cr < dirty_rows.len() {
+                dirty_rows[cr] = true;
+            }
+            let pcr = self.last_cursor_row as usize;
+            if pcr < dirty_rows.len() && pcr != cr {
+                dirty_rows[pcr] = true;
+            }
+        }
+
+        // Conservative: when scroll or search highlights change, mark all
+        // rows dirty. Selection changes trigger render_requested on the
+        // Kotlin side, so the next frame will have all-dirty anyway.
+        let scroll_changed = self.prev_scroll_offset != scroll_offset;
+        let highlights_present = !self.search_highlights.is_empty();
+        if highlights_present || scroll_changed {
+            for d in &mut dirty_rows {
+                *d = true;
+            }
+        }
+
+        self.prev_cells = snapshot.cells.clone();
+
+        let mut row_ends = Vec::new();
         torvox_renderer::gpu::build_cell_instances_into(
             &snapshot,
             &mut self.font_pipeline,
@@ -597,15 +686,25 @@ impl AndroidSurface {
                 atlas_width: self.atlas_width as f32,
                 atlas_height: self.atlas_height as f32,
                 projection_height: self.render_height as f32,
-                dirty_rows: Some(&snapshot.dirty),
                 selection: self.selection,
                 selection_bg,
                 search_highlights: &self.search_highlights,
                 cursor_color,
                 cursor_style: self.cursor_style,
+                dirty_rows: &dirty_rows,
+                cached_instances: &self.cached_instances,
+                cached_row_ends: &self.cached_row_ends,
             },
             &mut self.instance_buffer,
+            &mut row_ends,
         );
+
+        // Update caches for next frame
+        self.cached_instances.clear();
+        self.cached_instances.extend_from_slice(&self.instance_buffer);
+        self.cached_row_ends = row_ends;
+        self.prev_scroll_offset = scroll_offset;
+
         let instances = &self.instance_buffer[..];
         let gen_after = self.font_pipeline.atlas_generation();
         if gen_after > gen_before {
@@ -869,14 +968,17 @@ impl AndroidSurface {
                 atlas_width: self.atlas_width as f32,
                 atlas_height: self.atlas_height as f32,
                 projection_height: self.render_height as f32,
-                dirty_rows: None,
                 selection: self.selection,
                 selection_bg,
                 search_highlights: &self.search_highlights,
                 cursor_color,
                 cursor_style: self.cursor_style,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
             },
             &mut self.instance_buffer,
+            &mut Vec::new(),
         );
         let instances = &self.instance_buffer[..];
         let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();

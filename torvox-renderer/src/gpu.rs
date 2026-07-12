@@ -2405,12 +2405,20 @@ pub struct CellInstanceConfig<'a> {
     pub atlas_width: f32,
     pub atlas_height: f32,
     pub projection_height: f32,
-    pub dirty_rows: Option<&'a [bool]>,
     pub selection: Option<SelectionRange>,
     pub selection_bg: Option<[f32; 4]>,
     pub search_highlights: &'a [SearchHighlight],
     pub cursor_color: Option<[f32; 4]>,
     pub cursor_style: torvox_core::cursor::CursorStyle,
+    /// Per-row dirty flags. Empty slice = all rows dirty (full rebuild).
+    pub dirty_rows: &'a [bool],
+    /// Cached CellInstances from the previous frame — used as source for
+    /// non-dirty rows so we avoid re-executing the shaping/color/atlas
+    /// lookup hot path for unchanged cells.
+    pub cached_instances: &'a [CellInstance],
+    /// Cumulative end offsets for each row in `cached_instances`.
+    /// `cached_row_ends[row]` = exclusive end index of row `row`.
+    pub cached_row_ends: &'a [usize],
 }
 
 pub fn build_cell_instances_from_snapshot(
@@ -2419,7 +2427,8 @@ pub fn build_cell_instances_from_snapshot(
     config: CellInstanceConfig<'_>,
 ) -> Vec<CellInstance> {
     let mut instances = Vec::new();
-    build_cell_instances_into(snapshot, font_pipeline, config, &mut instances);
+    let mut _row_ends = Vec::new();
+    build_cell_instances_into(snapshot, font_pipeline, config, &mut instances, &mut _row_ends);
     instances
 }
 
@@ -2446,11 +2455,11 @@ pub fn build_cell_instances_into(
     font_pipeline: &mut crate::font::FontPipeline,
     config: CellInstanceConfig<'_>,
     instances: &mut Vec<CellInstance>,
+    row_ends: &mut Vec<usize>,
 ) {
     let atlas_width = config.atlas_width;
     let atlas_height = config.atlas_height;
     let projection_height = config.projection_height;
-    let dirty_rows = config.dirty_rows;
     let selection = config.selection;
     let selection_bg = config.selection_bg;
     let search_highlights = config.search_highlights;
@@ -2472,7 +2481,17 @@ pub fn build_cell_instances_into(
     }
 
     instances.clear();
-    instances.reserve((rows * cols) as usize);
+    let use_cache = !config.dirty_rows.is_empty()
+        && config.dirty_rows.len() >= rows as usize
+        && config.cached_row_ends.len() >= rows as usize
+        && config.cached_instances.len() > config.cached_row_ends[rows as usize - 1];
+    if use_cache {
+        // Estimate capacity from cached total (typically matches or is close)
+        instances.reserve(config.cached_instances.len());
+    } else {
+        instances.reserve((rows * cols) as usize);
+    }
+    row_ends.clear();
 
     let cursor_row = snapshot.cursor_row;
     let cursor_col = snapshot.cursor_col;
@@ -2493,88 +2512,26 @@ pub fn build_cell_instances_into(
     }
 
     for row in 0..rows {
+        // ── CACHED ROW PATH ──
+        // When the row is clean (no cell content changed, no cursor, no selection,
+        // no search highlight), copy the previous frame's instances directly.
+        // This avoids re-executing the shaping, color blending, and atlas lookup
+        // hot path for every cell in every frame.
+        if use_cache && !config.dirty_rows[row as usize] {
+            let ru = row as usize;
+            let start = if ru == 0 {
+                0_usize
+            } else {
+                config.cached_row_ends[ru - 1]
+            };
+            let end = config.cached_row_ends[ru];
+            instances.extend_from_slice(&config.cached_instances[start..end]);
+            row_ends.push(instances.len());
+            continue;
+        }
+
         if projection_height > 0.0 && (row as f32 * cell_h) >= projection_height {
             break;
-        }
-        if let Some(dirty) = dirty_rows
-            && row < dirty.len() as u32
-            && !dirty[row as usize]
-        {
-            for col in 0..cols {
-                let idx = (row * cols + col) as usize;
-                let cell = &snapshot.cells[idx];
-                let is_selected = selection.is_some_and(|s| s.contains(row, col, cols));
-                let is_cursor = cursor_visible && row == cursor_row && col == cursor_col;
-                let (mut fg, mut bg) = if cell.reverse {
-                    (cell.background, cell.foreground)
-                } else {
-                    (cell.foreground, cell.background)
-                };
-                if is_selected {
-                    if let Some(sbg) = selection_bg {
-                        bg = sbg;
-                    } else {
-                        std::mem::swap(&mut fg, &mut bg);
-                    }
-                }
-                if let Some(hl) = cell_highlight(row, col, &highlights_by_row) {
-                    apply_search_highlight(&mut fg, &mut bg, *hl);
-                }
-                let (fg, bg, quad_origin, quad_size) = if is_cursor {
-                    let raw_cursor_bg = cursor_color.unwrap_or([1.0, 1.0, 1.0, 1.0]);
-                    let cursor_alpha = match cursor_style {
-                        torvox_core::cursor::CursorStyle::Block => CURSOR_BLOCK_ALPHA,
-                        _ => CURSOR_LINE_ALPHA,
-                    };
-                    let cursor_bg = [
-                        raw_cursor_bg[0],
-                        raw_cursor_bg[1],
-                        raw_cursor_bg[2],
-                        raw_cursor_bg[3] * cursor_alpha,
-                    ];
-                    let base_x = col as f32 * cell_w;
-                    let base_y = row as f32 * cell_h;
-                    match cursor_style {
-                        torvox_core::cursor::CursorStyle::Block => {
-                            (bg, cursor_bg, [base_x, base_y], [cell_w, cell_h])
-                        }
-                        torvox_core::cursor::CursorStyle::Bar => (
-                            [0.0, 0.0, 0.0, 0.0],
-                            cursor_bg,
-                            [base_x, base_y],
-                            [cell_w * CURSOR_BAR_WIDTH_RATIO, cell_h],
-                        ),
-                        torvox_core::cursor::CursorStyle::Underline => (
-                            [0.0, 0.0, 0.0, 0.0],
-                            cursor_bg,
-                            [
-                                base_x,
-                                base_y + cell_h - cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO,
-                            ],
-                            [cell_w, cell_h * CURSOR_UNDERLINE_HEIGHT_RATIO],
-                        ),
-                    }
-                } else {
-                    (
-                        fg,
-                        bg,
-                        [col as f32 * cell_w, row as f32 * cell_h],
-                        [cell_w, cell_h],
-                    )
-                };
-                instances.push(CellInstance {
-                    quad_origin,
-                    atlas_offset: [0.0; 2],
-                    atlas_size: [0.0; 2],
-                    fg_color: fg,
-                    bg_color: bg,
-                    quad_size,
-                    flags: 0.0,
-                    bearing: [0.0; 2],
-                    glyph_advance_width: 0.0,
-                });
-            }
-            continue;
         }
         let mut skip_cols = 0u32;
         for col in 0..cols {
@@ -3594,12 +3551,14 @@ mod tests {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
                 projection_height: 0.0,
-                dirty_rows: None,
                 selection: None,
                 selection_bg: None,
                 search_highlights: &[],
                 cursor_color,
                 cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
             },
         );
         assert_eq!(instances.len(), 2);
@@ -3640,12 +3599,14 @@ mod tests {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
                 projection_height: 0.0,
-                dirty_rows: None,
                 selection: None,
                 selection_bg: None,
                 search_highlights: &[],
                 cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
                 cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
             },
         );
         assert_eq!(instances.len(), 1);
@@ -3687,12 +3648,14 @@ mod tests {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
                 projection_height: 768.0,
-                dirty_rows: None,
                 selection: None,
                 selection_bg: None,
                 search_highlights: &[],
                 cursor_color: Some([1.0, 1.0, 1.0, 1.0]),
                 cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
             },
         );
         assert_eq!(instances.len(), 1);
@@ -3746,12 +3709,14 @@ mod tests {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
                 projection_height: 768.0,
-                dirty_rows: None,
                 selection,
                 selection_bg: None,
                 search_highlights: &[],
                 cursor_color: None,
                 cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4308,12 +4273,14 @@ mod tests {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
                 projection_height: 768.0,
-                dirty_rows: None,
                 selection: None,
                 selection_bg: None,
                 search_highlights: &highlights,
                 cursor_color: None,
                 cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4358,12 +4325,14 @@ mod tests {
                 atlas_width: 2048.0,
                 atlas_height: 2048.0,
                 projection_height: 0.0,
-                dirty_rows: None,
                 selection: None,
                 selection_bg: None,
                 search_highlights: &highlights,
                 cursor_color: Some([0.5, 0.5, 1.0, 1.0]),
                 cursor_style: torvox_core::cursor::CursorStyle::Block,
+                dirty_rows: &[],
+                cached_instances: &[],
+                cached_row_ends: &[],
             },
         );
         assert_eq!(instances.len(), 1);

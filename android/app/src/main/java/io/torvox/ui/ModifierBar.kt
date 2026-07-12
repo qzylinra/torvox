@@ -514,22 +514,22 @@ private fun RowScope.ExtraKeyButton(
     contentDescription: String? = null,
     onRepeat: (() -> Unit)? = null,
 ) {
-    val active = modifierState?.let { it != ModifierState.Off } ?: isActive
     val isLocked = modifierState == ModifierState.Locked
     val isOnce = modifierState == ModifierState.Once
 
     var isPressed by remember { mutableStateOf(false) }
 
+    val pressedColor = Color(0xFF7F7F7F)
     val targetBg =
         when {
             isLocked -> MaterialTheme.colorScheme.primary
             isOnce -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
             isActive -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+            isPressed -> pressedColor
             else -> Color.Transparent
         }
-    val pressedOverlay = Color.White.copy(alpha = 0.12f)
     val animatedBg by animateColorAsState(
-        targetValue = if (isPressed && !active) pressedOverlay else targetBg,
+        targetValue = targetBg,
         animationSpec = tween(durationMillis = 100),
         label = "btnBg",
     )
@@ -590,7 +590,7 @@ private fun RowScope.ExtraKeyButton(
             .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier)
             .then(
                 Modifier.background(
-                    if (active || isPressed) animatedBg else Color.Transparent,
+                    animatedBg,
                     RoundedCornerShape(4.dp),
                 ),
             ).then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
