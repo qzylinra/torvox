@@ -254,4 +254,48 @@ class TerminalViewModelThemeTest {
         coVerify { settingsRepository.setAppThemeMode("night") }
         coVerify { runtime.applySettings() }
     }
+
+    @Test
+    fun cursorBlink_initialState() = runTest(testDispatcher) {
+        assertEquals(true, viewModel.cursorBlink.value)
+    }
+
+    @Test
+    fun cursorStyle_initialState() = runTest(testDispatcher) {
+        assertEquals("block", viewModel.cursorStyle.value)
+    }
+
+    @Test
+    fun cursorSpeed_initialState() = runTest(testDispatcher) {
+        assertEquals(530, viewModel.cursorSpeed.value)
+    }
+
+    @Test
+    fun setCursorBlink_storesSetting() = runTest(testDispatcher) {
+        viewModel.setCursorBlink(false)
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify { settingsRepository.setCursorBlink(false) }
+    }
+
+    @Test
+    fun setCursorSpeed_storesSetting() = runTest(testDispatcher) {
+        viewModel.setCursorSpeed(300)
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify { settingsRepository.setCursorSpeed(300) }
+    }
+
+    @Test
+    fun setCursorStyle_storesSetting() = runTest(testDispatcher) {
+        viewModel.setCursorStyle("bar")
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify { settingsRepository.setCursorStyle("bar") }
+    }
+
+    @Test
+    fun resetCursorBlink_handlesNullBridge() = runTest(testDispatcher) {
+        // Bridge is null in test — should not throw
+        viewModel.resetCursorBlink()
+        testDispatcher.scheduler.advanceUntilIdle()
+        // No exception expected
+    }
 }

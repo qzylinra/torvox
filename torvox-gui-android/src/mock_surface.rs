@@ -12,6 +12,9 @@ pub struct MockSurface {
     pixels: Vec<u8>,
     surface_width: u32,
     surface_height: u32,
+    blink_phase: bool,
+    blink_enabled: bool,
+    blink_speed_ms: u32,
 }
 
 impl MockSurface {
@@ -26,6 +29,9 @@ impl MockSurface {
             pixels: Vec::new(),
             surface_width: cols * 10,
             surface_height: rows * 20,
+            blink_phase: true,
+            blink_enabled: true,
+            blink_speed_ms: 530,
         }
     }
 

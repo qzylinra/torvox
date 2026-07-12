@@ -2518,6 +2518,17 @@ pub fn build_cell_instances_into(
     }
 
     for row in 0..rows {
+        // ── PROJECTION CLIP ──
+        // Must run before the cached row path so that rows beyond the
+        // visible area are always skipped, even when their content is
+        // clean. Otherwise, when the surface shrinks (e.g. IME opens),
+        // clean rows below the new projection_height would still be
+        // copied from cache, wasting GPU bandwidth and potentially
+        // rendering at wrong positions.
+        if projection_height > 0.0 && (row as f32 * cell_h) >= projection_height {
+            break;
+        }
+
         // ── CACHED ROW PATH ──
         // When the row is clean (no cell content changed, no cursor, no selection,
         // no search highlight), copy the previous frame's instances directly.
@@ -2534,10 +2545,6 @@ pub fn build_cell_instances_into(
             instances.extend_from_slice(&config.cached_instances[start..end]);
             row_ends.push(instances.len());
             continue;
-        }
-
-        if projection_height > 0.0 && (row as f32 * cell_h) >= projection_height {
-            break;
         }
         let mut skip_cols = 0u32;
         for col in 0..cols {
@@ -4524,6 +4531,7 @@ mod tests {
 
     #[test]
     fn cursor_block_full_cell_size() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
         let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
         font_pipeline.rasterize_ascii();
         let (cell_w, cell_h) = font_pipeline.cell_metrics();
@@ -4571,6 +4579,7 @@ mod tests {
 
     #[test]
     fn cursor_bar_width_ratio() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
         let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
         font_pipeline.rasterize_ascii();
         let (cell_w, cell_h) = font_pipeline.cell_metrics();
@@ -4620,6 +4629,7 @@ mod tests {
 
     #[test]
     fn cursor_underline_height_ratio() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
         let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
         font_pipeline.rasterize_ascii();
         let (cell_w, cell_h) = font_pipeline.cell_metrics();
@@ -4669,6 +4679,7 @@ mod tests {
 
     #[test]
     fn cursor_not_rendered_when_visible_false() {
+        use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
         let mut font_pipeline = crate::font::FontPipeline::new(2048, 2048, 14.0);
         font_pipeline.rasterize_ascii();
         let cells = vec![CellSnapshot {
