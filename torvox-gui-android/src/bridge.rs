@@ -543,7 +543,7 @@ impl TorvoxBridge {
         #[cfg(target_os = "android")]
         android_logger::init_once(
             android_logger::Config::default()
-                .with_max_level(log::LevelFilter::Debug)
+                .with_max_level(log::LevelFilter::Info)
                 .with_tag("TorvoxRust"),
         );
         std::panic::set_hook(Box::new(|info| {
@@ -669,7 +669,7 @@ impl TorvoxBridge {
         let prev_w = f32::from_bits(self.cell_width.load(std::sync::atomic::Ordering::Relaxed));
         let prev_h = f32::from_bits(self.cell_height.load(std::sync::atomic::Ordering::Relaxed));
         if (prev_w - cell_width).abs() > 0.01 || (prev_h - cell_height).abs() > 0.01 {
-            log::debug!(
+            log::trace!(
                 "store_cell_metrics: cell_width={} cell_height={}",
                 cell_width,
                 cell_height

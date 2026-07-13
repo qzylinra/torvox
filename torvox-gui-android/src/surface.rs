@@ -604,7 +604,7 @@ impl AndroidSurface {
                 } // AndroidSurface::render
                 return Ok(false);
             }
-            log::debug!(
+            log::trace!(
                 "RENDER_PROCEED: had_output={} frame_count={} highlights={} render_requested={}",
                 had_output,
                 self.frame_count,
@@ -874,7 +874,7 @@ impl AndroidSurface {
 
         if !instances.is_empty() {
             let first = &instances[0];
-            log::debug!(
+            log::trace!(
                 "RENDER_INSTANCES: count={} first_cell=({:.0},{:.0}) bg=({},{},{}) fg=({},{},{}) flags={:.0} uv_size=({:.4},{:.4}) bearing=({:.1},{:.1}) advance_width={:.1}",
                 instances.len(),
                 first.quad_origin[0],
@@ -893,7 +893,7 @@ impl AndroidSurface {
                 first.glyph_advance_width,
             );
         } else {
-            log::debug!("RENDER_INSTANCES: ZERO instances — nothing to render!");
+            log::trace!("RENDER_INSTANCES: ZERO instances — nothing to render!");
         }
 
         self.title = snapshot.title.clone();
@@ -1005,12 +1005,12 @@ impl AndroidSurface {
         // frame (≈16.6ms present on 60Hz) would spuriously warn.
         if cpu_ms >= FRAME_TIME_TARGET_MS {
             log::warn!(
-                "RENDER_SLOW: cpu={:.1}ms present={:.1}ms (cpu ≥16ms target)",
+                "RENDER_SLOW: cpu={:.1}ms present={:.1}ms",
                 cpu_ms,
                 present_ms
             );
         } else {
-            log::debug!("RENDER_OK: cpu={:.1}ms present={:.1}ms", cpu_ms, present_ms);
+            log::trace!("RENDER_OK: cpu={:.1}ms present={:.1}ms", cpu_ms, present_ms);
         }
 
         // Swap caches for next frame — eliminates ~800KB memcpy/frame
