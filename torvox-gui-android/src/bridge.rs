@@ -450,6 +450,11 @@ pub struct TorvoxBridge {
     cell_width: std::sync::atomic::AtomicU32,
     cell_height: std::sync::atomic::AtomicU32,
     scrollback_length: std::sync::atomic::AtomicU32,
+    /// Lock-free sender for user-initiated PTY writes (keyboard/IME/paste).
+    /// Captured once at session spawn so `write_to_pty`/`process_key_event`
+    /// never block on the session mutex — avoiding UI-thread stalls while the
+    /// render thread holds that lock during `process_output`.
+    user_write_tx: std::sync::Mutex<Option<flume::Sender<Vec<u8>>>>,
 }
 
 impl TorvoxBridge {
@@ -556,6 +561,7 @@ impl TorvoxBridge {
             cell_height: std::sync::atomic::AtomicU32::new(0),
             surface_ready: std::sync::atomic::AtomicBool::new(false),
             scrollback_length: std::sync::atomic::AtomicU32::new(0),
+            user_write_tx: std::sync::Mutex::new(None),
         }
     }
 
@@ -589,11 +595,19 @@ impl TorvoxBridge {
                     detail: e.to_string(),
                 })?;
         match self.session.lock() {
-            Ok(mut session_guard) => *session_guard = Some(session_arc),
+            Ok(mut session_guard) => *session_guard = Some(session_arc.clone()),
             Err(poisoned) => {
                 let mut session_guard = poisoned.into_inner();
-                *session_guard = Some(session_arc);
+                *session_guard = Some(session_arc.clone());
                 log::warn!("spawn_terminal: session mutex was poisoned, recovered");
+            }
+        }
+        // Capture the lock-free user-write sender once so subsequent
+        // write_to_pty / process_key_event calls never touch the session mutex.
+        if let Ok(session_guard) = session_arc.lock() {
+            let sender = session_guard.user_write_sender();
+            if let Ok(mut tx_guard) = self.user_write_tx.lock() {
+                *tx_guard = Some(sender);
             }
         }
         Ok(0)
@@ -651,7 +665,7 @@ impl TorvoxBridge {
 
     fn store_cell_metrics(&self, surface: &crate::surface::AndroidSurface) {
         let (cell_width, cell_height) = surface.font_pipeline().cell_metrics();
-        log::info!(
+        log::trace!(
             "store_cell_metrics: cell_width={} cell_height={}",
             cell_width,
             cell_height
@@ -1505,33 +1519,23 @@ impl TorvoxBridge {
     }
 
     pub fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
-        let session_arc = {
-            let guard = self
-                .session
-                .lock()
-                .map_err(|_| TerminalError::SessionUnavailable {
-                    detail: "session mutex poisoned".to_string(),
-                })?;
-            match guard.as_ref() {
-                Some(session_arc) => session_arc.clone(),
-                None => {
-                    return Err(TerminalError::SessionUnavailable {
-                        detail: "no active session".to_string(),
-                    });
-                }
-            }
-        };
-        let mut session = session_arc
+        let guard = self
+            .user_write_tx
             .lock()
             .map_err(|_| TerminalError::SessionUnavailable {
-                detail: "session inner mutex poisoned".to_string(),
+                detail: "user-write channel mutex poisoned".to_string(),
             })?;
-        session.write(&data).map_err(|error| {
-            log::error!("bridge: PTY write failed: {error}");
-            TerminalError::PtyError {
-                detail: format!("PTY write failed: {error}"),
-            }
-        })
+        match guard.as_ref() {
+            Some(sender) => sender.send(data).map_err(|error| {
+                log::error!("bridge: user PTY write channel closed: {error}");
+                TerminalError::PtyError {
+                    detail: format!("user PTY write channel closed: {error}"),
+                }
+            }),
+            None => Err(TerminalError::SessionUnavailable {
+                detail: "no active session — user-write channel not initialized".to_string(),
+            }),
+        }
     }
 
     pub fn process_key_event(
@@ -1542,47 +1546,68 @@ impl TorvoxBridge {
         unicode_char: u32,
         unshifted_char: u32,
     ) -> Result<(), TerminalError> {
-        let session_arc = {
-            let guard = self
-                .session
+        // Encode the key under the session lock (terminal state is mutated),
+        // then enqueue the bytes on the lock-free channel so the actual PTY
+        // write happens on the render thread. This keeps the UI thread off the
+        // session mutex's write path and avoids stalls while the render thread
+        // holds that lock during process_output.
+        let encoded = {
+            let session_arc = {
+                let guard = self
+                    .session
+                    .lock()
+                    .map_err(|_| TerminalError::SessionUnavailable {
+                        detail: "session mutex poisoned".to_string(),
+                    })?;
+                match guard.as_ref() {
+                    Some(session_arc) => session_arc.clone(),
+                    None => {
+                        return Err(TerminalError::SessionUnavailable {
+                            detail: "no active session".to_string(),
+                        });
+                    }
+                }
+            };
+            let session = session_arc
                 .lock()
                 .map_err(|_| TerminalError::SessionUnavailable {
-                    detail: "session mutex poisoned".to_string(),
+                    detail: "session inner mutex poisoned".to_string(),
                 })?;
-            match guard.as_ref() {
-                Some(session_arc) => session_arc.clone(),
-                None => {
-                    return Err(TerminalError::SessionUnavailable {
-                        detail: "no active session".to_string(),
-                    });
-                }
-            }
+            session.key_encode(
+                key_code,
+                modifiers as u16,
+                action,
+                unicode_char,
+                unshifted_char,
+            )
         };
-        let mut session = session_arc
-            .lock()
-            .map_err(|_| TerminalError::SessionUnavailable {
-                detail: "session inner mutex poisoned".to_string(),
-            })?;
-        if let Some(encoded) = session.key_encode(
-            key_code,
-            modifiers as u16,
-            action,
-            unicode_char,
-            unshifted_char,
-        ) && !encoded.is_empty()
+        if let Some(encoded) = encoded
+            && !encoded.is_empty()
         {
-            log::debug!(
+            log::trace!(
                 "bridge: process_key_event key_code={key_code} modifiers={modifiers} action={action} unicode={unicode_char} encoded_len={}",
                 encoded.len()
             );
-            session.write(&encoded).map_err(|error| {
-                log::error!("bridge: PTY write (key) failed: {error}");
-                TerminalError::PtyError {
-                    detail: format!("PTY write (key) failed: {error}"),
-                }
-            })?;
+            let guard = self
+                .user_write_tx
+                .lock()
+                .map_err(|_| TerminalError::SessionUnavailable {
+                    detail: "user-write channel mutex poisoned".to_string(),
+                })?;
+            match guard.as_ref() {
+                Some(sender) => sender.send(encoded).map_err(|error| {
+                    log::error!("bridge: key PTY write channel closed: {error}");
+                    TerminalError::PtyError {
+                        detail: format!("key PTY write channel closed: {error}"),
+                    }
+                }),
+                None => Err(TerminalError::SessionUnavailable {
+                    detail: "no active session — user-write channel not initialized".to_string(),
+                }),
+            }
+        } else {
+            Ok(())
         }
-        Ok(())
     }
 
     pub fn set_background_image(

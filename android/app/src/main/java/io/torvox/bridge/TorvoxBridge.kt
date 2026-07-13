@@ -259,10 +259,10 @@ private interface TorvoxNative : Library {
 
     fun boltffi_torvox_bridge_free(handle: Long)
 
-    fun torvox_bridge_ping(handle: Long): Int
+    fun boltffi_torvox_bridge_ping(handle: Long): Int
 
     // Raw C-ABI wrappers for methods with scalar parameters
-    fun torvox_bridge_set_native_window(
+    fun boltffi_torvox_bridge_set_native_window(
         handle: Long,
         window_ptr_low: Int,
         window_ptr_high: Int,
@@ -270,25 +270,25 @@ private interface TorvoxNative : Library {
         height: Int,
     ): Int
 
-    fun torvox_bridge_resize(
+    fun boltffi_torvox_bridge_resize(
         handle: Long,
         rows: Int,
         cols: Int,
     ): Int
 
-    fun torvox_bridge_recompute_grid(
+    fun boltffi_torvox_bridge_recompute_grid(
         handle: Long,
         width: Int,
         height: Int,
     ): Int
 
-    fun torvox_bridge_set_surface_size(
+    fun boltffi_torvox_bridge_set_surface_size(
         handle: Long,
         width: Int,
         height: Int,
     )
 
-    fun torvox_bridge_update_native_window(
+    fun boltffi_torvox_bridge_update_native_window(
         handle: Long,
         window_ptr_low: Int,
         window_ptr_high: Int,
@@ -296,15 +296,15 @@ private interface TorvoxNative : Library {
         height: Int,
     ): Int
 
-    fun torvox_bridge_spawn_terminal(
+    fun boltffi_torvox_bridge_spawn_terminal(
         handle: Long,
         rows: Int,
         cols: Int,
     ): Int
 
-    fun torvox_bridge_release_surface(handle: Long)
+    fun boltffi_torvox_bridge_release_surface(handle: Long)
 
-    fun torvox_bridge_release_gpu_surface(handle: Long)
+    fun boltffi_torvox_bridge_release_gpu_surface(handle: Long)
 
     fun boltffi_torvox_bridge_get_config(handle: Long): Pointer?
 
@@ -324,17 +324,17 @@ private interface TorvoxNative : Library {
     ): Pointer?
 
     // Raw C-ABI wrappers
-    fun torvox_bridge_render(handle: Long): Int
+    fun boltffi_torvox_bridge_render(handle: Long): Int
 
-    fun torvox_bridge_poll_bel(handle: Long): Int
+    fun boltffi_torvox_bridge_poll_bel(handle: Long): Int
 
-    fun torvox_bridge_save_test_frame(
+    fun boltffi_torvox_bridge_save_test_frame(
         handle: Long,
         dataDir: Pointer,
     ): Int
 
     @Suppress("LongParameterList")
-    fun torvox_bridge_save_test_frame_with_selection(
+    fun boltffi_torvox_bridge_save_test_frame_with_selection(
         handle: Long,
         dataDir: Pointer,
         startRow: Int,
@@ -345,58 +345,58 @@ private interface TorvoxNative : Library {
         mode: Int,
     ): Int
 
-    fun torvox_bridge_poll_clipboard(handle: Long): Long
+    fun boltffi_torvox_bridge_poll_clipboard(handle: Long): Long
 
-    fun torvox_bridge_poll_notification(handle: Long): Long
+    fun boltffi_torvox_bridge_poll_notification(handle: Long): Long
 
-    fun torvox_bridge_poll_shell_integration(handle: Long): Int
+    fun boltffi_torvox_bridge_poll_shell_integration(handle: Long): Int
 
-    fun torvox_bridge_poll_sync_active(handle: Long): Int
+    fun boltffi_torvox_bridge_poll_sync_active(handle: Long): Int
 
-    fun torvox_bridge_cwd(handle: Long): Pointer?
+    fun boltffi_torvox_bridge_cwd(handle: Long): Pointer?
 
-    fun torvox_bridge_free_cstring(pointer: Pointer?)
+    fun boltffi_torvox_bridge_free_cstring(pointer: Pointer?)
 
-    fun torvox_bridge_focus_event(
+    fun boltffi_torvox_bridge_focus_event(
         handle: Long,
         focused: Int,
     )
 
-    fun torvox_bridge_scrollback_len(handle: Long): Int
+    fun boltffi_torvox_bridge_scrollback_len(handle: Long): Int
 
     // Raw C-ABI wrappers for string/byte-array/scalar methods
 
-    fun torvox_bridge_set_save_path(
+    fun boltffi_torvox_bridge_set_save_path(
         handle: Long,
         path_ptr: ByteArray?,
         path_len: Int,
     ): Int
 
-    fun torvox_bridge_has_saved_session(
+    fun boltffi_torvox_bridge_has_saved_session(
         handle: Long,
         path_ptr: ByteArray?,
         path_len: Int,
     ): Boolean
 
-    fun torvox_bridge_save_session(
+    fun boltffi_torvox_bridge_save_session(
         handle: Long,
         path_ptr: ByteArray?,
         path_len: Int,
     ): Int
 
-    fun torvox_bridge_restore_session(
+    fun boltffi_torvox_bridge_restore_session(
         handle: Long,
         path_ptr: ByteArray?,
         path_len: Int,
     ): Int
 
-    fun torvox_bridge_write_to_pty(
+    fun boltffi_torvox_bridge_write_to_pty(
         handle: Long,
         data_ptr: ByteArray?,
         data_len: Int,
     ): Int
 
-    fun torvox_bridge_process_key_event(
+    fun boltffi_torvox_bridge_process_key_event(
         handle: Long,
         key_code: Int,
         modifiers: Byte,
@@ -405,17 +405,17 @@ private interface TorvoxNative : Library {
         unshifted_char: Int,
     ): Int
 
-    fun torvox_bridge_set_font_size(
+    fun boltffi_torvox_bridge_set_font_size(
         handle: Long,
         size_tenths: Int,
     ): Int
 
-    fun torvox_bridge_set_font_size_in_place(
+    fun boltffi_torvox_bridge_set_font_size_in_place(
         handle: Long,
         size_tenths: Int,
     ): Int
 
-    fun torvox_bridge_set_extra_font_paths(
+    fun boltffi_torvox_bridge_set_extra_font_paths(
         handle: Long,
         paths_ptr: com.sun.jna.Pointer?,
         lens_ptr: com.sun.jna.Pointer?,
@@ -423,7 +423,7 @@ private interface TorvoxNative : Library {
     ): Int
 
     @Suppress("LongParameterList", "FunctionParameterNaming")
-    fun torvox_bridge_set_selection(
+    fun boltffi_torvox_bridge_set_selection(
         handle: Long,
         start_row: Int,
         start_col: Int,
@@ -433,75 +433,75 @@ private interface TorvoxNative : Library {
         mode: Int,
     ): Int
 
-    fun torvox_bridge_expand_and_set_selection(
+    fun boltffi_torvox_bridge_expand_and_set_selection(
         handle: Long,
         row: Int,
         col: Int,
         mode: Int,
     ): Long
 
-    fun torvox_bridge_set_search_highlights(
+    fun boltffi_torvox_bridge_set_search_highlights(
         handle: Long,
         data_ptr: ByteArray?,
         data_len: Int,
     ): Int
 
-    fun torvox_bridge_set_font_family(
+    fun boltffi_torvox_bridge_set_font_family(
         handle: Long,
         family_ptr: ByteArray?,
         family_len: Int,
     ): Int
 
-    fun torvox_bridge_set_theme(
+    fun boltffi_torvox_bridge_set_theme(
         handle: Long,
         theme_ptr: ByteArray?,
         theme_len: Int,
     ): Int
 
-    fun torvox_bridge_scrollback_line(
+    fun boltffi_torvox_bridge_scrollback_line(
         handle: Long,
         index: Int,
     ): Long
 
-    fun torvox_bridge_get_terminal_text(handle: Long): Long
+    fun boltffi_torvox_bridge_get_terminal_text(handle: Long): Long
 
-    fun torvox_bridge_get_active_session_title(handle: Long): Long
+    fun boltffi_torvox_bridge_get_active_session_title(handle: Long): Long
 
-    fun torvox_bridge_get_grid_rows(handle: Long): Int
+    fun boltffi_torvox_bridge_get_grid_rows(handle: Long): Int
 
-    fun torvox_bridge_get_grid_cols(handle: Long): Int
+    fun boltffi_torvox_bridge_get_grid_cols(handle: Long): Int
 
-    fun torvox_bridge_get_cell_width(handle: Long): Float
+    fun boltffi_torvox_bridge_get_cell_width(handle: Long): Float
 
-    fun torvox_bridge_get_cell_height(handle: Long): Float
+    fun boltffi_torvox_bridge_get_cell_height(handle: Long): Float
 
-    fun torvox_bridge_get_default_font_name(handle: Long): Long
+    fun boltffi_torvox_bridge_get_default_font_name(handle: Long): Long
 
-    fun torvox_bridge_get_font_info(handle: Long): Long
+    fun boltffi_torvox_bridge_get_font_info(handle: Long): Long
 
-    fun torvox_bridge_set_system_locale(
+    fun boltffi_torvox_bridge_set_system_locale(
         handle: Long,
         locale: ByteArray,
     )
 
-    fun torvox_bridge_list_font_families(handle: Long): Long
+    fun boltffi_torvox_bridge_list_font_families(handle: Long): Long
 
-    fun torvox_bridge_free_string(handle: Long)
+    fun boltffi_torvox_bridge_free_string(handle: Long)
 
-    fun torvox_bridge_free_notification(ptr: Long)
+    fun boltffi_torvox_bridge_free_notification(ptr: Long)
 
     /** Aggregates all per-frame poll results into a single surface-lock acquisition. */
-    fun torvox_bridge_poll_all(handle: Long): Long
+    fun boltffi_torvox_bridge_poll_all(handle: Long): Long
 
-    fun torvox_bridge_free_poll_all(ptr: Long)
+    fun boltffi_torvox_bridge_free_poll_all(ptr: Long)
 
-    fun torvox_bridge_search_in_scrollback(
+    fun boltffi_torvox_bridge_search_in_scrollback(
         handle: Long,
         query_ptr: ByteArray?,
         query_len: Int,
     ): Long
 
-    fun torvox_bridge_search_all_in_scrollback(
+    fun boltffi_torvox_bridge_search_all_in_scrollback(
         handle: Long,
         query_ptr: ByteArray?,
         query_len: Int,
@@ -509,14 +509,14 @@ private interface TorvoxNative : Library {
         fuzzy: Byte,
     ): Long
 
-    fun torvox_bridge_set_scroll_offset(
+    fun boltffi_torvox_bridge_set_scroll_offset(
         handle: Long,
         offset: Int,
     )
 
-    fun torvox_bridge_wait_until_ready_for_render(handle: Long)
+    fun boltffi_torvox_bridge_wait_until_ready_for_render(handle: Long)
 
-    fun torvox_bridge_set_background_image(
+    fun boltffi_torvox_bridge_set_background_image(
         handle: Long,
         data: ByteArray?,
         len: Int,
@@ -524,27 +524,27 @@ private interface TorvoxNative : Library {
         height: Int,
     )
 
-    fun torvox_bridge_set_background_params(
+    fun boltffi_torvox_bridge_set_background_params(
         handle: Long,
         blur_radius: Int,
         alpha_tenths: Int,
     )
 
-    fun torvox_bridge_clear_background_image(handle: Long)
+    fun boltffi_torvox_bridge_clear_background_image(handle: Long)
 
-    fun torvox_bridge_set_cursor_blink_enabled(
+    fun boltffi_torvox_bridge_set_cursor_blink_enabled(
         handle: Long,
         enabled: Int,
     )
 
-    fun torvox_bridge_set_cursor_blink_speed_ms(
+    fun boltffi_torvox_bridge_set_cursor_blink_speed_ms(
         handle: Long,
         speed_ms: Int,
     )
 
-    fun torvox_bridge_reset_cursor_blink(handle: Long)
+    fun boltffi_torvox_bridge_reset_cursor_blink(handle: Long)
 
-    fun torvox_bridge_set_cursor_style(
+    fun boltffi_torvox_bridge_set_cursor_style(
         handle: Long,
         style_ptr: ByteArray?,
         style_len: Int,
@@ -632,7 +632,7 @@ class TorvoxBridge(
 
     fun ping(): String {
         val library = ensureLib()
-        val result = library.torvox_bridge_ping(handle)
+        val result = library.boltffi_torvox_bridge_ping(handle)
         return if (result == 0) "pong" else "error:$result"
     }
 
@@ -641,7 +641,7 @@ class TorvoxBridge(
         cols: UInt,
     ): Int {
         val library = ensureLib()
-        return library.torvox_bridge_spawn_terminal(handle, rows.toInt(), cols.toInt())
+        return library.boltffi_torvox_bridge_spawn_terminal(handle, rows.toInt(), cols.toInt())
     }
 
     fun setNativeWindow(
@@ -651,7 +651,7 @@ class TorvoxBridge(
     ) {
         val library = ensureLib()
         val result =
-            library.torvox_bridge_set_native_window(
+            library.boltffi_torvox_bridge_set_native_window(
                 handle,
                 (windowPointer and LOW_32_MASK).toInt(),
                 (
@@ -666,7 +666,7 @@ class TorvoxBridge(
 
     fun render(): Int {
         ensureOpen()
-        return ensureLib().torvox_bridge_render(handle)
+        return ensureLib().boltffi_torvox_bridge_render(handle)
     }
 
     fun saveTestFrame(dataDir: String): Int {
@@ -674,7 +674,7 @@ class TorvoxBridge(
             com.sun.jna.Memory(dataBytes.size.toLong() + 1).use { mem ->
                 mem.write(0, dataBytes, 0, dataBytes.size)
                 mem.setByte(dataBytes.size.toLong(), 0)
-                return ensureLib().torvox_bridge_save_test_frame(handle, mem)
+                return ensureLib().boltffi_torvox_bridge_save_test_frame(handle, mem)
             }
         }
     }
@@ -692,7 +692,7 @@ class TorvoxBridge(
             com.sun.jna.Memory(dataBytes.size.toLong() + 1).use { mem ->
                 mem.write(0, dataBytes, 0, dataBytes.size)
                 mem.setByte(dataBytes.size.toLong(), 0)
-                return ensureLib().torvox_bridge_save_test_frame_with_selection(
+                return ensureLib().boltffi_torvox_bridge_save_test_frame_with_selection(
                     handle,
                     mem,
                     startRow,
@@ -706,22 +706,22 @@ class TorvoxBridge(
         }
     }
 
-    fun pollBel(): Boolean = ensureLib().torvox_bridge_poll_bel(handle) != 0
+    fun pollBel(): Boolean = ensureLib().boltffi_torvox_bridge_poll_bel(handle) != 0
 
-    fun pollShellIntegration(): Int = ensureLib().torvox_bridge_poll_shell_integration(handle)
+    fun pollShellIntegration(): Int = ensureLib().boltffi_torvox_bridge_poll_shell_integration(handle)
 
-    fun pollSyncActive(): Boolean = ensureLib().torvox_bridge_poll_sync_active(handle) != 0
+    fun pollSyncActive(): Boolean = ensureLib().boltffi_torvox_bridge_poll_sync_active(handle) != 0
 
     fun pollClipboard(): String? {
-        val pointer = ensureLib().torvox_bridge_poll_clipboard(handle)
+        val pointer = ensureLib().boltffi_torvox_bridge_poll_clipboard(handle)
         if (pointer == 0L) return null
         val text = Pointer(pointer).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(pointer)
+        ensureLib().boltffi_torvox_bridge_free_string(pointer)
         return text
     }
 
     fun pollNotification(): Pair<String, String>? {
-        val pointer = ensureLib().torvox_bridge_poll_notification(handle)
+        val pointer = ensureLib().boltffi_torvox_bridge_poll_notification(handle)
         if (pointer == 0L) return null
         // pointer points to [title_ptr, body_ptr] — two consecutive C string pointers
         val buffer = Pointer(pointer)
@@ -729,7 +729,7 @@ class TorvoxBridge(
         val bodyPtr = buffer.getPointer(8)
         val title = titlePtr?.getString(0, "UTF-8") ?: ""
         val body = bodyPtr?.getString(0, "UTF-8") ?: ""
-        ensureLib().torvox_bridge_free_notification(pointer)
+        ensureLib().boltffi_torvox_bridge_free_notification(pointer)
         return if (title.isNotEmpty() || body.isNotEmpty()) title to body else null
     }
 
@@ -749,7 +749,7 @@ class TorvoxBridge(
      * own, eliminating ~4 extra round-trips and lock acquisitions per render frame.
      */
     fun pollAll(): PollAllResult {
-        val pointer = ensureLib().torvox_bridge_poll_all(handle)
+        val pointer = ensureLib().boltffi_torvox_bridge_poll_all(handle)
         if (pointer == 0L) {
             return PollAllResult(false, null, null, false, 0)
         }
@@ -764,7 +764,7 @@ class TorvoxBridge(
         val clipboard =
             if (clipboardPtr != 0L) {
                 val text = Pointer(clipboardPtr).getString(0, "UTF-8")
-                ensureLib().torvox_bridge_free_string(clipboardPtr)
+                ensureLib().boltffi_torvox_bridge_free_string(clipboardPtr)
                 text
             } else {
                 null
@@ -776,25 +776,25 @@ class TorvoxBridge(
                 val bodyPtr = nbuf.getPointer(8)
                 val title = titlePtr?.getString(0, "UTF-8") ?: ""
                 val body = bodyPtr?.getString(0, "UTF-8") ?: ""
-                ensureLib().torvox_bridge_free_notification(notificationPtr)
+                ensureLib().boltffi_torvox_bridge_free_notification(notificationPtr)
                 if (title.isNotEmpty() || body.isNotEmpty()) title to body else null
             } else {
                 null
             }
-        ensureLib().torvox_bridge_free_poll_all(pointer)
+        ensureLib().boltffi_torvox_bridge_free_poll_all(pointer)
         return PollAllResult(bel, clipboard, notification, syncActive, shellIntegration)
     }
 
     fun cwd(): String {
-        val pointer = ensureLib().torvox_bridge_cwd(handle)
+        val pointer = ensureLib().boltffi_torvox_bridge_cwd(handle)
         if (pointer == null) return ""
         val str = pointer.getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_cstring(pointer)
+        ensureLib().boltffi_torvox_bridge_free_cstring(pointer)
         return str
     }
 
     fun focusEvent(focused: Boolean) {
-        ensureLib().torvox_bridge_focus_event(handle, if (focused) 1 else 0)
+        ensureLib().boltffi_torvox_bridge_focus_event(handle, if (focused) 1 else 0)
     }
 
     fun resize(
@@ -802,7 +802,7 @@ class TorvoxBridge(
         cols: UInt,
     ) {
         val library = ensureLib()
-        val result = library.torvox_bridge_resize(handle, rows.toInt(), cols.toInt())
+        val result = library.boltffi_torvox_bridge_resize(handle, rows.toInt(), cols.toInt())
         if (result != 0) throw RuntimeException("resize failed with code $result")
     }
 
@@ -811,7 +811,7 @@ class TorvoxBridge(
         height: UInt,
     ) {
         val library = ensureLib()
-        val result = library.torvox_bridge_recompute_grid(handle, width.toInt(), height.toInt())
+        val result = library.boltffi_torvox_bridge_recompute_grid(handle, width.toInt(), height.toInt())
         if (result != 0) throw RuntimeException("recomputeGrid failed with code $result")
     }
 
@@ -819,7 +819,7 @@ class TorvoxBridge(
         width: Int,
         height: Int,
     ) {
-        ensureLib().torvox_bridge_set_surface_size(handle, width, height)
+        ensureLib().boltffi_torvox_bridge_set_surface_size(handle, width, height)
     }
 
     fun updateNativeWindow(
@@ -829,7 +829,7 @@ class TorvoxBridge(
     ) {
         val library = ensureLib()
         val result =
-            library.torvox_bridge_update_native_window(
+            library.boltffi_torvox_bridge_update_native_window(
                 handle,
                 (windowPointer and LOW_32_MASK).toInt(),
                 (
@@ -844,20 +844,20 @@ class TorvoxBridge(
 
     fun releaseSurface() {
         val library = ensureLib()
-        library.torvox_bridge_release_surface(handle)
+        library.boltffi_torvox_bridge_release_surface(handle)
     }
 
     fun releaseGpuSurface() {
         val library = ensureLib()
-        library.torvox_bridge_release_gpu_surface(handle)
+        library.boltffi_torvox_bridge_release_gpu_surface(handle)
     }
 
     fun setScrollOffset(offset: UInt) {
-        ensureLib().torvox_bridge_set_scroll_offset(handle, offset.toInt())
+        ensureLib().boltffi_torvox_bridge_set_scroll_offset(handle, offset.toInt())
     }
 
     fun waitUntilReadyForRender() {
-        ensureLib().torvox_bridge_wait_until_ready_for_render(handle)
+        ensureLib().boltffi_torvox_bridge_wait_until_ready_for_render(handle)
     }
 
     fun setSelection(
@@ -869,7 +869,7 @@ class TorvoxBridge(
         mode: Byte = 0,
     ) {
         val library = ensureLib()
-        library.torvox_bridge_set_selection(
+        library.boltffi_torvox_bridge_set_selection(
             handle,
             startRow.toInt(),
             startCol.toInt(),
@@ -892,7 +892,7 @@ class TorvoxBridge(
             )
         }
         val result =
-            ensureLib().torvox_bridge_expand_and_set_selection(
+            ensureLib().boltffi_torvox_bridge_expand_and_set_selection(
                 handle,
                 row.toInt(),
                 col.toInt(),
@@ -907,17 +907,17 @@ class TorvoxBridge(
     }
 
     fun setSearchHighlights(serialized: ByteArray) {
-        ensureLib().torvox_bridge_set_search_highlights(handle, serialized, serialized.size)
+        ensureLib().boltffi_torvox_bridge_set_search_highlights(handle, serialized, serialized.size)
     }
 
     fun clearSearchHighlights() {
-        ensureLib().torvox_bridge_set_search_highlights(handle, null, 0)
+        ensureLib().boltffi_torvox_bridge_set_search_highlights(handle, null, 0)
     }
 
-    fun scrollbackLength(): UInt = ensureLib().torvox_bridge_scrollback_len(handle).toUInt()
+    fun scrollbackLength(): UInt = ensureLib().boltffi_torvox_bridge_scrollback_len(handle).toUInt()
 
     fun writeToPty(data: ByteArray): Boolean {
-        val result = ensureLib().torvox_bridge_write_to_pty(handle, data, data.size)
+        val result = ensureLib().boltffi_torvox_bridge_write_to_pty(handle, data, data.size)
         return result == 0
     }
 
@@ -930,7 +930,7 @@ class TorvoxBridge(
     ): Boolean {
         ensureOpen()
         val result =
-            ensureLib().torvox_bridge_process_key_event(
+            ensureLib().boltffi_torvox_bridge_process_key_event(
                 handle,
                 keyCode,
                 modifiers,
@@ -942,11 +942,11 @@ class TorvoxBridge(
     }
 
     fun setFontSize(sizeTenths: UInt) {
-        ensureLib().torvox_bridge_set_font_size(handle, sizeTenths.toInt())
+        ensureLib().boltffi_torvox_bridge_set_font_size(handle, sizeTenths.toInt())
     }
 
     fun setFontSizeInPlace(sizeTenths: UInt) {
-        val result = ensureLib().torvox_bridge_set_font_size_in_place(handle, sizeTenths.toInt())
+        val result = ensureLib().boltffi_torvox_bridge_set_font_size_in_place(handle, sizeTenths.toInt())
         if (result != 0) android.util.Log.w("TorvoxBridge", "setFontSizeInPlace failed with code $result")
     }
 
@@ -963,24 +963,24 @@ class TorvoxBridge(
             pathPtrsMem.setPointer(i * JNA_POINTER_SIZE, bytesMem)
             lensMem.setInt(i * JNA_INT_SIZE, bytes.size)
         }
-        val result = ensureLib().torvox_bridge_set_extra_font_paths(handle, pathPtrsMem, lensMem, count)
+        val result = ensureLib().boltffi_torvox_bridge_set_extra_font_paths(handle, pathPtrsMem, lensMem, count)
         if (result != 0) android.util.Log.w("TorvoxBridge", "setExtraFontPaths failed with code $result")
     }
 
     fun setFontFamily(familyName: String) {
         val bytes = familyName.toByteArray(Charsets.UTF_8)
-        val result = ensureLib().torvox_bridge_set_font_family(handle, bytes, bytes.size)
+        val result = ensureLib().boltffi_torvox_bridge_set_font_family(handle, bytes, bytes.size)
         if (result != 0) throw RuntimeException("setFontFamily failed with code $result")
     }
 
     fun setTheme(theme: BridgeTheme) {
         val bytes = theme.wireEncodeBytes()
-        ensureLib().torvox_bridge_set_theme(handle, bytes, bytes.size)
+        ensureLib().boltffi_torvox_bridge_set_theme(handle, bytes, bytes.size)
     }
 
     fun setSavePath(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        ensureLib().torvox_bridge_set_save_path(handle, bytes, bytes.size)
+        ensureLib().boltffi_torvox_bridge_set_save_path(handle, bytes, bytes.size)
     }
 
     fun getConfig(): TerminalConfig = callOk({ it.boltffi_torvox_bridge_get_config(handle) }) { TerminalConfig.wireDecode(it) }
@@ -998,24 +998,24 @@ class TorvoxBridge(
     }
 
     fun getDefaultFontName(): String {
-        val ptr = ensureLib().torvox_bridge_get_default_font_name(handle)
+        val ptr = ensureLib().boltffi_torvox_bridge_get_default_font_name(handle)
         if (ptr == 0L) return "monospace"
         val result = Pointer(ptr).getString(0)
-        ensureLib().torvox_bridge_free_string(ptr)
+        ensureLib().boltffi_torvox_bridge_free_string(ptr)
         return result.ifEmpty { "monospace" }
     }
 
     fun getFontInfo(): String {
-        val ptr = ensureLib().torvox_bridge_get_font_info(handle)
+        val ptr = ensureLib().boltffi_torvox_bridge_get_font_info(handle)
         if (ptr == 0L) return "No font loaded"
         val result = Pointer(ptr).getString(0)
-        ensureLib().torvox_bridge_free_string(ptr)
+        ensureLib().boltffi_torvox_bridge_free_string(ptr)
         return result.ifEmpty { "No font loaded" }
     }
 
     fun setSystemLocale(locale: String) {
         val bytes = locale.toByteArray(Charsets.UTF_8) + 0.toByte()
-        ensureLib().torvox_bridge_set_system_locale(handle, bytes)
+        ensureLib().boltffi_torvox_bridge_set_system_locale(handle, bytes)
     }
 
     fun loadFontFile(path: String): String? {
@@ -1026,58 +1026,58 @@ class TorvoxBridge(
 
     fun saveSession(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        val result = ensureLib().torvox_bridge_save_session(handle, bytes, bytes.size)
+        val result = ensureLib().boltffi_torvox_bridge_save_session(handle, bytes, bytes.size)
         if (result != 0) throw RuntimeException("saveSession failed with code $result")
     }
 
     fun restoreSession(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        val result = ensureLib().torvox_bridge_restore_session(handle, bytes, bytes.size)
+        val result = ensureLib().boltffi_torvox_bridge_restore_session(handle, bytes, bytes.size)
         if (result != 0) throw RuntimeException("restoreSession failed with code $result")
     }
 
     fun hasSavedSession(path: String): Boolean {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        return ensureLib().torvox_bridge_has_saved_session(handle, bytes, bytes.size)
+        return ensureLib().boltffi_torvox_bridge_has_saved_session(handle, bytes, bytes.size)
     }
 
     fun scrollbackLine(index: UInt): String? {
-        val pointer = ensureLib().torvox_bridge_scrollback_line(handle, index.toInt())
+        val pointer = ensureLib().boltffi_torvox_bridge_scrollback_line(handle, index.toInt())
         if (pointer == 0L) return null
         val text = Pointer(pointer).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(pointer)
+        ensureLib().boltffi_torvox_bridge_free_string(pointer)
         return text
     }
 
     fun getTerminalText(): String? {
-        val pointer = ensureLib().torvox_bridge_get_terminal_text(handle)
+        val pointer = ensureLib().boltffi_torvox_bridge_get_terminal_text(handle)
         if (pointer == 0L) return null
         val text = Pointer(pointer).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(pointer)
+        ensureLib().boltffi_torvox_bridge_free_string(pointer)
         return text
     }
 
     fun getActiveSessionTitle(): String {
-        val pointer = ensureLib().torvox_bridge_get_active_session_title(handle)
+        val pointer = ensureLib().boltffi_torvox_bridge_get_active_session_title(handle)
         if (pointer == 0L) return ""
         val text = Pointer(pointer).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(pointer)
+        ensureLib().boltffi_torvox_bridge_free_string(pointer)
         return text
     }
 
-    fun getGridRows(): Int = ensureLib().torvox_bridge_get_grid_rows(handle)
+    fun getGridRows(): Int = ensureLib().boltffi_torvox_bridge_get_grid_rows(handle)
 
-    fun getGridCols(): Int = ensureLib().torvox_bridge_get_grid_cols(handle)
+    fun getGridCols(): Int = ensureLib().boltffi_torvox_bridge_get_grid_cols(handle)
 
-    fun getCellWidth(): Float = ensureLib().torvox_bridge_get_cell_width(handle)
+    fun getCellWidth(): Float = ensureLib().boltffi_torvox_bridge_get_cell_width(handle)
 
-    fun getCellHeight(): Float = ensureLib().torvox_bridge_get_cell_height(handle)
+    fun getCellHeight(): Float = ensureLib().boltffi_torvox_bridge_get_cell_height(handle)
 
     fun listFontFamilies(): List<String> {
-        val pointer = ensureLib().torvox_bridge_list_font_families(handle)
+        val pointer = ensureLib().boltffi_torvox_bridge_list_font_families(handle)
         if (pointer == 0L) return emptyList()
         val text = Pointer(pointer).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(pointer)
+        ensureLib().boltffi_torvox_bridge_free_string(pointer)
         return if (text.isNotEmpty()) text.split("\u001f") else emptyList()
     }
 
@@ -1086,43 +1086,43 @@ class TorvoxBridge(
         width: UInt,
         height: UInt,
     ) {
-        ensureLib().torvox_bridge_set_background_image(handle, rgbaData, rgbaData.size, width.toInt(), height.toInt())
+        ensureLib().boltffi_torvox_bridge_set_background_image(handle, rgbaData, rgbaData.size, width.toInt(), height.toInt())
     }
 
     fun setBackgroundParams(
         blurRadius: UInt,
         alphaTenths: UInt,
     ) {
-        ensureLib().torvox_bridge_set_background_params(handle, blurRadius.toInt(), alphaTenths.toInt())
+        ensureLib().boltffi_torvox_bridge_set_background_params(handle, blurRadius.toInt(), alphaTenths.toInt())
     }
 
     fun clearBackgroundImage() {
-        ensureLib().torvox_bridge_clear_background_image(handle)
+        ensureLib().boltffi_torvox_bridge_clear_background_image(handle)
     }
 
     fun setCursorBlinkEnabled(enabled: Boolean) {
-        ensureLib().torvox_bridge_set_cursor_blink_enabled(handle, if (enabled) 1 else 0)
+        ensureLib().boltffi_torvox_bridge_set_cursor_blink_enabled(handle, if (enabled) 1 else 0)
     }
 
     fun setCursorBlinkSpeedMs(speedMs: Int) {
-        ensureLib().torvox_bridge_set_cursor_blink_speed_ms(handle, speedMs)
+        ensureLib().boltffi_torvox_bridge_set_cursor_blink_speed_ms(handle, speedMs)
     }
 
     fun resetCursorBlink() {
-        ensureLib().torvox_bridge_reset_cursor_blink(handle)
+        ensureLib().boltffi_torvox_bridge_reset_cursor_blink(handle)
     }
 
     fun setCursorStyle(style: String) {
         val bytes = style.toByteArray(Charsets.UTF_8)
-        ensureLib().torvox_bridge_set_cursor_style(handle, bytes, bytes.size)
+        ensureLib().boltffi_torvox_bridge_set_cursor_style(handle, bytes, bytes.size)
     }
 
     fun searchInScrollback(query: String): Pair<Int, Int>? {
         val queryBytes = query.toByteArray(Charsets.UTF_8)
-        val pointer = ensureLib().torvox_bridge_search_in_scrollback(handle, queryBytes, queryBytes.size)
+        val pointer = ensureLib().boltffi_torvox_bridge_search_in_scrollback(handle, queryBytes, queryBytes.size)
         if (pointer == 0L) return null
         val text = Pointer(pointer).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(pointer)
+        ensureLib().boltffi_torvox_bridge_free_string(pointer)
         val parts = text.split(',')
         return if (parts.size == 2) parts[0].toInt() to parts[1].toInt() else null
     }
@@ -1134,7 +1134,7 @@ class TorvoxBridge(
     ): List<Triple<Int, Int, Int>>? {
         val queryBytes = query.toByteArray(Charsets.UTF_8)
         val ptr =
-            ensureLib().torvox_bridge_search_all_in_scrollback(
+            ensureLib().boltffi_torvox_bridge_search_all_in_scrollback(
                 handle,
                 queryBytes,
                 queryBytes.size,
@@ -1143,7 +1143,7 @@ class TorvoxBridge(
             )
         if (ptr == 0L) return null
         val text = Pointer(ptr).getString(0, "UTF-8")
-        ensureLib().torvox_bridge_free_string(ptr)
+        ensureLib().boltffi_torvox_bridge_free_string(ptr)
         if (text.isEmpty()) return emptyList()
         return text.split(";").map { part ->
             val coords = part.split(",")

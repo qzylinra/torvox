@@ -604,7 +604,7 @@ impl AndroidSurface {
                 } // AndroidSurface::render
                 return Ok(false);
             }
-            log::info!(
+            log::trace!(
                 "RENDER_PROCEED: had_output={} frame_count={} highlights={} render_requested={}",
                 had_output,
                 self.frame_count,
@@ -874,7 +874,7 @@ impl AndroidSurface {
 
         if !instances.is_empty() {
             let first = &instances[0];
-            log::info!(
+            log::trace!(
                 "RENDER_INSTANCES: count={} first_cell=({:.0},{:.0}) bg=({},{},{}) fg=({},{},{}) flags={:.0} uv_size=({:.4},{:.4}) bearing=({:.1},{:.1}) advance_width={:.1}",
                 instances.len(),
                 first.quad_origin[0],
@@ -893,7 +893,7 @@ impl AndroidSurface {
                 first.glyph_advance_width,
             );
         } else {
-            log::warn!("RENDER_INSTANCES: ZERO instances — nothing to render!");
+            log::trace!("RENDER_INSTANCES: ZERO instances — nothing to render!");
         }
 
         self.title = snapshot.title.clone();
