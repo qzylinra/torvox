@@ -303,6 +303,7 @@ impl FontPipeline {
                     .expect("SHAPE_CACHE_CAPACITY must be non-zero"),
             ),
             ascii_glyph_ids: [None; 128],
+            raster_scale: 1.0,
         };
 
         if pipeline.font_id.is_none() {
@@ -718,6 +719,31 @@ impl FontPipeline {
         (cw, ch)
     }
 
+    /// Set the rasterization scale = device pixel ratio. Glyphs are rasterized
+    /// at `font_size * raster_scale` so the atlas matches the physical surface
+    /// 1:1. `raster_scale` must be derived from the Android surface metrics
+    /// (e.g. physical width / (cols * logical cell width)); it is never
+    /// hardcoded. Changing it rebuilds the atlas at the new resolution.
+    pub fn set_raster_scale(&mut self, scale: f32) {
+        let scale = if scale > 0.0 && scale.is_finite() {
+            scale
+        } else {
+            1.0
+        };
+        if (scale - self.raster_scale).abs() < 1e-3 {
+            return;
+        }
+        self.raster_scale = scale;
+        self.glyph_cache.clear();
+        self.atlas_generation = 0;
+        self.rasterize_ascii();
+        log::info!("RASTER_SCALE: scale={:.3}", scale);
+    }
+
+    pub fn raster_scale(&self) -> f32 {
+        self.raster_scale
+    }
+
     pub fn current_font_family_name(&self) -> Option<String> {
         let font_id = self.font_id?;
         let db = self.font_system.db();
@@ -856,7 +882,7 @@ impl FontPipeline {
             let key = GlyphKey {
                 font_id: primary_font_id,
                 glyph_id: gid,
-                pixel_size: self.font_size as u16,
+                pixel_size: (self.font_size * self.raster_scale) as u16,
             };
             if let Some(info) = self.glyph_cache.get(&key).cloned() {
                 return Some(info);
@@ -962,7 +988,7 @@ impl FontPipeline {
         let key = GlyphKey {
             font_id,
             glyph_id,
-            pixel_size: self.font_size as u16,
+            pixel_size: (self.font_size * self.raster_scale) as u16,
         };
 
         if let Some(info) = self.glyph_cache.get(&key).cloned() {
@@ -971,13 +997,14 @@ impl FontPipeline {
 
         let db = self.font_system.db();
         let font_size = self.font_size;
+        let raster_size = font_size * self.raster_scale;
         let (image, advance_width) =
             db.with_face_data(font_id, |font_data, face_index| -> Option<(_, f32)> {
                 let font_ref = swash::FontRef::from_index(font_data, face_index as usize)?;
                 let mut scaler = self
                     .scaler_context
                     .builder(font_ref)
-                    .size(font_size)
+                    .size(raster_size)
                     .hint(false)
                     .build();
                 let image = Render::new(&[Source::Outline]).render(&mut scaler, glyph_id);
@@ -1249,7 +1276,15 @@ impl FontPipeline {
     pub fn from_fixture(
         atlas_width: i32,
         atlas_height: i32,
-        font_size: f32,
+    font_size: f32,
+    /// Multiplier applied to glyph rasterization so the atlas bitmap matches the
+    /// physical (device-pixel-ratio scaled) surface 1:1 instead of the logical
+    /// font size. Without this, glyphs are rasterized at the logical size and the
+    /// GPU upscales by the DPR, producing blurry/rough text (worst for CJK).
+    /// Derived at runtime from the Android surface metrics (see `set_raster_scale`),
+    /// never hardcoded. A value of 1.0 preserves the legacy logical rasterization.
+    raster_scale: f32,
+
         fixture_dir: &str,
     ) -> Self {
         let mut font_system = FontSystem::new();

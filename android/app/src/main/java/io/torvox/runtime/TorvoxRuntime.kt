@@ -717,6 +717,31 @@ class TorvoxRuntime
                         target.bridge?.updateNativeWindow(windowPointer, width, height)
                     }
                     target.running = true
+                    // Render the new session's first frame SYNCHRONOUSLY before the
+                    // event-driven render thread starts, so the reconfigured
+                    // swapchain shows real content immediately instead of a brief
+                    // blank/clear frame. Reconfiguring the swapchain (above) discards
+                    // the previous session's backbuffer, and the render thread's
+                    // first frame is only presented after OS thread scheduling —
+                    // that gap is exactly the blank flash. Presenting here closes it.
+                    // The render thread takes over right after (it re-renders once,
+                    // then latches on the 500ms RENDER_LATCH_TIMEOUT_MS cadence, so
+                    // the event-driven model is preserved).
+                    try {
+                        val initialRender = target.bridge?.render() ?: 0
+                        LogUtil.d(
+                            "TorvoxRuntime",
+                            "switchSession: initial render for session $id result=$initialRender",
+                        )
+                        target.forceRenderRequested = true
+                        target.notifyRender()
+                    } catch (exception: Exception) {
+                        LogUtil.e(
+                            "TorvoxRuntime",
+                            "switchSession: initial render failed for session $id",
+                            exception,
+                        )
+                    }
                     startRenderThread(target)
                     activeSessionId = id
                     target.bridge?.let { syncGridDimensions(it) }

@@ -207,7 +207,12 @@ pub struct CursorInstance {
 pub struct GpuUniforms {
     pub projection: [[f32; 4]; 4],
     pub atlas_size: [f32; 2],
-    pub _padding: [f32; 2],
+    /// Device pixel ratio applied to glyph rasterization. Multiply world-space
+    /// cell coordinates by this in the fragment shader so glyph bitmap pixels
+    /// (rasterized at `font_size * raster_scale`) map 1:1 onto the physical
+    /// surface. 1.0 preserves legacy logical rasterization.
+    pub raster_scale: f32,
+    pub _padding: f32,
 }
 
 #[repr(C)]
@@ -268,6 +273,7 @@ pub struct GpuContext {
     kgp_atlas_data: Vec<u8>,
     kgp_atlas_width: u32,
     kgp_atlas_height: u32,
+    raster_scale: f32,
 }
 
 impl Drop for GpuContext {
@@ -755,7 +761,8 @@ impl GpuContext {
         let uniforms = GpuUniforms {
             projection: proj,
             atlas_size: [self.kgp_atlas_width as f32, self.kgp_atlas_height as f32],
-            _padding: [0.0; 2],
+            raster_scale: self.raster_scale,
+            _padding: 0.0,
         };
         self.queue
             .write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
@@ -838,6 +845,7 @@ impl GpuContext {
             kgp_atlas_data: Vec::new(),
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
+            raster_scale: 1.0,
         })
     }
 
@@ -1286,7 +1294,8 @@ impl GpuContext {
         let uniforms = GpuUniforms {
             projection: proj,
             atlas_size: [atlas_width, atlas_height],
-            _padding: [0.0; 2],
+            raster_scale: self.raster_scale,
+            _padding: 0.0,
         };
 
         let uniform_buffer = match self.cell_uniform_buffer.as_ref() {
@@ -1351,7 +1360,8 @@ impl GpuContext {
         let uniforms = GpuUniforms {
             projection: proj,
             atlas_size: [atlas_width as f32, atlas_height as f32],
-            _padding: [0.0; 2],
+            raster_scale: self.raster_scale,
+            _padding: 0.0,
         };
 
         if self.cell_uniform_buffer.is_none() {
@@ -1721,7 +1731,8 @@ impl GpuContext {
             let uniforms = GpuUniforms {
                 projection: proj,
                 atlas_size: [aw as f32, ah as f32],
-                _padding: [0.0; 2],
+                raster_scale: self.raster_scale,
+                _padding: 0.0,
             };
             if let Some(buf) = &self.cell_uniform_buffer {
                 self.queue
@@ -3603,12 +3614,14 @@ mod tests {
         let uniforms_800 = GpuUniforms {
             projection: orthographic_projection(800.0, 600.0),
             atlas_size: [1024.0, 1024.0],
-            _padding: [0.0; 2],
+            raster_scale: 1.0,
+            _padding: 0.0,
         };
         let uniforms_400 = GpuUniforms {
             projection: orthographic_projection(800.0, 400.0),
             atlas_size: [1024.0, 1024.0],
-            _padding: [0.0; 2],
+            raster_scale: 1.0,
+            _padding: 0.0,
         };
 
         // Same projection/atlas layout, different height
