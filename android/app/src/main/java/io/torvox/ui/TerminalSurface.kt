@@ -1330,16 +1330,6 @@ class TerminalSurface
             return builder.toString().trimEnd('\n')
         }
 
-        fun expandWordSelection(
-            row: Int,
-            col: Int,
-        ): Pair<Int, Int> {
-            val bridge = viewModel?.runtime?.bridge() ?: return Pair(col, col)
-            val scrollbackLength = bridge.scrollbackLength().toInt()
-            val line = bridge.scrollbackLine((scrollbackLength - scrollOffset + row).toUInt()) ?: return Pair(col, col)
-            return expandWordOnLine(line, col)
-        }
-
         private fun startSelectionAt(
             event: MotionEvent,
             expandToWord: Boolean = false,
