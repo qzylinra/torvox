@@ -11,6 +11,7 @@ object StrictModeConfig {
                 .detectDiskWrites()
                 .detectNetwork()
                 .detectCustomSlowCalls()
+                .detectUnbufferedIo()
                 .penaltyLog()
                 .build(),
         )
@@ -20,8 +21,11 @@ object StrictModeConfig {
                 .detectActivityLeaks()
                 .detectLeakedClosableObjects()
                 .detectLeakedRegistrationObjects()
+                .detectLeakedSqlLiteObjects()
                 .detectFileUriExposure()
                 .detectCleartextNetwork()
+                .detectContentUriWithoutPermission()
+                .penaltyLog()
                 .penaltyLog()
                 .build(),
         )

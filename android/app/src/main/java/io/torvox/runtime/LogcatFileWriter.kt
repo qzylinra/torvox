@@ -4,13 +4,15 @@ import android.content.Context
 import android.os.StrictMode
 import android.util.Log
 import java.io.File
-import java.io.FileWriter
+import java.io.FileOutputStream
+import java.io.OutputStreamWriter
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 object LogcatFileWriter {
-    private var fileWriter: FileWriter? = null
+    private var fileWriter: OutputStreamWriter? = null
     private var logFile: File? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
     private val lock = Any()
@@ -35,7 +37,7 @@ object LogcatFileWriter {
                     }
                     val file = File(logsDirectory, "debug.log")
                     logFile = file
-                    fileWriter = FileWriter(file, true)
+                    fileWriter = OutputStreamWriter(FileOutputStream(file, true), StandardCharsets.UTF_8)
                     Log.d("LogcatFileWriter", "Log file: ${file.absolutePath}")
                 } catch (exception: Exception) {
                     Log.e("LogcatFileWriter", "Failed to init file logging", exception)
