@@ -18,32 +18,38 @@ class ThermalMonitor(
 ) {
     private val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     private var lastStatus = PowerManager.THERMAL_STATUS_NONE
+    private var thermalExecutor: java.util.concurrent.ExecutorService? = null
 
     fun register() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
-        pm.addThermalStatusListener(
+        val executor =
             Executors.newSingleThreadExecutor { r ->
                 Thread(r, "ThermalMonitor").apply { isDaemon = true }
-            },
-        ) { status ->
+            }
+        thermalExecutor = executor
+        pm.addThermalStatusListener(executor) { status ->
             onThermalStatusChanged(status)
         }
         Log.i(TAG, "ThermalStatusListener registered")
     }
 
+    fun unregister() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            pm.removeThermalStatusListener { }
+        }
+        thermalExecutor?.shutdownNow()
+        thermalExecutor = null
+    }
+
     private fun onThermalStatusChanged(status: Int) {
-        val label = thermalStatusLabel(status)
         if (status == lastStatus) return
         lastStatus = status
+        val label = thermalStatusLabel(status)
 
         if (status >= PowerManager.THERMAL_STATUS_SEVERE) {
-            val logFile = writeThermalLog(status, label)
-            Log.e(TAG, "$label — log written to ${logFile?.absolutePath}")
-
-            if (status >= PowerManager.THERMAL_STATUS_CRITICAL) {
-                Log.e(TAG, "$label — killing process")
-                onCritical?.invoke()
-            }
+            writeThermalLog(status, label)
+            Log.e(TAG, "$label — killing process (SEVERE+)")
+            onCritical?.invoke()
         } else if (status >= PowerManager.THERMAL_STATUS_MODERATE) {
             Log.w(TAG, "$label — throttling may occur")
         } else {

@@ -1,7 +1,6 @@
 package io.torvox
 
 import android.app.Application
-import android.os.Process
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import io.torvox.monitor.AnrWatchDog
@@ -14,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import java.io.File
+import java.io.FileOutputStream
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.SimpleDateFormat
@@ -57,13 +57,11 @@ class TorvoxApp : Application() {
             }
     }
 
-    @Suppress("DEPRECATION")
     private fun installThermalMonitor() {
         val logDir = getDir("logs", MODE_PRIVATE)
         thermalMonitor =
             ThermalMonitor(this, logDir) {
-                Log.e("TorvoxApp", "Thermal CRITICAL — killing process")
-                Process.killProcess(Process.myPid())
+                SelfExit.exit(logDir, "Thermal SEVERE+")
             }.also { it.register() }
     }
 
@@ -112,7 +110,10 @@ class TorvoxApp : Application() {
                 }
             }
 
-        crashLogFile.writeText(crashLog)
+        FileOutputStream(crashLogFile).use { fos ->
+            fos.write(crashLog.toByteArray(Charsets.UTF_8))
+            fos.fd.sync()
+        }
         Log.e("TorvoxApp", "Crash log written to ${crashLogFile.absolutePath}")
     }
 

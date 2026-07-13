@@ -7,18 +7,18 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 object SelfExit {
     private const val TAG = "SelfExit"
-    private var alreadyKilling = false
+    private val alreadyKilling = AtomicBoolean(false)
 
     @Suppress("TooGenericExceptionCaught")
     fun exit(
         logDir: File,
         reason: String,
     ) {
-        if (alreadyKilling) return
-        alreadyKilling = true
+        if (!alreadyKilling.compareAndSet(false, true)) return
 
         try {
             logDir.mkdirs()
