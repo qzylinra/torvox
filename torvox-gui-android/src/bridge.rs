@@ -543,7 +543,7 @@ impl TorvoxBridge {
         #[cfg(target_os = "android")]
         android_logger::init_once(
             android_logger::Config::default()
-                .with_max_level(log::LevelFilter::Info)
+                .with_max_level(log::LevelFilter::Debug)
                 .with_tag("TorvoxRust"),
         );
         std::panic::set_hook(Box::new(|info| {

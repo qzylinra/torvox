@@ -604,7 +604,7 @@ impl AndroidSurface {
                 } // AndroidSurface::render
                 return Ok(false);
             }
-            log::trace!(
+            log::debug!(
                 "RENDER_PROCEED: had_output={} frame_count={} highlights={} render_requested={}",
                 had_output,
                 self.frame_count,
@@ -874,7 +874,7 @@ impl AndroidSurface {
 
         if !instances.is_empty() {
             let first = &instances[0];
-            log::trace!(
+            log::debug!(
                 "RENDER_INSTANCES: count={} first_cell=({:.0},{:.0}) bg=({},{},{}) fg=({},{},{}) flags={:.0} uv_size=({:.4},{:.4}) bearing=({:.1},{:.1}) advance_width={:.1}",
                 instances.len(),
                 first.quad_origin[0],
@@ -1010,7 +1010,7 @@ impl AndroidSurface {
                 present_ms
             );
         } else {
-            log::trace!("RENDER_OK: cpu={:.1}ms present={:.1}ms", cpu_ms, present_ms);
+            log::debug!("RENDER_OK: cpu={:.1}ms present={:.1}ms", cpu_ms, present_ms);
         }
 
         // Swap caches for next frame — eliminates ~800KB memcpy/frame

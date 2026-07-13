@@ -1,13 +1,13 @@
 package io.torvox.ui
 
+import android.view.WindowInsets
+import android.view.WindowInsets.Type
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.uiautomator.UiDevice
 import io.torvox.MainActivity
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -145,21 +145,27 @@ class ModifierBarTest {
 
     @Test
     fun modifier_bar_bottom_position_above_gesture_zone() {
-        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-        val displayHeight = device.displayHeight
-
         composeTestRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
 
         composeTestRule.waitForIdle()
+
+        val activity = composeTestRule.activity
+        val windowMetrics = activity.windowManager.maximumWindowMetrics
+        val displayHeight = windowMetrics.bounds.height()
+        val navBarHeight =
+            windowMetrics
+                .windowInsets
+                .getInsets(Type.navigationBars())
+                .bottom
 
         val barSemantics = composeTestRule.onNodeWithTag("ModifierBar").fetchSemanticsNode()
         val barBounds = barSemantics.boundsInRoot
         val barBottom = barBounds.bottom.toInt()
 
-        val gestureZoneTop = (displayHeight * 0.92).toInt()
+        val gestureZoneTop = displayHeight - navBarHeight
         assertTrue(
             "ModifierBar bottom ($barBottom) should be above gesture zone top ($gestureZoneTop), " +
-                "displayHeight=$displayHeight, barBounds=$barBounds",
+                "displayHeight=$displayHeight, navBarHeight=$navBarHeight, barBounds=$barBounds",
             barBottom <= gestureZoneTop,
         )
     }
