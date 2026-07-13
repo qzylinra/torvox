@@ -907,9 +907,10 @@ class TorvoxBridge(
     ) {
         val library = ensureLib()
         val result =
-            library.boltffi_torvox_bridge_set_native_window(
+            library.torvox_bridge_set_native_window(
                 handle,
-                windowPointer,
+                (windowPointer and 0xFFFFFFFFL).toInt(),
+                ((windowPointer shr 32) and 0xFFFFFFFFL).toInt(),
                 width,
                 height,
             )
@@ -1081,9 +1082,10 @@ class TorvoxBridge(
     ) {
         val library = ensureLib()
         val result =
-            library.boltffi_torvox_bridge_update_native_window(
+            library.torvox_bridge_update_native_window(
                 handle,
-                windowPointer,
+                (windowPointer and 0xFFFFFFFFL).toInt(),
+                ((windowPointer shr 32) and 0xFFFFFFFFL).toInt(),
                 width,
                 height,
             )

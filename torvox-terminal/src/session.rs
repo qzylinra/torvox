@@ -408,12 +408,12 @@ impl Session {
             count += 1;
         }
         if count > 0 {
-            log::debug!("process_output: processed {count} chunks");
+            log::trace!("process_output: processed {count} chunks");
         }
         if changed {
             self.terminal.flush();
             for response in self.terminal.drain_pty_write_responses() {
-                log::debug!("process_output: pty write-back {} bytes", response.len());
+                log::trace!("process_output: pty write-back {} bytes", response.len());
                 if let Err(error) = self.pty.write_all(&response) {
                     log::error!(
                         "session: PTY write-back failed ({} bytes): {}",

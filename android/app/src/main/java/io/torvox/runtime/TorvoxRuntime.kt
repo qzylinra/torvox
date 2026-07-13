@@ -342,12 +342,11 @@ class TorvoxRuntime
             height: Int,
             blitCallback: (() -> Unit)? = null,
         ) {
-            if (stopped) return
             synchronized(sessionLock) {
-                if (sessions.isNotEmpty() || starting) return
+                if ((!stopped && sessions.isNotEmpty()) || starting) return
+                stopped = false
                 starting = true
             }
-            stopped = false
             LogUtil.d("TorvoxRuntime", "start() called: surface=$surface width=$width height=$height")
             LogcatFileWriter.write("TorvoxRuntime", "start() called: surface=$surface width=$width height=$height")
             val displayW = context.resources.displayMetrics.widthPixels
