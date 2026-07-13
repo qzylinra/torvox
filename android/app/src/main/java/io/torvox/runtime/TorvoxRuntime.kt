@@ -48,14 +48,7 @@ private data class SessionEntry(
     @Volatile var running: Boolean,
     val savePath: String,
     @Volatile var blitCallback: (() -> Unit)? = null,
-    @Volatile var snapshotCallback: ((ByteArray, Int) -> Unit)? = null,
 ) {
-    // Reusable snapshot buffer — reallocated on resize instead of per-frame
-    @Volatile var snapshotBuf: ByteArray? = null
-    @Volatile var lastSnapshotRows: Int = 0
-    @Volatile var lastSnapshotCols: Int = 0
-
-    // Reusable render-thread signaling primitive. Replaces the previous
     // per-frame `CountDownLatch`, which had a lost-wakeup race: after
     // `bridge.render()` the loop published a fresh latch and waited, but a
     // producer `countDown()` on the stale latch during the render left the new
@@ -104,7 +97,6 @@ constructor(
     @Volatile var cellWidth: Float = 0f
 
     @Volatile var cellHeight: Float = 0f
-    private var pendingSnapshotCallback: ((ByteArray, Int) -> Unit)? = null
 
     private val renderGeneration =
         java.util.concurrent.atomic
@@ -1017,14 +1009,6 @@ constructor(
         entry.blitCallback = callback
     }
 
-    fun setSnapshotCallback(callback: (ByteArray, Int) -> Unit) {
-        pendingSnapshotCallback = callback
-        val entry = sessions[activeSessionId]
-        if (entry != null) {
-            entry.snapshotCallback = callback
-        }
-    }
-
     fun destroy() {
         stop()
         scope.cancel()
@@ -1061,29 +1045,20 @@ constructor(
                             bridge.setScrollOffset(currentScrollOffset)
                             lastScrollOffset = currentScrollOffset
                         }
-                        // Reuse snapshotBuf — reallocate only on resize
-                        var snapshotBuf = entry.snapshotBuf
-                        val rows = _state.value.rows
-                        val cols = _state.value.cols
-                        val needed = 20 + rows * cols * 12
-                        if (snapshotBuf == null || snapshotBuf.size < needed) {
-                            snapshotBuf = ByteArray(needed)
-                            entry.snapshotBuf = snapshotBuf
-                        }
-                        val count = bridge.getSnapshot(entry.scrollOffset.toInt(), snapshotBuf, snapshotBuf.size)
+                        val count = bridge.render()
                         if (count < 0) {
                             consecutiveErrors++
                             if (consecutiveErrors == 1) {
-                                LogUtil.e("TorvoxRuntime", "session ${entry.id} getSnapshot error code=$count")
+                                LogUtil.e("TorvoxRuntime", "session ${entry.id} render error code=$count")
                                 LogcatFileWriter.write(
                                     "TorvoxRuntime",
-                                    "session ${entry.id} getSnapshot error code=$count",
+                                    "session ${entry.id} render error code=$count",
                                 )
                             } else if (consecutiveErrors % RENDER_ERROR_LOG_FREQUENCY == 0) {
-                                LogUtil.e("TorvoxRuntime", "session ${entry.id} getSnapshot error $count (x$consecutiveErrors)")
+                                LogUtil.e("TorvoxRuntime", "session ${entry.id} render error $count (x$consecutiveErrors)")
                             }
                             if (consecutiveErrors > RENDER_MAX_CONSECUTIVE_ERRORS) {
-                                LogUtil.e("TorvoxRuntime", "session ${entry.id} too many getSnapshot errors, stopping render thread")
+                                LogUtil.e("TorvoxRuntime", "session ${entry.id} too many render errors, stopping render thread")
                                 LogcatFileWriter.write(
                                     "TorvoxRuntime",
                                     "session ${entry.id} render thread exiting after $consecutiveErrors consecutive errors",
@@ -1099,42 +1074,39 @@ constructor(
                                 )
                             }
                             consecutiveErrors = 0
-                            if (count > 0) {
-                                entry.snapshotCallback?.invoke(snapshotBuf, count)
-                                try {
-                                    val poll = bridge.pollAll()
-                                    if (poll.bel) {
-                                        val toneGenerator = ToneGenerator(BEL_TONE_STREAM_TYPE, BEL_TONE_VOLUME)
-                                        try {
-                                            toneGenerator.startTone(BEL_TONE_TYPE, BEL_TONE_DURATION_MILLIS)
-                                        } finally {
-                                            toneGenerator.release()
-                                        }
+                            try {
+                                val poll = bridge.pollAll()
+                                if (poll.bel) {
+                                    val toneGenerator = ToneGenerator(BEL_TONE_STREAM_TYPE, BEL_TONE_VOLUME)
+                                    try {
+                                        toneGenerator.startTone(BEL_TONE_TYPE, BEL_TONE_DURATION_MILLIS)
+                                    } finally {
+                                        toneGenerator.release()
                                     }
-                                    if (poll.notification != null) {
-                                        val (title, body) = poll.notification
-                                        val toastText = if (title.isNotEmpty()) "$title: $body" else body
-                                        Handler(Looper.getMainLooper()).post {
-                                            android.widget.Toast
-                                                .makeText(context, toastText, android.widget.Toast.LENGTH_LONG)
-                                                .show()
-                                        }
-                                        io.torvox.ui
-                                            .TerminalNotificationHelper(context)
-                                            .showNotification(title, body)
-                                    }
-                                    if (poll.clipboard != null) {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clipData = ClipData.newPlainText("terminal clipboard", poll.clipboard)
-                                        clipboard.setPrimaryClip(clipData)
-                                    }
-                                } catch (exception: Exception) {
-                                    LogUtil.e(
-                                        "TorvoxRuntime",
-                                        "pollAll failed for session ${entry.id}; deferred events dropped",
-                                        exception,
-                                    )
                                 }
+                                if (poll.notification != null) {
+                                    val (title, body) = poll.notification
+                                    val toastText = if (title.isNotEmpty()) "$title: $body" else body
+                                    Handler(Looper.getMainLooper()).post {
+                                        android.widget.Toast
+                                            .makeText(context, toastText, android.widget.Toast.LENGTH_LONG)
+                                            .show()
+                                    }
+                                    io.torvox.ui
+                                        .TerminalNotificationHelper(context)
+                                        .showNotification(title, body)
+                                }
+                                if (poll.clipboard != null) {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clipData = ClipData.newPlainText("terminal clipboard", poll.clipboard)
+                                    clipboard.setPrimaryClip(clipData)
+                                }
+                            } catch (exception: Exception) {
+                                LogUtil.e(
+                                    "TorvoxRuntime",
+                                    "pollAll failed for session ${entry.id}; deferred events dropped",
+                                    exception,
+                                )
                             }
                             diagCount++
                             if (diagCount == 1) {
