@@ -264,6 +264,14 @@ private interface TorvoxNative : Library {
     fun boltffi_torvox_bridge_ping(handle: Long): Int
 
     // Raw C-ABI wrappers for methods with scalar parameters
+    fun torvox_bridge_set_native_window(
+        handle: Long,
+        window_ptr_low: Int,
+        window_ptr_high: Int,
+        width: Int,
+        height: Int,
+    ): Int
+
     fun boltffi_torvox_bridge_set_native_window(
         handle: Long,
         window_ptr_low: Int,
@@ -289,6 +297,14 @@ private interface TorvoxNative : Library {
         width: Int,
         height: Int,
     )
+
+    fun torvox_bridge_update_native_window(
+        handle: Long,
+        window_ptr_low: Int,
+        window_ptr_high: Int,
+        width: Int,
+        height: Int,
+    ): Int
 
     fun boltffi_torvox_bridge_update_native_window(
         handle: Long,
@@ -400,6 +416,10 @@ private interface TorvoxNative : Library {
     ): Int
 
     fun boltffi_torvox_bridge_has_saved_session(
+        handle: Long,
+        path_ptr: ByteArray?,
+        path_len: Int,
+    ): Boolean
 
     fun boltffi_torvox_bridge_write_to_pty(
         handle: Long,
@@ -662,7 +682,7 @@ class TorvoxBridge(
     ) {
         val library = ensureLib()
         val result =
-            library.boltffi_torvox_bridge_set_native_window(
+            library.torvox_bridge_set_native_window(
                 handle,
                 (windowPointer and LOW_32_MASK).toInt(),
                 (
@@ -840,7 +860,7 @@ class TorvoxBridge(
     ) {
         val library = ensureLib()
         val result =
-            library.boltffi_torvox_bridge_update_native_window(
+            library.torvox_bridge_update_native_window(
                 handle,
                 (windowPointer and LOW_32_MASK).toInt(),
                 (
