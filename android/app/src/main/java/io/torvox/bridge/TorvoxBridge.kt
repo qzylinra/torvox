@@ -7,7 +7,6 @@ import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 
-private const val LOW_32_MASK = 0xFFFFFFFFL
 private const val LOW_16_MASK = 0xFFFFL
 private const val JNA_POINTER_SIZE = 8L
 private const val JNA_INT_SIZE = 4L
@@ -165,30 +164,29 @@ data class BridgeTheme(
 
     companion object {
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): BridgeTheme =
-            BridgeTheme(
-                name = reader.readString(),
-                bg = reader.readI32(),
-                fg = reader.readI32(),
-                cursor = reader.readI32(),
-                selectionBg = reader.readI32(),
-                ansi0 = reader.readI32(),
-                ansi1 = reader.readI32(),
-                ansi2 = reader.readI32(),
-                ansi3 = reader.readI32(),
-                ansi4 = reader.readI32(),
-                ansi5 = reader.readI32(),
-                ansi6 = reader.readI32(),
-                ansi7 = reader.readI32(),
-                ansi8 = reader.readI32(),
-                ansi9 = reader.readI32(),
-                ansi10 = reader.readI32(),
-                ansi11 = reader.readI32(),
-                ansi12 = reader.readI32(),
-                ansi13 = reader.readI32(),
-                ansi14 = reader.readI32(),
-                ansi15 = reader.readI32(),
-            )
+        fun wireDecode(reader: WireReader): BridgeTheme = BridgeTheme(
+            name = reader.readString(),
+            bg = reader.readI32(),
+            fg = reader.readI32(),
+            cursor = reader.readI32(),
+            selectionBg = reader.readI32(),
+            ansi0 = reader.readI32(),
+            ansi1 = reader.readI32(),
+            ansi2 = reader.readI32(),
+            ansi3 = reader.readI32(),
+            ansi4 = reader.readI32(),
+            ansi5 = reader.readI32(),
+            ansi6 = reader.readI32(),
+            ansi7 = reader.readI32(),
+            ansi8 = reader.readI32(),
+            ansi9 = reader.readI32(),
+            ansi10 = reader.readI32(),
+            ansi11 = reader.readI32(),
+            ansi12 = reader.readI32(),
+            ansi13 = reader.readI32(),
+            ansi14 = reader.readI32(),
+            ansi15 = reader.readI32(),
+        )
     }
 }
 
@@ -228,25 +226,24 @@ data class TerminalConfig(
         private const val DEFAULT_FONT_SIZE_TENTHS = 140u
 
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): TerminalConfig =
-            TerminalConfig(
-                shell =
-                    when (reader.readI32()) {
-                        0 -> Shell.SystemDefault
-                        1 -> Shell.Custom(reader.readString())
-                        else -> Shell.SystemDefault
-                    },
-                rows = reader.readU32(),
-                cols = reader.readU32(),
-                scrollbackLines = reader.readU32(),
-                font_size_tenths = reader.readU32(),
-                theme = BridgeTheme.wireDecode(reader),
-                home = reader.readString(),
-                user = reader.readString(),
-                path = reader.readString(),
-                workingDirectory = reader.readString(),
-                prefix = reader.readString(),
-            )
+        fun wireDecode(reader: WireReader): TerminalConfig = TerminalConfig(
+            shell =
+            when (reader.readI32()) {
+                0 -> Shell.SystemDefault
+                1 -> Shell.Custom(reader.readString())
+                else -> Shell.SystemDefault
+            },
+            rows = reader.readU32(),
+            cols = reader.readU32(),
+            scrollbackLines = reader.readU32(),
+            font_size_tenths = reader.readU32(),
+            theme = BridgeTheme.wireDecode(reader),
+            home = reader.readString(),
+            user = reader.readString(),
+            path = reader.readString(),
+            workingDirectory = reader.readString(),
+            prefix = reader.readString(),
+        )
     }
 }
 
@@ -400,6 +397,7 @@ private interface TorvoxNative : Library {
         mode: Int,
     ): Int
 
+    @Suppress("LongParameterList")
     fun torvox_bridge_save_test_frame_with_selection(
         handle: Long,
         dataDir: Pointer,
