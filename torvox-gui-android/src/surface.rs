@@ -18,8 +18,8 @@ use torvox_renderer::font::FontPipeline;
 use torvox_renderer::gpu::GpuContext;
 use torvox_renderer::gpu::SearchHighlight;
 use torvox_renderer::gpu::SelectionRange;
-use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
 use torvox_terminal::ghostty_terminal::KgpImageData;
+use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
 use torvox_terminal::session::Session;
 use torvox_terminal::shell_env::ShellEnv;
 
@@ -781,6 +781,13 @@ impl AndroidSurface {
                 search_highlights: &self.search_highlights,
                 cursor_color,
                 cursor_style: self.cursor_style,
+                surface_bg: [
+                    self.theme.background[0] as f32 / 255.0,
+                    self.theme.background[1] as f32 / 255.0,
+                    self.theme.background[2] as f32 / 255.0,
+                    1.0,
+                ],
+                render_scale: torvox_renderer::gpu::RENDER_SCALE,
                 dirty_rows: &dirty_rows,
                 cached_instances: &self.cached_instances,
                 cached_row_ends: &self.cached_row_ends,
@@ -1081,6 +1088,13 @@ impl AndroidSurface {
                 search_highlights: &self.search_highlights,
                 cursor_color,
                 cursor_style: self.cursor_style,
+                surface_bg: [
+                    self.theme.background[0] as f32 / 255.0,
+                    self.theme.background[1] as f32 / 255.0,
+                    self.theme.background[2] as f32 / 255.0,
+                    1.0,
+                ],
+                render_scale: torvox_renderer::gpu::RENDER_SCALE,
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],

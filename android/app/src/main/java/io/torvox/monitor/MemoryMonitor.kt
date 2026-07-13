@@ -45,7 +45,14 @@ class MemoryMonitor(
         val totalMb = memInfo.totalMem / BYTES_PER_MB
         val thresholdMb = memInfo.threshold / BYTES_PER_MB
 
-        val pssKb = Debug.getPss()
+        val pssKb =
+            try {
+                Debug.getPss()
+            } catch (e: SecurityException) {
+                Log.w(TAG, "Debug.getPss() not available", e)
+                -1L
+            }
+        val pssStr = if (pssKb >= 0) "${pssKb}KB" else "N/A"
         val nativeHeapMb = Debug.getNativeHeapAllocatedSize() / BYTES_PER_MB
 
         val availPercent = if (memInfo.totalMem > 0) ((memInfo.availMem * 100) / memInfo.totalMem).toInt() else 0
@@ -55,14 +62,14 @@ class MemoryMonitor(
                 lowMemoryReported = true
                 Log.e(
                     TAG,
-                    "LOW MEMORY: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=${pssKb}KB, nativeHeap=$nativeHeapMb MB, threshold=$thresholdMb MB",
+                    "LOW MEMORY: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=$pssStr, nativeHeap=$nativeHeapMb MB, threshold=$thresholdMb MB",
                 )
                 onCriticalMemory?.invoke()
             }
         } else {
             lowMemoryReported = false
             if (availMb < thresholdMb * LOW_MEMORY_FACTOR) {
-                Log.w(TAG, "Memory pressure: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=${pssKb}KB, threshold=$thresholdMb MB")
+                Log.w(TAG, "Memory pressure: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=$pssStr, threshold=$thresholdMb MB")
             } else {
                 LogUtil.d(TAG, "Memory OK: avail=$availMb MB / $totalMb MB ($availPercent%)")
             }

@@ -80,6 +80,7 @@ class TorvoxApp : Application() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 writeCrashLog(thread, throwable)
+                BootGuard(getDir("logs", MODE_PRIVATE)).recordExit()
             } catch (exception: Exception) {
                 Log.e("TorvoxApp", "Failed to write crash log", exception)
             }
@@ -122,7 +123,6 @@ class TorvoxApp : Application() {
 
         FileOutputStream(crashLogFile).use { fos ->
             fos.write(crashLog.toByteArray(Charsets.UTF_8))
-            fos.fd.sync()
         }
         Log.e("TorvoxApp", "Crash log written to ${crashLogFile.absolutePath}")
     }

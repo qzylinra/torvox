@@ -126,6 +126,8 @@ class AnrWatchDog(
             }
         } catch (e: Exception) {
             Log.e("AnrWatchDog", "Unhandled exception in ANR handler", e)
+        } finally {
+            anrInProgress.set(false)
         }
     }
 

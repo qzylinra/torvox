@@ -687,8 +687,7 @@ impl TorvoxBridge {
     /// surface mutex.  Returns `(had_output, snapshot)`.
     fn process_session_for_render(
         &self,
-    ) -> Result<(bool, torvox_terminal::ghostty_terminal::GridSnapshot), TerminalError>
-    {
+    ) -> Result<(bool, torvox_terminal::ghostty_terminal::GridSnapshot), TerminalError> {
         let session_arc = self
             .session
             .lock()
@@ -703,7 +702,9 @@ impl TorvoxBridge {
         let mut session_guard = session_arc.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("session inner lock poisoned: {e}"),
         })?;
-        let scroll_offset = self.scroll_offset.load(std::sync::atomic::Ordering::Relaxed);
+        let scroll_offset = self
+            .scroll_offset
+            .load(std::sync::atomic::Ordering::Relaxed);
         let had_output = session_guard.process_output();
         let snapshot = session_guard
             .terminal()
@@ -3412,7 +3413,10 @@ pub unsafe extern "C" fn torvox_bridge_get_snapshot(
         Ok(g) => g,
         Err(_) => return -1,
     };
-    let snapshot = match session_inner.terminal().try_take_snapshot_with_scroll(scroll_offset) {
+    let snapshot = match session_inner
+        .terminal()
+        .try_take_snapshot_with_scroll(scroll_offset)
+    {
         Some(s) => s,
         None => return 0,
     };
@@ -3436,6 +3440,36 @@ pub unsafe extern "C" fn torvox_bridge_get_snapshot(
         *(off.add(8) as *mut u32) = to_argb(&cell.background);
     }
     total as i32
+}
+
+/// # Safety
+///
+/// `handle` must be a valid bridge handle. `path_ptr` must point to `path_len` valid bytes
+/// or be null when `path_len` is 0.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_load_font_file(
+    handle: i64,
+    path_ptr: *const u8,
+    path_len: i32,
+) -> *mut core::ffi::c_char {
+    let bridge = match (handle as *mut TorvoxBridge).as_mut() {
+        Some(b) => b,
+        None => return std::ptr::null_mut(),
+    };
+    let path = {
+        let slice = if path_len >= 0 && !path_ptr.is_null() {
+            unsafe { std::slice::from_raw_parts(path_ptr, path_len as usize) }
+        } else {
+            return std::ptr::null_mut();
+        };
+        String::from_utf8_lossy(slice).into_owned()
+    };
+    match bridge.load_font_file(path) {
+        Some(family) => std::ffi::CString::new(family)
+            .unwrap_or_default()
+            .into_raw(),
+        None => std::ptr::null_mut(),
+    }
 }
 
 #[cfg(test)]

@@ -2,7 +2,6 @@ package io.torvox.monitor
 
 import android.util.Log
 import java.io.File
-import java.io.FileOutputStream
 
 class BootGuard(
     private val logDir: File,
@@ -95,10 +94,8 @@ class BootGuard(
     private fun writeCounter(counter: ExitCounter) {
         val counterFile = counterFile()
         try {
-            FileOutputStream(counterFile).use { fos ->
-                fos.write("${counter.count}:${counter.lastResetTime}".toByteArray(Charsets.UTF_8))
-                fos.fd.sync()
-            }
+            counterFile.writeText("${counter.count}:${counter.lastResetTime}")
+            // No fsync — called from crash handler path; kernel flushes on process death.
         } catch (e: Exception) {
             Log.w(TAG, "Failed to write counter file", e)
         }
