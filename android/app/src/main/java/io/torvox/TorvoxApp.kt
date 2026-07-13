@@ -6,6 +6,7 @@ import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import io.torvox.monitor.AnrWatchDog
 import io.torvox.monitor.MemoryMonitor
+import io.torvox.monitor.SelfExit
 import io.torvox.monitor.StrictModeConfig
 import io.torvox.monitor.ThermalMonitor
 import io.torvox.runtime.LogcatFileWriter
@@ -36,14 +37,22 @@ class TorvoxApp : Application() {
         installCrashHandler()
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        memoryMonitor?.onTrimMemory(level)
+    }
+
     private fun installAnrWatchDog() {
         val logDir = getDir("logs", MODE_PRIVATE)
         anrWatchDog = AnrWatchDog(logDir, ANR_TIMEOUT_MILLIS).also { it.start() }
     }
 
     private fun installMemoryMonitor() {
+        val logDir = getDir("logs", MODE_PRIVATE)
         memoryMonitor =
-            MemoryMonitor(this, monitorScope).also {
+            MemoryMonitor(this, monitorScope) {
+                SelfExit.exit(logDir, "Critical memory pressure")
+            }.also {
                 it.startPolling()
             }
     }
