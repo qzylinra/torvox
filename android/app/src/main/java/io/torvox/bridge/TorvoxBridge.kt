@@ -371,6 +371,13 @@ private interface TorvoxNative : Library {
 
     fun torvox_bridge_render(handle: Long): Int
 
+    fun torvox_bridge_get_snapshot(
+        handle: Long,
+        scroll_offset: Int,
+        buf: ByteArray,
+        buf_len: Int,
+    ): Int
+
     fun boltffi_torvox_bridge_poll_bel(handle: Long): Int
 
     fun torvox_bridge_poll_bel(handle: Long): Int
@@ -918,6 +925,15 @@ class TorvoxBridge(
     fun render(): Int {
         ensureOpen()
         return ensureLib().torvox_bridge_render(handle)
+    }
+
+    fun getSnapshot(
+        scrollOffset: Int,
+        buf: ByteArray,
+        bufLen: Int,
+    ): Int {
+        ensureOpen()
+        return ensureLib().torvox_bridge_get_snapshot(handle, scrollOffset, buf, bufLen)
     }
 
     fun saveTestFrame(dataDir: String): Int {

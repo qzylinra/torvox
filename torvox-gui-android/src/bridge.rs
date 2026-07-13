@@ -3379,6 +3379,60 @@ pub unsafe extern "C" fn torvox_bridge_set_cursor_style(
     }
 }
 
+/// Convert [f32; 4] (RGBA 0..1) to u32 ARGB.
+#[inline]
+fn to_argb(color: &[f32; 4]) -> u32 {
+    let r = (color[0].clamp(0.0, 1.0) * 255.0) as u32;
+    let g = (color[1].clamp(0.0, 1.0) * 255.0) as u32;
+    let b = (color[2].clamp(0.0, 1.0) * 255.0) as u32;
+    let a = (color[3].clamp(0.0, 1.0) * 255.0) as u32;
+    (a << 24) | (r << 16) | (g << 8) | b
+}
+
+pub unsafe extern "C" fn torvox_bridge_get_snapshot(
+    handle: i64,
+    scroll_offset: u32,
+    buf: *mut u8,
+    buf_len: u32,
+) -> i32 {
+    let bridge = match (handle as *mut TorvoxBridge).as_mut() {
+        Some(b) => b,
+        None => return -1,
+    };
+    let session_guard = match bridge.session.lock() {
+        Ok(g) => g,
+        Err(_) => return -1,
+    };
+    let session = match session_guard.as_ref() {
+        Some(s) => s,
+        None => return 0,
+    };
+    let snapshot = match session.terminal().try_take_snapshot_with_scroll(scroll_offset) {
+        Some(s) => s,
+        None => return 0,
+    };
+    let rows = snapshot.rows;
+    let cols = snapshot.cols;
+    let total = (rows * cols) as usize;
+    let needed = 20 + total * 12;
+    if (buf_len as usize) < needed {
+        return -1;
+    }
+    *(buf as *mut u32) = rows;
+    *(buf.add(4) as *mut u32) = cols;
+    *(buf.add(8) as *mut u32) = snapshot.cursor_row;
+    *(buf.add(12) as *mut u32) = snapshot.cursor_col;
+    *(buf.add(16) as *mut u8) = if snapshot.cursor_visible { 1 } else { 0 };
+    for i in 0..total {
+        let cell = &snapshot.cells[i];
+        let off = buf.add(20 + i * 12);
+        *(off as *mut u32) = cell.codepoint;
+        *(off.add(4) as *mut u32) = to_argb(&cell.foreground);
+        *(off.add(8) as *mut u32) = to_argb(&cell.background);
+    }
+    total as i32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

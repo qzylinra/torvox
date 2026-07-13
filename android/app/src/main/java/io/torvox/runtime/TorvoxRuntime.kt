@@ -48,6 +48,7 @@ private data class SessionEntry(
     @Volatile var running: Boolean,
     val savePath: String,
     @Volatile var blitCallback: (() -> Unit)? = null,
+    @Volatile var snapshotCallback: ((ByteArray, Int) -> Unit)? = null,
 ) {
     // Reusable render-thread signaling primitive. Replaces the previous
     // per-frame `CountDownLatch`, which had a lost-wakeup race: after
@@ -98,6 +99,7 @@ constructor(
     @Volatile var cellWidth: Float = 0f
 
     @Volatile var cellHeight: Float = 0f
+    private var pendingSnapshotCallback: ((ByteArray, Int) -> Unit)? = null
 
     private val renderGeneration =
         java.util.concurrent.atomic
@@ -251,7 +253,6 @@ constructor(
         private const val BEL_TONE_VOLUME = 50
         private const val BEL_TONE_TYPE = ToneGenerator.TONE_PROP_ACK
         private const val BEL_TONE_DURATION_MILLIS = 200
-        private const val RENDER_COOLDOWN_MS = 1000L
     }
 
     private data class ConfigReads(
@@ -1011,6 +1012,14 @@ constructor(
         entry.blitCallback = callback
     }
 
+    fun setSnapshotCallback(callback: (ByteArray, Int) -> Unit) {
+        pendingSnapshotCallback = callback
+        val entry = sessions[activeSessionId]
+        if (entry != null) {
+            entry.snapshotCallback = callback
+        }
+    }
+
     fun destroy() {
         stop()
         scope.cancel()
@@ -1047,25 +1056,106 @@ constructor(
                             bridge.setScrollOffset(currentScrollOffset)
                             lastScrollOffset = currentScrollOffset
                         }
-                        val result = bridge.render()
-                        if (result < 0) {
+                                                val snapshotBuf = ByteArray(64000)
+                        val count = bridge.getSnapshot(entry.scrollOffset.toInt(), snapshotBuf, snapshotBuf.size)
+                        if (count < 0) {
                             consecutiveErrors++
                             if (consecutiveErrors == 1) {
-                                LogUtil.e("TorvoxRuntime", "session ${entry.id} render error code=$result")
+                                LogUtil.e("TorvoxRuntime", "session ${entry.id} getSnapshot error code=$count")
                                 LogcatFileWriter.write(
                                     "TorvoxRuntime",
-                                    "session ${entry.id} render error code=$result",
+                                    "session ${entry.id} getSnapshot error code=$count",
                                 )
                             } else if (consecutiveErrors % RENDER_ERROR_LOG_FREQUENCY == 0) {
-                                LogUtil.e("TorvoxRuntime", "session ${entry.id} render error $result (x$consecutiveErrors)")
+                                LogUtil.e("TorvoxRuntime", "session ${entry.id} getSnapshot error $count (x$consecutiveErrors)")
                             }
                             if (consecutiveErrors > RENDER_MAX_CONSECUTIVE_ERRORS) {
-                                LogUtil.e("TorvoxRuntime", "session ${entry.id} too many render errors, entering cooldown")
-                                Thread.sleep(RENDER_COOLDOWN_MS)
-                                consecutiveErrors = 0
-                                LogUtil.i("TorvoxRuntime", "session ${entry.id} render thread resumed after cooldown")
+                                LogUtil.e("TorvoxRuntime", "session ${entry.id} too many getSnapshot errors, stopping render thread")
+                                LogcatFileWriter.write(
+                                    "TorvoxRuntime",
+                                    "session ${entry.id} render thread exiting after $consecutiveErrors consecutive errors",
+                                )
+                                break
                             }
                             Thread.sleep(RENDER_ERROR_SLEEP_MS)
+                        } else {
+                            if (consecutiveErrors > 0) {
+                                LogUtil.i(
+                                    "TorvoxRuntime",
+                                    "session ${entry.id} recovered after $consecutiveErrors errors",
+                                )
+                            }
+                            consecutiveErrors = 0
+                            if (count > 0) {
+                                entry.snapshotCallback?.invoke(snapshotBuf, count)
+                                try {
+                                    val poll = bridge.pollAll()
+                                    if (poll.bel) {
+                                        val toneGenerator = ToneGenerator(BEL_TONE_STREAM_TYPE, BEL_TONE_VOLUME)
+                                        try {
+                                            toneGenerator.startTone(BEL_TONE_TYPE, BEL_TONE_DURATION_MILLIS)
+                                        } finally {
+                                            toneGenerator.release()
+                                        }
+                                    }
+                                    if (poll.notification != null) {
+                                        val (title, body) = poll.notification
+                                        val toastText = if (title.isNotEmpty()) "$title: $body" else body
+                                        Handler(Looper.getMainLooper()).post {
+                                            android.widget.Toast
+                                                .makeText(context, toastText, android.widget.Toast.LENGTH_LONG)
+                                                .show()
+                                        }
+                                        io.torvox.ui
+                                            .TerminalNotificationHelper(context)
+                                            .showNotification(title, body)
+                                    }
+                                    if (poll.clipboard != null) {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clipData = ClipData.newPlainText("terminal clipboard", poll.clipboard)
+                                        clipboard.setPrimaryClip(clipData)
+                                    }
+                                } catch (exception: Exception) {
+                                    LogUtil.e(
+                                        "TorvoxRuntime",
+                                        "pollAll failed for session ${entry.id}; deferred events dropped",
+                                        exception,
+                                    )
+                                }
+                            }
+                            diagCount++
+                            if (diagCount == 1) {
+                                LogUtil.d("TorvoxRuntime", "session ${entry.id} first render OK")
+                            }
+                            if (diagCount % RENDER_DIAGNOSTIC_FREQUENCY == 0) {
+                                val title =
+                                    try {
+                                        bridge.getActiveSessionTitle()
+                                    } catch (exception: Exception) {
+                                        LogUtil.e("TorvoxRuntime", "title query failed", exception)
+                                        ""
+                                    }
+                                if (title.isNotEmpty() && title != _state.value.title) {
+                                    _state.value = _state.value.copy(title = title)
+                                }
+                            }
+                            if (!entry.forceRenderRequested) {
+                                entry.renderLock.lock()
+                                try {
+                                    while (!entry.renderSignaled && !entry.forceRenderRequested) {
+                                        entry.renderCondition.await(
+                                            RENDER_LATCH_TIMEOUT_MS,
+                                            java.util.concurrent.TimeUnit.MILLISECONDS,
+                                        )
+                                    }
+                                } finally {
+                                    entry.renderSignaled = false
+                                    entry.renderLock.unlock()
+                                }
+                            } else {
+                                entry.forceRenderRequested = false
+                            }
+                            }
                         } else {
                             if (consecutiveErrors > 0) {
                                 LogUtil.i(
@@ -1111,9 +1201,13 @@ constructor(
                                 )
                             }
                             try {
-                                entry.blitCallback?.invoke()
+                                val snapshotBuf = ByteArray(64000)
+                                val count = bridge.getSnapshot(entry.scrollOffset.toInt(), snapshotBuf, snapshotBuf.size)
+                                if (count > 0) {
+                                    entry.snapshotCallback?.invoke(snapshotBuf, count)
+                                }
                             } catch (exception: Exception) {
-                                LogUtil.w("TorvoxRuntime", "blitCallback failed for session ${entry.id}", exception)
+                                LogUtil.w("TorvoxRuntime", "snapshot failed for session ${entry.id}", exception)
                             }
                             diagCount++
                             if (diagCount == 1) {
@@ -1155,10 +1249,16 @@ constructor(
                             LogUtil.e("TorvoxRuntime", "session ${entry.id} render exception", exception)
                         }
                         if (consecutiveErrors > RENDER_MAX_CONSECUTIVE_ERRORS) {
-                            LogUtil.e("TorvoxRuntime", "session ${entry.id} too many render exceptions, entering cooldown", exception)
-                            Thread.sleep(RENDER_COOLDOWN_MS)
-                            consecutiveErrors = 0
-                            LogUtil.i("TorvoxRuntime", "session ${entry.id} render thread resumed after cooldown")
+                            LogUtil.e(
+                                "TorvoxRuntime",
+                                "session ${entry.id} too many render exceptions, stopping render thread",
+                                exception,
+                            )
+                            LogcatFileWriter.write(
+                                "TorvoxRuntime",
+                                "session ${entry.id} render thread exiting after $consecutiveErrors consecutive exceptions",
+                            )
+                            break
                         }
                         Thread.sleep(RENDER_ERROR_SLEEP_MS)
                     }
