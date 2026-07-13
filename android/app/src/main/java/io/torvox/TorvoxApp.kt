@@ -4,8 +4,12 @@ import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import io.torvox.monitor.AnrWatchDog
+import io.torvox.monitor.MemoryMonitor
 import io.torvox.monitor.StrictModeConfig
 import io.torvox.runtime.LogcatFileWriter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -16,18 +20,28 @@ import java.util.Locale
 @HiltAndroidApp
 class TorvoxApp : Application() {
     private var anrWatchDog: AnrWatchDog? = null
+    private var memoryMonitor: MemoryMonitor? = null
+    private val monitorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
         StrictModeConfig.install()
         LogcatFileWriter.init(this)
         installAnrWatchDog()
+        installMemoryMonitor()
         installCrashHandler()
     }
 
     private fun installAnrWatchDog() {
         val logDir = getDir("logs", MODE_PRIVATE)
         anrWatchDog = AnrWatchDog(logDir, ANR_TIMEOUT_MILLIS).also { it.start() }
+    }
+
+    private fun installMemoryMonitor() {
+        memoryMonitor =
+            MemoryMonitor(this, monitorScope).also {
+                it.startPolling()
+            }
     }
 
     private fun installCrashHandler() {
