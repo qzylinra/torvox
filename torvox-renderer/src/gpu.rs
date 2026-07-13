@@ -2986,15 +2986,17 @@ mod tests {
     /// Android lag root cause).
     #[test]
     fn select_present_mode_prefers_vsync() {
-        let base = wgpu::SurfaceCapabilities {
-            formats: vec![wgpu::TextureFormat::Rgba8Unorm],
-            present_modes: vec![wgpu::PresentMode::Immediate],
-            alpha_modes: vec![wgpu::CompositeAlphaMode::Opaque],
-            usages: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        };
+        fn base_caps() -> wgpu::SurfaceCapabilities {
+            wgpu::SurfaceCapabilities {
+                formats: vec![wgpu::TextureFormat::Rgba8Unorm],
+                present_modes: vec![wgpu::PresentMode::Immediate],
+                alpha_modes: vec![wgpu::CompositeAlphaMode::Opaque],
+                usages: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            }
+        }
 
         // Mailbox available -> Mailbox (vsync + drop oldest). Never Immediate.
-        let mut caps = base.clone();
+        let mut caps = base_caps();
         caps.present_modes = vec![
             wgpu::PresentMode::Immediate,
             wgpu::PresentMode::Mailbox,
@@ -3007,12 +3009,15 @@ mod tests {
         );
 
         // No Mailbox -> Fifo (vsync).
-        let mut caps = base.clone();
+        let mut caps = base_caps();
         caps.present_modes = vec![wgpu::PresentMode::Immediate, wgpu::PresentMode::Fifo];
-        assert_eq!(GpuContext::select_present_mode(&caps), wgpu::PresentMode::Fifo);
+        assert_eq!(
+            GpuContext::select_present_mode(&caps),
+            wgpu::PresentMode::Fifo
+        );
 
         // No Mailbox/Fifo -> AutoVsync (still vsync).
-        let mut caps = base.clone();
+        let mut caps = base_caps();
         caps.present_modes = vec![wgpu::PresentMode::Immediate, wgpu::PresentMode::AutoVsync];
         assert_eq!(
             GpuContext::select_present_mode(&caps),
@@ -3020,6 +3025,7 @@ mod tests {
         );
 
         // Only Immediate -> Immediate (last resort; the lag mode we fixed away).
+        let base = base_caps();
         assert_eq!(
             GpuContext::select_present_mode(&base),
             wgpu::PresentMode::Immediate

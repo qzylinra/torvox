@@ -34,7 +34,9 @@ fn vulkan_device() -> (wgpu::Instance, wgpu::Adapter, wgpu::Device, wgpu::Queue)
     let task::Poll::Ready(Ok(adapter)) =
         pin!(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).poll(ctx)
     else {
-        panic!("Vulkan request_adapter failed: is Mesa Lavapipe available (VK_ICD_FILENAMES=lvp_icd.x86_64.json)?");
+        panic!(
+            "Vulkan request_adapter failed: is Mesa Lavapipe available (VK_ICD_FILENAMES=lvp_icd.x86_64.json)?"
+        );
     };
     assert_eq!(
         adapter.get_info().backend,
@@ -54,7 +56,7 @@ fn vulkan_device() -> (wgpu::Instance, wgpu::Adapter, wgpu::Device, wgpu::Queue)
 /// wgpu/Vulkan path used on a real Android GPU).
 #[test]
 fn torvox_gpu_context_inits_on_vulkan() {
-    let _gpu = torvox_renderer::GpuContext::new_with_no_surface();
+    let _gpu = torvox_renderer::gpu::GpuContext::new_with_no_surface();
 }
 
 #[test]
@@ -107,7 +109,7 @@ fn gpu_vulkan_compute_readback_real() {
     });
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("vulkan-layout"),
-        bind_group_layouts: &[&bgl],
+        bind_group_layouts: &[Some(&bgl)],
         immediate_size: 0,
     });
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -137,7 +139,7 @@ fn gpu_vulkan_compute_readback_real() {
         });
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.dispatch_workgroups(1);
+        cpass.dispatch_workgroups(1, 1, 1);
     }
     encoder.copy_buffer_to_buffer(&storage, 0, &staging, 0, 16);
     queue.submit(Some(encoder.finish()));

@@ -1240,6 +1240,24 @@ impl AndroidSurface {
         0
     }
 
+    /// Poll all deferred events (BEL, clipboard, notification, sync mode, shell
+    /// integration) in a single session lock acquisition. This avoids the
+    /// per-poll session-lock churn that the individual `poll_*` methods incur.
+    pub fn poll_all(&mut self) -> (bool, Option<String>, Option<(String, String)>, bool, u8) {
+        if let Some(ref session_arc) = self.session
+            && let Ok(session) = session_arc.lock()
+        {
+            return (
+                session.poll_bel(),
+                session.poll_clipboard(),
+                session.poll_notification(),
+                session.mode_get(SYNC_MODE_NUMBER, 0),
+                session.poll_shell_integration() as u8,
+            );
+        }
+        (false, None, None, false, 0)
+    }
+
     pub fn cwd(&self) -> String {
         if let Some(ref session_arc) = self.session
             && let Ok(session) = session_arc.lock()

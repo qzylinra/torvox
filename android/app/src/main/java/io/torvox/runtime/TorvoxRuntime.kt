@@ -148,10 +148,11 @@ constructor(
     fun setScrollOffset(offset: UInt) {
         val entry = sessions[activeSessionId] ?: return
         entry.scrollOffset = offset
-        entry.bridge?.setScrollOffset(offset)
-        // Signal the render thread (vsync-paced). The render loop already detects
-        // scroll-offset changes and re-renders, so a synchronous GPU render here
-        // would only block the calling thread (often the UI thread during scroll).
+        // The render thread already reads entry.scrollOffset and calls
+        // bridge.setScrollOffset() under the surface lock, so calling it here
+        // would be a redundant JNA round-trip + surface-lock acquisition on the
+        // calling thread (often the UI thread during scroll). Just signal the
+        // render thread to pick up the change.
         entry.notifyRender()
     }
 
@@ -1077,8 +1078,11 @@ constructor(
                                 )
                             }
                             consecutiveErrors = 0
+                            // Single lock acquisition that drains BEL, clipboard,
+                            // notification, sync mode, and shell integration.
                             try {
-                                if (bridge.pollBel()) {
+                                val poll = bridge.pollAll()
+                                if (poll.bel) {
                                     val toneGenerator = ToneGenerator(BEL_TONE_STREAM_TYPE, BEL_TONE_VOLUME)
                                     try {
                                         toneGenerator.startTone(BEL_TONE_TYPE, BEL_TONE_DURATION_MILLIS)
@@ -1086,13 +1090,8 @@ constructor(
                                         toneGenerator.release()
                                     }
                                 }
-                            } catch (exception: Exception) {
-                                LogUtil.w("TorvoxRuntime", "BEL poll failed for session ${entry.id}", exception)
-                            }
-                            try {
-                                val notification = bridge.pollNotification()
-                                if (notification != null) {
-                                    val (title, body) = notification
+                                if (poll.notification != null) {
+                                    val (title, body) = poll.notification
                                     val toastText = if (title.isNotEmpty()) "$title: $body" else body
                                     Handler(Looper.getMainLooper()).post {
                                         android.widget.Toast
@@ -1103,24 +1102,15 @@ constructor(
                                         .TerminalNotificationHelper(context)
                                         .showNotification(title, body)
                                 }
-                            } catch (exception: Exception) {
-                                LogUtil.e(
-                                    "TorvoxRuntime",
-                                    "notification poll/display failed for session ${entry.id}; terminal notification dropped",
-                                    exception,
-                                )
-                            }
-                            try {
-                                val clipboardText = bridge.pollClipboard()
-                                if (clipboardText != null) {
+                                if (poll.clipboard != null) {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clipData = ClipData.newPlainText("terminal clipboard", clipboardText)
+                                    val clipData = ClipData.newPlainText("terminal clipboard", poll.clipboard)
                                     clipboard.setPrimaryClip(clipData)
                                 }
                             } catch (exception: Exception) {
                                 LogUtil.e(
                                     "TorvoxRuntime",
-                                    "clipboard poll/set failed for session ${entry.id}; clipboard update skipped",
+                                    "pollAll failed for session ${entry.id}; deferred events dropped",
                                     exception,
                                 )
                             }
@@ -1131,48 +1121,19 @@ constructor(
                             }
                             diagCount++
                             if (diagCount == 1) {
-                                val terminalText =
-                                    try {
-                                        bridge.getTerminalText()
-                                    } catch (exception: Exception) {
-                                        LogUtil.e("TorvoxRuntime", "diagnostics query failed", exception)
-                                        null
-                                    }
-                                val scrollbackLength = bridge.scrollbackLength()
-                                val preview = terminalText?.take(80) ?: "null"
-                                LogUtil.d(
-                                    "TorvoxRuntime",
-                                    "session ${entry.id} first render OK: " +
-                                        "scrollback=$scrollbackLength " +
-                                        "text='$preview'",
-                                )
+                                LogUtil.d("TorvoxRuntime", "session ${entry.id} first render OK")
                             }
                             if (diagCount % RENDER_DIAGNOSTIC_FREQUENCY == 0) {
-                                val scrollbackLength = bridge.scrollbackLength()
-                                val terminalText =
-                                    try {
-                                        bridge.getTerminalText()
-                                    } catch (exception: Exception) {
-                                        LogUtil.e("TorvoxRuntime", "diagnostics query failed", exception)
-                                        null
-                                    }
-                                LogUtil.d(
-                                    "TorvoxRuntime",
-                                    "session ${entry.id} scrollback=$scrollbackLength text='${terminalText?.take(80) ?: "N/A"}'",
-                                )
                                 val title =
                                     try {
                                         bridge.getActiveSessionTitle()
                                     } catch (exception: Exception) {
-                                        LogUtil.e("TorvoxRuntime", "diagnostics query failed", exception)
+                                        LogUtil.e("TorvoxRuntime", "title query failed", exception)
                                         ""
                                     }
                                 if (title.isNotEmpty() && title != _state.value.title) {
                                     _state.value = _state.value.copy(title = title)
                                 }
-                            }
-                            if (diagCount % (RENDER_DIAGNOSTIC_FREQUENCY * 10) == 0) {
-                                LogUtil.d("TorvoxRuntime", "session ${entry.id} render alive: $diagCount")
                             }
                             if (!entry.forceRenderRequested) {
                                 entry.renderLock.lock()

@@ -702,10 +702,6 @@ constructor(
             ): Boolean {
                 if (isSelectingText) return false
                 val scrollbackLen = currentScrollbackLength()
-                Log.d(
-                    TAG,
-                    "onScroll: distY=$distanceY cellH=$cellHeight offset=$scrollOffset scrollback=$scrollbackLen",
-                )
                 if (!isScrolling) {
                     isScrolling = true
                     onScrollingStateChanged?.invoke(true)
@@ -1489,7 +1485,6 @@ constructor(
             }
         }
 
-        Log.v(TAG, "onTouchEvent: action=${event.actionMasked} xy=(${event.x},${event.y}) touchEnabled=$touchEnabled")
         scaleDetector.onTouchEvent(event)
         gestureDetector.onTouchEvent(event)
 
