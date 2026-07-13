@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import io.torvox.monitor.AnrWatchDog
+import io.torvox.monitor.BootGuard
 import io.torvox.monitor.MemoryMonitor
 import io.torvox.monitor.SelfExit
 import io.torvox.monitor.StrictModeConfig
@@ -12,6 +13,8 @@ import io.torvox.runtime.LogcatFileWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.io.PrintWriter
@@ -29,12 +32,19 @@ class TorvoxApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val logDir = getDir("logs", MODE_PRIVATE)
+        BootGuard(logDir).rotateLogs()
+        BootGuard(logDir).check()
         StrictModeConfig.install()
         LogcatFileWriter.init(this)
         installAnrWatchDog()
         installMemoryMonitor()
         installThermalMonitor()
         installCrashHandler()
+        monitorScope.launch {
+            delay(HEALTHY_UPTIME_MS)
+            BootGuard(logDir).markHealthy()
+        }
     }
 
     override fun onTrimMemory(level: Int) {
@@ -119,5 +129,6 @@ class TorvoxApp : Application() {
 
     companion object {
         private const val ANR_TIMEOUT_MILLIS = 5_000L
+        private const val HEALTHY_UPTIME_MS = 10 * 60 * 1000L
     }
 }

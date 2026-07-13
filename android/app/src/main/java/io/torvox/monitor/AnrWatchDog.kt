@@ -2,7 +2,6 @@ package io.torvox.monitor
 
 import android.os.Handler
 import android.os.Looper
-import android.os.Process
 import android.util.Log
 import io.torvox.BuildConfig
 import java.io.File
@@ -123,7 +122,7 @@ class AnrWatchDog(
 
             if (killOnAnr) {
                 Log.e("AnrWatchDog", "Killing process due to ANR")
-                Process.killProcess(Process.myPid())
+                SelfExit.exit(logDir, "ANR")
             }
         } catch (e: Exception) {
             Log.e("AnrWatchDog", "Unhandled exception in ANR handler", e)
