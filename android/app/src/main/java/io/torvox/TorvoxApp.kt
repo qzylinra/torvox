@@ -1,11 +1,13 @@
 package io.torvox
 
 import android.app.Application
+import android.os.Process
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import io.torvox.monitor.AnrWatchDog
 import io.torvox.monitor.MemoryMonitor
 import io.torvox.monitor.StrictModeConfig
+import io.torvox.monitor.ThermalMonitor
 import io.torvox.runtime.LogcatFileWriter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,7 @@ import java.util.Locale
 class TorvoxApp : Application() {
     private var anrWatchDog: AnrWatchDog? = null
     private var memoryMonitor: MemoryMonitor? = null
+    private var thermalMonitor: ThermalMonitor? = null
     private val monitorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
@@ -29,6 +32,7 @@ class TorvoxApp : Application() {
         LogcatFileWriter.init(this)
         installAnrWatchDog()
         installMemoryMonitor()
+        installThermalMonitor()
         installCrashHandler()
     }
 
@@ -42,6 +46,16 @@ class TorvoxApp : Application() {
             MemoryMonitor(this, monitorScope).also {
                 it.startPolling()
             }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun installThermalMonitor() {
+        val logDir = getDir("logs", MODE_PRIVATE)
+        thermalMonitor =
+            ThermalMonitor(this, logDir) {
+                Log.e("TorvoxApp", "Thermal CRITICAL — killing process")
+                Process.killProcess(Process.myPid())
+            }.also { it.register() }
     }
 
     private fun installCrashHandler() {
