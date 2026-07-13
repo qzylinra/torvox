@@ -4258,4 +4258,91 @@ mod tests {
         assert!(result.is_some());
         assert_eq!(result.unwrap().to_str().unwrap(), "line1\nline2\rline3");
     }
+
+    const VENDOR_TTF: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../vendor/ghostty/src/font/res/TerminusTTF-Regular.ttf"
+    );
+
+    fn create_test_bridge_handle() -> i64 {
+        let config = super::TerminalConfig {
+            shell: super::Shell::Custom {
+                path: "/bin/sh".to_string(),
+            },
+            rows: 24,
+            cols: 80,
+            scrollback_lines: 50_000,
+            font_size_tenths: 140,
+            theme: torvox_core::config::Theme::catppuccin_mocha().into(),
+            home: String::new(),
+            user: String::new(),
+            path: String::new(),
+            working_directory: String::new(),
+            prefix: String::new(),
+        };
+        let bridge = Box::into_raw(Box::new(super::TorvoxBridge::new(config)));
+        bridge as i64
+    }
+
+    unsafe fn call_torvox_bridge_load_font_file(
+        handle: i64,
+        path: &str,
+    ) -> Option<String> {
+        let path_bytes = path.as_bytes();
+        let ptr = path_bytes.as_ptr();
+        let len = path_bytes.len() as i32;
+        let result_ptr = super::torvox_bridge_load_font_file(handle, ptr, len);
+        if result_ptr.is_null() {
+            return None;
+        }
+        let cstr = std::ffi::CStr::from_ptr(result_ptr);
+        let s = cstr.to_str().unwrap().to_string();
+        let _ = std::ffi::CString::from_raw(result_ptr);
+        Some(s)
+    }
+
+    #[test]
+    fn raw_load_font_file_with_null_handle_returns_null() {
+        unsafe {
+            let path_bytes = b"/some/path.ttf";
+            let result = super::torvox_bridge_load_font_file(0, path_bytes.as_ptr(), path_bytes.len() as i32);
+            assert!(result.is_null(), "null handle should return null");
+        }
+    }
+
+    #[test]
+    fn raw_load_font_file_with_null_path_returns_null() {
+        let handle = create_test_bridge_handle();
+        unsafe {
+            let result = super::torvox_bridge_load_font_file(handle, std::ptr::null(), 5);
+            assert!(result.is_null(), "null path should return null");
+        }
+    }
+
+    #[test]
+    fn raw_load_font_file_with_negative_len_returns_null() {
+        let handle = create_test_bridge_handle();
+        unsafe {
+            let path_bytes = b"/some/path.ttf";
+            let result = super::torvox_bridge_load_font_file(handle, path_bytes.as_ptr(), -1);
+            assert!(result.is_null(), "negative len should return null");
+        }
+    }
+
+    #[test]
+    fn raw_load_font_file_with_nonexistent_path_returns_null() {
+        let handle = create_test_bridge_handle();
+        let result = unsafe { call_torvox_bridge_load_font_file(handle, "/nonexistent/font.ttf") };
+        assert!(result.is_none(), "nonexistent path should return None");
+    }
+
+    #[test]
+    fn raw_load_font_file_with_zero_length_path_returns_null() {
+        let handle = create_test_bridge_handle();
+        unsafe {
+            let path_bytes = b"";
+            let result = super::torvox_bridge_load_font_file(handle, path_bytes.as_ptr(), 0);
+            assert!(result.is_null(), "zero-length path should return null");
+        }
+    }
 }

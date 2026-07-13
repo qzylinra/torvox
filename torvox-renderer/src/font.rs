@@ -2733,4 +2733,116 @@ mod tests {
             "atlas should have content after defrag"
         );
     }
+
+    const VENDOR_TTF: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../vendor/ghostty/src/font/res/TerminusTTF-Regular.ttf"
+    );
+
+    #[test]
+    fn load_font_file_valid_ttf_returns_family() {
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let family = p.load_font_file(std::path::Path::new(VENDOR_TTF));
+        let family = family.expect("load_font_file should return Some for valid TTF");
+        assert!(
+            !family.is_empty(),
+            "family name should not be empty, got '{family}'"
+        );
+        assert!(family.contains("Terminus") || family.contains("TerminusTTF"),
+            "expected 'Terminus' in family name, got '{family}'");
+    }
+
+    #[test]
+    fn load_font_file_nonexistent_path_returns_none() {
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let result = p.load_font_file(std::path::Path::new(
+            "/nonexistent/path/to/font.ttf",
+        ));
+        assert!(result.is_none(), "should return None for nonexistent path");
+    }
+
+    #[test]
+    fn load_font_file_empty_file_returns_none() {
+        let dir = std::env::temp_dir().join("torvox_test_font_load");
+        let _ = std::fs::create_dir_all(&dir);
+        let empty_path = dir.join("empty.ttf");
+        std::fs::write(&empty_path, &[]).ok();
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let result = p.load_font_file(&empty_path);
+        assert!(result.is_none(), "empty file should return None");
+        let _ = std::fs::remove_file(&empty_path);
+    }
+
+    #[test]
+    fn load_font_file_corrupt_file_returns_none() {
+        let dir = std::env::temp_dir().join("torvox_test_font_load");
+        let _ = std::fs::create_dir_all(&dir);
+        let corrupt_path = dir.join("corrupt.ttf");
+        let garbage: Vec<u8> = (0..256).map(|i| (i ^ 0xAB) as u8).collect();
+        std::fs::write(&corrupt_path, &garbage).ok();
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let result = p.load_font_file(&corrupt_path);
+        assert!(result.is_none(), "corrupt file should return None");
+        let _ = std::fs::remove_file(&corrupt_path);
+    }
+
+    #[test]
+    fn load_font_file_multiple_times_works() {
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let first = p.load_font_file(std::path::Path::new(VENDOR_TTF));
+        let second = p.load_font_file(std::path::Path::new(VENDOR_TTF));
+        assert!(first.is_some(), "first load should succeed");
+        assert!(second.is_some(), "second load of same file should succeed");
+        assert_eq!(first, second, "loading same file twice should return same family");
+    }
+
+    #[test]
+    fn load_font_file_does_not_break_cell_metrics() {
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let (cw_before, ch_before) = p.cell_metrics();
+        assert!(cw_before > 0.0 && ch_before > 0.0, "initial metrics should be positive");
+        let family = p.load_font_file(std::path::Path::new(VENDOR_TTF));
+        assert!(family.is_some(), "should load vendor TTF");
+        let (cw_after, ch_after) = p.cell_metrics();
+        assert_eq!(cw_before, cw_after, "cell width unchanged after load_font_file");
+        assert_eq!(ch_before, ch_after, "cell height unchanged after load_font_file");
+    }
+
+    #[test]
+    fn load_font_file_loaded_font_can_be_set() {
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let family = p.load_font_file(std::path::Path::new(VENDOR_TTF))
+            .expect("should load vendor TTF");
+        assert!(
+            p.set_font_family(&family),
+            "set_font_family should succeed for loaded font '{family}'"
+        );
+        let (cw, ch) = p.cell_metrics();
+        assert!(cw > 0.0, "cell width positive after setting loaded font");
+        assert!(ch > 0.0, "cell height positive after setting loaded font");
+    }
+
+    #[test]
+    fn load_font_file_unicode_path() {
+        let dir = std::env::temp_dir().join("torvox_test_unicode_字体");
+        let _ = std::fs::create_dir_all(&dir);
+        let target = dir.join("测试-font.ttf");
+        std::fs::copy(VENDOR_TTF, &target).expect("copy vendor TTF to unicode path");
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let family = p.load_font_file(&target);
+        assert!(family.is_some(), "should load font from unicode path");
+        assert!(!family.unwrap().is_empty(), "family should not be empty");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_font_file_after_set_font_family() {
+        let mut p = FontPipeline::new(512, 512, 14.0);
+        let fonts = p.list_monospace_fonts();
+        if let Some(first) = fonts.first() {
+            assert!(p.set_font_family(first), "set font family {first}");
+        }
+        let result = p.load_font_file(std::path::Path::new(VENDOR_TTF));
+        assert!(result.is_some(), "load after set_font_family should succeed");
+    }
 }
