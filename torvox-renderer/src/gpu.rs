@@ -3669,6 +3669,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 2);
@@ -3717,6 +3719,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -3766,6 +3770,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -3827,6 +3833,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4391,6 +4399,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4443,6 +4453,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4660,6 +4672,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4708,6 +4722,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4758,6 +4774,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4807,6 +4825,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4854,6 +4874,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(
@@ -4905,6 +4927,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -4958,6 +4982,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -5011,6 +5037,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);
@@ -5062,6 +5090,8 @@ mod tests {
                 dirty_rows: &[],
                 cached_instances: &[],
                 cached_row_ends: &[],
+                surface_bg: [0.0, 0.0, 0.0, 1.0],
+                render_scale: 1.0,
             },
         );
         assert_eq!(instances.len(), 1);

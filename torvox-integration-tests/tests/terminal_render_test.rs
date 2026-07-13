@@ -259,6 +259,8 @@ fn render_or_die(
             dirty_rows: &[],
             cached_instances: &[],
             cached_row_ends: &[],
+            surface_bg: [0.0, 0.0, 0.0, 1.0],
+            render_scale: 1.0,
         },
     );
     ctx.render_to_buffer(&instances, &[])
@@ -286,6 +288,8 @@ fn render_with_selection(
             dirty_rows: &[],
             cached_instances: &[],
             cached_row_ends: &[],
+            surface_bg: [0.0, 0.0, 0.0, 1.0],
+            render_scale: 1.0,
         },
     );
     ctx.render_to_buffer(&instances, &[])
@@ -323,6 +327,8 @@ fn render_dirty_or_die(
             dirty_rows: &[],
             cached_instances: &[],
             cached_row_ends: &[],
+            surface_bg: [0.0, 0.0, 0.0, 1.0],
+            render_scale: 1.0,
         },
     );
     ctx.render_to_buffer(&instances, &[])
@@ -399,6 +405,8 @@ fn gpu_render_cursor_visible() {
             dirty_rows: &[],
             cached_instances: &[],
             cached_row_ends: &[],
+            surface_bg: [0.0, 0.0, 0.0, 1.0],
+            render_scale: 1.0,
         },
     );
     let pixels = ctx.render_to_buffer(&instances, &[]).unwrap();
