@@ -553,7 +553,50 @@ impl AndroidSurface {
     }
 
     /// Returns `true` if new PTY data arrived and was rendered, `false` if idle.
+    /// GPU-only render path.  Called from bridge after `process_session_for_render`
+    /// has already processed ghostty output and taken a snapshot while the surface
+    /// lock was NOT held.  The surface lock is held during this call but only for
+    /// fast GPU operations (atlas upload, instance building, wgpu render pass).
+    pub fn render_frame(
+        &mut self,
+        scroll_offset: u32,
+        had_output: bool,
+        snapshot: torvox_terminal::ghostty_terminal::CellSnapshot,
+    ) -> Result<bool, SurfaceError> {
+        self.render_inner(scroll_offset, had_output, snapshot)
+    }
+
+    /// Full render path: process ghostty output, take snapshot, then run GPU work.
+    /// Used by tests and as a fallback when the bridge path is not available.
     pub fn render(&mut self, scroll_offset: u32) -> Result<bool, SurfaceError> {
+        let had_output;
+        let snapshot;
+        {
+            let mut guard = self
+                .session
+                .as_ref()
+                .ok_or(SurfaceError::NoSession)?
+                .lock()
+                .map_err(|_| SurfaceError::NoSession)?;
+            let session = &mut *guard;
+            had_output = session.process_output();
+            snapshot = match session
+                .terminal()
+                .try_take_snapshot_with_scroll(scroll_offset)
+            {
+                Some(snap) => snap,
+                None => return Ok(false),
+            };
+        }
+        self.render_inner(scroll_offset, had_output, snapshot)
+    }
+
+    fn render_inner(
+        &mut self,
+        scroll_offset: u32,
+        had_output: bool,
+        mut snapshot: torvox_terminal::ghostty_terminal::CellSnapshot,
+    ) -> Result<bool, SurfaceError> {
         let frame_start = Instant::now();
         #[cfg(target_os = "android")]
         // SAFETY: ATrace_beginSection/endSection are thread-safe NDK functions.
@@ -569,70 +612,37 @@ impl AndroidSurface {
             self.native_window.is_some(),
         );
 
-        let had_output;
-        let mut snapshot;
         let has_search_highlights = !self.search_highlights.is_empty();
-        {
-            let mut guard = self
-                .session
-                .as_ref()
-                .ok_or(SurfaceError::NoSession)?
-                .lock()
-                .map_err(|_| SurfaceError::NoSession)?;
-            let session = &mut *guard;
-            had_output = session.process_output();
-            // Skip expensive snapshot + GPU render when nothing changed.
-            // Render even without PTY output when search highlights are pending
-            // so the user sees the highlighted matches immediately.
-            if has_search_highlights {
-                log::info!(
-                    "render: search highlights pending, proceeding (count={})",
-                    self.search_highlights.len()
-                );
-            }
-            if !had_output
-                && self.frame_count > 0
-                && !has_search_highlights
-                && !self.render_requested
-                && !self.blink_timer_elapsed()
-            {
-                #[cfg(target_os = "android")]
-                // SAFETY: Paired with the ATrace_beginSection at the top of render().
-                // These NDK functions are thread-safe and the call is correctly nested.
-                unsafe {
-                    ATrace_endSection();
-                } // AndroidSurface::render
-                return Ok(false);
-            }
-            log::debug!(
-                "RENDER_PROCEED: had_output={} frame_count={} highlights={} render_requested={}",
-                had_output,
-                self.frame_count,
-                has_search_highlights,
-                self.render_requested,
+        // Skip expensive snapshot + GPU render when nothing changed.
+        // Render even without PTY output when search highlights are pending
+        // so the user sees the highlighted matches immediately.
+        if has_search_highlights {
+            log::info!(
+                "render: search highlights pending, proceeding (count={})",
+                self.search_highlights.len()
             );
-
-            // Non-blocking snapshot for the render hot path. This must NOT block
-            // on the VT thread while we hold the session lock — blocking here
-            // would stall main-thread work (IME input, settings). The returned
-            // snapshot is at most 1 frame behind, which the surface diffs
-            // against `prev_cells`. On the first call the cache is not yet
-            // primed, so skip this frame.
-            match session
-                .terminal()
-                .try_take_snapshot_with_scroll(scroll_offset)
-            {
-                Some(snap) => snapshot = snap,
-                None => {
-                    #[cfg(target_os = "android")]
-                    // SAFETY: Paired with the ATrace_beginSection at the top of render().
-                    unsafe {
-                        ATrace_endSection();
-                    } // AndroidSurface::render
-                    return Ok(false);
-                }
-            }
         }
+        if !had_output
+            && self.frame_count > 0
+            && !has_search_highlights
+            && !self.render_requested
+            && !self.blink_timer_elapsed()
+        {
+            #[cfg(target_os = "android")]
+            // SAFETY: Paired with the ATrace_beginSection at the top of render_inner().
+            // These NDK functions are thread-safe and the call is correctly nested.
+            unsafe {
+                ATrace_endSection();
+            } // AndroidSurface::render
+            return Ok(false);
+        }
+        log::debug!(
+            "RENDER_PROCEED: had_output={} frame_count={} highlights={} render_requested={}",
+            had_output,
+            self.frame_count,
+            has_search_highlights,
+            self.render_requested,
+        );
 
         // Cursor visibility follows the terminal's DECTCEM state directly.
         // No app-level override — cursor_override was removed (FR-057).

@@ -110,7 +110,7 @@
               vale
               markdownlint-cli2
               mesa
-              mold
+              wild-unwrapped
               vulkan-loader
               vulkan-tools
               nixfmt-rs

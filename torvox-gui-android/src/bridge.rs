@@ -682,7 +682,46 @@ impl TorvoxBridge {
     }
 
     /// Returns `Ok(true)` if new data was rendered, `Ok(false)` if idle.
+    /// Process ghostty PTY output and take a cell snapshot.
+    /// Called BEFORE the surface lock so ghostty C code never blocks the
+    /// surface mutex.  Returns `(had_output, snapshot)`.
+    fn process_session_for_render(
+        &self,
+    ) -> Result<(bool, torvox_terminal::ghostty_terminal::CellSnapshot), TerminalError>
+    {
+        let session_arc = self
+            .session
+            .lock()
+            .map_err(|e| TerminalError::PtyError {
+                detail: format!("session lock poisoned: {e}"),
+            })?
+            .as_ref()
+            .cloned()
+            .ok_or(TerminalError::PtyError {
+                detail: "no active session for render".to_string(),
+            })?;
+        let mut session_guard = session_arc.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("session inner lock poisoned: {e}"),
+        })?;
+        let scroll_offset = self.scroll_offset.load(std::sync::atomic::Ordering::Relaxed);
+        let had_output = session_guard.process_output();
+        let snapshot = session_guard
+            .terminal()
+            .try_take_snapshot_with_scroll(scroll_offset)
+            .ok_or(TerminalError::PtyError {
+                detail: "snapshot unavailable — VT thread busy".to_string(),
+            })?;
+        Ok((had_output, snapshot))
+    }
+
     pub fn render(&self) -> Result<bool, TerminalError> {
+        // Step 1 – process ghostty output / take snapshot OUTSIDE the surface
+        // lock so that ghostty C code (potentially 100+ ms) never stalls the
+        // surface mutex.  The main thread can still apply settings / resize /
+        // IME input while ghostty is working.
+        let session_out = self.process_session_for_render()?;
+
+        // Step 2 – lock surface only for the fast GPU path
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
@@ -691,7 +730,7 @@ impl TorvoxBridge {
                 .scroll_offset
                 .load(std::sync::atomic::Ordering::Relaxed);
             let result = surface
-                .render(scroll_offset)
+                .render_frame(scroll_offset, session_out.0, session_out.1)
                 .map_err(|e| TerminalError::PtyError {
                     detail: e.to_string(),
                 });
