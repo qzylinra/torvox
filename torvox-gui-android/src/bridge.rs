@@ -687,7 +687,7 @@ impl TorvoxBridge {
     /// surface mutex.  Returns `(had_output, snapshot)`.
     fn process_session_for_render(
         &self,
-    ) -> Result<(bool, torvox_terminal::ghostty_terminal::CellSnapshot), TerminalError>
+    ) -> Result<(bool, torvox_terminal::ghostty_terminal::GridSnapshot), TerminalError>
     {
         let session_arc = self
             .session

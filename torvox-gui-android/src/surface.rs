@@ -18,7 +18,7 @@ use torvox_renderer::font::FontPipeline;
 use torvox_renderer::gpu::GpuContext;
 use torvox_renderer::gpu::SearchHighlight;
 use torvox_renderer::gpu::SelectionRange;
-use torvox_terminal::ghostty_terminal::CellSnapshot;
+use torvox_terminal::ghostty_terminal::{CellSnapshot, GridSnapshot};
 use torvox_terminal::ghostty_terminal::KgpImageData;
 use torvox_terminal::session::Session;
 use torvox_terminal::shell_env::ShellEnv;
@@ -561,7 +561,7 @@ impl AndroidSurface {
         &mut self,
         scroll_offset: u32,
         had_output: bool,
-        snapshot: torvox_terminal::ghostty_terminal::CellSnapshot,
+        snapshot: torvox_terminal::ghostty_terminal::GridSnapshot,
     ) -> Result<bool, SurfaceError> {
         self.render_inner(scroll_offset, had_output, snapshot)
     }
@@ -595,7 +595,7 @@ impl AndroidSurface {
         &mut self,
         scroll_offset: u32,
         had_output: bool,
-        mut snapshot: torvox_terminal::ghostty_terminal::CellSnapshot,
+        mut snapshot: torvox_terminal::ghostty_terminal::GridSnapshot,
     ) -> Result<bool, SurfaceError> {
         let frame_start = Instant::now();
         #[cfg(target_os = "android")]
