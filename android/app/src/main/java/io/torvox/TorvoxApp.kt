@@ -3,6 +3,8 @@ package io.torvox
 import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
+import io.torvox.monitor.AnrWatchDog
+import io.torvox.monitor.StrictModeConfig
 import io.torvox.runtime.LogcatFileWriter
 import java.io.File
 import java.io.PrintWriter
@@ -13,10 +15,19 @@ import java.util.Locale
 
 @HiltAndroidApp
 class TorvoxApp : Application() {
+    private var anrWatchDog: AnrWatchDog? = null
+
     override fun onCreate() {
         super.onCreate()
+        StrictModeConfig.install()
         LogcatFileWriter.init(this)
+        installAnrWatchDog()
         installCrashHandler()
+    }
+
+    private fun installAnrWatchDog() {
+        val logDir = getDir("logs", MODE_PRIVATE)
+        anrWatchDog = AnrWatchDog(logDir, ANR_TIMEOUT_MILLIS).also { it.start() }
     }
 
     private fun installCrashHandler() {
@@ -66,5 +77,9 @@ class TorvoxApp : Application() {
 
         crashLogFile.writeText(crashLog)
         Log.e("TorvoxApp", "Crash log written to ${crashLogFile.absolutePath}")
+    }
+
+    companion object {
+        private const val ANR_TIMEOUT_MILLIS = 5_000L
     }
 }
