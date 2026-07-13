@@ -11,6 +11,7 @@
 
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 use thiserror::Error;
 use torvox_core::selection::SelectionMode;
 use wgpu::util::DeviceExt;
@@ -18,6 +19,7 @@ use wgpu::util::DeviceExt;
 const MIN_ATLAS_BUFFER_SIZE: u64 = 64;
 const DESIRED_FRAME_LATENCY: u32 = 2;
 const DESIRED_FRAME_LATENCY_ANDROID: u32 = 1;
+const GPU_POLL_TIMEOUT: Duration = Duration::from_secs(2);
 const QUAD_VERTEX_COUNT: u32 = 6;
 const DEFAULT_BG_ALPHA: f32 = 0.8;
 
@@ -1409,7 +1411,7 @@ impl GpuContext {
         self.surface_config = None;
         if let Err(error) = self.device.poll(wgpu::PollType::Wait {
             submission_index: None,
-            timeout: None,
+            timeout: Some(GPU_POLL_TIMEOUT),
         }) {
             log::warn!("release_gpu_surface: device poll error: {error}");
         }
@@ -1443,7 +1445,7 @@ impl GpuContext {
         self.surface_config = None;
         if let Err(error) = self.device.poll(wgpu::PollType::Wait {
             submission_index: None,
-            timeout: None,
+            timeout: Some(GPU_POLL_TIMEOUT),
         }) {
             log::warn!("configure_android_surface: device poll error: {error}");
         }
@@ -2125,7 +2127,7 @@ impl GpuContext {
         // Wait for GPU to finish
         if let Err(error) = self.device.poll(wgpu::PollType::Wait {
             submission_index: None,
-            timeout: None,
+            timeout: Some(GPU_POLL_TIMEOUT),
         }) {
             log::warn!("render_to_buffer: device poll error: {error}");
         }
@@ -2139,7 +2141,7 @@ impl GpuContext {
         });
         if let Err(error) = self.device.poll(wgpu::PollType::Wait {
             submission_index: None,
-            timeout: None,
+            timeout: Some(GPU_POLL_TIMEOUT),
         }) {
             log::warn!("render_to_buffer (map wait): device poll error: {error}");
         }
@@ -3433,7 +3435,7 @@ mod tests {
             });
         let _ = device.poll(wgpu::PollType::Wait {
             submission_index: None,
-            timeout: None,
+            timeout: Some(GPU_POLL_TIMEOUT),
         });
 
         if let Ok(Ok(())) = rx.recv() {

@@ -21,6 +21,7 @@ class MemoryMonitor(
     private val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     private val memInfo = ActivityManager.MemoryInfo()
     private var pollingJob: Job? = null
+    private var lowMemoryReported = false
 
     fun startPolling(intervalMs: Long = POLL_INTERVAL_MS) {
         stopPolling()
@@ -50,15 +51,21 @@ class MemoryMonitor(
         val availPercent = if (memInfo.totalMem > 0) ((memInfo.availMem * 100) / memInfo.totalMem).toInt() else 0
 
         if (memInfo.lowMemory) {
-            Log.e(
-                TAG,
-                "LOW MEMORY: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=${pssKb}KB, nativeHeap=$nativeHeapMb MB, threshold=$thresholdMb MB",
-            )
-            onCriticalMemory?.invoke()
-        } else if (availMb < thresholdMb * LOW_MEMORY_FACTOR) {
-            Log.w(TAG, "Memory pressure: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=${pssKb}KB, threshold=$thresholdMb MB")
+            if (!lowMemoryReported) {
+                lowMemoryReported = true
+                Log.e(
+                    TAG,
+                    "LOW MEMORY: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=${pssKb}KB, nativeHeap=$nativeHeapMb MB, threshold=$thresholdMb MB",
+                )
+                onCriticalMemory?.invoke()
+            }
         } else {
-            LogUtil.d(TAG, "Memory OK: avail=$availMb MB / $totalMb MB ($availPercent%)")
+            lowMemoryReported = false
+            if (availMb < thresholdMb * LOW_MEMORY_FACTOR) {
+                Log.w(TAG, "Memory pressure: avail=$availMb MB / $totalMb MB ($availPercent%), PSS=${pssKb}KB, threshold=$thresholdMb MB")
+            } else {
+                LogUtil.d(TAG, "Memory OK: avail=$availMb MB / $totalMb MB ($availPercent%)")
+            }
         }
     }
 

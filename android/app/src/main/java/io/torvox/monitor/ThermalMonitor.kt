@@ -19,6 +19,7 @@ class ThermalMonitor(
     private val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
     private var lastStatus = PowerManager.THERMAL_STATUS_NONE
     private var thermalExecutor: java.util.concurrent.ExecutorService? = null
+    private var thermalListener: PowerManager.OnThermalStatusChangedListener? = null
 
     fun register() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
@@ -27,18 +28,24 @@ class ThermalMonitor(
                 Thread(r, "ThermalMonitor").apply { isDaemon = true }
             }
         thermalExecutor = executor
-        pm.addThermalStatusListener(executor) { status ->
-            onThermalStatusChanged(status)
-        }
+        thermalListener =
+            PowerManager.OnThermalStatusChangedListener { status ->
+                onThermalStatusChanged(status)
+            }
+        pm.addThermalStatusListener(executor, thermalListener!!)
         Log.i(TAG, "ThermalStatusListener registered")
     }
 
     fun unregister() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            pm.removeThermalStatusListener { }
+            val listener = thermalListener
+            if (listener != null) {
+                pm.removeThermalStatusListener(listener)
+            }
         }
         thermalExecutor?.shutdownNow()
         thermalExecutor = null
+        thermalListener = null
     }
 
     private fun onThermalStatusChanged(status: Int) {

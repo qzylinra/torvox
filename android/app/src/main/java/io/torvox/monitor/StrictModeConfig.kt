@@ -1,26 +1,20 @@
 package io.torvox.monitor
 
 import android.os.StrictMode
-import io.torvox.BuildConfig
 
 object StrictModeConfig {
     fun install() {
-        val threadPolicy =
+        StrictMode.setThreadPolicy(
             StrictMode.ThreadPolicy
                 .Builder()
                 .detectDiskReads()
                 .detectDiskWrites()
                 .detectNetwork()
                 .detectCustomSlowCalls()
-                .apply {
-                    if (BuildConfig.DEBUG) {
-                        penaltyLog()
-                    } else {
-                        penaltyLog()
-                    }
-                }.build()
-
-        val vmPolicy =
+                .penaltyLog()
+                .build(),
+        )
+        StrictMode.setVmPolicy(
             StrictMode.VmPolicy
                 .Builder()
                 .detectActivityLeaks()
@@ -28,15 +22,8 @@ object StrictModeConfig {
                 .detectLeakedRegistrationObjects()
                 .detectFileUriExposure()
                 .detectCleartextNetwork()
-                .apply {
-                    if (BuildConfig.DEBUG) {
-                        penaltyLog()
-                    } else {
-                        penaltyLog()
-                    }
-                }.build()
-
-        StrictMode.setThreadPolicy(threadPolicy)
-        StrictMode.setVmPolicy(vmPolicy)
+                .penaltyLog()
+                .build(),
+        )
     }
 }
