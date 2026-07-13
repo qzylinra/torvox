@@ -1593,12 +1593,12 @@ impl TorvoxBridge {
                 "bridge: process_key_event key_code={key_code} modifiers={modifiers} action={action} unicode={unicode_char} encoded_len={}",
                 encoded.len()
             );
-            let guard = self
-                .user_write_tx
-                .lock()
-                .map_err(|_| TerminalError::SessionUnavailable {
-                    detail: "user-write channel mutex poisoned".to_string(),
-                })?;
+            let guard =
+                self.user_write_tx
+                    .lock()
+                    .map_err(|_| TerminalError::SessionUnavailable {
+                        detail: "user-write channel mutex poisoned".to_string(),
+                    })?;
             match guard.as_ref() {
                 Some(sender) => sender.send(encoded).map_err(|error| {
                     log::error!("bridge: key PTY write channel closed: {error}");
