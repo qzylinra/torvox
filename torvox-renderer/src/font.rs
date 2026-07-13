@@ -2748,16 +2748,16 @@ mod tests {
             !family.is_empty(),
             "family name should not be empty, got '{family}'"
         );
-        assert!(family.contains("Terminus") || family.contains("TerminusTTF"),
-            "expected 'Terminus' in family name, got '{family}'");
+        assert!(
+            family.contains("Terminus") || family.contains("TerminusTTF"),
+            "expected 'Terminus' in family name, got '{family}'"
+        );
     }
 
     #[test]
     fn load_font_file_nonexistent_path_returns_none() {
         let mut p = FontPipeline::new(512, 512, 14.0);
-        let result = p.load_font_file(std::path::Path::new(
-            "/nonexistent/path/to/font.ttf",
-        ));
+        let result = p.load_font_file(std::path::Path::new("/nonexistent/path/to/font.ttf"));
         assert!(result.is_none(), "should return None for nonexistent path");
     }
 
@@ -2793,25 +2793,38 @@ mod tests {
         let second = p.load_font_file(std::path::Path::new(VENDOR_TTF));
         assert!(first.is_some(), "first load should succeed");
         assert!(second.is_some(), "second load of same file should succeed");
-        assert_eq!(first, second, "loading same file twice should return same family");
+        assert_eq!(
+            first, second,
+            "loading same file twice should return same family"
+        );
     }
 
     #[test]
     fn load_font_file_does_not_break_cell_metrics() {
         let mut p = FontPipeline::new(512, 512, 14.0);
         let (cw_before, ch_before) = p.cell_metrics();
-        assert!(cw_before > 0.0 && ch_before > 0.0, "initial metrics should be positive");
+        assert!(
+            cw_before > 0.0 && ch_before > 0.0,
+            "initial metrics should be positive"
+        );
         let family = p.load_font_file(std::path::Path::new(VENDOR_TTF));
         assert!(family.is_some(), "should load vendor TTF");
         let (cw_after, ch_after) = p.cell_metrics();
-        assert_eq!(cw_before, cw_after, "cell width unchanged after load_font_file");
-        assert_eq!(ch_before, ch_after, "cell height unchanged after load_font_file");
+        assert_eq!(
+            cw_before, cw_after,
+            "cell width unchanged after load_font_file"
+        );
+        assert_eq!(
+            ch_before, ch_after,
+            "cell height unchanged after load_font_file"
+        );
     }
 
     #[test]
     fn load_font_file_loaded_font_can_be_set() {
         let mut p = FontPipeline::new(512, 512, 14.0);
-        let family = p.load_font_file(std::path::Path::new(VENDOR_TTF))
+        let family = p
+            .load_font_file(std::path::Path::new(VENDOR_TTF))
             .expect("should load vendor TTF");
         assert!(
             p.set_font_family(&family),
@@ -2843,6 +2856,9 @@ mod tests {
             assert!(p.set_font_family(first), "set font family {first}");
         }
         let result = p.load_font_file(std::path::Path::new(VENDOR_TTF));
-        assert!(result.is_some(), "load after set_font_family should succeed");
+        assert!(
+            result.is_some(),
+            "load after set_font_family should succeed"
+        );
     }
 }

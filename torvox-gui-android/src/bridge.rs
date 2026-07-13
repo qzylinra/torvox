@@ -1225,6 +1225,136 @@ impl TorvoxBridge {
         Ok((row, col, row, col))
     }
 
+    /// Move one endpoint of an active selection to a new cell while keeping the
+    /// other endpoint fixed, then (for Word mode) re-expand the moved endpoint
+    /// using the same core `Selection` logic used by long-press. This unifies
+    /// drag-grow with long-press so word/URL/CJK boundaries stay consistent and
+    /// there is no divergent client-side expansion.
+    ///
+    /// * `handle_side` — 0 to move the start endpoint, 1 to move the end endpoint.
+    /// * `anchor_row`/`anchor_col` — the cell the dragged handle moved to.
+    /// * `other_row`/`other_col` — the fixed (opposite) endpoint.
+    /// * `mode` — selection mode (0=Char, 1=Word, 2=Line, 3=Block).
+    /// * `origin_row`/`origin_col` — the original long-press cell (preserved as the
+    ///   selection origin for the renderer).
+    ///
+    /// Returns the resulting ordered `(start_row, start_col, end_row, end_col)`.
+    pub fn set_selection_endpoint(
+        &self,
+        handle_side: u8,
+        anchor_row: i32,
+        anchor_col: i32,
+        other_row: i32,
+        other_col: i32,
+        mode: u8,
+        origin_row: i32,
+        origin_col: i32,
+    ) -> Result<(u32, u32, u32, u32), TerminalError> {
+        let mode_enum = match mode {
+            0 => torvox_core::selection::SelectionMode::Char,
+            1 => torvox_core::selection::SelectionMode::Word,
+            2 => torvox_core::selection::SelectionMode::Line,
+            3 => torvox_core::selection::SelectionMode::Block,
+            _ => torvox_core::selection::SelectionMode::Char,
+        };
+        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
+            detail: format!("lock failed: {}", e),
+        })?;
+        if let Some(surface) = surface_guard.as_mut() {
+            if let Ok(guard) = self.session.lock()
+                && let Some(session_arc) = guard.as_ref()
+                && let Ok(session) = session_arc.lock()
+            {
+                let snapshot = session.terminal().take_snapshot();
+                let cols = snapshot.cols;
+                let cell_at = |r: u32, c: u32| -> Option<char> {
+                    let idx = (r * cols + c) as usize;
+                    snapshot
+                        .cells
+                        .get(idx)
+                        .and_then(|s| char::from_u32(s.codepoint))
+                };
+
+                let fixed = torvox_core::selection::SelectionAnchor {
+                    row: other_row.max(0) as u32,
+                    col: other_col.max(0) as u32,
+                };
+                let moved = torvox_core::selection::SelectionAnchor {
+                    row: anchor_row.max(0) as u32,
+                    col: anchor_col.max(0) as u32,
+                };
+
+                let (new_start, new_end) = if mode_enum
+                    == torvox_core::selection::SelectionMode::Word
+                {
+                    // Re-expand only the word the dragged handle landed on.
+                    let moved_word = torvox_core::selection::Selection::new(
+                        moved,
+                        moved,
+                        mode_enum,
+                    )
+                    .expand(cell_at);
+                    let (mws, mwe) = moved_word.ordered();
+                    if handle_side == 0 {
+                        (mws, fixed)
+                    } else {
+                        (fixed, mwe)
+                    }
+                } else if handle_side == 0 {
+                    (moved, fixed)
+                } else {
+                    (fixed, moved)
+                };
+
+                surface.set_selection(Some(
+                    torvox_renderer::gpu::SelectionRange {
+                        start_row: new_start.row as i32,
+                        start_col: new_start.col as i32,
+                        end_row: new_end.row as i32,
+                        end_col: new_end.col as i32,
+                        active: true,
+                        mode: mode_enum,
+                        origin: Some((origin_row, origin_col)),
+                    },
+                ));
+                let (lo, hi) = if new_start.row < new_end.row
+                    || (new_start.row == new_end.row && new_start.col <= new_end.col)
+                {
+                    (new_start, new_end)
+                } else {
+                    (new_end, new_start)
+                };
+                log::debug!(
+                    "set_selection_endpoint handle={} mode={} -> start=({},{}), end=({},{}), anchor=({},{}), fixed=({},{}), origin=({},{}), moved_word=({},{}),({},{}))",
+                    handle_side,
+                    mode,
+                    lo.row,
+                    lo.col,
+                    hi.row,
+                    hi.col,
+                    anchor_row,
+                    anchor_col,
+                    other_row,
+                    other_col,
+                    origin_row,
+                    origin_col,
+                    new_start.row,
+                    new_start.col,
+                    new_end.row,
+                    new_end.col,
+                );
+                return Ok((lo.row, lo.col, hi.row, hi.col));
+            }
+            surface.set_selection(None);
+        }
+        Ok((
+            anchor_row.max(0) as u32,
+            anchor_col.max(0) as u32,
+            anchor_row.max(0) as u32,
+            anchor_col.max(0) as u32,
+        ))
+    }
+
     /// Deserialize search highlights from wire format and set them on the surface.
     ///
     /// Wire format: [count: i32 LE] then for each highlight:
@@ -2448,6 +2578,41 @@ pub unsafe extern "C" fn torvox_bridge_expand_and_set_selection(
 ) -> i64 {
     with_bridge(handle, |bridge| {
         bridge.expand_and_set_selection(row, col, mode as u8)
+    })
+    .map(|(sr, sc, er, ec)| {
+        (sr as i64 & 0xFFFF)
+            | ((sc as i64 & 0xFFFF) << 16)
+            | ((er as i64 & 0xFFFF) << 32)
+            | ((ec as i64 & 0xFFFF) << 48)
+    })
+    .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_selection_endpoint(
+    handle: i64,
+    handle_side: u8,
+    anchor_row: i32,
+    anchor_col: i32,
+    other_row: i32,
+    other_col: i32,
+    mode: i32,
+    origin_row: i32,
+    origin_col: i32,
+) -> i64 {
+    with_bridge(handle, |bridge| {
+        bridge.set_selection_endpoint(
+            handle_side,
+            anchor_row,
+            anchor_col,
+            other_row,
+            other_col,
+            mode as u8,
+            origin_row,
+            origin_col,
+        )
     })
     .map(|(sr, sc, er, ec)| {
         (sr as i64 & 0xFFFF)
@@ -4284,10 +4449,7 @@ mod tests {
         bridge as i64
     }
 
-    unsafe fn call_torvox_bridge_load_font_file(
-        handle: i64,
-        path: &str,
-    ) -> Option<String> {
+    unsafe fn call_torvox_bridge_load_font_file(handle: i64, path: &str) -> Option<String> {
         let path_bytes = path.as_bytes();
         let ptr = path_bytes.as_ptr();
         let len = path_bytes.len() as i32;
@@ -4305,7 +4467,11 @@ mod tests {
     fn raw_load_font_file_with_null_handle_returns_null() {
         unsafe {
             let path_bytes = b"/some/path.ttf";
-            let result = super::torvox_bridge_load_font_file(0, path_bytes.as_ptr(), path_bytes.len() as i32);
+            let result = super::torvox_bridge_load_font_file(
+                0,
+                path_bytes.as_ptr(),
+                path_bytes.len() as i32,
+            );
             assert!(result.is_null(), "null handle should return null");
         }
     }

@@ -2,24 +2,37 @@
 
 package io.torvox.ui
 
+import android.graphics.RectF
 import android.util.Log
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,19 +46,26 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import io.torvox.R
+import io.torvox.SelectionState
 import io.torvox.TerminalViewModel
 import io.torvox.ui.theme.BuiltInThemes
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 private const val FONT_SIZE_MIN = 8f
 private const val FONT_SIZE_MAX = 48f
@@ -202,11 +222,11 @@ fun TerminalScreen(
 
         Box(
             modifier =
-            Modifier
-                .fillMaxSize()
-                .testTag("TerminalScreen")
-                .background(terminalBg)
-                .statusBarsPadding(),
+                Modifier
+                    .fillMaxSize()
+                    .testTag("TerminalScreen")
+                    .background(terminalBg)
+                    .statusBarsPadding(),
         ) {
             LaunchedEffect(drawerState.isOpen) {
                 surfaceRef.value?.drawerOpen = drawerState.isOpen
@@ -297,24 +317,24 @@ fun TerminalScreen(
 
             Column(
                 modifier =
-                Modifier
-                    .fillMaxSize()
-                    .testTag("TerminalContent")
-                    .imePadding()
-                    .then(
-                        if (WindowInsets.ime.getBottom(LocalDensity.current) <= 0) {
-                            Modifier.navigationBarsPadding()
-                        } else {
-                            Modifier
-                        },
-                    ),
+                    Modifier
+                        .fillMaxSize()
+                        .testTag("TerminalContent")
+                        .imePadding()
+                        .then(
+                            if (WindowInsets.ime.getBottom(LocalDensity.current) <= 0) {
+                                Modifier.navigationBarsPadding()
+                            } else {
+                                Modifier
+                            },
+                        ),
             ) {
                 // Terminal content area — fills remaining space above the bar
                 Box(
                     modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
                 ) {
                     AndroidView(
                         factory = { context ->
@@ -382,7 +402,7 @@ fun TerminalScreen(
                                 (
                                     surface.getRows() != runtimeState.rows ||
                                         surface.getCols() != runtimeState.cols
-                                    )
+                                )
                             ) {
                                 surface.setDimensions(runtimeState.rows, runtimeState.cols)
                                 surface.requestLayout()
@@ -407,12 +427,13 @@ fun TerminalScreen(
                         }
                         val themeAccent = if (state.selectionAccent != 0) Color(state.selectionAccent) else resolvedTerminalTheme.foreground
 
-                        fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int = android.graphics.Color.argb(
-                            (color.alpha * 255).toInt(),
-                            (color.red * 255).toInt(),
-                            (color.green * 255).toInt(),
-                            (color.blue * 255).toInt(),
-                        )
+                        fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int =
+                            android.graphics.Color.argb(
+                                (color.alpha * 255).toInt(),
+                                (color.red * 255).toInt(),
+                                (color.green * 255).toInt(),
+                                (color.blue * 255).toInt(),
+                            )
                         val themeAccentArgb = colorToArgb(themeAccent)
 
                         if (selection.dragging) {
@@ -448,6 +469,33 @@ fun TerminalScreen(
                                 backgroundColor = Color(state.selectionBg),
                             )
                         }
+                    }
+
+                    // ── Selection context menu (Compose overlay) ──
+                    // Primary selection menu. Driven entirely by the view-model
+                    // selection state so it stays in sync with the GPU-inverted
+                    // selection and the drag handles. Hidden while dragging and
+                    // re-shown (re-placed) when the drag ends.
+                    val menuSurface = surfaceRef.value
+                    if (menuSurface != null && selectionActive && !selection.dragging) {
+                        val configuration = LocalConfiguration.current
+                        val density = LocalDensity.current
+                        val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
+                        val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+                        SelectionMenuOverlay(
+                            selection = selection,
+                            cellWidth = menuSurface.cellWidth,
+                            cellHeight = menuSurface.cellHeight,
+                            scrollOffset = menuSurface.getScrollOffset(),
+                            screenWidthPx = screenWidthPx,
+                            screenHeightPx = screenHeightPx,
+                            onCopy = {
+                                viewModel.copySelectionToClipboard()
+                                viewModel.consumePastePopupRequest()
+                            },
+                            onSelectAll = { viewModel.selectAll(menuSurface.getScrollOffset()) },
+                            onPaste = { viewModel.pasteFromClipboard() },
+                        )
                     }
 
                     if (showTextSearch && searchState.hasResults) {
@@ -562,9 +610,9 @@ fun TerminalScreen(
 
                     ModifierBar(
                         modifier =
-                        Modifier
-                            .testTag("ModifierBar")
-                            .navigationBarsPadding(),
+                            Modifier
+                                .testTag("ModifierBar")
+                                .navigationBarsPadding(),
                         onKeyClick = { data ->
                             viewModel.writeToPty(data.toByteArray())
                         },
@@ -588,41 +636,161 @@ fun TerminalScreen(
                         toolbarLayout = rememberToolbarLayout(),
                         barMode = barMode,
                         onCopy =
-                        if (selectionActive) {
-                            {
-                                viewModel.copySelectionToClipboard()
-                                viewModel.clearSelection()
-                            }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                {
+                                    viewModel.copySelectionToClipboard()
+                                    viewModel.clearSelection()
+                                }
+                            } else {
+                                null
+                            },
                         onSelectAll =
-                        if (selectionActive) {
-                            { viewModel.selectAll() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.selectAll() }
+                            } else {
+                                null
+                            },
                         onPaste =
-                        if (selectionActive && hasClipboard) {
-                            { viewModel.pasteFromClipboard() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive && hasClipboard) {
+                                { viewModel.pasteFromClipboard() }
+                            } else {
+                                null
+                            },
                         onShare =
-                        if (selectionActive) {
-                            { viewModel.shareSelection() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.shareSelection() }
+                            } else {
+                                null
+                            },
                         onDismiss =
-                        if (selectionActive) {
-                            { viewModel.clearSelection() }
-                        } else {
-                            null
-                        },
+                            if (selectionActive) {
+                                { viewModel.clearSelection() }
+                            } else {
+                                null
+                            },
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * Compose overlay that renders the selection context menu near the inverted
+ * selection. Placement rules (mirrors Termux/Haven ergonomics):
+ *  1. Prefer below the selection baseline.
+ *  2. If that would run off the bottom of the screen, flip above.
+ *  3. Clamp horizontally to the screen edges.
+ *  4. The menu must NEVER cover the selected text — [coversSelection] is
+ *     computed and logged so the OCR / video verification can assert it.
+ *
+ * Colors come exclusively from [MaterialTheme.colorScheme] (the active theme);
+ * no hardcoded hex. Hidden during a drag ([SelectionState.dragging]) via
+ * [AnimatedVisibility] and re-shown (re-placed) when the drag ends.
+ */
+@Composable
+@Suppress("LongParameterList")
+fun SelectionMenuOverlay(
+    selection: SelectionState,
+    cellWidth: Float,
+    cellHeight: Float,
+    scrollOffset: Int,
+    screenWidthPx: Float,
+    screenHeightPx: Float,
+    onCopy: () -> Unit,
+    onSelectAll: () -> Unit,
+    onPaste: () -> Unit,
+) {
+    if (!selection.active) return
+    val start = selection.start ?: return
+    val end = selection.end ?: return
+
+    // Empty / whitespace long-press produced no text → PASTE_ONLY menu.
+    val pasteOnly = selection.selectedText.isEmpty()
+
+    val loRow = min(start.row, end.row)
+    val hiRow = max(start.row, end.row)
+    val loCol = if (start.row <= end.row) start.col else end.col
+    val hiCol = if (start.row <= end.row) end.col else start.col
+
+    val visibleLoRow = (loRow - scrollOffset).coerceAtLeast(0)
+    val visibleHiRow = (hiRow - scrollOffset).coerceAtLeast(0)
+
+    val selLeft = loCol * cellWidth
+    val selRight = (hiCol + 1) * cellWidth
+    val selTop = visibleLoRow * cellHeight
+    val selBottom = (visibleHiRow + 1) * cellHeight
+    val selRect = RectF(selLeft, selTop, selRight, selBottom)
+
+    var menuSize by remember { mutableStateOf(IntSize(0, 0)) }
+    val menuW = if (menuSize.width > 0) menuSize.width.toFloat() else 260f
+    val menuH = if (menuSize.height > 0) menuSize.height.toFloat() else 48f
+
+    // Place below the selection, with an 8px gap.
+    var menuX = selLeft.coerceIn(0f, (screenWidthPx - menuW).coerceAtLeast(0f))
+    var menuY = selBottom + 8f
+    val flipAbove = menuY + menuH > screenHeightPx && (selTop - menuH - 8f) >= 0f
+    if (flipAbove) {
+        menuY = selTop - menuH - 8f
+    }
+    // Edge-pin: never let the menu leave the screen vertically.
+    menuY = menuY.coerceIn(0f, (screenHeightPx - menuH).coerceAtLeast(0f))
+
+    val menuRect = RectF(menuX, menuY, menuX + menuW, menuY + menuH)
+    val coversSelection = RectF.intersects(selRect, menuRect)
+    Log.d(
+        "TorvoxSelection",
+        "MENU placement selRect=(${selLeft.toInt()},${selTop.toInt()},${selRight.toInt()}," +
+            "${selBottom.toInt()}) menuPos=(${menuX.toInt()},${menuY.toInt()}) " +
+            "menuW=${menuW.toInt()} menuH=${menuH.toInt()} flipAbove=$flipAbove " +
+            "coversSelection=$coversSelection pasteOnly=$pasteOnly",
+    )
+
+    AnimatedVisibility(
+        visible = !selection.dragging,
+        enter = fadeIn() + slideInVertically { it / 2 },
+        exit = fadeOut() + slideOutVertically { it / 2 },
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .offset { IntOffset(menuX.roundToInt(), menuY.roundToInt()) }
+                    .onSizeChanged { menuSize = it }
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(8.dp),
+                    ).border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline,
+                        RoundedCornerShape(8.dp),
+                    ),
+        ) {
+            Row(modifier = Modifier.padding(4.dp)) {
+                if (!pasteOnly) {
+                    SelectionMenuItem(text = "Copy", onClick = onCopy)
+                    SelectionMenuItem(text = "Select All", onClick = onSelectAll)
+                }
+                SelectionMenuItem(text = "Paste", onClick = onPaste)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectionMenuItem(
+    text: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .clickable { onClick() }
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelMedium,
+        )
     }
 }

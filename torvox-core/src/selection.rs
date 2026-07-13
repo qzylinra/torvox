@@ -6,8 +6,26 @@
 //! - [FR-023](crate) — Selection: line-at-a-time
 use serde::{Deserialize, Serialize};
 
+/// Returns true when `character` is a CJK ideograph or kana/hangul syllable.
+///
+/// CJK text has no inter-word spaces, so each glyph must be treated as part
+/// of a "word" for selection purposes — otherwise long-press on a single CJK
+/// glyph would only ever select that one character. Covers the common Unified
+/// CJK, extension-A, and the Hiragana/Katakana/Hangul syllable ranges.
+fn char_is_cjk(character: char) -> bool {
+    // Unified CJK Ideographs
+    ('\u{3400}'..='\u{4dbf}').contains(&character)
+        || ('\u{4e00}'..='\u{9fff}').contains(&character)
+        // CJK Unified Ideographs Extension A
+        || ('\u{f900}'..='\u{faff}').contains(&character)
+        // Hiragana + Katakana
+        || ('\u{3040}'..='\u{30ff}').contains(&character)
+        // Hangul Syllables
+        || ('\u{ac00}'..='\u{d7a3}').contains(&character)
+}
+
 fn is_word_char(character: char) -> bool {
-    character.is_alphanumeric() || character == '_'
+    character.is_alphanumeric() || character == '_' || char_is_cjk(character)
 }
 
 fn is_url_safe(character: char) -> bool {
@@ -36,6 +54,9 @@ fn is_url_safe(character: char) -> bool {
                 | '['
                 | ']'
         )
+        // CJK glyphs inside a URL (e.g. IDN / punycode-adjacent text) must not
+        // break the URL scan.
+        || char_is_cjk(character)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -187,11 +208,21 @@ impl Selection {
 
 impl Selection {
     /// Expand word boundaries around the start anchor.
+    ///
+    /// Word characters are `[A-Za-z0-9_]` plus CJK ideographs/kana/hangul. To
+    /// avoid merging a CJK glyph with an adjacent Latin word (e.g. selecting
+    /// `本` in `abc日本語def` should only grab `日本語`, not `abc日本語def`), the
+    /// expansion keeps the run within a single script class: once the seed
+    /// character is CJK, only other CJK glyphs extend the word, and vice-versa.
     pub fn expand_word(mut self, cell_at: impl Fn(u32, u32) -> Option<char>) -> Self {
+        let seed_is_cjk = cell_at(self.start.row, self.start.col)
+            .map(char_is_cjk)
+            .unwrap_or(false);
+        let same_script = |ch: char| is_word_char(ch) && char_is_cjk(ch) == seed_is_cjk;
         let mut left = self.start.col;
         while left > 0 {
             if let Some(ch) = cell_at(self.start.row, left - 1) {
-                if is_word_char(ch) {
+                if same_script(ch) {
                     left -= 1;
                 } else {
                     break;
@@ -202,7 +233,7 @@ impl Selection {
         }
         let mut right = self.end.col;
         while let Some(ch) = cell_at(self.end.row, right + 1) {
-            if is_word_char(ch) {
+            if same_script(ch) {
                 right += 1;
             } else {
                 break;
@@ -263,6 +294,42 @@ impl Selection {
         }
         self.end.row = row;
         self.end.col = col;
+
+        // Strip trailing sentence punctuation that belongs to prose surrounding
+        // the URL (e.g. the trailing '.' in "see https://example.com."). We only
+        // drop a trailing '.', ',' or ';' when the character immediately before
+        // it is itself URL-safe (i.e. it is genuinely trailing, not an internal
+        // separator like the '.' in "example.com"). We never shrink past the
+        // selected start column.
+        loop {
+            if self.end.col == 0 && self.end.row == self.start.row {
+                break;
+            }
+            let (prev_row, prev_col) = if self.end.col > 0 {
+                (self.end.row, self.end.col - 1)
+            } else if self.end.row > self.start.row {
+                (self.end.row - 1, self.end.col)
+            } else {
+                break;
+            };
+            let trailing = cell_at(self.end.row, self.end.col);
+            let is_trailing_punct = matches!(trailing, Some('.') | Some(',') | Some(';'));
+            if !is_trailing_punct {
+                break;
+            }
+            let prev_is_safe = cell_at(prev_row, prev_col).map(is_url_safe).unwrap_or(false);
+            if !prev_is_safe {
+                break;
+            }
+            if self.end.row == self.start.row && self.end.col <= self.start.col {
+                break;
+            }
+            if self.end.col > 0 {
+                self.end.col -= 1;
+            } else {
+                self.end.row -= 1;
+            }
+        }
         self
     }
 
@@ -1099,6 +1166,115 @@ mod tests {
         );
         let expanded = s.expand_url(|r, c| grid.cell(r, c).map(|cell| cell.char));
         assert_eq!(expanded.start.col, 0);
+    }
+
+    #[test]
+    fn is_word_char_cjk() {
+        // CJK glyphs must be treated as word characters so a long-press selects
+        // the whole ideograph run instead of a single cell.
+        assert!(is_word_char('日'));
+        assert!(is_word_char('本'));
+        assert!(is_word_char('語'));
+        // Latin + CJK mixed must still be recognized as word chars.
+        assert!(is_word_char('a'));
+        assert!(is_word_char('5'));
+    }
+
+    #[test]
+    fn is_word_char_not_whitespace() {
+        assert!(!is_word_char(' '));
+        assert!(!is_word_char('\t'));
+    }
+
+    #[test]
+    fn is_url_safe_cjk() {
+        assert!(is_url_safe('本'));
+        assert!(is_url_safe('語'));
+    }
+
+    #[test]
+    fn expand_word_cjk_selects_run() {
+        let grid = make_grid_with_text(&["日本語テスト"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 1 }, // '本'
+            SelectionAnchor { row: 0, col: 1 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        // Whole ideograph run should be selected, not a single glyph.
+        assert_eq!(expanded.start.col, 0);
+        assert_eq!(expanded.end.col, 5);
+        assert_eq!(expanded.text(&grid), "日本語テスト");
+    }
+
+    #[test]
+    fn expand_word_cjk_then_ascii_boundary() {
+        let grid = make_grid_with_text(&["abc日本語def"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 4 }, // '本'
+            SelectionAnchor { row: 0, col: 4 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        // CJK run only; ASCII words on either side are separate boundaries.
+        assert_eq!(expanded.start.col, 3);
+        assert_eq!(expanded.end.col, 5);
+        assert_eq!(expanded.text(&grid), "日本語");
+    }
+
+    #[test]
+    fn expand_url_trailing_punctuation_stripped() {
+        let grid = make_grid_with_text(&["see https://example.com. now"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 8 }, // 'h' in https
+            SelectionAnchor { row: 0, col: 8 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 4);
+        // Trailing '.' is stripped; selection ends at 'm'.
+        assert_eq!(expanded.end.col, 22);
+        assert_eq!(expanded.text(&grid), "https://example.com");
+    }
+
+    #[test]
+    fn expand_url_trailing_comma_stripped() {
+        let grid = make_grid_with_text(&["open https://example.com, please"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        // The comma is not URL-safe, so the forward scan already stops at 'm'.
+        assert_eq!(expanded.end.col, 23);
+        assert_eq!(expanded.text(&grid), "https://example.com");
+    }
+
+    #[test]
+    fn expand_url_keeps_internal_dot() {
+        let grid = make_grid_with_text(&["goto https://example.com/path"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        // Internal dots are preserved.
+        assert_eq!(expanded.text(&grid), "https://example.com/path");
+    }
+
+    #[test]
+    fn expand_url_trailing_semicolon_stripped() {
+        let grid = make_grid_with_text(&["visit https://example.com; done"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 6 },
+            SelectionAnchor { row: 0, col: 6 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.end.col, 24);
+        assert_eq!(expanded.text(&grid), "https://example.com");
     }
 
     #[test]

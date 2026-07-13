@@ -600,6 +600,18 @@ private interface TorvoxNative : Library {
         mode: Int,
     ): Long
 
+    fun torvox_bridge_set_selection_endpoint(
+        handle: Long,
+        handleSide: Byte,
+        anchorRow: Int,
+        anchorCol: Int,
+        otherRow: Int,
+        otherCol: Int,
+        mode: Int,
+        originRow: Int,
+        originCol: Int,
+    ): Long
+
     fun boltffi_torvox_bridge_set_search_highlights(
         handle: Long,
         data_ptr: ByteArray?,
@@ -1169,6 +1181,56 @@ class TorvoxBridge(
                 row.toInt(),
                 col.toInt(),
                 mode.toInt(),
+            )
+        if (result < 0) return null
+        val startRow = (result and LOW_16_MASK).toUInt()
+        val startCol = ((result shr 16) and LOW_16_MASK).toUInt()
+        val endRow = ((result shr 32) and LOW_16_MASK).toUInt()
+        val endCol = ((result shr 48) and LOW_16_MASK).toUInt()
+        return Pair(Pair(startRow, startCol), Pair(endRow, endCol))
+    }
+
+    /**
+     * Move one endpoint of the active selection (set [handleSide]=0 to move the start, 1 to move
+     * the end) to the cell ([anchorRow], [anchorCol]) while keeping the opposite endpoint fixed.
+     * For Word mode the moved endpoint is re-expanded with the core [Selection] logic so drag-grow
+     * stays consistent with long-press. Returns the resulting ordered selection bounds, or null on
+     * failure.
+     */
+    fun setSelectionEndpoint(
+        handleSide: Byte,
+        anchorRow: UInt,
+        anchorCol: UInt,
+        otherRow: UInt,
+        otherCol: UInt,
+        mode: Byte,
+        originRow: UInt,
+        originCol: UInt,
+    ): Pair<Pair<UInt, UInt>, Pair<UInt, UInt>>? {
+        if (anchorRow > LOW_16_MASK.toUInt() ||
+            anchorCol > LOW_16_MASK.toUInt() ||
+            otherRow > LOW_16_MASK.toUInt() ||
+            otherCol > LOW_16_MASK.toUInt() ||
+            originRow > LOW_16_MASK.toUInt() ||
+            originCol > LOW_16_MASK.toUInt()
+        ) {
+            throw IllegalArgumentException(
+                "setSelectionEndpoint: row/col exceed the 16-bit wire packing range " +
+                    "(anchorRow=$anchorRow, anchorCol=$anchorCol, otherRow=$otherRow, " +
+                    "otherCol=$otherCol, originRow=$originRow, originCol=$originCol, max=$LOW_16_MASK)",
+            )
+        }
+        val result =
+            ensureLib().torvox_bridge_set_selection_endpoint(
+                handle,
+                handleSide,
+                anchorRow.toInt(),
+                anchorCol.toInt(),
+                otherRow.toInt(),
+                otherCol.toInt(),
+                mode.toInt(),
+                originRow.toInt(),
+                originCol.toInt(),
             )
         if (result < 0) return null
         val startRow = (result and LOW_16_MASK).toUInt()
