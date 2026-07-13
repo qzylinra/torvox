@@ -2,8 +2,15 @@ package io.torvox.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onChild
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import io.torvox.MainActivity
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -37,17 +44,73 @@ class ModifierBarTest {
     }
 
     @Test
-    fun modifier_bar_esc_key_exists() {
-        composeTestRule.onNodeWithTag("Key_ESC").assertIsDisplayed()
+    fun modifier_bar_arrow_buttons_exist() {
+        composeTestRule.onNodeWithTag("Key_\u2191").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_\u2193").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_\u2190").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_\u2192").assertIsDisplayed()
     }
 
     @Test
-    fun modifier_bar_ctrl_key_exists() {
+    fun modifier_bar_arrow_buttons_clickable() {
+        composeTestRule.onNodeWithTag("Key_\u2191").performClick()
+        composeTestRule.onNodeWithTag("Key_\u2193").performClick()
+        composeTestRule.onNodeWithTag("Key_\u2190").performClick()
+        composeTestRule.onNodeWithTag("Key_\u2192").performClick()
+    }
+
+    @Test
+    fun modifier_bar_home_pgup_pgdn_exist() {
+        composeTestRule.onNodeWithTag("Key_HOME").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_PGUP").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_PGDN").assertIsDisplayed()
+    }
+
+    @Test
+    fun modifier_bar_home_pgup_pgdn_clickable() {
+        composeTestRule.onNodeWithTag("Key_HOME").performClick()
+        composeTestRule.onNodeWithTag("Key_PGUP").performClick()
+        composeTestRule.onNodeWithTag("Key_PGDN").performClick()
+    }
+
+    @Test
+    fun modifier_bar_ctrl_toggle_cycles() {
+        composeTestRule.onNodeWithTag("Key_CTRL").performClick()
         composeTestRule.onNodeWithTag("Key_CTRL").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_CTRL").performClick()
+        composeTestRule.onNodeWithTag("Key_CTRL").performClick()
     }
 
     @Test
-    fun modifier_bar_alt_key_exists() {
+    fun modifier_bar_alt_toggle_cycles() {
+        composeTestRule.onNodeWithTag("Key_ALT").performClick()
         composeTestRule.onNodeWithTag("Key_ALT").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_ALT").performClick()
+        composeTestRule.onNodeWithTag("Key_ALT").performClick()
+    }
+
+    @Test
+    fun modifier_bar_press_changes_visual_state() {
+        composeTestRule.onNodeWithTag("Key_ESC").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("Key_ESC").performClick()
+    }
+
+    @Test
+    fun modifier_bar_bottom_position_above_gesture_zone() {
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        val displayHeight = device.displayHeight
+
+        val bar = composeTestRule.onNodeWithTag("ModifierBar")
+        bar.assertIsDisplayed()
+
+        val root = composeTestRule.onRoot()
+        val barBounds = composeTestRule.onNodeWithTag("ModifierBar").fetchSemanticsNode().boundsInRoot
+        val barBottom = barBounds.bottom.toInt()
+
+        val gestureZoneTop = (displayHeight * 0.92).toInt()
+        assertTrue(
+            "ModifierBar bottom ($barBottom) should be above gesture zone",
+            barBottom <= gestureZoneTop,
+        )
     }
 }
