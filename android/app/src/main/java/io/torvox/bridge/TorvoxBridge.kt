@@ -165,29 +165,30 @@ data class BridgeTheme(
 
     companion object {
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): BridgeTheme = BridgeTheme(
-            name = reader.readString(),
-            bg = reader.readI32(),
-            fg = reader.readI32(),
-            cursor = reader.readI32(),
-            selectionBg = reader.readI32(),
-            ansi0 = reader.readI32(),
-            ansi1 = reader.readI32(),
-            ansi2 = reader.readI32(),
-            ansi3 = reader.readI32(),
-            ansi4 = reader.readI32(),
-            ansi5 = reader.readI32(),
-            ansi6 = reader.readI32(),
-            ansi7 = reader.readI32(),
-            ansi8 = reader.readI32(),
-            ansi9 = reader.readI32(),
-            ansi10 = reader.readI32(),
-            ansi11 = reader.readI32(),
-            ansi12 = reader.readI32(),
-            ansi13 = reader.readI32(),
-            ansi14 = reader.readI32(),
-            ansi15 = reader.readI32(),
-        )
+        fun wireDecode(reader: WireReader): BridgeTheme =
+            BridgeTheme(
+                name = reader.readString(),
+                bg = reader.readI32(),
+                fg = reader.readI32(),
+                cursor = reader.readI32(),
+                selectionBg = reader.readI32(),
+                ansi0 = reader.readI32(),
+                ansi1 = reader.readI32(),
+                ansi2 = reader.readI32(),
+                ansi3 = reader.readI32(),
+                ansi4 = reader.readI32(),
+                ansi5 = reader.readI32(),
+                ansi6 = reader.readI32(),
+                ansi7 = reader.readI32(),
+                ansi8 = reader.readI32(),
+                ansi9 = reader.readI32(),
+                ansi10 = reader.readI32(),
+                ansi11 = reader.readI32(),
+                ansi12 = reader.readI32(),
+                ansi13 = reader.readI32(),
+                ansi14 = reader.readI32(),
+                ansi15 = reader.readI32(),
+            )
     }
 }
 
@@ -227,24 +228,25 @@ data class TerminalConfig(
         private const val DEFAULT_FONT_SIZE_TENTHS = 140u
 
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): TerminalConfig = TerminalConfig(
-            shell =
-            when (reader.readI32()) {
-                0 -> Shell.SystemDefault
-                1 -> Shell.Custom(reader.readString())
-                else -> Shell.SystemDefault
-            },
-            rows = reader.readU32(),
-            cols = reader.readU32(),
-            scrollbackLines = reader.readU32(),
-            font_size_tenths = reader.readU32(),
-            theme = BridgeTheme.wireDecode(reader),
-            home = reader.readString(),
-            user = reader.readString(),
-            path = reader.readString(),
-            workingDirectory = reader.readString(),
-            prefix = reader.readString(),
-        )
+        fun wireDecode(reader: WireReader): TerminalConfig =
+            TerminalConfig(
+                shell =
+                    when (reader.readI32()) {
+                        0 -> Shell.SystemDefault
+                        1 -> Shell.Custom(reader.readString())
+                        else -> Shell.SystemDefault
+                    },
+                rows = reader.readU32(),
+                cols = reader.readU32(),
+                scrollbackLines = reader.readU32(),
+                font_size_tenths = reader.readU32(),
+                theme = BridgeTheme.wireDecode(reader),
+                home = reader.readString(),
+                user = reader.readString(),
+                path = reader.readString(),
+                workingDirectory = reader.readString(),
+                prefix = reader.readString(),
+            )
     }
 }
 
@@ -372,23 +374,32 @@ private interface TorvoxNative : Library {
         path_len: Int,
     ): Int
 
-    fun boltffi_torvox_bridge_has_saved_session(
+    // Manual FFI functions for path-based operations (avoid boltffi wire format issues)
+    fun torvox_bridge_set_save_path(
+        handle: Long,
+        path_ptr: ByteArray?,
+        path_len: Int,
+    ): Int
+
+    fun torvox_bridge_has_saved_session(
         handle: Long,
         path_ptr: ByteArray?,
         path_len: Int,
     ): Boolean
 
-    fun boltffi_torvox_bridge_save_session(
+    fun torvox_bridge_save_session(
         handle: Long,
         path_ptr: ByteArray?,
         path_len: Int,
     ): Int
 
-    fun boltffi_torvox_bridge_restore_session(
+    fun torvox_bridge_restore_session(
         handle: Long,
         path_ptr: ByteArray?,
         path_len: Int,
     ): Int
+
+    fun boltffi_torvox_bridge_has_saved_session(
 
     fun boltffi_torvox_bridge_write_to_pty(
         handle: Long,
@@ -657,7 +668,7 @@ class TorvoxBridge(
                 (
                     (windowPointer shr 32) and
                         LOW_32_MASK
-                    ).toInt(),
+                ).toInt(),
                 width,
                 height,
             )
@@ -835,7 +846,7 @@ class TorvoxBridge(
                 (
                     (windowPointer shr 32) and
                         LOW_32_MASK
-                    ).toInt(),
+                ).toInt(),
                 width,
                 height,
             )
@@ -956,12 +967,14 @@ class TorvoxBridge(
         val count = pathBytes.size
         val pathPtrsMem = com.sun.jna.Memory(JNA_POINTER_SIZE * count)
         val lensMem = com.sun.jna.Memory(JNA_INT_SIZE * count)
+        val buffers = mutableListOf<com.sun.jna.Memory>()
         for (i in 0 until count) {
             val bytes = pathBytes[i]
             val bytesMem = com.sun.jna.Memory(bytes.size.toLong())
             bytesMem.write(0, bytes, 0, bytes.size)
             pathPtrsMem.setPointer(i * JNA_POINTER_SIZE, bytesMem)
             lensMem.setInt(i * JNA_INT_SIZE, bytes.size)
+            buffers.add(bytesMem)
         }
         val result = ensureLib().boltffi_torvox_bridge_set_extra_font_paths(handle, pathPtrsMem, lensMem, count)
         if (result != 0) android.util.Log.w("TorvoxBridge", "setExtraFontPaths failed with code $result")
@@ -980,7 +993,7 @@ class TorvoxBridge(
 
     fun setSavePath(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        ensureLib().boltffi_torvox_bridge_set_save_path(handle, bytes, bytes.size)
+        ensureLib().torvox_bridge_set_save_path(handle, bytes, bytes.size)
     }
 
     fun getConfig(): TerminalConfig = callOk({ it.boltffi_torvox_bridge_get_config(handle) }) { TerminalConfig.wireDecode(it) }
@@ -1026,19 +1039,19 @@ class TorvoxBridge(
 
     fun saveSession(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        val result = ensureLib().boltffi_torvox_bridge_save_session(handle, bytes, bytes.size)
+        val result = ensureLib().torvox_bridge_save_session(handle, bytes, bytes.size)
         if (result != 0) throw RuntimeException("saveSession failed with code $result")
     }
 
     fun restoreSession(path: String) {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        val result = ensureLib().boltffi_torvox_bridge_restore_session(handle, bytes, bytes.size)
+        val result = ensureLib().torvox_bridge_restore_session(handle, bytes, bytes.size)
         if (result != 0) throw RuntimeException("restoreSession failed with code $result")
     }
 
     fun hasSavedSession(path: String): Boolean {
         val bytes = path.toByteArray(Charsets.UTF_8)
-        return ensureLib().boltffi_torvox_bridge_has_saved_session(handle, bytes, bytes.size)
+        return ensureLib().torvox_bridge_has_saved_session(handle, bytes, bytes.size)
     }
 
     fun scrollbackLine(index: UInt): String? {

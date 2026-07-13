@@ -665,11 +665,16 @@ impl TorvoxBridge {
 
     fn store_cell_metrics(&self, surface: &crate::surface::AndroidSurface) {
         let (cell_width, cell_height) = surface.font_pipeline().cell_metrics();
-        log::trace!(
-            "store_cell_metrics: cell_width={} cell_height={}",
-            cell_width,
-            cell_height
-        );
+        // Only log on change to avoid per-frame log spam
+        let prev_w = f32::from_bits(self.cell_width.load(std::sync::atomic::Ordering::Relaxed));
+        let prev_h = f32::from_bits(self.cell_height.load(std::sync::atomic::Ordering::Relaxed));
+        if (prev_w - cell_width).abs() > 0.01 || (prev_h - cell_height).abs() > 0.01 {
+            log::debug!(
+                "store_cell_metrics: cell_width={} cell_height={}",
+                cell_width,
+                cell_height
+            );
+        }
         self.cell_width
             .store(cell_width.to_bits(), std::sync::atomic::Ordering::Relaxed);
         self.cell_height

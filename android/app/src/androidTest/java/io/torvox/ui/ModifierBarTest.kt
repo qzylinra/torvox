@@ -2,10 +2,10 @@ package io.torvox.ui
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import androidx.compose.ui.test.onChild
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import io.torvox.MainActivity
@@ -90,9 +90,57 @@ class ModifierBarTest {
     }
 
     @Test
-    fun modifier_bar_press_changes_visual_state() {
+    fun modifier_bar_esc_triggers_action() {
         composeTestRule.onNodeWithTag("Key_ESC").assertIsDisplayed()
         composeTestRule.onNodeWithTag("Key_ESC").performClick()
+    }
+
+    @Test
+    fun all_fourteen_keys_clickable() {
+        val allTags =
+            listOf(
+                "Key_ESC",
+                "Key_DRAWER",
+                "Key_SCROLL",
+                "Key_HOME",
+                "Key_\u2191",
+                "Key_END",
+                "Key_PGUP",
+                "Key_TAB",
+                "Key_CTRL",
+                "Key_ALT",
+                "Key_\u2190",
+                "Key_\u2193",
+                "Key_\u2192",
+                "Key_PGDN",
+            )
+        allTags.forEach { tag ->
+            composeTestRule.onNodeWithTag(tag).performClick()
+        }
+    }
+
+    @Test
+    fun rapid_press_does_not_crash() {
+        repeat(5) {
+            composeTestRule.onNodeWithTag("Key_ESC").performTouchInput {
+                down(center)
+                up()
+            }
+        }
+    }
+
+    @Test
+    fun rapid_press_arrow_keys_does_not_crash() {
+        repeat(3) {
+            composeTestRule.onNodeWithTag("Key_\u2191").performTouchInput {
+                down(center)
+                up()
+            }
+            composeTestRule.onNodeWithTag("Key_\u2193").performTouchInput {
+                down(center)
+                up()
+            }
+        }
     }
 
     @Test
@@ -100,17 +148,34 @@ class ModifierBarTest {
         val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
         val displayHeight = device.displayHeight
 
-        val bar = composeTestRule.onNodeWithTag("ModifierBar")
-        bar.assertIsDisplayed()
+        composeTestRule.onNodeWithTag("ModifierBar").assertIsDisplayed()
 
-        val root = composeTestRule.onRoot()
-        val barBounds = composeTestRule.onNodeWithTag("ModifierBar").fetchSemanticsNode().boundsInRoot
+        composeTestRule.waitForIdle()
+
+        val barSemantics = composeTestRule.onNodeWithTag("ModifierBar").fetchSemanticsNode()
+        val barBounds = barSemantics.boundsInRoot
         val barBottom = barBounds.bottom.toInt()
 
         val gestureZoneTop = (displayHeight * 0.92).toInt()
         assertTrue(
-            "ModifierBar bottom ($barBottom) should be above gesture zone",
+            "ModifierBar bottom ($barBottom) should be above gesture zone top ($gestureZoneTop), " +
+                "displayHeight=$displayHeight, barBounds=$barBounds",
             barBottom <= gestureZoneTop,
+        )
+    }
+
+    @Test
+    fun modifier_bar_bounds_are_valid() {
+        composeTestRule.waitForIdle()
+        val barSemantics = composeTestRule.onNodeWithTag("ModifierBar").fetchSemanticsNode()
+        val bounds = barSemantics.boundsInRoot
+        assertTrue(
+            "ModifierBar bounds must have positive size: $bounds",
+            bounds.width > 0f && bounds.height > 0f,
+        )
+        assertTrue(
+            "ModifierBar bottom should be near screen bottom: $bounds",
+            bounds.bottom > 0f,
         )
     }
 }

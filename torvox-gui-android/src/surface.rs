@@ -604,7 +604,7 @@ impl AndroidSurface {
                 } // AndroidSurface::render
                 return Ok(false);
             }
-            log::trace!(
+            log::debug!(
                 "RENDER_PROCEED: had_output={} frame_count={} highlights={} render_requested={}",
                 had_output,
                 self.frame_count,
@@ -786,7 +786,7 @@ impl AndroidSurface {
         if gen_after > gen_before {
             let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
             let non_zero = atlas_data.iter().filter(|&&b| b != 0).count();
-            log::trace!(
+            log::debug!(
                 "atlas re-upload gen={}->{} non_zero_pixels={}",
                 gen_before,
                 gen_after,
@@ -874,7 +874,7 @@ impl AndroidSurface {
 
         if !instances.is_empty() {
             let first = &instances[0];
-            log::trace!(
+            log::debug!(
                 "RENDER_INSTANCES: count={} first_cell=({:.0},{:.0}) bg=({},{},{}) fg=({},{},{}) flags={:.0} uv_size=({:.4},{:.4}) bearing=({:.1},{:.1}) advance_width={:.1}",
                 instances.len(),
                 first.quad_origin[0],
@@ -893,7 +893,7 @@ impl AndroidSurface {
                 first.glyph_advance_width,
             );
         } else {
-            log::trace!("RENDER_INSTANCES: ZERO instances — nothing to render!");
+            log::debug!("RENDER_INSTANCES: ZERO instances — nothing to render!");
         }
 
         self.title = snapshot.title.clone();
@@ -1010,7 +1010,7 @@ impl AndroidSurface {
                 present_ms
             );
         } else {
-            log::trace!("RENDER_OK: cpu={:.1}ms present={:.1}ms", cpu_ms, present_ms);
+            log::debug!("RENDER_OK: cpu={:.1}ms present={:.1}ms", cpu_ms, present_ms);
         }
 
         // Swap caches for next frame — eliminates ~800KB memcpy/frame
