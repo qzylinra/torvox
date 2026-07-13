@@ -3389,6 +3389,7 @@ fn to_argb(color: &[f32; 4]) -> u32 {
     (a << 24) | (r << 16) | (g << 8) | b
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn torvox_bridge_get_snapshot(
     handle: i64,
     scroll_offset: u32,
@@ -3407,7 +3408,11 @@ pub unsafe extern "C" fn torvox_bridge_get_snapshot(
         Some(s) => s,
         None => return 0,
     };
-    let snapshot = match session.terminal().try_take_snapshot_with_scroll(scroll_offset) {
+    let session_inner = match session.lock() {
+        Ok(g) => g,
+        Err(_) => return -1,
+    };
+    let snapshot = match session_inner.terminal().try_take_snapshot_with_scroll(scroll_offset) {
         Some(s) => s,
         None => return 0,
     };

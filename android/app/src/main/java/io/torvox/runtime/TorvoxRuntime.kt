@@ -50,6 +50,11 @@ private data class SessionEntry(
     @Volatile var blitCallback: (() -> Unit)? = null,
     @Volatile var snapshotCallback: ((ByteArray, Int) -> Unit)? = null,
 ) {
+    // Reusable snapshot buffer — reallocated on resize instead of per-frame
+    @Volatile var snapshotBuf: ByteArray? = null
+    @Volatile var lastSnapshotRows: Int = 0
+    @Volatile var lastSnapshotCols: Int = 0
+
     // Reusable render-thread signaling primitive. Replaces the previous
     // per-frame `CountDownLatch`, which had a lost-wakeup race: after
     // `bridge.render()` the loop published a fresh latch and waited, but a
@@ -246,7 +251,7 @@ constructor(
         private const val RENDER_ERROR_LOG_FREQUENCY = 60
         private const val RENDER_MAX_CONSECUTIVE_ERRORS = 100
         private const val RENDER_ERROR_SLEEP_MS = 50L
-        private const val RENDER_LATCH_TIMEOUT_MS = 16L
+        private const val RENDER_LATCH_TIMEOUT_MS = 500L
         private const val RENDER_DIAGNOSTIC_FREQUENCY = 60
         private const val THREAD_JOIN_TIMEOUT_MS = 500L
         private const val BEL_TONE_STREAM_TYPE = AudioManager.STREAM_NOTIFICATION
@@ -1056,7 +1061,15 @@ constructor(
                             bridge.setScrollOffset(currentScrollOffset)
                             lastScrollOffset = currentScrollOffset
                         }
-                                                val snapshotBuf = ByteArray(64000)
+                        // Reuse snapshotBuf — reallocate only on resize
+                        var snapshotBuf = entry.snapshotBuf
+                        val rows = _state.value.rows
+                        val cols = _state.value.cols
+                        val needed = 20 + rows * cols * 12
+                        if (snapshotBuf == null || snapshotBuf.size < needed) {
+                            snapshotBuf = ByteArray(needed)
+                            entry.snapshotBuf = snapshotBuf
+                        }
                         val count = bridge.getSnapshot(entry.scrollOffset.toInt(), snapshotBuf, snapshotBuf.size)
                         if (count < 0) {
                             consecutiveErrors++
@@ -1155,91 +1168,6 @@ constructor(
                             } else {
                                 entry.forceRenderRequested = false
                             }
-                            }
-                        } else {
-                            if (consecutiveErrors > 0) {
-                                LogUtil.i(
-                                    "TorvoxRuntime",
-                                    "session ${entry.id} recovered after $consecutiveErrors errors",
-                                )
-                            }
-                            consecutiveErrors = 0
-                            // Single lock acquisition that drains BEL, clipboard,
-                            // notification, sync mode, and shell integration.
-                            try {
-                                val poll = bridge.pollAll()
-                                if (poll.bel) {
-                                    val toneGenerator = ToneGenerator(BEL_TONE_STREAM_TYPE, BEL_TONE_VOLUME)
-                                    try {
-                                        toneGenerator.startTone(BEL_TONE_TYPE, BEL_TONE_DURATION_MILLIS)
-                                    } finally {
-                                        toneGenerator.release()
-                                    }
-                                }
-                                if (poll.notification != null) {
-                                    val (title, body) = poll.notification
-                                    val toastText = if (title.isNotEmpty()) "$title: $body" else body
-                                    Handler(Looper.getMainLooper()).post {
-                                        android.widget.Toast
-                                            .makeText(context, toastText, android.widget.Toast.LENGTH_LONG)
-                                            .show()
-                                    }
-                                    io.torvox.ui
-                                        .TerminalNotificationHelper(context)
-                                        .showNotification(title, body)
-                                }
-                                if (poll.clipboard != null) {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    val clipData = ClipData.newPlainText("terminal clipboard", poll.clipboard)
-                                    clipboard.setPrimaryClip(clipData)
-                                }
-                            } catch (exception: Exception) {
-                                LogUtil.e(
-                                    "TorvoxRuntime",
-                                    "pollAll failed for session ${entry.id}; deferred events dropped",
-                                    exception,
-                                )
-                            }
-                            try {
-                                val snapshotBuf = ByteArray(64000)
-                                val count = bridge.getSnapshot(entry.scrollOffset.toInt(), snapshotBuf, snapshotBuf.size)
-                                if (count > 0) {
-                                    entry.snapshotCallback?.invoke(snapshotBuf, count)
-                                }
-                            } catch (exception: Exception) {
-                                LogUtil.w("TorvoxRuntime", "snapshot failed for session ${entry.id}", exception)
-                            }
-                            diagCount++
-                            if (diagCount == 1) {
-                                LogUtil.d("TorvoxRuntime", "session ${entry.id} first render OK")
-                            }
-                            if (diagCount % RENDER_DIAGNOSTIC_FREQUENCY == 0) {
-                                val title =
-                                    try {
-                                        bridge.getActiveSessionTitle()
-                                    } catch (exception: Exception) {
-                                        LogUtil.e("TorvoxRuntime", "title query failed", exception)
-                                        ""
-                                    }
-                                if (title.isNotEmpty() && title != _state.value.title) {
-                                    _state.value = _state.value.copy(title = title)
-                                }
-                            }
-                            if (!entry.forceRenderRequested) {
-                                entry.renderLock.lock()
-                                try {
-                                    while (!entry.renderSignaled && !entry.forceRenderRequested) {
-                                        entry.renderCondition.await(
-                                            RENDER_LATCH_TIMEOUT_MS,
-                                            java.util.concurrent.TimeUnit.MILLISECONDS,
-                                        )
-                                    }
-                                    entry.renderSignaled = false
-                                } finally {
-                                    entry.renderLock.unlock()
-                                }
-                            }
-                            entry.forceRenderRequested = false
                         }
                     } catch (exception: Exception) {
                         consecutiveErrors++

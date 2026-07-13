@@ -327,6 +327,9 @@ fun TerminalScreen(
                                         composeScrollOffset = offset
                                         viewModel.runtime.setScrollOffset(offset.toUInt())
                                     }
+                                    viewModel.runtime.setSnapshotCallback { buffer, count ->
+                                        surface.renderSnapshotFromBuffer(buffer, count)
+                                    }
                                 }.apply {
                                     initialize(viewModel)
                                     setDimensions(runtimeState.rows, runtimeState.cols)

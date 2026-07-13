@@ -14,7 +14,6 @@ object StrictModeConfig {
                 .detectCustomSlowCalls()
                 .apply {
                     if (BuildConfig.DEBUG) {
-                        penaltyDeath()
                         penaltyLog()
                     } else {
                         penaltyLog()
@@ -31,7 +30,6 @@ object StrictModeConfig {
                 .detectCleartextNetwork()
                 .apply {
                     if (BuildConfig.DEBUG) {
-                        penaltyDeath()
                         penaltyLog()
                     } else {
                         penaltyLog()
