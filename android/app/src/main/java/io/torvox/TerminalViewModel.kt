@@ -552,25 +552,46 @@ constructor(
     private val _bootstrapResult = MutableStateFlow<String?>(null)
     val bootstrapResult: StateFlow<String?> = _bootstrapResult.asStateFlow()
 
+    private val _bootstrapProgress = MutableStateFlow<io.torvox.installer.BootstrapProgress?>(null)
+    val bootstrapProgress: StateFlow<io.torvox.installer.BootstrapProgress?> =
+        _bootstrapProgress.asStateFlow()
+
     fun runBootstrap() {
         if (_bootstrapRunning.value) return
         viewModelScope.launch(Dispatchers.IO) {
             _bootstrapRunning.value = true
             _bootstrapResult.value = null
+            _bootstrapProgress.value = null
             try {
-                val downloader = io.torvox.installer.BootstrapDownloader(context)
+                val onProgress =
+                    io.torvox.installer.BootstrapProgressCallback { progress ->
+                        _bootstrapProgress.value = progress
+                    }
+                val downloader =
+                    io.torvox.installer.BootstrapDownloader(
+                        context,
+                        onProgress = onProgress,
+                    )
                 val installer =
                     io.torvox.installer.BootstrapInstaller(
                         prefixDir = java.io.File(context.filesDir, "bootstrap/usr"),
                         homeDir = java.io.File(context.filesDir, "home"),
                         stagingDir = java.io.File(context.filesDir, "bootstrap/usr-staging"),
+                        onProgress = onProgress,
                     )
                 val secondStage =
                     io.torvox.installer.SecondStageRunner(
                         prefixDir = java.io.File(context.filesDir, "bootstrap/usr"),
                         homeDir = java.io.File(context.filesDir, "home"),
+                        onProgress = onProgress,
                     )
-                val orchestrator = io.torvox.installer.BootstrapOrchestrator(downloader, installer, secondStage)
+                val orchestrator =
+                    io.torvox.installer.BootstrapOrchestrator(
+                        downloader,
+                        installer,
+                        secondStage,
+                        onProgress = onProgress,
+                    )
                 val url = settingsRepository.bootstrapUrl.first()
                 val result = orchestrator.ensureBootstrap(url)
                 _bootstrapResult.value = result.getOrNull() ?: "Error: ${result.exceptionOrNull()?.message}"

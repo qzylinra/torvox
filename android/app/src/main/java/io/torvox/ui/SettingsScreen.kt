@@ -33,10 +33,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.torvox.R
 import io.torvox.TerminalViewModel
+import io.torvox.installer.BootstrapProgress
 import io.torvox.ui.theme.TerminalTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -499,6 +500,7 @@ private fun BootstrapSectionFromSettings(
     val bootstrapUrl by viewModel.bootstrapUrl.collectAsState()
     val bootstrapRunning by viewModel.bootstrapRunning.collectAsState()
     val bootstrapResult by viewModel.bootstrapResult.collectAsState()
+    val bootstrapProgress: BootstrapProgress? by viewModel.bootstrapProgress.collectAsState()
     SectionHeader(stringResource(R.string.bootstrap), sectionTitleColor)
     SettingsCard(cardBackground, isSmallScreen, Modifier.testTag("BootstrapSection")) {
         BootstrapSection(
@@ -507,6 +509,7 @@ private fun BootstrapSectionFromSettings(
             onRunBootstrap = { viewModel.runBootstrap() },
             bootstrapRunning = bootstrapRunning,
             bootstrapResult = bootstrapResult,
+            bootstrapProgress = bootstrapProgress,
             textColor = textColor,
             accentColor = accentColor,
             secondaryText = secondaryText,
@@ -1029,6 +1032,7 @@ private fun BootstrapSection(
     onRunBootstrap: () -> Unit,
     bootstrapRunning: Boolean,
     bootstrapResult: String?,
+    bootstrapProgress: BootstrapProgress?,
     textColor: Color,
     accentColor: Color,
     secondaryText: Color,
@@ -1100,7 +1104,7 @@ private fun BootstrapSection(
     }
 
     Spacer(modifier = Modifier.height(8.dp))
-    BootstrapInstallButton(onRunBootstrap, bootstrapRunning, bootstrapResult, accentColor, textColor)
+    BootstrapInstallButton(onRunBootstrap, bootstrapRunning, bootstrapResult, bootstrapProgress, accentColor, textColor)
 }
 
 @Composable
@@ -1108,9 +1112,11 @@ private fun BootstrapInstallButton(
     onRunBootstrap: () -> Unit,
     bootstrapRunning: Boolean,
     bootstrapResult: String?,
+    bootstrapProgress: BootstrapProgress?,
     accentColor: Color,
     textColor: Color,
 ) {
+    val progress = bootstrapProgress
     Button(
         onClick = onRunBootstrap,
         enabled = !bootstrapRunning,
@@ -1118,17 +1124,19 @@ private fun BootstrapInstallButton(
         colors = ButtonDefaults.buttonColors(containerColor = accentColor),
     ) {
         if (bootstrapRunning) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                strokeWidth = 2.dp,
+            LinearProgressIndicator(
+                progress = { progress?.overallProgress() ?: 0f },
+                modifier = Modifier.width(16.dp).height(16.dp),
                 color = textColor,
+                trackColor = textColor.copy(alpha = 0.2f),
             )
             Spacer(modifier = Modifier.width(8.dp))
         }
         Text(
             text =
             if (bootstrapRunning) {
-                stringResource(R.string.bootstrap_installing)
+                progress?.stepDescription()
+                    ?: stringResource(R.string.bootstrap_installing)
             } else {
                 stringResource(R.string.bootstrap_install)
             },

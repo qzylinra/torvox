@@ -668,7 +668,7 @@ impl FontPipeline {
             MAX_CJK_FALLBACK_FONTS
         );
         if candidates.is_empty() || candidates.iter().all(|c| c.2 <= 0i16) {
-            log::warn!(
+            log::debug!(
                 "CJK_FALLBACK: no font with vector outlines found; CJK may render as bitmap"
             );
         }

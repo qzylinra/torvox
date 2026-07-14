@@ -416,12 +416,13 @@ constructor(
                                 height - visibleFrame.bottom
                             }
                         } ?: 0
-                    val availableHeight = (height - imeInsetBottom).coerceAtLeast(0)
+                    val availableHeight = (height - imeInsetBottom).coerceAtLeast(1)
                     val safeHeight = availableHeight
                     if (safeHeight <= 0) {
                         outRect.set(0, 0, width, height)
                         return
                     }
+                    val safeWidth = width.coerceAtLeast(1)
 
                     val topOfSelection = Math.round(loRow * cellHeight)
                     val bottomOfSelection = Math.round((hiRow + 1) * cellHeight)
@@ -441,9 +442,9 @@ constructor(
                                 .coerceIn(0, safeHeight)
                         val anchorBottom = topOfSelection.coerceIn(0, safeHeight)
                         outRect.set(
-                            left.coerceIn(0, width),
+                            left.coerceIn(0, safeWidth),
                             anchorTop,
-                            right.coerceIn(0, width),
+                            right.coerceIn(0, safeWidth),
                             anchorBottom,
                         )
                     } else {
@@ -454,9 +455,9 @@ constructor(
                                 .round(bottomOfSelection + cellHeight)
                                 .coerceIn(0, safeHeight)
                         outRect.set(
-                            left.coerceIn(0, width),
+                            left.coerceIn(0, safeWidth),
                             anchorTop,
-                            right.coerceIn(0, width),
+                            right.coerceIn(0, safeWidth),
                             anchorBottom,
                         )
                     }
