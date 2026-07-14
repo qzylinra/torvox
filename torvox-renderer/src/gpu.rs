@@ -290,6 +290,9 @@ pub struct GpuContext {
     kgp_atlas_width: u32,
     kgp_atlas_height: u32,
     raster_scale: f32,
+    blur_h_pipeline: Option<wgpu::RenderPipeline>,
+    blur_v_pipeline: Option<wgpu::RenderPipeline>,
+    render_paused: bool,
 }
 
 impl Drop for GpuContext {
@@ -302,6 +305,8 @@ impl Drop for GpuContext {
         self.bg_uniform_buffer = None;
         self.bg_bind_group = None;
         self.bg_sampler = None;
+        self.blur_h_pipeline = None;
+        self.blur_v_pipeline = None;
         self.bg_pipeline = None;
         self.bg_image_view = None;
         self.bg_image_texture = None;
@@ -663,6 +668,97 @@ impl GpuContext {
             self.bg_bind_group_layout = Some(layout);
         }
 
+        if self.blur_h_pipeline.is_none() {
+            let blur_wgsl_source = include_str!("../shaders/background.wgsl");
+            let blur_shader = self
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("Background Blur Shader"),
+                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(blur_wgsl_source)),
+                });
+            let bg_pipeline_layout = self.bg_bind_group_layout.as_ref().map(|layout| {
+                self.device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: Some("Blur Pipeline Layout"),
+                        bind_group_layouts: &[Some(layout)],
+                        immediate_size: 0,
+                    })
+            });
+            let layout = bg_pipeline_layout
+                .as_ref()
+                .expect("blur pipeline layout created");
+            self.blur_h_pipeline = Some(self.device.create_render_pipeline(
+                &wgpu::RenderPipelineDescriptor {
+                    label: Some("Background Blur H Pipeline"),
+                    layout: Some(layout),
+                    vertex: wgpu::VertexState {
+                        module: &blur_shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &[quad_corner_buffer_layout()],
+                        compilation_options: Default::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &blur_shader,
+                        entry_point: Some("fs_blur_h"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format,
+                            blend: Some(wgpu::BlendState::REPLACE),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: Default::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        strip_index_format: None,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: None,
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        unclipped_depth: false,
+                        conservative: false,
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview_mask: None,
+                    cache: None,
+                },
+            ));
+            self.blur_v_pipeline = Some(self.device.create_render_pipeline(
+                &wgpu::RenderPipelineDescriptor {
+                    label: Some("Background Blur V Pipeline"),
+                    layout: Some(layout),
+                    vertex: wgpu::VertexState {
+                        module: &blur_shader,
+                        entry_point: Some("vs_main"),
+                        buffers: &[quad_corner_buffer_layout()],
+                        compilation_options: Default::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &blur_shader,
+                        entry_point: Some("fs_blur_v"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format,
+                            blend: Some(wgpu::BlendState::REPLACE),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: Default::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        strip_index_format: None,
+                        front_face: wgpu::FrontFace::Ccw,
+                        cull_mode: None,
+                        polygon_mode: wgpu::PolygonMode::Fill,
+                        unclipped_depth: false,
+                        conservative: false,
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview_mask: None,
+                    cache: None,
+                },
+            ));
+        }
+
         let pipeline = match self.bg_pipeline.as_ref() {
             Some(p) => p,
             None => return,
@@ -883,6 +979,9 @@ impl GpuContext {
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
             raster_scale: 1.0,
+            blur_h_pipeline: None,
+            blur_v_pipeline: None,
+            render_paused: false,
         })
     }
 
@@ -939,6 +1038,9 @@ impl GpuContext {
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
             raster_scale: 1.0,
+            blur_h_pipeline: None,
+            blur_v_pipeline: None,
+            render_paused: false,
         }
     }
 
@@ -949,6 +1051,10 @@ impl GpuContext {
             b: background[2] as f64 / 255.0,
             a: 1.0,
         };
+    }
+
+    pub fn set_render_paused(&mut self, paused: bool) {
+        self.render_paused = paused;
     }
 
     /// Set the device-pixel-ratio raster scale used by the cell fragment shader
@@ -1716,6 +1822,9 @@ impl GpuContext {
         instances: &[CellInstance],
         kgp_instances: &[KgpInstance],
     ) -> Result<(), GpuError> {
+        if self.render_paused {
+            return Ok(());
+        }
         let mut cfg_width = self
             .surface_config
             .as_ref()
@@ -1863,8 +1972,63 @@ impl GpuContext {
             }
         }
 
-        // Background image render pass (before cell pass)
-        if let (Some(bg_pipeline), Some(bg_bind_group)) = (&self.bg_pipeline, &self.bg_bind_group) {
+        // Background image render pass (two-pass separable blur when active)
+        if self.blur_h_pipeline.is_some()
+            && self.blur_v_pipeline.is_some()
+            && self.bg_blur_radius >= 0.5
+            && self.bg_bind_group.is_some()
+        {
+            let blur_h = self.blur_h_pipeline.as_ref().unwrap();
+            let blur_v = self.blur_v_pipeline.as_ref().unwrap();
+            // Pass 1: Horizontal blur → main framebuffer
+            {
+                let mut h_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Blur H Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(self.bg_color),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    ..Default::default()
+                });
+                h_pass.set_pipeline(blur_h);
+                h_pass.set_bind_group(0, self.bg_bind_group.as_ref().unwrap(), &[]);
+                h_pass.set_viewport(0.0, 0.0, cfg_width as f32, cfg_height as f32, 0.0, 1.0);
+                h_pass.set_scissor_rect(0, 0, cfg_width, cfg_height);
+                h_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
+                h_pass.draw(0..QUAD_VERTEX_COUNT, 0..1);
+            }
+            // Pass 2: Vertical blur → main framebuffer
+            {
+                let mut v_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Blur V Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    depth_stencil_attachment: None,
+                    ..Default::default()
+                });
+                v_pass.set_pipeline(blur_v);
+                v_pass.set_bind_group(0, self.bg_bind_group.as_ref().unwrap(), &[]);
+                v_pass.set_viewport(0.0, 0.0, cfg_width as f32, cfg_height as f32, 0.0, 1.0);
+                v_pass.set_scissor_rect(0, 0, cfg_width, cfg_height);
+                v_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
+                v_pass.draw(0..QUAD_VERTEX_COUNT, 0..1);
+            }
+        } else if let (Some(bg_pipeline), Some(bg_bind_group)) =
+            (&self.bg_pipeline, &self.bg_bind_group)
+        {
             {
                 let mut bg_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Background Render Pass"),
@@ -5192,6 +5356,23 @@ mod tests {
             cell.bg_color,
             [0.5, 0.3, 0.8, 0.7],
             "custom cursor color should be reflected with block alpha multiplier"
+        );
+    }
+
+    #[test]
+    fn render_paused_skips_frame() {
+        let mut ctx = GpuContext::new_with_no_surface();
+        assert!(!ctx.render_paused, "should start unpaused");
+        // Without a surface config, render should fail when not paused
+        assert!(
+            ctx.render_frame(&[], &[]).is_err(),
+            "expected error when not paused and no surface"
+        );
+        // When paused, render should succeed immediately (skips surface check)
+        ctx.set_render_paused(true);
+        assert!(
+            ctx.render_frame(&[], &[]).is_ok(),
+            "expected ok when paused regardless of surface"
         );
     }
 

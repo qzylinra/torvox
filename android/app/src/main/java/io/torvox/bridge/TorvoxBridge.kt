@@ -797,6 +797,11 @@ private interface TorvoxNative : Library {
 
     fun torvox_bridge_clear_background_image(handle: Long)
 
+    fun torvox_bridge_set_render_paused(
+        handle: Long,
+        paused: Int,
+    )
+
     fun boltffi_torvox_bridge_set_cursor_blink_enabled(
         handle: Long,
         enabled: Int,
@@ -1442,6 +1447,8 @@ class TorvoxBridge(
     fun clearBackgroundImage() {
         ensureLib().torvox_bridge_clear_background_image(handle)
     }
+
+    fun setRenderPaused(paused: Boolean) = ensureLib().torvox_bridge_set_render_paused(handle, if (paused) 1 else 0)
 
     fun setCursorBlinkEnabled(enabled: Boolean) {
         ensureLib().torvox_bridge_set_cursor_blink_enabled(handle, if (enabled) 1 else 0)

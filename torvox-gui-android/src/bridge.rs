@@ -1834,6 +1834,16 @@ impl TorvoxBridge {
         Ok(())
     }
 
+    pub fn set_render_paused(&self, paused: bool) {
+        if let Ok(mut guard) = self.surface.lock() {
+            if let Some(surface) = guard.as_mut() {
+                if let Some(gpu) = surface.gpu_mut() {
+                    gpu.set_render_paused(paused);
+                }
+            }
+        }
+    }
+
     pub fn set_cursor_blink_enabled(&self, enabled: bool) -> Result<(), TerminalError> {
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
@@ -3532,6 +3542,17 @@ pub unsafe extern "C" fn torvox_bridge_clear_background_image(handle: i64) {
     if let Err(error) = with_bridge(handle, |bridge| bridge.clear_background_image()) {
         log::error!("bridge: torvox_bridge_clear_background_image failed: {error}");
     }
+}
+
+/// # Safety
+/// `handle` must be a valid pointer to a `TorvoxBridge` created by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_set_render_paused(handle: i64, paused: i32) {
+    let bridge = match unsafe { bridge_from_handle(handle) } {
+        Some(b) => b,
+        None => return,
+    };
+    bridge.set_render_paused(paused != 0);
 }
 
 /// # Safety
