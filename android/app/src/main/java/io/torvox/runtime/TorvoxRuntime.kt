@@ -434,7 +434,7 @@ constructor(
         private const val BEL_TONE_VOLUME = 50
         private const val BEL_TONE_TYPE = ToneGenerator.TONE_PROP_ACK
         private const val BEL_TONE_DURATION_MILLIS = 200
-        private const val RENDER_HANG_TIMEOUT_NANOS = 30_000_000_000L // 30 seconds
+        private const val RENDER_HANG_TIMEOUT_NANOS = 10_000_000_000L // 10 seconds
         private const val RENDER_INITIAL_RETRY_MAX = 5
         private const val RENDER_INITIAL_RETRY_DELAY_MS = 150L
 

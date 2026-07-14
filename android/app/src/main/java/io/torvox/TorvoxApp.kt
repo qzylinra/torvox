@@ -84,6 +84,7 @@ class TorvoxApp : Application() {
             } catch (exception: Exception) {
                 Log.e("TorvoxApp", "Failed to write crash log", exception)
             }
+            SelfExit.exit(getDir("logs", MODE_PRIVATE), "Uncaught exception on ${thread.name}")
             defaultHandler?.uncaughtException(thread, throwable)
         }
     }
