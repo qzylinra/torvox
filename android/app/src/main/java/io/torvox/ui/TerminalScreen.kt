@@ -603,10 +603,19 @@ fun TerminalScreen(
                         } else {
                             io.torvox.ui.ModifierBarMode.Normal
                         }
-                    val clipboard =
+                    val clipboardManager =
                         context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                             as android.content.ClipboardManager
-                    val hasClipboard = clipboard.hasPrimaryClip()
+                    var hasClipboard by remember { mutableStateOf(clipboardManager.hasPrimaryClip()) }
+
+                    DisposableEffect(context) {
+                        val listener =
+                            android.content.ClipboardManager.OnPrimaryClipChangedListener {
+                                hasClipboard = clipboardManager.hasPrimaryClip()
+                            }
+                        clipboardManager.addPrimaryClipChangedListener(listener)
+                        onDispose { clipboardManager.removePrimaryClipChangedListener(listener) }
+                    }
 
                     ModifierBar(
                         modifier =

@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<testsuites>
+  <testsuite name="Test Suite" device="torvox_test" tests="1" failures="0" time="22.0">
+    <testcase id="Stage H — Selection feature verification (480x854 / 360dp)" name="Stage H — Selection feature verification (480x854 / 360dp)" classname="Stage H — Selection feature verification (480x854 / 360dp)" file="ultragoal/fix-selection-and-bugs/artifacts/maestro/selection-stage-h.yaml" time="22.0" status="SUCCESS">
+      <properties>
+        <property name="tags" value="stage-h, selection, p1"/>
+      </properties>
+    </testcase>
+  </testsuite>
+</testsuites>

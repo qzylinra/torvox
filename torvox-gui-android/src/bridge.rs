@@ -1679,6 +1679,20 @@ impl TorvoxBridge {
         DEFAULT_GRID_COLS
     }
 
+    /// Returns (rows, cols) in a single session-lock acquisition.
+    /// Prefer this over separate `get_grid_rows()` + `get_grid_cols()` calls
+    /// to halve JNA round-trips and lock contention.
+    pub fn get_grid_rows_cols(&self) -> (u32, u32) {
+        if let Ok(guard) = self.session.lock()
+            && let Some(session_arc) = guard.as_ref()
+            && let Ok(session) = session_arc.lock()
+        {
+            let terminal = session.terminal();
+            return (terminal.rows(), terminal.cols());
+        }
+        (DEFAULT_GRID_ROWS, DEFAULT_GRID_COLS)
+    }
+
     pub fn get_cell_width(&self) -> f32 {
         f32::from_bits(self.cell_width.load(std::sync::atomic::Ordering::Relaxed))
     }
@@ -2480,6 +2494,33 @@ pub unsafe extern "C" fn torvox_bridge_get_cell_height(handle: i64) -> f32 {
             };
             log::error!("FFI panic in torvox_bridge_get_cell_height: {}", message);
             0.0
+        }
+    }
+}
+
+/// # Safety
+/// `handle` must be a valid bridge handle previously returned by `torvox_bridge_new`, or zero.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_get_grid_rows_cols(handle: i64) -> u64 {
+    let bridge = match unsafe { bridge_from_handle(handle) } {
+        Some(b) => b,
+        None => return (DEFAULT_GRID_ROWS as u64) << 32 | DEFAULT_GRID_COLS as u64,
+    };
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let (rows, cols) = bridge.get_grid_rows_cols();
+        (rows as u64) << 32 | cols as u64
+    })) {
+        Ok(packed) => packed,
+        Err(panic_info) => {
+            let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "panic in FFI call".to_string()
+            };
+            log::error!("FFI panic in torvox_bridge_get_grid_rows_cols: {}", message);
+            (DEFAULT_GRID_ROWS as u64) << 32 | DEFAULT_GRID_COLS as u64
         }
     }
 }

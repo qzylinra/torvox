@@ -14,6 +14,7 @@ use std::time::Instant;
 
 use thiserror::Error;
 use torvox_core::line::Line;
+use torvox_core::snapshot::SessionSnapshot;
 use torvox_renderer::font::FontPipeline;
 use torvox_renderer::gpu::GpuContext;
 use torvox_renderer::gpu::SearchHighlight;
@@ -218,6 +219,16 @@ fn line_to_text(line: &Line) -> String {
         .filter_map(|c| line.get(c))
         .map(|cell| cell.char)
         .collect()
+}
+
+/// Requirement 4 (CJK font scale, Fix D): the glyph raster scale is the ratio of
+/// the physical surface width (ANativeWindow pixels) to the wgpu surface-config
+/// width (logical density). It is clamped to a sane range so a misreported
+/// surface metric cannot blow up the atlas. Pure + testable.
+fn compute_raster_scale(surface_width: u32, config_width: u32) -> f32 {
+    let surface_width = surface_width.max(1);
+    let config_width = config_width.max(1);
+    (surface_width as f32 / config_width as f32).clamp(0.5, 4.0)
 }
 
 impl AndroidSurface {
@@ -785,7 +796,7 @@ impl AndroidSurface {
             .and_then(|g| g.surface_config.as_ref())
             .map(|cfg| cfg.width.max(1))
             .unwrap_or(1);
-        let raster_scale = (surf_w as f32 / cfg_w as f32).clamp(0.5, 4.0);
+        let raster_scale = compute_raster_scale(surf_w, cfg_w);
         if self.last_raster_scale != raster_scale {
             self.last_raster_scale = raster_scale;
             log::debug!(
@@ -1587,6 +1598,36 @@ impl AndroidSurface {
         Ok(())
     }
 
+    /// Requirement 4 (session restore, Fix G): rebuild the scrollback/visible text
+    /// so a restored session matches the saved row count without a spurious
+    /// trailing blank line. Pure + testable.
+    ///
+    /// 1. NUL padding becomes a real space (cell_to_line already maps a NUL
+    ///    codepoint to ' ', but normalize defensively) so blank rows carry
+    ///    visible blank content instead of garbage.
+    /// 2. Do NOT per-line `trim_end`: an intentional blank line is spaces, and
+    ///    trimming would collapse it. Middle blank lines must survive.
+    /// 3. Trim only genuinely-empty TRAILING lines (whitespace-only). The shell
+    ///    echoes the re-fed text and emits one prompt newline; a trailing
+    ///    whitespace-only row from the save/restore is the off-by-one extra
+    ///    blank line, so it is dropped here. Rows are joined with a single '\n'
+    ///    and NO trailing newline, which avoids advancing the cursor onto an
+    ///    extra empty row.
+    pub fn restore_session_lines_to_text(snapshot: &SessionSnapshot) -> String {
+        let mut lines: Vec<String> = snapshot
+            .scrollback_lines
+            .iter()
+            .chain(&snapshot.visible_lines)
+            .map(|line| line_to_text(line).replace('\0', " "))
+            .collect();
+        while let Some(last) = lines.last()
+            && last.trim().is_empty()
+        {
+            lines.pop();
+        }
+        lines.join("\n")
+    }
+
     pub fn restore_session(&mut self, path: &str) -> Result<(), SurfaceError> {
         use rkyv::rancor;
         use std::fs;
@@ -1615,18 +1656,7 @@ impl AndroidSurface {
             //    off-by-one extra blank line, so it is dropped here. Rows are
             //    joined with a single '\n' and NO trailing newline, which avoids
             //    advancing the cursor onto an extra empty row.
-            let mut lines: Vec<String> = snapshot
-                .scrollback_lines
-                .iter()
-                .chain(&snapshot.visible_lines)
-                .map(|line| line_to_text(line).replace('\0', " "))
-                .collect();
-            while let Some(last) = lines.last()
-                && last.trim().is_empty()
-            {
-                lines.pop();
-            }
-            let text = lines.join("\n");
+            let text = restore_session_lines_to_text(&snapshot);
             if !text.is_empty() {
                 session.terminal_mut().pty_write(text.as_bytes());
             }
@@ -2148,5 +2178,67 @@ mod tests {
             surface.blink_timer_elapsed(),
             "blink timer should be elapsed after 20ms with 10ms period"
         );
+    }
+
+    #[test]
+    fn compute_raster_scale_is_surface_over_config_width() {
+        // 2x physical surface vs logical config => scale 2.0.
+        assert!((compute_raster_scale(1080, 540) - 2.0).abs() < f32::EPSILON);
+        assert!((compute_raster_scale(540, 1080) - 0.5).abs() < f32::EPSILON);
+        // Not hardcoded: any ratio works; here 1.5x.
+        assert!((compute_raster_scale(1620, 1080) - 1.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn compute_raster_scale_clamps_extremes() {
+        // Surface much larger than config is clamped to 4.0.
+        assert_eq!(compute_raster_scale(10000, 100), 4.0);
+        // Surface much smaller than config is clamped to 0.5.
+        assert_eq!(compute_raster_scale(100, 10000), 0.5);
+        // A zero config width must not divide-by-zero.
+        assert_eq!(compute_raster_scale(800, 0), 0.5);
+    }
+
+    #[test]
+    fn restore_session_nul_becomes_space_and_trims_trailing_blanks() {
+        // Build two visible rows: "ab\0" (NUL padding) and a trailing
+        // whitespace-only row that simulates the off-by-one blank line.
+        let row_a = cell_to_line(
+            &[
+                CellSnapshot { codepoint: 0x61, ..Default::default() }, // a
+                CellSnapshot { codepoint: 0x62, ..Default::default() }, // b
+                CellSnapshot { codepoint: 0x00, ..Default::default() }, // NUL
+            ],
+            3,
+        );
+        let trailing_blank = cell_to_line(&[], 3); // all spaces
+        let snapshot = SessionSnapshot {
+            visible_lines: vec![row_a, trailing_blank],
+            scrollback_lines: vec![],
+            rows: 2,
+            cols: 3,
+            max_scrollback: DEFAULT_MAX_SCROLLBACK,
+        };
+        let text = AndroidSurface::restore_session_lines_to_text(&snapshot);
+        // NUL -> space, trailing whitespace-only row trimmed, single '\n', no
+        // trailing newline.
+        assert_eq!(text, "ab ");
+    }
+
+    #[test]
+    fn restore_session_preserves_middle_blank_lines() {
+        // A blank line in the MIDDLE must survive (no per-line trim_end).
+        let row_a = cell_to_line(&[CellSnapshot { codepoint: 0x61, ..Default::default() }], 1);
+        let middle_blank = cell_to_line(&[], 1);
+        let row_b = cell_to_line(&[CellSnapshot { codepoint: 0x62, ..Default::default() }], 1);
+        let snapshot = SessionSnapshot {
+            visible_lines: vec![row_a, middle_blank, row_b],
+            scrollback_lines: vec![],
+            rows: 3,
+            cols: 1,
+            max_scrollback: DEFAULT_MAX_SCROLLBACK,
+        };
+        let text = AndroidSurface::restore_session_lines_to_text(&snapshot);
+        assert_eq!(text, "a\n\nb");
     }
 }

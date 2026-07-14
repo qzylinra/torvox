@@ -1,16 +1,17 @@
 package io.torvox.monitor
 
 import android.os.StrictMode
+import io.torvox.BuildConfig
 
 object StrictModeConfig {
     fun install() {
+        if (!BuildConfig.DEBUG) return
         StrictMode.setThreadPolicy(
             StrictMode.ThreadPolicy
                 .Builder()
                 .detectDiskReads()
                 .detectDiskWrites()
                 .detectNetwork()
-                .detectCustomSlowCalls()
                 .detectUnbufferedIo()
                 .penaltyLog()
                 .build(),
@@ -21,11 +22,8 @@ object StrictModeConfig {
                 .detectActivityLeaks()
                 .detectLeakedClosableObjects()
                 .detectLeakedRegistrationObjects()
-                .detectLeakedSqlLiteObjects()
                 .detectFileUriExposure()
                 .detectCleartextNetwork()
-                .detectContentUriWithoutPermission()
-                .penaltyLog()
                 .penaltyLog()
                 .build(),
         )

@@ -1094,8 +1094,9 @@ class TorvoxRuntime
         }
 
         private fun syncGridDimensions(bridge: TorvoxBridge) {
-            val rows = bridge.getGridRows()
-            val cols = bridge.getGridCols()
+            val packed = bridge.getGridRowsColsPacked()
+            val rows = (packed shr 32).toInt()
+            val cols = packed.toInt()
             cellWidth = bridge.getCellWidth()
             cellHeight = bridge.getCellHeight()
             val sizeChanged = rows != _state.value.rows || cols != _state.value.cols

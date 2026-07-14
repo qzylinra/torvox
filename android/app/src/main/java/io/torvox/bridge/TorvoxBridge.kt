@@ -682,6 +682,8 @@ private interface TorvoxNative : Library {
 
     fun torvox_bridge_get_cell_height(handle: Long): Float
 
+    fun torvox_bridge_get_grid_rows_cols(handle: Long): Long
+
     fun boltffi_torvox_bridge_get_default_font_name(handle: Long): Long
 
     fun torvox_bridge_get_default_font_name(handle: Long): Long
@@ -1411,6 +1413,8 @@ class TorvoxBridge(
     fun getCellWidth(): Float = ensureLib().torvox_bridge_get_cell_width(handle)
 
     fun getCellHeight(): Float = ensureLib().torvox_bridge_get_cell_height(handle)
+
+    fun getGridRowsColsPacked(): Long = ensureLib().torvox_bridge_get_grid_rows_cols(handle)
 
     fun listFontFamilies(): List<String> {
         val pointer = ensureLib().torvox_bridge_list_font_families(handle)

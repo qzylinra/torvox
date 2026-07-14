@@ -24,6 +24,7 @@ import android.view.Surface
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
@@ -98,6 +99,7 @@ class TerminalSurface
             private const val ZOOM_THRESHOLD_LOW = 0.9f
             private const val ZOOM_THRESHOLD_HIGH = 1.1f
             private const val DRAWER_WIDTH_DP = 280
+            private const val RESIZE_SETTLE_MS = 50L
             private const val FLING_VELOCITY_DIVISOR = 100f
             private const val SUPPRESS_GRACE_PERIOD_NS = 200_000_000L
             private const val FLING_MAX_LINES = 50
@@ -152,6 +154,14 @@ class TerminalSurface
         private var magnifier: Magnifier? = null
         private var lastConfiguredWidth = 0
         private var lastConfiguredHeight = 0
+
+        // Predictive grid pre-computation for IME animation
+        private var predictiveRows: Int = 0
+        private var predictiveCols: Int = 0
+        private var predictiveCellWidth: Float = 0f
+        private var predictiveCellHeight: Float = 0f
+        private var imeAnimationInProgress: Boolean = false
+        private var imeAnimationEndRunnable: Runnable? = null
 
         var onScrollChanged: ((offset: Int) -> Unit)? = null
         var onScrollingStateChanged: ((isScrolling: Boolean) -> Unit)? = null
@@ -1070,6 +1080,33 @@ class TerminalSurface
             }
         }
 
+        override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
+            val result = super.onApplyWindowInsets(insets)
+            val imeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom
+            val totalHeight = height
+            if (imeBottom > 0) {
+                // IME is visible — compute what the grid will look like after the animation ends
+                val availableHeight = totalHeight - imeBottom
+                val cellWidth = viewModel?.runtime?.cellWidth ?: 0f
+                val cellHeight = viewModel?.runtime?.cellHeight ?: 0f
+                if (cellWidth > 0f && cellHeight > 0f && availableHeight > 0) {
+                    predictiveCols = (width.toFloat() / cellWidth).toInt().coerceAtLeast(1)
+                    predictiveRows = (availableHeight.toFloat() / cellHeight).toInt().coerceAtLeast(1)
+                    predictiveCellWidth = cellWidth
+                    predictiveCellHeight = cellHeight
+                }
+            } else {
+                // IME is hidden — grid will expand back to full height
+                predictiveRows = 0
+                predictiveCols = 0
+            }
+            // Cancel any pending settle runnable
+            imeAnimationEndRunnable?.let { removeCallbacks(it) }
+            imeAnimationEndRunnable = null
+            imeAnimationInProgress = true
+            return result
+        }
+
         fun initialize(viewModel: TerminalViewModel) {
             this.viewModel = viewModel
         }
@@ -1653,9 +1690,44 @@ class TerminalSurface
             terminalViewModel.surfaceWidth = width
             terminalViewModel.surfaceHeight = height
             terminalViewModel.runtime.bridge()?.setSurfaceSize(width, height)
-            // Resize the terminal grid (rows/cols) to match the new viewport.
-            // This ensures the PTY knows its correct dimensions when IME opens,
-            // and the GPU renders exactly the visible number of rows.
+
+            if (imeAnimationInProgress) {
+                // During IME animation, skip the full grid recompute and
+                // defer it until the animation settles. The GPU buffer is
+                // already updated via setSurfaceSize above, preventing
+                // text stretch/compression between frames.
+                imeAnimationEndRunnable?.let { removeCallbacks(it) }
+                imeAnimationEndRunnable =
+                    Runnable {
+                        imeAnimationInProgress = false
+                        imeAnimationEndRunnable = null
+                        terminalViewModel.runtime.recomputeGrid(
+                            terminalViewModel.surfaceWidth,
+                            terminalViewModel.surfaceHeight,
+                        )
+                        val surface = cachedSurface ?: return@Runnable
+                        val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
+                        if (windowPointer != 0L) {
+                            terminalViewModel.runtime.updateNativeWindow(
+                                windowPointer,
+                                terminalViewModel.surfaceWidth,
+                                terminalViewModel.surfaceHeight,
+                            )
+                        }
+                        val runtimeState = terminalViewModel.runtime.state.value
+                        if (runtimeState.rows > 0 && runtimeState.cols > 0) {
+                            rows = runtimeState.rows
+                            cols = runtimeState.cols
+                        }
+                        lastConfiguredWidth = terminalViewModel.surfaceWidth
+                        lastConfiguredHeight = terminalViewModel.surfaceHeight
+                    }.also { postDelayed(it, RESIZE_SETTLE_MS) }
+                lastConfiguredWidth = width
+                lastConfiguredHeight = height
+                return
+            }
+
+            // Normal (non-animation) resize — full path including grid recompute
             terminalViewModel.runtime.recomputeGrid(width, height)
             val surface =
                 cachedSurface ?: (

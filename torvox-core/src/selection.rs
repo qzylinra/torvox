@@ -1347,4 +1347,100 @@ mod tests {
         );
         assert_eq!(s.text(&grid), "BC");
     }
+
+    // ── Whitespace / mixed expansion ──
+
+    #[test]
+    fn expand_word_on_whitespace_expands_to_adjacent_words() {
+        // Long-pressing the whitespace between two words seeds a non-word char,
+        // but expand_word walks outward to the word chars on each side, so the
+        // whole "hello world" run is selected.
+        let grid = make_grid_with_text(&["hello world"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 5 }, // the space between the words
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 0);
+        assert_eq!(expanded.end.col, 10);
+        assert_eq!(expanded.text(&grid), "hello world");
+    }
+
+    #[test]
+    fn expand_word_on_leading_whitespace() {
+        // A whitespace seed with no word char to its left expands rightward only.
+        let grid = make_grid_with_text(&["  hello"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 1 }, // second leading space
+            SelectionAnchor { row: 0, col: 1 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 1);
+        assert_eq!(expanded.end.col, 6);
+        assert_eq!(expanded.text(&grid), " hello");
+    }
+
+    #[test]
+    fn expand_word_url_trailing_slash_preserved() {
+        // A trailing slash is URL-safe and must be included in the selection.
+        let grid = make_grid_with_text(&["open https://example.com/ now"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.text(&grid), "https://example.com/");
+    }
+
+    #[test]
+    fn expand_word_ascii_run_inside_cjk_does_not_merge() {
+        // "abc日本語def" — long-press on the ASCII "abc" must NOT absorb the
+        // adjacent CJK run (script-class isolation).
+        let grid = make_grid_with_text(&["abc日本語def"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 1 },
+            SelectionAnchor { row: 0, col: 1 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 0);
+        assert_eq!(expanded.end.col, 2);
+        assert_eq!(expanded.text(&grid), "abc");
+    }
+
+    #[test]
+    fn expand_word_cjk_run_with_number() {
+        // Numbers are word chars; a CJK run adjacent to a digit of different
+        // script class must remain separate.
+        let grid = make_grid_with_text(&["版本2发布"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 1 }, // '本'
+            SelectionAnchor { row: 0, col: 1 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        // Only the CJK run "版本" is selected (col 0..1), the ASCII '2' is a
+        // separate script class.
+        assert_eq!(expanded.start.col, 0);
+        assert_eq!(expanded.end.col, 1);
+        assert_eq!(expanded.text(&grid), "版本");
+    }
+
+    #[test]
+    fn char_is_cjk_covers_common_ranges() {
+        // Directly exercise the CJK detection ranges used by expand_word.
+        assert!(char_is_cjk('中')); // CJK Unified Ideographs
+        assert!(char_is_cjk('本'));
+        assert!(char_is_cjk('㐀')); // Extension A
+        assert!(char_is_cjk('豈')); // Compatibility ideograph
+        assert!(char_is_cjk('あ')); // Hiragana
+        assert!(char_is_cjk('ア')); // Katakana
+        assert!(char_is_cjk('가')); // Hangul
+        assert!(!char_is_cjk('a'));
+        assert!(!char_is_cjk('1'));
+        assert!(!char_is_cjk(' '));
+    }
 }
