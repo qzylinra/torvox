@@ -164,29 +164,30 @@ data class BridgeTheme(
 
     companion object {
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): BridgeTheme = BridgeTheme(
-            name = reader.readString(),
-            bg = reader.readI32(),
-            fg = reader.readI32(),
-            cursor = reader.readI32(),
-            selectionBg = reader.readI32(),
-            ansi0 = reader.readI32(),
-            ansi1 = reader.readI32(),
-            ansi2 = reader.readI32(),
-            ansi3 = reader.readI32(),
-            ansi4 = reader.readI32(),
-            ansi5 = reader.readI32(),
-            ansi6 = reader.readI32(),
-            ansi7 = reader.readI32(),
-            ansi8 = reader.readI32(),
-            ansi9 = reader.readI32(),
-            ansi10 = reader.readI32(),
-            ansi11 = reader.readI32(),
-            ansi12 = reader.readI32(),
-            ansi13 = reader.readI32(),
-            ansi14 = reader.readI32(),
-            ansi15 = reader.readI32(),
-        )
+        fun wireDecode(reader: WireReader): BridgeTheme =
+            BridgeTheme(
+                name = reader.readString(),
+                bg = reader.readI32(),
+                fg = reader.readI32(),
+                cursor = reader.readI32(),
+                selectionBg = reader.readI32(),
+                ansi0 = reader.readI32(),
+                ansi1 = reader.readI32(),
+                ansi2 = reader.readI32(),
+                ansi3 = reader.readI32(),
+                ansi4 = reader.readI32(),
+                ansi5 = reader.readI32(),
+                ansi6 = reader.readI32(),
+                ansi7 = reader.readI32(),
+                ansi8 = reader.readI32(),
+                ansi9 = reader.readI32(),
+                ansi10 = reader.readI32(),
+                ansi11 = reader.readI32(),
+                ansi12 = reader.readI32(),
+                ansi13 = reader.readI32(),
+                ansi14 = reader.readI32(),
+                ansi15 = reader.readI32(),
+            )
     }
 }
 
@@ -226,24 +227,25 @@ data class TerminalConfig(
         private const val DEFAULT_FONT_SIZE_TENTHS = 140u
 
         @Suppress("FunctionNaming")
-        fun wireDecode(reader: WireReader): TerminalConfig = TerminalConfig(
-            shell =
-            when (reader.readI32()) {
-                0 -> Shell.SystemDefault
-                1 -> Shell.Custom(reader.readString())
-                else -> Shell.SystemDefault
-            },
-            rows = reader.readU32(),
-            cols = reader.readU32(),
-            scrollbackLines = reader.readU32(),
-            font_size_tenths = reader.readU32(),
-            theme = BridgeTheme.wireDecode(reader),
-            home = reader.readString(),
-            user = reader.readString(),
-            path = reader.readString(),
-            workingDirectory = reader.readString(),
-            prefix = reader.readString(),
-        )
+        fun wireDecode(reader: WireReader): TerminalConfig =
+            TerminalConfig(
+                shell =
+                    when (reader.readI32()) {
+                        0 -> Shell.SystemDefault
+                        1 -> Shell.Custom(reader.readString())
+                        else -> Shell.SystemDefault
+                    },
+                rows = reader.readU32(),
+                cols = reader.readU32(),
+                scrollbackLines = reader.readU32(),
+                font_size_tenths = reader.readU32(),
+                theme = BridgeTheme.wireDecode(reader),
+                home = reader.readString(),
+                user = reader.readString(),
+                path = reader.readString(),
+                workingDirectory = reader.readString(),
+                prefix = reader.readString(),
+            )
     }
 }
 
@@ -873,12 +875,13 @@ fun initNativeProxy() {
 }
 
 /** Detect whether we are running in a Robolectric unit test environment. */
-private fun isRunningRobolectric(): Boolean = try {
-    Class.forName("org.robolectric.RobolectricTestRunner")
-    true
-} catch (_: ClassNotFoundException) {
-    false
-}
+private fun isRunningRobolectric(): Boolean =
+    try {
+        Class.forName("org.robolectric.RobolectricTestRunner")
+        true
+    } catch (_: ClassNotFoundException) {
+        false
+    }
 
 private fun ensureLib(): TorvoxNative {
     if (isRunningRobolectric()) {
@@ -1285,6 +1288,11 @@ class TorvoxBridge(
 
     fun writeToPty(data: ByteArray): Boolean {
         val result = ensureLib().torvox_bridge_write_to_pty(handle, data, data.size)
+        if (result == 0) {
+            // Force an immediate render pass so the queued data is processed
+            // by process_output() without waiting for the render loop to wake up.
+            ensureLib().torvox_bridge_render(handle)
+        }
         return result == 0
     }
 
