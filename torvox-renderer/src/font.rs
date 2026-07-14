@@ -634,6 +634,14 @@ impl FontPipeline {
                 };
                 let effective_priority =
                     priority.saturating_sub(source_quality_penalty as i16) + outline_bonus;
+                log::info!(
+                    "CJK_CANDIDATE: family='{}' base={} locale={} is_vector={} eff_pri={}",
+                    family_name,
+                    base_priority,
+                    locale_boost,
+                    is_vector,
+                    effective_priority,
+                );
                 candidates.push((face.id, advance_px, effective_priority));
             }
         }
