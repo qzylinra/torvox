@@ -117,6 +117,8 @@ pub struct AndroidSurface {
     surface_height: AtomicU32,
     render_width: u32,
     render_height: u32,
+    /// Last derived raster scale, kept to log changes only (fix D).
+    last_raster_scale: f32,
     native_window: Option<NativeWindow>,
     frame_count: u64,
     title: String,
@@ -244,6 +246,7 @@ impl AndroidSurface {
             surface_height: AtomicU32::new(0),
             render_width: 0,
             render_height: 0,
+            last_raster_scale: 0.0,
             native_window: None,
             frame_count: 0,
             title: String::new(),
@@ -769,6 +772,33 @@ impl AndroidSurface {
 
         let mut row_ends = std::mem::take(&mut self.row_ends_buf);
         row_ends.clear();
+        // Fix D: rasterize glyphs at font_size * raster_scale so the atlas
+        // matches the physical surface 1:1. The device pixel ratio is the ratio
+        // of the physical surface size (ANativeWindow) to the wgpu surface-config
+        // size (which the renderer configures at logical density). This is
+        // derived purely from surface metrics — never hardcoded — and equals the
+        // factor the compositor upscales the rendered buffer by.
+        let surf_w = self.surface_width.load(Ordering::Relaxed).max(1);
+        let cfg_w = self
+            .gpu
+            .as_ref()
+            .and_then(|g| g.surface_config.as_ref())
+            .map(|cfg| cfg.width.max(1))
+            .unwrap_or(1);
+        let raster_scale = (surf_w as f32 / cfg_w as f32).clamp(0.5, 4.0);
+        if self.last_raster_scale != raster_scale {
+            self.last_raster_scale = raster_scale;
+            log::debug!(
+                "RASTER_SCALE: scale={} (surface_w={} config_w={})",
+                raster_scale,
+                surf_w,
+                cfg_w
+            );
+        }
+        self.font_pipeline.set_raster_scale(raster_scale);
+        if let Some(gpu) = self.gpu.as_mut() {
+            gpu.set_raster_scale(raster_scale);
+        }
         torvox_renderer::gpu::build_cell_instances_into(
             &snapshot,
             &mut self.font_pipeline,
@@ -1570,17 +1600,29 @@ impl AndroidSurface {
         if let Some(ref session_arc) = self.session
             && let Ok(mut session) = session_arc.lock()
         {
-            // Join lines with a single '\n' and NO trailing newline: a trailing
-            // '\n' advances the cursor onto an extra empty row that was not part
-            // of the saved screen, producing spurious blank lines on restore.
+            // Fix G: rebuild the scrollback/visible text so a restored session
+            // matches the saved row count without a spurious trailing blank line.
+            //
+            // 1. NUL padding becomes a real space (cell_to_line already maps a NUL
+            //    codepoint to ' ', but normalize defensively) so blank rows carry
+            //    visible blank content instead of garbage.
+            // 2. Do NOT per-line `trim_end`: an intentional blank line is spaces,
+            //    and trimming would collapse it. Middle blank lines must survive
+            //    the re-feed (joined as an empty element => a blank row).
+            // 3. Trim only genuinely-empty TRAILING lines (whitespace-only). The
+            //    shell echoes the re-fed text and emits one prompt newline; a
+            //    trailing whitespace-only row from the save/restore is the
+            //    off-by-one extra blank line, so it is dropped here. Rows are
+            //    joined with a single '\n' and NO trailing newline, which avoids
+            //    advancing the cursor onto an extra empty row.
             let mut lines: Vec<String> = snapshot
                 .scrollback_lines
                 .iter()
                 .chain(&snapshot.visible_lines)
-                .map(|line| line_to_text(line).trim_end().to_string())
+                .map(|line| line_to_text(line).replace('\0', " "))
                 .collect();
             while let Some(last) = lines.last()
-                && last.is_empty()
+                && last.trim().is_empty()
             {
                 lines.pop();
             }

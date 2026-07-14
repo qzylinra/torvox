@@ -212,7 +212,15 @@ pub struct GpuUniforms {
     /// (rasterized at `font_size * raster_scale`) map 1:1 onto the physical
     /// surface. 1.0 preserves legacy logical rasterization.
     pub raster_scale: f32,
-    pub _padding: f32,
+    /// 1.0 when a background image is active (so default-background cells must
+    /// become transparent to reveal the wallpaper), 0.0 otherwise.
+    pub image_active: f32,
+    /// The surface's default (theme) background color ([r,g,b,a]). Cells whose
+    /// background matches this are treated as "default" and, when a background
+    /// image is active, rendered with zero alpha (fix F). Split into two vec2
+    /// in the WGSL `Uniforms` so the std140 layout exactly matches this
+    /// #[repr(C)] layout.
+    pub default_bg: [f32; 4],
 }
 
 #[repr(C)]
@@ -423,7 +431,22 @@ impl GpuContext {
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    // Fix F: alpha blending lets default-background cells
+                    // (alpha 0) reveal the wallpaper painted by the background
+                    // pass, while opaque cells behave exactly as before
+                    // (src-over with alpha 1 == replace).
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: Default::default(),
@@ -762,7 +785,13 @@ impl GpuContext {
             projection: proj,
             atlas_size: [self.kgp_atlas_width as f32, self.kgp_atlas_height as f32],
             raster_scale: self.raster_scale,
-            _padding: 0.0,
+            image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
+            default_bg: [
+                self.bg_color.r as f32,
+                self.bg_color.g as f32,
+                self.bg_color.b as f32,
+                1.0,
+            ],
         };
         self.queue
             .write_buffer(buf, 0, bytemuck::cast_slice(&[uniforms]));
@@ -901,6 +930,7 @@ impl GpuContext {
             kgp_atlas_data: Vec::new(),
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
+            raster_scale: 1.0,
         }
     }
 
@@ -911,6 +941,14 @@ impl GpuContext {
             b: background[2] as f64 / 255.0,
             a: 1.0,
         };
+    }
+
+    /// Set the device-pixel-ratio raster scale used by the cell fragment shader
+    /// to map world-space cell coordinates onto the physical surface.
+    pub fn set_raster_scale(&mut self, scale: f32) {
+        if scale > 0.0 && scale.is_finite() {
+            self.raster_scale = scale;
+        }
     }
 
     pub fn set_background_params(&mut self, blur_radius: f32, alpha: f32) {
@@ -1014,13 +1052,24 @@ impl GpuContext {
     }
 
     fn select_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
-        if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
-            wgpu::CompositeAlphaMode::Opaque
-        } else if caps
+        // Fix F: prefer a transparent composite alpha mode so the window (and the
+        // in-app background image) can be transparent. Opaque is only used as a
+        // last resort when no transparent mode is supported by the WSI.
+        if caps
             .alpha_modes
             .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
         {
             wgpu::CompositeAlphaMode::PreMultiplied
+        } else if caps
+            .alpha_modes
+            .contains(&wgpu::CompositeAlphaMode::Auto)
+        {
+            wgpu::CompositeAlphaMode::Auto
+        } else if caps
+            .alpha_modes
+            .contains(&wgpu::CompositeAlphaMode::Opaque)
+        {
+            wgpu::CompositeAlphaMode::Opaque
         } else {
             caps.alpha_modes
                 .first()
@@ -1292,11 +1341,17 @@ impl GpuContext {
         let proj = orthographic_projection(projection_width, projection_height);
 
         let uniforms = GpuUniforms {
-            projection: proj,
-            atlas_size: [atlas_width, atlas_height],
-            raster_scale: self.raster_scale,
-            _padding: 0.0,
-        };
+                projection: proj,
+                atlas_size: [atlas_width, atlas_height],
+                raster_scale: self.raster_scale,
+                image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
+                default_bg: [
+                    self.bg_color.r as f32,
+                    self.bg_color.g as f32,
+                    self.bg_color.b as f32,
+                    1.0,
+                ],
+            };
 
         let uniform_buffer = match self.cell_uniform_buffer.as_ref() {
             Some(buf) => buf,
@@ -1361,7 +1416,13 @@ impl GpuContext {
             projection: proj,
             atlas_size: [atlas_width as f32, atlas_height as f32],
             raster_scale: self.raster_scale,
-            _padding: 0.0,
+            image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
+            default_bg: [
+                self.bg_color.r as f32,
+                self.bg_color.g as f32,
+                self.bg_color.b as f32,
+                1.0,
+            ],
         };
 
         if self.cell_uniform_buffer.is_none() {
@@ -1732,7 +1793,13 @@ impl GpuContext {
                 projection: proj,
                 atlas_size: [aw as f32, ah as f32],
                 raster_scale: self.raster_scale,
-                _padding: 0.0,
+                image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
+                default_bg: [
+                    self.bg_color.r as f32,
+                    self.bg_color.g as f32,
+                    self.bg_color.b as f32,
+                    1.0,
+                ],
             };
             if let Some(buf) = &self.cell_uniform_buffer {
                 self.queue
@@ -2509,6 +2576,7 @@ pub fn build_cell_instances_into(
     cell_w *= config.render_scale;
     cell_h *= config.render_scale;
     let ascent_pixels = font_pipeline.ascent_pixels();
+    let raster_scale = font_pipeline.get_raster_scale();
     let expected = (snapshot.rows * snapshot.cols) as usize;
     if snapshot.cells.len() < expected {
         log::warn!(
@@ -2795,13 +2863,13 @@ pub fn build_cell_instances_into(
                         let uv_y = info.atlas_y as f32 / atlas_height;
                         let uv_w = info.width as f32 / atlas_width;
                         let uv_h = info.height as f32 / atlas_height;
-                        let bearing_x = info.placement.left as f32 + sg.x_offset;
-                        let glyph_h = info.height as f32;
-                        let raw_bearing_y = ascent_pixels - info.placement.top as f32;
+                        let bearing_x = info.placement.left as f32 + sg.x_offset * raster_scale;
+                        let glyph_h = info.height as f32 / raster_scale;
+                        let raw_bearing_y = ascent_pixels * raster_scale - info.placement.top as f32;
                         let bearing_y = if glyph_h > cell_h {
-                            (cell_h - glyph_h) / 2.0 + sg.y_offset
+                            (cell_h - glyph_h) / 2.0 * raster_scale * raster_scale + sg.y_offset * raster_scale
                         } else {
-                            raw_bearing_y + sg.y_offset
+                            raw_bearing_y + sg.y_offset * raster_scale
                         };
 
                         instances.push(CellInstance {
@@ -2907,8 +2975,8 @@ pub fn build_cell_instances_into(
                 let uv_h = info.height as f32 / atlas_height;
 
                 let bearing_x = info.placement.left as f32;
-                let glyph_h = info.height as f32;
-                let raw_bearing_y = ascent_pixels - info.placement.top as f32;
+                let glyph_h = info.height as f32 / raster_scale;
+                let raw_bearing_y = ascent_pixels * raster_scale - info.placement.top as f32;
                 let bearing_y = if glyph_h > cell_h {
                     (cell_h - glyph_h) / 2.0
                 } else {
@@ -2941,10 +3009,10 @@ pub fn build_cell_instances_into(
                     let uv_w = info.width as f32 / atlas_width;
                     let uv_h = info.height as f32 / atlas_height;
                     let bearing_x = info.placement.left as f32;
-                    let glyph_h = info.height as f32;
-                    let raw_bearing_y = ascent_pixels - info.placement.top as f32;
+                    let glyph_h = info.height as f32 / raster_scale;
+                    let raw_bearing_y = ascent_pixels * raster_scale - info.placement.top as f32;
                     let bearing_y = if glyph_h > cell_h {
-                        (cell_h - glyph_h) / 2.0
+                        (cell_h - glyph_h) / 2.0 * raster_scale
                     } else {
                         raw_bearing_y
                     };
@@ -2988,10 +3056,10 @@ pub fn build_cell_instances_into(
                     let uv_w = info.width as f32 / atlas_width;
                     let uv_h = info.height as f32 / atlas_height;
                     let bearing_x = info.placement.left as f32;
-                    let glyph_h = info.height as f32;
-                    let raw_bearing_y = ascent_pixels - info.placement.top as f32;
+                    let glyph_h = info.height as f32 / raster_scale;
+                    let raw_bearing_y = ascent_pixels * raster_scale - info.placement.top as f32;
                     let bearing_y = if glyph_h > cell_h {
-                        (cell_h - glyph_h) / 2.0
+                        (cell_h - glyph_h) / 2.0 * raster_scale
                     } else {
                         raw_bearing_y
                     };
@@ -3215,7 +3283,10 @@ mod tests {
 
     #[test]
     fn gpu_uniforms_size() {
-        assert_eq!(std::mem::size_of::<GpuUniforms>(), 80);
+        // #[repr(C)] layout: 64 (mat4) + 8 (vec2) + 4 + 4 (raster_scale,
+        // image_active) + 16 (default_bg [f32;4]) = 96. Matches the WGSL
+        // std140 `Uniforms` (default_bg split into two vec2).
+        assert_eq!(std::mem::size_of::<GpuUniforms>(), 96);
     }
 
     #[test]
@@ -3615,13 +3686,15 @@ mod tests {
             projection: orthographic_projection(800.0, 600.0),
             atlas_size: [1024.0, 1024.0],
             raster_scale: 1.0,
-            _padding: 0.0,
+            image_active: 0.0,
+            default_bg: [0.0, 0.0, 0.0, 1.0],
         };
         let uniforms_400 = GpuUniforms {
             projection: orthographic_projection(800.0, 400.0),
             atlas_size: [1024.0, 1024.0],
             raster_scale: 1.0,
-            _padding: 0.0,
+            image_active: 0.0,
+            default_bg: [0.0, 0.0, 0.0, 1.0],
         };
 
         // Same projection/atlas layout, different height
@@ -4041,6 +4114,7 @@ mod tests {
             kgp_atlas_data: Vec::new(),
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
+            raster_scale: 1.0,
         };
         ctx.initialize_pipeline_and_bind_group(256, 256, 50, 50);
         Some(ctx)
@@ -4113,6 +4187,7 @@ mod tests {
             kgp_atlas_data: Vec::new(),
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
+            raster_scale: 1.0,
         };
         ctx.initialize_pipeline_and_bind_group(width.max(256), height.max(256), width, height);
         Some(ctx)

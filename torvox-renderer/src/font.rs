@@ -226,6 +226,13 @@ pub struct FontPipeline {
     font_id: Option<fontdb::ID>,
     cjk_fallback_ids: Vec<fontdb::ID>,
     font_size: f32,
+    /// Multiplier applied to glyph rasterization so the atlas bitmap matches the
+    /// physical (device-pixel-ratio scaled) surface 1:1 instead of the logical
+    /// font size. Without this, glyphs are rasterized at the logical size and the
+    /// GPU upscales by the DPR, producing blurry/rough text (worst for CJK).
+    /// Derived at runtime from the Android surface metrics (see `set_raster_scale`),
+    /// never hardcoded. A value of 1.0 preserves the legacy logical rasterization.
+    raster_scale: f32,
     atlas_generation: u64,
     system_locale: String,
     shaping_buffer: Option<cosmic_text::Buffer>,
@@ -740,7 +747,7 @@ impl FontPipeline {
         log::info!("RASTER_SCALE: scale={:.3}", scale);
     }
 
-    pub fn raster_scale(&self) -> f32 {
+    pub fn get_raster_scale(&self) -> f32 {
         self.raster_scale
     }
 
@@ -1277,14 +1284,6 @@ impl FontPipeline {
         atlas_width: i32,
         atlas_height: i32,
     font_size: f32,
-    /// Multiplier applied to glyph rasterization so the atlas bitmap matches the
-    /// physical (device-pixel-ratio scaled) surface 1:1 instead of the logical
-    /// font size. Without this, glyphs are rasterized at the logical size and the
-    /// GPU upscales by the DPR, producing blurry/rough text (worst for CJK).
-    /// Derived at runtime from the Android surface metrics (see `set_raster_scale`),
-    /// never hardcoded. A value of 1.0 preserves the legacy logical rasterization.
-    raster_scale: f32,
-
         fixture_dir: &str,
     ) -> Self {
         let mut font_system = FontSystem::new();
@@ -1333,6 +1332,7 @@ impl FontPipeline {
                     .expect("SHAPE_CACHE_CAPACITY must be non-zero"),
             ),
             ascii_glyph_ids: [None; 128],
+            raster_scale: 1.0,
         };
 
         pipeline.find_monospace_font();
