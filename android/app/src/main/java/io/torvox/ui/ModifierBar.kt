@@ -50,12 +50,11 @@ enum class ModifierState { Off, Once, Locked }
 
 enum class ModifierBarMode { Normal, SelectionActions }
 
-fun ModifierState.next(): ModifierState =
-    when (this) {
-        ModifierState.Off -> ModifierState.Once
-        ModifierState.Once -> ModifierState.Locked
-        ModifierState.Locked -> ModifierState.Off
-    }
+fun ModifierState.next(): ModifierState = when (this) {
+    ModifierState.Off -> ModifierState.Once
+    ModifierState.Once -> ModifierState.Locked
+    ModifierState.Locked -> ModifierState.Off
+}
 
 data class ModifierKey(
     val key: String,
@@ -280,10 +279,10 @@ private fun SelectionActionsBar(
 
     Row(
         modifier =
-            modifier
-                .fillMaxWidth()
-                .height(buttonHeight)
-                .background(backgroundColor),
+        modifier
+            .fillMaxWidth()
+            .height(buttonHeight)
+            .background(backgroundColor),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -330,147 +329,141 @@ private fun ConfigurableModifierBar(
     val row1 = allKeys.take(midpoint)
     val row2 = allKeys.drop(midpoint)
 
-    fun getModifierState(item: ToolbarItem): ModifierState? =
-        when (item) {
-            is ToolbarItem.Default -> {
-                when (item.key) {
-                    ToolbarKey.CTRL -> ctrlState
-                    ToolbarKey.ALT -> altState
-                    else -> null
-                }
-            }
-
-            is ToolbarItem.Custom -> {
-                null
+    fun getModifierState(item: ToolbarItem): ModifierState? = when (item) {
+        is ToolbarItem.Default -> {
+            when (item.key) {
+                ToolbarKey.CTRL -> ctrlState
+                ToolbarKey.ALT -> altState
+                else -> null
             }
         }
 
-    fun getOnRepeat(item: ToolbarItem): (() -> Unit)? =
-        when (item) {
-            is ToolbarItem.Default -> {
-                when (item.key) {
-                    ToolbarKey.ARROW_UP,
-                    ToolbarKey.ARROW_DOWN,
-                    ToolbarKey.ARROW_LEFT,
-                    ToolbarKey.ARROW_RIGHT,
-                    -> {
-                        { onKeyClick(item.key.sequence) }
-                    }
+        is ToolbarItem.Custom -> {
+            null
+        }
+    }
 
-                    else -> {
-                        null
-                    }
+    fun getOnRepeat(item: ToolbarItem): (() -> Unit)? = when (item) {
+        is ToolbarItem.Default -> {
+            when (item.key) {
+                ToolbarKey.ARROW_UP,
+                ToolbarKey.ARROW_DOWN,
+                ToolbarKey.ARROW_LEFT,
+                ToolbarKey.ARROW_RIGHT,
+                -> {
+                    { onKeyClick(item.key.sequence) }
                 }
-            }
 
-            is ToolbarItem.Custom -> {
-                null
+                else -> {
+                    null
+                }
             }
         }
 
-    fun getItemLabel(item: ToolbarItem): String =
-        when (item) {
-            is ToolbarItem.Default -> {
-                val display = label(item.key.defaultLabel)
-                when (item.key) {
-                    ToolbarKey.ARROW_UP -> "\u2191"
-                    ToolbarKey.ARROW_DOWN -> "\u2193"
-                    ToolbarKey.ARROW_LEFT -> "\u2190"
-                    ToolbarKey.ARROW_RIGHT -> "\u2192"
-                    ToolbarKey.DRAWER -> "\u2630"
-                    else -> display
-                }
-            }
+        is ToolbarItem.Custom -> {
+            null
+        }
+    }
 
-            is ToolbarItem.Custom -> {
-                item.label
+    fun getItemLabel(item: ToolbarItem): String = when (item) {
+        is ToolbarItem.Default -> {
+            val display = label(item.key.defaultLabel)
+            when (item.key) {
+                ToolbarKey.ARROW_UP -> "\u2191"
+                ToolbarKey.ARROW_DOWN -> "\u2193"
+                ToolbarKey.ARROW_LEFT -> "\u2190"
+                ToolbarKey.ARROW_RIGHT -> "\u2192"
+                ToolbarKey.DRAWER -> "\u2630"
+                else -> display
             }
         }
 
-    fun getTestTag(item: ToolbarItem): String =
-        when (item) {
-            is ToolbarItem.Default -> {
-                when (item.key) {
-                    ToolbarKey.ARROW_UP -> "Key_\u2191"
-                    ToolbarKey.ARROW_DOWN -> "Key_\u2193"
-                    ToolbarKey.ARROW_LEFT -> "Key_\u2190"
-                    ToolbarKey.ARROW_RIGHT -> "Key_\u2192"
-                    ToolbarKey.DRAWER -> "Key_DRAWER"
-                    else -> "Key_${item.key.defaultLabel}"
-                }
-            }
+        is ToolbarItem.Custom -> {
+            item.label
+        }
+    }
 
-            is ToolbarItem.Custom -> {
-                item.testTag
+    fun getTestTag(item: ToolbarItem): String = when (item) {
+        is ToolbarItem.Default -> {
+            when (item.key) {
+                ToolbarKey.ARROW_UP -> "Key_\u2191"
+                ToolbarKey.ARROW_DOWN -> "Key_\u2193"
+                ToolbarKey.ARROW_LEFT -> "Key_\u2190"
+                ToolbarKey.ARROW_RIGHT -> "Key_\u2192"
+                ToolbarKey.DRAWER -> "Key_DRAWER"
+                else -> "Key_${item.key.defaultLabel}"
             }
         }
 
-    fun getContentDescription(item: ToolbarItem): String =
-        when (item) {
-            is ToolbarItem.Default -> {
-                when (item.key) {
-                    ToolbarKey.ESC -> "Escape"
-                    ToolbarKey.DRAWER -> "Open session drawer"
-                    ToolbarKey.SCROLL -> "Toggle scroll"
-                    ToolbarKey.HOME -> "Home"
-                    ToolbarKey.ARROW_UP -> "Arrow up"
-                    ToolbarKey.END -> "End"
-                    ToolbarKey.PGUP -> "Page up"
-                    ToolbarKey.TAB -> "Tab"
-                    ToolbarKey.CTRL -> "Control toggle"
-                    ToolbarKey.ALT -> "Alt toggle"
-                    ToolbarKey.ARROW_LEFT -> "Arrow left"
-                    ToolbarKey.ARROW_DOWN -> "Arrow down"
-                    ToolbarKey.ARROW_RIGHT -> "Arrow right"
-                    ToolbarKey.PGDN -> "Page down"
-                    else -> item.key.defaultLabel
-                }
-            }
+        is ToolbarItem.Custom -> {
+            item.testTag
+        }
+    }
 
-            is ToolbarItem.Custom -> {
-                item.label
+    fun getContentDescription(item: ToolbarItem): String = when (item) {
+        is ToolbarItem.Default -> {
+            when (item.key) {
+                ToolbarKey.ESC -> "Escape"
+                ToolbarKey.DRAWER -> "Open session drawer"
+                ToolbarKey.SCROLL -> "Toggle scroll"
+                ToolbarKey.HOME -> "Home"
+                ToolbarKey.ARROW_UP -> "Arrow up"
+                ToolbarKey.END -> "End"
+                ToolbarKey.PGUP -> "Page up"
+                ToolbarKey.TAB -> "Tab"
+                ToolbarKey.CTRL -> "Control toggle"
+                ToolbarKey.ALT -> "Alt toggle"
+                ToolbarKey.ARROW_LEFT -> "Arrow left"
+                ToolbarKey.ARROW_DOWN -> "Arrow down"
+                ToolbarKey.ARROW_RIGHT -> "Arrow right"
+                ToolbarKey.PGDN -> "Page down"
+                else -> item.key.defaultLabel
             }
         }
 
-    fun getKeyHandler(item: ToolbarItem): () -> Unit =
-        when (item) {
-            is ToolbarItem.Default -> {
-                when (item.key) {
-                    ToolbarKey.CTRL -> {
-                        onToggleCtrl
-                    }
+        is ToolbarItem.Custom -> {
+            item.label
+        }
+    }
 
-                    ToolbarKey.ALT -> {
-                        onToggleAlt
-                    }
-
-                    ToolbarKey.DRAWER -> {
-                        onDrawerClick
-                    }
-
-                    ToolbarKey.SCROLL -> {
-                        onScrollClick
-                    }
-
-                    else -> {
-                        val seq = item.key.sequence
-                        if (seq.isNotEmpty()) {
-                            { onKeyClick(seq) }
-                        } else {
-                            {}
-                        }
-                    }
+    fun getKeyHandler(item: ToolbarItem): () -> Unit = when (item) {
+        is ToolbarItem.Default -> {
+            when (item.key) {
+                ToolbarKey.CTRL -> {
+                    onToggleCtrl
                 }
-            }
 
-            is ToolbarItem.Custom -> {
-                if (item.sequence.isNotEmpty()) {
-                    { onKeyClick(item.sequence) }
-                } else {
-                    {}
+                ToolbarKey.ALT -> {
+                    onToggleAlt
+                }
+
+                ToolbarKey.DRAWER -> {
+                    onDrawerClick
+                }
+
+                ToolbarKey.SCROLL -> {
+                    onScrollClick
+                }
+
+                else -> {
+                    val seq = item.key.sequence
+                    if (seq.isNotEmpty()) {
+                        { onKeyClick(seq) }
+                    } else {
+                        {}
+                    }
                 }
             }
         }
+
+        is ToolbarItem.Custom -> {
+            if (item.sequence.isNotEmpty()) {
+                { onKeyClick(item.sequence) }
+            } else {
+                {}
+            }
+        }
+    }
 
     Column(
         modifier = modifier.fillMaxWidth().background(backgroundColor),
@@ -634,20 +627,20 @@ private fun RowScope.ExtraKeyButton(
 
     Box(
         modifier =
-            Modifier
-                .weight(1f)
-                .height(BUTTON_HEIGHT_DP.dp)
-                .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier)
-                .then(
-                    Modifier.background(
-                        animatedBg,
-                        RoundedCornerShape(4.dp),
-                    ),
-                ).then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                }.then(gestureModifier),
+        Modifier
+            .weight(1f)
+            .height(BUTTON_HEIGHT_DP.dp)
+            .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier)
+            .then(
+                Modifier.background(
+                    animatedBg,
+                    RoundedCornerShape(4.dp),
+                ),
+            ).then(if (contentDescription != null) Modifier.semantics { this.contentDescription = contentDescription } else Modifier)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }.then(gestureModifier),
         contentAlignment = Alignment.Center,
     ) {
         Text(
