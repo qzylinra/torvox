@@ -1231,6 +1231,13 @@ class TorvoxRuntime
                                 entry.lastRenderDone = System.nanoTime()
                             }
                         } catch (exception: Exception) {
+                            if (exception is InterruptedException) {
+                                // The render thread was interrupted during shutdown
+                                // (session switch / runtime stop). This is an expected
+                                // signal, not a render failure — exit the loop cleanly.
+                                Thread.currentThread().interrupt()
+                                break
+                            }
                             consecutiveErrors++
                             if (consecutiveErrors == 1) {
                                 LogUtil.e("TorvoxRuntime", "session ${entry.id} first render exception", exception)
@@ -1261,7 +1268,7 @@ class TorvoxRuntime
                 RenderWatchDog(
                     getStart = { entry.lastRenderStart },
                     getDone = { entry.lastRenderDone },
-                    isRunning = { entry.running },
+                    isRunning = { entry.running && activeSessionId == entry.id },
                     onHangDetected = {
                         LogUtil.e("TorvoxRuntime", "session ${entry.id} render thread hung")
                         LogcatFileWriter.write("TorvoxRuntime", "session ${entry.id} render thread hung")

@@ -1283,7 +1283,7 @@ impl FontPipeline {
     pub fn from_fixture(
         atlas_width: i32,
         atlas_height: i32,
-    font_size: f32,
+        font_size: f32,
         fixture_dir: &str,
     ) -> Self {
         let mut font_system = FontSystem::new();

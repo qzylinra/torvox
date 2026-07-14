@@ -1284,39 +1284,33 @@ impl TorvoxBridge {
                     col: anchor_col.max(0) as u32,
                 };
 
-                let (new_start, new_end) = if mode_enum
-                    == torvox_core::selection::SelectionMode::Word
-                {
-                    // Re-expand only the word the dragged handle landed on.
-                    let moved_word = torvox_core::selection::Selection::new(
-                        moved,
-                        moved,
-                        mode_enum,
-                    )
-                    .expand(cell_at);
-                    let (mws, mwe) = moved_word.ordered();
-                    if handle_side == 0 {
-                        (mws, fixed)
+                let (new_start, new_end) =
+                    if mode_enum == torvox_core::selection::SelectionMode::Word {
+                        // Re-expand only the word the dragged handle landed on.
+                        let moved_word =
+                            torvox_core::selection::Selection::new(moved, moved, mode_enum)
+                                .expand(cell_at);
+                        let (mws, mwe) = moved_word.ordered();
+                        if handle_side == 0 {
+                            (mws, fixed)
+                        } else {
+                            (fixed, mwe)
+                        }
+                    } else if handle_side == 0 {
+                        (moved, fixed)
                     } else {
-                        (fixed, mwe)
-                    }
-                } else if handle_side == 0 {
-                    (moved, fixed)
-                } else {
-                    (fixed, moved)
-                };
+                        (fixed, moved)
+                    };
 
-                surface.set_selection(Some(
-                    torvox_renderer::gpu::SelectionRange {
-                        start_row: new_start.row as i32,
-                        start_col: new_start.col as i32,
-                        end_row: new_end.row as i32,
-                        end_col: new_end.col as i32,
-                        active: true,
-                        mode: mode_enum,
-                        origin: Some((origin_row, origin_col)),
-                    },
-                ));
+                surface.set_selection(Some(torvox_renderer::gpu::SelectionRange {
+                    start_row: new_start.row as i32,
+                    start_col: new_start.col as i32,
+                    end_row: new_end.row as i32,
+                    end_col: new_end.col as i32,
+                    active: true,
+                    mode: mode_enum,
+                    origin: Some((origin_row, origin_col)),
+                }));
                 let (lo, hi) = if new_start.row < new_end.row
                     || (new_start.row == new_end.row && new_start.col <= new_end.col)
                 {

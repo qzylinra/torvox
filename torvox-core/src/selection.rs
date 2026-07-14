@@ -317,7 +317,9 @@ impl Selection {
             if !is_trailing_punct {
                 break;
             }
-            let prev_is_safe = cell_at(prev_row, prev_col).map(is_url_safe).unwrap_or(false);
+            let prev_is_safe = cell_at(prev_row, prev_col)
+                .map(is_url_safe)
+                .unwrap_or(false);
             if !prev_is_safe {
                 break;
             }

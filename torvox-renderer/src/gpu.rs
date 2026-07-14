@@ -785,7 +785,11 @@ impl GpuContext {
             projection: proj,
             atlas_size: [self.kgp_atlas_width as f32, self.kgp_atlas_height as f32],
             raster_scale: self.raster_scale,
-            image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
+            image_active: if self.bg_bind_group.is_some() {
+                1.0
+            } else {
+                0.0
+            },
             default_bg: [
                 self.bg_color.r as f32,
                 self.bg_color.g as f32,
@@ -1060,15 +1064,9 @@ impl GpuContext {
             .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
         {
             wgpu::CompositeAlphaMode::PreMultiplied
-        } else if caps
-            .alpha_modes
-            .contains(&wgpu::CompositeAlphaMode::Auto)
-        {
+        } else if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Auto) {
             wgpu::CompositeAlphaMode::Auto
-        } else if caps
-            .alpha_modes
-            .contains(&wgpu::CompositeAlphaMode::Opaque)
-        {
+        } else if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
             wgpu::CompositeAlphaMode::Opaque
         } else {
             caps.alpha_modes
@@ -1341,17 +1339,21 @@ impl GpuContext {
         let proj = orthographic_projection(projection_width, projection_height);
 
         let uniforms = GpuUniforms {
-                projection: proj,
-                atlas_size: [atlas_width, atlas_height],
-                raster_scale: self.raster_scale,
-                image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
-                default_bg: [
-                    self.bg_color.r as f32,
-                    self.bg_color.g as f32,
-                    self.bg_color.b as f32,
-                    1.0,
-                ],
-            };
+            projection: proj,
+            atlas_size: [atlas_width, atlas_height],
+            raster_scale: self.raster_scale,
+            image_active: if self.bg_bind_group.is_some() {
+                1.0
+            } else {
+                0.0
+            },
+            default_bg: [
+                self.bg_color.r as f32,
+                self.bg_color.g as f32,
+                self.bg_color.b as f32,
+                1.0,
+            ],
+        };
 
         let uniform_buffer = match self.cell_uniform_buffer.as_ref() {
             Some(buf) => buf,
@@ -1416,7 +1418,11 @@ impl GpuContext {
             projection: proj,
             atlas_size: [atlas_width as f32, atlas_height as f32],
             raster_scale: self.raster_scale,
-            image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
+            image_active: if self.bg_bind_group.is_some() {
+                1.0
+            } else {
+                0.0
+            },
             default_bg: [
                 self.bg_color.r as f32,
                 self.bg_color.g as f32,
@@ -1793,7 +1799,11 @@ impl GpuContext {
                 projection: proj,
                 atlas_size: [aw as f32, ah as f32],
                 raster_scale: self.raster_scale,
-                image_active: if self.bg_bind_group.is_some() { 1.0 } else { 0.0 },
+                image_active: if self.bg_bind_group.is_some() {
+                    1.0
+                } else {
+                    0.0
+                },
                 default_bg: [
                     self.bg_color.r as f32,
                     self.bg_color.g as f32,
@@ -2865,9 +2875,11 @@ pub fn build_cell_instances_into(
                         let uv_h = info.height as f32 / atlas_height;
                         let bearing_x = info.placement.left as f32 + sg.x_offset * raster_scale;
                         let glyph_h = info.height as f32 / raster_scale;
-                        let raw_bearing_y = ascent_pixels * raster_scale - info.placement.top as f32;
+                        let raw_bearing_y =
+                            ascent_pixels * raster_scale - info.placement.top as f32;
                         let bearing_y = if glyph_h > cell_h {
-                            (cell_h - glyph_h) / 2.0 * raster_scale * raster_scale + sg.y_offset * raster_scale
+                            (cell_h - glyph_h) / 2.0 * raster_scale * raster_scale
+                                + sg.y_offset * raster_scale
                         } else {
                             raw_bearing_y + sg.y_offset * raster_scale
                         };
