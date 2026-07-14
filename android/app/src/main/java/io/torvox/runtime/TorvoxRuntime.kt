@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -47,7 +48,7 @@ data class RuntimeState(
 private data class SessionEntry(
     val id: Long,
     var bridge: TorvoxBridge?,
-    var renderThread: Thread?,
+    var renderThreadRef: Thread?,
     @Volatile var running: Boolean,
     val savePath: String,
     @Volatile var blitCallback: (() -> Unit)? = null,
@@ -58,12 +59,10 @@ private data class SessionEntry(
     // latch unsignaled, so the thread waited the full timeout. A coalescing
     // flag under a lock/condition avoids both the race and the per-frame
     // allocation.
-    val renderLock =
-        java.util.concurrent.locks
-            .ReentrantLock()
-    val renderCondition = renderLock.newCondition()
 
-    @Volatile var renderSignaled: Boolean = false
+    val renderSignaled =
+        java.util.concurrent.atomic
+            .AtomicBoolean(false)
 
     @Volatile var forceRenderRequested: Boolean = false
 
@@ -72,13 +71,14 @@ private data class SessionEntry(
     @Volatile var lastRenderDone: Long = 0L
     var renderWatchDog: RenderWatchDog? = null
 
+    @Volatile var lastSignalNanos: Long = System.nanoTime()
+
     fun notifyRender() {
-        renderLock.lock()
-        try {
-            renderSignaled = true
-            renderCondition.signal()
-        } finally {
-            renderLock.unlock()
+        lastSignalNanos = System.nanoTime()
+        renderSignaled.set(true)
+        renderThreadRef?.let {
+            java.util.concurrent.locks.LockSupport
+                .unpark(it)
         }
     }
 
@@ -251,7 +251,9 @@ class TorvoxRuntime
             private const val RENDER_ERROR_LOG_FREQUENCY = 60
             private const val RENDER_MAX_CONSECUTIVE_ERRORS = 100
             private const val RENDER_ERROR_SLEEP_MS = 50L
-            private const val RENDER_LATCH_TIMEOUT_MS = 500L
+            private const val RENDER_LATCH_TIMEOUT_NANOS = 16_000_000L // 16ms for active (~60 FPS)
+            private const val RENDER_LATCH_IDLE_TIMEOUT_NANOS = 500_000_000L // 500ms for idle (~2 FPS)
+            private const val RENDER_IDLE_THRESHOLD_NANOS = 5_000_000_000L // 5s idle → switch to low-freq
             private const val RENDER_DIAGNOSTIC_FREQUENCY = 60
             private const val THREAD_JOIN_TIMEOUT_MS = 3000L
             private const val BEL_TONE_STREAM_TYPE = AudioManager.STREAM_NOTIFICATION
@@ -513,7 +515,7 @@ class TorvoxRuntime
                     SessionEntry(
                         id = sessionId,
                         bridge = bridge,
-                        renderThread = null,
+                        renderThreadRef = null,
                         running = true,
                         savePath = savePath,
                     )
@@ -605,7 +607,7 @@ class TorvoxRuntime
                     SessionEntry(
                         id = nextId,
                         bridge = bridge,
-                        renderThread = null,
+                        renderThreadRef = null,
                         running = false,
                         savePath = savePath,
                     )
@@ -727,7 +729,7 @@ class TorvoxRuntime
                     // first frame is only presented after OS thread scheduling —
                     // that gap is exactly the blank flash. Presenting here closes it.
                     // The render thread takes over right after (it re-renders once,
-                    // then latches on the 500ms RENDER_LATCH_TIMEOUT_MS cadence, so
+                    // then latches on the RENDER_LATCH_IDLE_TIMEOUT_NANOS cadence, so
                     // the event-driven model is preserved).
                     try {
                         // The GPU surface may not be fully configured immediately after
@@ -1082,7 +1084,7 @@ class TorvoxRuntime
             try {
                 entry.bridge?.updateNativeWindow(windowPointer, width, height)
                 entry.bridge?.let { syncGridDimensions(it) }
-                if (entry.renderThread?.isAlive != true) {
+                if (entry.renderThreadRef?.isAlive != true) {
                     LogUtil.d("TorvoxRuntime", "updateNativeWindow: render thread dead, restarting for session ${entry.id}")
                     startRenderThread(entry)
                 }
@@ -1119,7 +1121,7 @@ class TorvoxRuntime
             }
             val generation = renderGeneration.incrementAndGet()
             entry.running = true
-            entry.renderThread =
+            val renderThread =
                 Thread({
                     var diagCount = 0
                     var consecutiveErrors = 0
@@ -1227,18 +1229,19 @@ class TorvoxRuntime
                                     }
                                 }
                                 if (!entry.forceRenderRequested) {
-                                    entry.renderLock.lock()
-                                    try {
-                                        while (!entry.renderSignaled && !entry.forceRenderRequested) {
-                                            entry.renderCondition.await(
-                                                RENDER_LATCH_TIMEOUT_MS,
-                                                java.util.concurrent.TimeUnit.MILLISECONDS,
-                                            )
+                                    val idleNanos = System.nanoTime() - entry.lastSignalNanos
+                                    val timeoutNanos =
+                                        if (idleNanos > RENDER_IDLE_THRESHOLD_NANOS) {
+                                            RENDER_LATCH_IDLE_TIMEOUT_NANOS
+                                        } else {
+                                            RENDER_LATCH_TIMEOUT_NANOS
                                         }
-                                    } finally {
-                                        entry.renderSignaled = false
-                                        entry.renderLock.unlock()
+                                    while (!entry.renderSignaled.get() && !entry.forceRenderRequested) {
+                                        java.util.concurrent.locks.LockSupport
+                                            .parkNanos(timeoutNanos)
+                                        if (Thread.interrupted()) throw InterruptedException()
                                     }
+                                    entry.renderSignaled.set(false)
                                 } else {
                                     entry.forceRenderRequested = false
                                 }
@@ -1275,8 +1278,9 @@ class TorvoxRuntime
                     LogUtil.d("TorvoxRuntime", "render thread stopped for session ${entry.id}")
                 }, "TorvoxRender-${entry.id}").apply {
                     isDaemon = true
-                    start()
                 }
+            entry.renderThreadRef = renderThread
+            renderThread.start()
             entry.renderWatchDog =
                 RenderWatchDog(
                     getStart = { entry.lastRenderStart },
@@ -1295,8 +1299,9 @@ class TorvoxRuntime
             entry.renderWatchDog?.stop()
             entry.renderWatchDog = null
             entry.running = false
-            val thread = entry.renderThread
-            entry.renderThread = null
+            val thread = entry.renderThreadRef
+            entry.renderThreadRef = null
+            entry.renderSignaled.set(false)
             thread?.let { t ->
                 t.interrupt()
                 t.join(THREAD_JOIN_TIMEOUT_MS)
