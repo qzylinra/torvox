@@ -105,8 +105,10 @@ class BootstrapInstaller(
     private fun isExecutable(name: String): Boolean = EXEC_PREFIXES.any { name.startsWith(it) } ||
         name.startsWith("lib/apt/methods/")
 
+    private val symlinkSeparator = Regex("""\s*(?:->|←|→|↔)\s*""")
+
     private fun parseSymlinks(content: String): List<Pair<String, String>> = content.lines().filter { it.isNotBlank() }.mapNotNull { line ->
-        val parts = line.split(" -> ")
+        val parts = line.split(symlinkSeparator)
         if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
     }
 

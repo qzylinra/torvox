@@ -1130,40 +1130,42 @@ private fun BootstrapInstallButton(
     textColor: Color,
 ) {
     val progress = bootstrapProgress
-    Button(
-        onClick = onRunBootstrap,
-        enabled = !bootstrapRunning,
-        modifier = Modifier.fillMaxWidth().testTag("BootstrapInstallButton"),
-        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
-    ) {
+    Column {
         if (bootstrapRunning) {
             LinearProgressIndicator(
                 progress = { progress?.overallProgress() ?: 0f },
-                modifier = Modifier.width(16.dp).height(16.dp),
+                modifier = Modifier.fillMaxWidth().height(4.dp),
                 color = textColor,
                 trackColor = textColor.copy(alpha = 0.2f),
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
-        Text(
-            text =
-            if (bootstrapRunning) {
-                progress?.stepDescription()
-                    ?: stringResource(R.string.bootstrap_installing)
-            } else {
-                stringResource(R.string.bootstrap_install)
-            },
-            color = textColor,
-        )
-    }
-    if (!bootstrapResult.isNullOrEmpty()) {
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = bootstrapResult,
-            style = MaterialTheme.typography.bodySmall,
-            color = textColor.copy(alpha = 0.7f),
-            modifier = Modifier.testTag("BootstrapResultText"),
-        )
+        Button(
+            onClick = onRunBootstrap,
+            enabled = !bootstrapRunning,
+            modifier = Modifier.fillMaxWidth().testTag("BootstrapInstallButton"),
+            colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+        ) {
+            Text(
+                text =
+                if (bootstrapRunning) {
+                    progress?.stepDescription()
+                        ?: stringResource(R.string.bootstrap_installing)
+                } else {
+                    stringResource(R.string.bootstrap_install)
+                },
+                color = textColor,
+            )
+        }
+        if (!bootstrapResult.isNullOrEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = bootstrapResult,
+                style = MaterialTheme.typography.bodySmall,
+                color = textColor.copy(alpha = 0.7f),
+                modifier = Modifier.testTag("BootstrapResultText"),
+            )
+        }
     }
 }
 

@@ -388,7 +388,7 @@ constructor(
                 java.io
                     .File(context.filesDir, "home")
                     .apply {
-                        if (!mkdirs()) {
+                        if (!exists() && !mkdirs()) {
                             Log.w("TorvoxRuntime", "Failed to create home directory: $this")
                         }
                     }.absolutePath
@@ -638,7 +638,7 @@ constructor(
 
             val fontsDir = context.filesDir.resolve("fonts")
             fontsDir.apply {
-                if (!mkdirs()) {
+                if (!exists() && !mkdirs()) {
                     Log.w("TorvoxRuntime", "Failed to create fonts directory: $this")
                 }
             }
@@ -1271,6 +1271,9 @@ constructor(
             if (entry.renderThreadRef?.isAlive != true) {
                 LogUtil.d("TorvoxRuntime", "updateNativeWindow: render thread dead, restarting for session ${entry.id}")
                 startRenderThread(entry)
+            } else {
+                entry.forceRenderRequested = true
+                entry.notifyRender()
             }
         } catch (exception: Exception) {
             LogUtil.e("TorvoxRuntime", "updateNativeWindow failed", exception)

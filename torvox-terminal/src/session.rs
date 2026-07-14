@@ -526,6 +526,20 @@ impl Session {
             .key_encode(key_code, modifiers, action, unicode_char, unshifted_char)
     }
 
+    /// Submit a key for encoding and return a receiver for the result.
+    /// The caller should NOT hold any session lock while waiting on the returned receiver.
+    pub fn key_encode_submit(
+        &self,
+        key_code: u32,
+        modifiers: u16,
+        action: u8,
+        unicode_char: u32,
+        unshifted_char: u32,
+    ) -> Option<flume::Receiver<Vec<u8>>> {
+        self.terminal
+            .key_encode_submit(key_code, modifiers, action, unicode_char, unshifted_char)
+    }
+
     pub fn mode_get(&self, mode_num: u16, kind: u8) -> bool {
         self.terminal.mode_get(mode_num, kind)
     }

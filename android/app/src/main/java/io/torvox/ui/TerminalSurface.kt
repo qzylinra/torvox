@@ -100,9 +100,9 @@ constructor(
         private const val ZOOM_THRESHOLD_LOW = 0.9f
         private const val ZOOM_THRESHOLD_HIGH = 1.1f
         private const val DRAWER_WIDTH_DP = 280
-        private const val RESIZE_SETTLE_MS = 50L
+        private const val RESIZE_SETTLE_MS = 400L
         private const val FLING_VELOCITY_DIVISOR = 100f
-        private const val SUPPRESS_GRACE_PERIOD_NS = 200_000_000L
+        private const val SUPPRESS_GRACE_PERIOD_NS = 50_000_000L
         private const val FLING_MAX_LINES = 50
         private const val SCROLL_END_DELAY_MS = 300L
         private const val FALLBACK_CELL_WIDTH = 8f
@@ -603,7 +603,7 @@ constructor(
                             selection.end.row,
                             selection.end.col,
                             hasSelection = true,
-                            hasClipboard = clipboard?.hasPrimaryClip() ?: false,
+                            hasClipboard = safeHasPrimaryClip(clipboard),
                             selectionStartRow = selection.start.row,
                             selectionEndRow = selection.end.row,
                             selectionStartCol = selection.start.col,
@@ -698,6 +698,15 @@ constructor(
             Log.w(TAG, "Clipboard service not available")
         }
         return clipboardManager
+    }
+
+    private fun safeHasPrimaryClip(clipboard: ClipboardManager? = getClipboardManager()): Boolean {
+        if (clipboard == null) return false
+        return try {
+            clipboard.hasPrimaryClip()
+        } catch (_: Exception) {
+            false
+        }
     }
 
     private val edgeScrollHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -951,7 +960,7 @@ constructor(
                     col = col.toUInt(),
                     mode = 1,
                 )
-            val hasClipboard = getClipboardManager()?.hasPrimaryClip() ?: false
+            val hasClipboard = safeHasPrimaryClip()
 
             val startRow: Int
             val startCol: Int
@@ -1086,18 +1095,20 @@ constructor(
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         viewModel?.runtime?.focusChange(hasFocus)
-        coalescer.reset()
         if (!hasFocus) {
             isPaused = true
+            coalescer.reset()
             currentInputConnection?.let { ic ->
                 ic.finishComposingText()
             }
             suppressUntilNanos = System.nanoTime() + SUPPRESS_GRACE_PERIOD_NS
         }
         if (hasFocus) {
+            // Reset pause state but do NOT call finishComposingText — the IME may be
+            // mid-composition; aborting it here causes the IME to lose sync and
+            // produce duplicate text, extra spaces, or silently drop input.
             isPaused = false
             suppressUntilNanos = System.nanoTime() + SUPPRESS_GRACE_PERIOD_NS
-            currentInputConnection?.finishComposingText()
         }
     }
 
@@ -1128,9 +1139,6 @@ constructor(
             imeAnimationInProgress = false
             return result
         }
-        // Cancel any pending settle runnable
-        imeAnimationEndRunnable?.let { removeCallbacks(it) }
-        imeAnimationEndRunnable = null
         return result
     }
 
@@ -1518,18 +1526,22 @@ constructor(
         val isInModBarZone =
             !searchActive && modifierBarHeightPx > 0 &&
                 event.y >= height - modifierBarHeightPx
-        if (isInModBarZone && viewModel
-                ?.state
-                ?.value
-                ?.selection
-                ?.active == false
-        ) {
-            // Allow the touch to propagate through to the gesture detector,
-            // which will handle IME focus on single tap. The ModifierBar in
-            // the Compose overlay layer will consume touches that hit its
-            // buttons via normal Compose pointer input dispatch.
-            // Do NOT block with return false — that prevents IME activation
-            // when tapping near the bottom of the terminal content area.
+        // When the terminal surface is tall enough (> 2x mod bar height),
+        // touches in the mod bar zone are passed to the parent for Compose
+        // dispatch, allowing modifier bar buttons to work correctly.
+        // When the surface is small (IME open), this is skipped so the
+        // gesture detector can still process taps for IME focus.
+        val passThrough =
+            isInModBarZone &&
+                viewModel
+                    ?.state
+                    ?.value
+                    ?.selection
+                    ?.active == false &&
+                height > modifierBarHeightPx * 2
+
+        if (passThrough && event.action == MotionEvent.ACTION_DOWN) {
+            return super.onTouchEvent(event)
         }
 
         val fromMouse = event.isFromSource(InputDevice.SOURCE_MOUSE)
@@ -1717,12 +1729,12 @@ constructor(
         val terminalViewModel = viewModel ?: return
         terminalViewModel.surfaceWidth = width
         terminalViewModel.surfaceHeight = height
-        terminalViewModel.runtime.bridge()?.setSurfaceSize(width, height)
 
         if (imeAnimationInProgress) {
             applyResizeDuringIme(width, height, terminalViewModel)
             return
         }
+        terminalViewModel.runtime.bridge()?.setSurfaceSize(width, height)
         applyResizeNormal(width, height, terminalViewModel)
     }
 
@@ -1737,23 +1749,30 @@ constructor(
             terminalViewModel.runtime.cellWidth = predictiveCellWidth
             terminalViewModel.runtime.cellHeight = predictiveCellHeight
         }
-        terminalViewModel.runtime.recomputeGrid(width, height)
-        val surface = cachedSurface
-        if (surface != null) {
-            val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
-            if (windowPointer != 0L) {
-                terminalViewModel.runtime.updateNativeWindow(
-                    windowPointer,
-                    width,
-                    height,
-                )
-            }
-        }
         imeAnimationEndRunnable?.let { removeCallbacks(it) }
         imeAnimationEndRunnable =
             Runnable {
                 imeAnimationInProgress = false
                 imeAnimationEndRunnable = null
+                terminalViewModel.runtime.bridge()?.setSurfaceSize(
+                    terminalViewModel.surfaceWidth,
+                    terminalViewModel.surfaceHeight,
+                )
+                terminalViewModel.runtime.recomputeGrid(
+                    terminalViewModel.surfaceWidth,
+                    terminalViewModel.surfaceHeight,
+                )
+                val surface = cachedSurface
+                if (surface != null) {
+                    val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
+                    if (windowPointer != 0L) {
+                        terminalViewModel.runtime.updateNativeWindow(
+                            windowPointer,
+                            terminalViewModel.surfaceWidth,
+                            terminalViewModel.surfaceHeight,
+                        )
+                    }
+                }
                 val runtimeState = terminalViewModel.runtime.state.value
                 if (runtimeState.rows > 0 && runtimeState.cols > 0) {
                     rows = runtimeState.rows

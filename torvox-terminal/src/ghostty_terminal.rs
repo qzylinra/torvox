@@ -259,8 +259,6 @@ pub struct GhosttyTerminal {
     query_tx: Sender<Command>,
     handle: Option<thread::JoinHandle<()>>,
     pty_write_responses: Arc<Mutex<Vec<Vec<u8>>>>,
-    key_encode_rx: Receiver<Vec<u8>>,
-    key_encode_tx_base: Sender<Vec<u8>>,
     snapshot_cache: Mutex<SnapshotCache>,
     snapshot_rebuild_count: Arc<AtomicU64>,
 }
@@ -342,16 +340,12 @@ impl GhosttyTerminal {
             })
             .map_err(|e| format!("failed to spawn terminal thread: {e}"))?;
 
-        let (key_encode_tx_base, key_encode_rx) = bounded(1);
-
         Ok(Self {
             cmd_tx,
             query_tx,
             handle: Some(handle),
             pty_write_responses,
-            key_encode_rx,
             snapshot_rebuild_count,
-            key_encode_tx_base,
             snapshot_cache: Mutex::new(SnapshotCache {
                 cached: GridSnapshot::fallback(DISCONNECTED_ROWS, DISCONNECTED_COLS),
                 pending_rx: None,
@@ -1192,9 +1186,23 @@ impl GhosttyTerminal {
         unicode_char: u32,
         unshifted_char: u32,
     ) -> Option<Vec<u8>> {
-        let tx = self.key_encode_tx_base.clone();
-        if self
-            .cmd_tx
+        self.key_encode_submit(key_code, modifiers, action, unicode_char, unshifted_char)?
+            .recv()
+            .ok()
+    }
+
+    /// Submit a key for encoding and return a receiver for the result.
+    /// The caller should NOT hold any session lock while waiting on the returned receiver.
+    pub fn key_encode_submit(
+        &self,
+        key_code: u32,
+        modifiers: u16,
+        action: u8,
+        unicode_char: u32,
+        unshifted_char: u32,
+    ) -> Option<flume::Receiver<Vec<u8>>> {
+        let (tx, rx) = flume::bounded(1);
+        self.cmd_tx
             .send(Command::KeyEncode {
                 key_code,
                 modifiers,
@@ -1203,11 +1211,8 @@ impl GhosttyTerminal {
                 unshifted_char,
                 tx,
             })
-            .is_err()
-        {
-            return None;
-        }
-        self.key_encode_rx.recv().ok()
+            .ok()?;
+        Some(rx)
     }
 
     pub fn mode_get(&self, mode_num: u16, kind: u8) -> bool {
@@ -10365,6 +10370,63 @@ mod tests_s2_fixes {
             positions.len() >= 3,
             "fuzzy search should return at least 3 distinct match positions, got {}",
             positions.len()
+        );
+    }
+
+    /// key_encode_submit returns a Some(receiver) for a valid key and the
+    /// receiver produces the expected encoded bytes (same semantic as key_encode).
+    #[test]
+    fn key_encode_submit_returns_receiver() {
+        let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        enable_kitty(&mut t);
+        let shift = key::Mods::SHIFT.bits();
+        let rx = t.key_encode_submit(29, shift, 0, 0x41, 0x61);
+        assert!(rx.is_some(), "key_encode_submit must return Some receiver");
+        let result = rx.unwrap().recv().expect("receiver must produce result");
+        assert!(
+            result.contains(&0x41),
+            "output must contain 'A' (utf8): {result:?}"
+        );
+        assert!(
+            !result.contains(&0x61),
+            "output must NOT contain 'a' (unshifted): {result:?}"
+        );
+    }
+
+    /// key_encode_submit + waiting on receiver produces the same result as
+    /// the synchronous key_encode for the same input.
+    #[test]
+    fn key_encode_submit_and_key_encode_produce_same_result() {
+        let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        enable_kitty(&mut t);
+        let shift = key::Mods::SHIFT.bits();
+        let rx = t
+            .key_encode_submit(29, shift, 0, 0x41, 0x61)
+            .expect("key_encode_submit must return receiver");
+        let submit_result = rx.recv().expect("receiver must produce result");
+        let direct_result = t
+            .key_encode(29, shift, 0, 0x41, 0x61)
+            .expect("key_encode must produce result");
+        assert_eq!(
+            submit_result, direct_result,
+            "key_encode_submit and key_encode must produce identical output"
+        );
+    }
+
+    /// Dropping the receiver before the ghostty thread responds does not
+    /// cause a panic — ghostty handles the send error gracefully and the
+    /// terminal remains usable for subsequent requests.
+    #[test]
+    fn key_encode_submit_dropped_receiver_does_not_panic() {
+        let t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        let rx = t.key_encode_submit(29, 0, 0, 0x61, 0x61);
+        drop(rx);
+        let result = t
+            .key_encode(29, 0, 0, 0x62, 0x62)
+            .expect("terminal must remain functional after dropped receiver");
+        assert!(
+            !result.is_empty(),
+            "key_encode after dropped receiver must produce output: {result:?}"
         );
     }
 }

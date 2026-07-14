@@ -38,8 +38,11 @@ class TorvoxApp : Application() {
         BootGuard(logDir).check()
         StrictModeConfig.install()
         LogcatFileWriter.init(this)
-        TorvoxBridge.initLogger()
-        LogcatFileWriter.getLogFilePath()?.let { TorvoxBridge.setLogFilePath(it) }
+        Thread({
+            getSharedPreferences("toolbar_prefs", MODE_PRIVATE)
+            TorvoxBridge.initLogger()
+            LogcatFileWriter.getLogFilePath()?.let { TorvoxBridge.setLogFilePath(it) }
+        }, "JNA-Init").start()
         installAnrWatchDog()
         installMemoryMonitor()
         installThermalMonitor()

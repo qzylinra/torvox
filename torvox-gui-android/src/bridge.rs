@@ -1754,12 +1754,10 @@ impl TorvoxBridge {
         unicode_char: u32,
         unshifted_char: u32,
     ) -> Result<(), TerminalError> {
-        // Encode the key under the session lock (terminal state is mutated),
-        // then enqueue the bytes on the lock-free channel so the actual PTY
-        // write happens on the render thread. This keeps the UI thread off the
-        // session mutex's write path and avoids stalls while the render thread
-        // holds that lock during process_output.
-        let encoded = {
+        // Step 1: Submit key encode under the session lock (fast, non-blocking).
+        // The session lock is released before waiting for the ghostty response,
+        // so the render thread is not blocked from acquiring it.
+        let rx = {
             let session_arc = {
                 let guard = self
                     .session
@@ -1781,7 +1779,9 @@ impl TorvoxBridge {
                 .map_err(|_| TerminalError::SessionUnavailable {
                     detail: "session inner mutex poisoned".to_string(),
                 })?;
-            session.key_encode(
+            // key_encode_submit sends the command on the lock-free ghostty cmd_tx
+            // and returns a receiver. Session lock is dropped when this scope ends.
+            session.key_encode_submit(
                 key_code,
                 modifiers as u16,
                 action,
@@ -1789,6 +1789,10 @@ impl TorvoxBridge {
                 unshifted_char,
             )
         };
+        // Step 2: Wait for ghostty response WITHOUT holding the session lock.
+        // The render thread can now acquire the session lock for process_output + snapshot.
+        let encoded = rx.and_then(|r| r.recv().ok());
+        // Step 3: Enqueue the encoded bytes on the lock-free channel.
         if let Some(encoded) = encoded
             && !encoded.is_empty()
         {

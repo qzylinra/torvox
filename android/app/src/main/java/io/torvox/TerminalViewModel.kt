@@ -363,7 +363,7 @@ constructor(
     }
 
     private fun loadFonts() {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val bridge = runtime.bridge()
                 val rustFontFamilies = bridge?.listFontFamilies() ?: emptyList()
