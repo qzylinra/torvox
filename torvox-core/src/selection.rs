@@ -313,7 +313,7 @@ impl Selection {
                 break;
             };
             let trailing = cell_at(self.end.row, self.end.col);
-            let is_trailing_punct = matches!(trailing, Some('.') | Some(',') | Some(';'));
+            let is_trailing_punct = matches!(trailing, Some('.' | ',' | ';'));
             if !is_trailing_punct {
                 break;
             }

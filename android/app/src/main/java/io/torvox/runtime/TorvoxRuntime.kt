@@ -259,6 +259,8 @@ class TorvoxRuntime
             private const val BEL_TONE_TYPE = ToneGenerator.TONE_PROP_ACK
             private const val BEL_TONE_DURATION_MILLIS = 200
             private const val RENDER_HANG_TIMEOUT_NANOS = 30_000_000_000L // 30 seconds
+            private const val RENDER_INITIAL_RETRY_MAX = 5
+            private const val RENDER_INITIAL_RETRY_DELAY_MS = 150L
             private val nextSessionId = AtomicLong(1L)
         }
 
@@ -728,10 +730,22 @@ class TorvoxRuntime
                     // then latches on the 500ms RENDER_LATCH_TIMEOUT_MS cadence, so
                     // the event-driven model is preserved).
                     try {
-                        val initialRender = target.bridge?.render() ?: 0
+                        // The GPU surface may not be fully configured immediately after
+                        // spawnTerminal/setNativeWindow (a transient race on shared
+                        // ANativeWindow). Retry the first synchronous render a few times
+                        // with a short delay so we present real content instead of
+                        // starting a render thread on a not-yet-ready surface (which would
+                        // block and trip the hang watchdog -> SelfExit).
+                        var initialRender = target.bridge?.render() ?: 0
+                        var attempts = 1
+                        while (initialRender < 0 && attempts < RENDER_INITIAL_RETRY_MAX) {
+                            Thread.sleep(RENDER_INITIAL_RETRY_DELAY_MS)
+                            initialRender = target.bridge?.render() ?: 0
+                            attempts++
+                        }
                         LogUtil.d(
                             "TorvoxRuntime",
-                            "switchSession: initial render for session $id result=$initialRender",
+                            "switchSession: initial render for session $id result=$initialRender (attempts=$attempts)",
                         )
                         target.forceRenderRequested = true
                         target.notifyRender()
@@ -1230,14 +1244,13 @@ class TorvoxRuntime
                                 }
                                 entry.lastRenderDone = System.nanoTime()
                             }
+                        } catch (exception: InterruptedException) {
+                            // The render thread was interrupted during shutdown
+                            // (session switch / runtime stop). This is an expected
+                            // signal, not a render failure — exit the loop cleanly.
+                            Thread.currentThread().interrupt()
+                            break
                         } catch (exception: Exception) {
-                            if (exception is InterruptedException) {
-                                // The render thread was interrupted during shutdown
-                                // (session switch / runtime stop). This is an expected
-                                // signal, not a render failure — exit the loop cleanly.
-                                Thread.currentThread().interrupt()
-                                break
-                            }
                             consecutiveErrors++
                             if (consecutiveErrors == 1) {
                                 LogUtil.e("TorvoxRuntime", "session ${entry.id} first render exception", exception)
