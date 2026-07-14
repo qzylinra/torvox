@@ -1,7 +1,6 @@
 package io.torvox.ui
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -75,7 +74,7 @@ class SelectionMenuComposeTest {
     }
 
     companion object {
-        private val SCREENSHOT_DIR =
+        private const val SCREENSHOT_DIR =
             "/home/runner/work/kudzu/kudzu/repositories/torvox/ultragoal/fix-selection-and-bugs/artifacts/screenshots"
     }
 

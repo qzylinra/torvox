@@ -382,6 +382,12 @@ impl AndroidSurface {
         #[cfg(target_os = "android")]
         if let Some(gpu) = &mut self.gpu {
             if pointer_changed || !gpu.has_surface() {
+                // When the ANativeWindow has changed (foreground/background transition),
+                // the globally cached surface belongs to the old window and must be
+                // discarded before creating a new one on the new window.
+                if pointer_changed {
+                    GpuContext::clear_global_surface();
+                }
                 gpu.configure_android_surface(window_ptr, width.max(1), height.max(1))
                     .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
             } else {

@@ -6,7 +6,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.lang.reflect.Modifier
 
 /**
  * Stage E (blank-flash) behavior test.

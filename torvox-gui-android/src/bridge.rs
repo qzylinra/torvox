@@ -4567,4 +4567,39 @@ mod tests {
             assert!(result.is_null(), "zero-length path should return null");
         }
     }
+
+    #[test]
+    fn set_render_paused_does_not_panic_without_surface() {
+        let bridge = TorvoxBridge::new(TerminalConfig::default());
+        // Should not panic when called without a surface being initialized
+        bridge.set_render_paused(true);
+        bridge.set_render_paused(false);
+    }
+
+    #[test]
+    fn set_render_paused_idempotent() {
+        let bridge = TorvoxBridge::new(TerminalConfig::default());
+        bridge.set_render_paused(true);
+        bridge.set_render_paused(true);
+        bridge.set_render_paused(false);
+        bridge.set_render_paused(false);
+    }
+
+    #[test]
+    fn set_render_paused_ffi_does_not_crash() {
+        let handle = create_test_bridge_handle();
+        unsafe {
+            super::torvox_bridge_set_render_paused(handle, 1);
+            super::torvox_bridge_set_render_paused(handle, 0);
+            super::torvox_bridge_set_render_paused(handle, 1);
+        }
+    }
+
+    #[test]
+    fn set_render_paused_ffi_null_handle_does_not_crash() {
+        unsafe {
+            super::torvox_bridge_set_render_paused(0, 1);
+            super::torvox_bridge_set_render_paused(-1, 0);
+        }
+    }
 }

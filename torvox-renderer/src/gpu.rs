@@ -10,7 +10,7 @@
 //! - [NFR-022](crate) — Render: crash recovery
 
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use thiserror::Error;
 use torvox_core::selection::SelectionMode;
@@ -30,7 +30,7 @@ const QUAD_VERTEX_COUNT: u32 = 6;
 const DEFAULT_BG_ALPHA: f32 = 0.8;
 
 #[cfg(target_os = "android")]
-const SURFACE_RELEASE_POLL_MS: u64 = 50;
+const SURFACE_RELEASE_POLL_MS: u64 = 500;
 
 fn log_gpu_error(error: &wgpu::Error) {
     log::error!("GPU_UNCAPTURED_ERROR: {error:#?}");
@@ -93,6 +93,13 @@ struct GlobalGpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
+
+/// Global surface cache: prevents destroying+recreating a wgpu Surface on the
+/// same ANativeWindow across session switches. SwiftShader/emulator does not
+/// handle surface recreation on a shared window reliably — the cached surface
+/// is kept alive and reconfigured instead.
+static GLOBAL_SURFACE: OnceLock<Mutex<Option<(wgpu::Surface, wgpu::SurfaceConfiguration)>>> =
+    OnceLock::new();
 
 fn global_gpu() -> &'static GlobalGpu {
     static INSTANCE: OnceLock<GlobalGpu> = OnceLock::new();
@@ -1592,7 +1599,18 @@ impl GpuContext {
     }
 
     pub fn release_gpu_surface(&mut self) {
-        self.surface = None;
+        // Cache the surface globally instead of dropping — prevents the
+        // SwiftShader/emulator hang when a new wgpu Surface is created on
+        // the same ANativeWindow after this one is destroyed.
+        if self.surface.is_some() {
+            let surface = self.surface.take().unwrap();
+            let config = self.surface_config.take();
+            if let Some(config) = config {
+                if let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock() {
+                    *guard = Some((surface, config));
+                }
+            }
+        }
         self.surface_config = None;
         if let Err(error) = self.device.poll(wgpu::PollType::Wait {
             submission_index: None,
@@ -1600,10 +1618,17 @@ impl GpuContext {
         }) {
             log::warn!("release_gpu_surface: device poll error: {error}");
         }
-        // Give the Vulkan driver (especially SwiftShader) time to finish
-        // asynchronous surface destruction before the next create_surface call.
         #[cfg(target_os = "android")]
         std::thread::sleep(std::time::Duration::from_millis(SURFACE_RELEASE_POLL_MS));
+    }
+
+    /// Clear the global surface cache (e.g., when the ANativeWindow pointer changes
+    /// on foreground/background transitions, the cached surface is invalid for the
+    /// new window and must be discarded).
+    pub fn clear_global_surface() {
+        if let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock() {
+            *guard = None;
+        }
     }
 
     pub fn has_surface(&self) -> bool {
@@ -1617,15 +1642,42 @@ impl GpuContext {
     /// Create a wgpu Surface from an Android ANativeWindow and configure
     /// it with the existing device+queue.  Does NOT request a new adapter
     /// or create a new device — call after `initialize_pipeline_and_bind_group`.
+    ///
+    /// On session switches the old surface is cached in [`GLOBAL_SURFACE`]
+    /// (see [`Self::release_gpu_surface`]) instead of being dropped — we
+    /// try to reuse it here, avoiding the SwiftShader/emulator hang that
+    /// occurs when a new wgpu Surface is created on the same ANativeWindow
+    /// after destroying the previous one.
     pub fn configure_android_surface(
         &mut self,
         window_ptr: *mut std::ffi::c_void,
         width: u32,
         height: u32,
     ) -> Result<(), GpuError> {
-        // Drop old surface FIRST to release ANativeWindow before creating a new one.
-        // Poll the device to ensure the old surface's Vulkan resources are fully released
-        // before creating a new surface (prevents SIGABRT on SwiftShader/emulator).
+        // 1. Reuse a globally-cached surface when available (avoids recreating
+        //    on the same ANativeWindow — the source of the multi-session hang).
+        if self.surface.is_none() {
+            if let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock() {
+                if let Some((cached_surface, cached_config)) = guard.take() {
+                    let new_config = wgpu::SurfaceConfiguration {
+                        width: ((width as f32 * RENDER_SCALE) as u32).max(1),
+                        height: ((height as f32 * RENDER_SCALE) as u32).max(1),
+                        ..cached_config
+                    };
+                    cached_surface.configure(&self.device, &new_config);
+                    self.surface = Some(cached_surface);
+                    self.surface_config = Some(new_config);
+                    log::info!(
+                        "configure_android_surface: {}x{} (reused cached surface)",
+                        new_config.width,
+                        new_config.height,
+                    );
+                    return Ok(());
+                }
+            }
+        }
+
+        // 2. No cached surface — drop any old surface first, then create new.
         self.surface = None;
         self.surface_config = None;
         if let Err(error) = self.device.poll(wgpu::PollType::Wait {
@@ -1973,13 +2025,12 @@ impl GpuContext {
         }
 
         // Background image render pass (two-pass separable blur when active)
-        if self.blur_h_pipeline.is_some()
-            && self.blur_v_pipeline.is_some()
-            && self.bg_blur_radius >= 0.5
-            && self.bg_bind_group.is_some()
+        if let (Some(bg_bind_group), Some(blur_h), Some(blur_v)) = (
+            self.bg_bind_group.as_ref(),
+            self.blur_h_pipeline.as_ref(),
+            self.blur_v_pipeline.as_ref(),
+        ) && self.bg_blur_radius >= 0.5
         {
-            let blur_h = self.blur_h_pipeline.as_ref().unwrap();
-            let blur_v = self.blur_v_pipeline.as_ref().unwrap();
             // Pass 1: Horizontal blur → main framebuffer
             {
                 let mut h_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -1997,7 +2048,7 @@ impl GpuContext {
                     ..Default::default()
                 });
                 h_pass.set_pipeline(blur_h);
-                h_pass.set_bind_group(0, self.bg_bind_group.as_ref().unwrap(), &[]);
+                h_pass.set_bind_group(0, bg_bind_group, &[]);
                 h_pass.set_viewport(0.0, 0.0, cfg_width as f32, cfg_height as f32, 0.0, 1.0);
                 h_pass.set_scissor_rect(0, 0, cfg_width, cfg_height);
                 h_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
@@ -2020,7 +2071,7 @@ impl GpuContext {
                     ..Default::default()
                 });
                 v_pass.set_pipeline(blur_v);
-                v_pass.set_bind_group(0, self.bg_bind_group.as_ref().unwrap(), &[]);
+                v_pass.set_bind_group(0, bg_bind_group, &[]);
                 v_pass.set_viewport(0.0, 0.0, cfg_width as f32, cfg_height as f32, 0.0, 1.0);
                 v_pass.set_scissor_rect(0, 0, cfg_width, cfg_height);
                 v_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
@@ -5374,6 +5425,48 @@ mod tests {
             ctx.render_frame(&[], &[]).is_ok(),
             "expected ok when paused regardless of surface"
         );
+    }
+
+    #[test]
+    fn render_paused_toggle_resumes_rendering() {
+        let mut ctx = GpuContext::new_with_no_surface();
+        // Pause then unpause
+        ctx.set_render_paused(true);
+        assert!(
+            ctx.render_frame(&[], &[]).is_ok(),
+            "paused skips surface check"
+        );
+        ctx.set_render_paused(false);
+        assert!(
+            ctx.render_frame(&[], &[]).is_err(),
+            "unpaused fails without surface (correct behavior)"
+        );
+    }
+
+    #[test]
+    fn render_paused_remains_paused_after_multiple_frames() {
+        let mut ctx = GpuContext::new_with_no_surface();
+        ctx.set_render_paused(true);
+        for _ in 0..10 {
+            assert!(
+                ctx.render_frame(&[], &[]).is_ok(),
+                "paused render must stay ok across multiple frames"
+            );
+        }
+    }
+
+    #[test]
+    fn new_with_no_surface_starts_unpaused() {
+        let ctx = GpuContext::new_with_no_surface();
+        assert!(!ctx.render_paused, "new context must start unpaused");
+    }
+
+    #[test]
+    fn set_render_paused_idempotent() {
+        let mut ctx = GpuContext::new_with_no_surface();
+        ctx.set_render_paused(true);
+        ctx.set_render_paused(true);
+        assert!(ctx.render_frame(&[], &[]).is_ok(), "double-pause still ok");
     }
 
     #[test]

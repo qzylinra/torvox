@@ -33,6 +33,7 @@ import android.widget.PopupWindow
 import io.torvox.R
 import io.torvox.SelectionMode
 import io.torvox.TerminalViewModel
+import io.torvox.runtime.InputBatchBuffer
 import io.torvox.runtime.LogUtil
 
 private val modifierBarHeightPx: Int by lazy {
@@ -1198,7 +1199,8 @@ class TerminalSurface
 
         fun consumePendingInput(): ByteArray? = viewModel?.consumePendingInput()
 
-        private val coalescer = InputCoalescer({ data -> viewModel?.writeToPty(data) })
+        private val inputBatchBuffer = InputBatchBuffer({ data -> viewModel?.writeToPty(data) })
+        private val coalescer = InputCoalescer({ data -> inputBatchBuffer.write(data) })
         private var currentInputConnection: InputConnection? = null
 
         override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
@@ -1698,46 +1700,58 @@ class TerminalSurface
             terminalViewModel.runtime.bridge()?.setSurfaceSize(width, height)
 
             if (imeAnimationInProgress) {
-                // During IME animation: set grid from predictive cache
-                // (zero JNA), then defer full recompute until settle.
-                if (predictiveRows > 0 && predictiveCols > 0) {
-                    rows = predictiveRows
-                    cols = predictiveCols
-                    terminalViewModel.runtime.cellWidth = predictiveCellWidth
-                    terminalViewModel.runtime.cellHeight = predictiveCellHeight
-                }
-                imeAnimationEndRunnable?.let { removeCallbacks(it) }
-                imeAnimationEndRunnable =
-                    Runnable {
-                        imeAnimationInProgress = false
-                        imeAnimationEndRunnable = null
-                        terminalViewModel.runtime.recomputeGrid(
+                applyResizeDuringIme(width, height, terminalViewModel)
+                return
+            }
+            applyResizeNormal(width, height, terminalViewModel)
+        }
+
+        private fun applyResizeDuringIme(
+            width: Int,
+            height: Int,
+            terminalViewModel: TerminalViewModel,
+        ) {
+            if (predictiveRows > 0 && predictiveCols > 0) {
+                rows = predictiveRows
+                cols = predictiveCols
+                terminalViewModel.runtime.cellWidth = predictiveCellWidth
+                terminalViewModel.runtime.cellHeight = predictiveCellHeight
+            }
+            imeAnimationEndRunnable?.let { removeCallbacks(it) }
+            imeAnimationEndRunnable =
+                Runnable {
+                    imeAnimationInProgress = false
+                    imeAnimationEndRunnable = null
+                    terminalViewModel.runtime.recomputeGrid(
+                        terminalViewModel.surfaceWidth,
+                        terminalViewModel.surfaceHeight,
+                    )
+                    val surface = cachedSurface ?: return@Runnable
+                    val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
+                    if (windowPointer != 0L) {
+                        terminalViewModel.runtime.updateNativeWindow(
+                            windowPointer,
                             terminalViewModel.surfaceWidth,
                             terminalViewModel.surfaceHeight,
                         )
-                        val surface = cachedSurface ?: return@Runnable
-                        val windowPointer = terminalViewModel.runtime.getNativeWindowPtr(surface)
-                        if (windowPointer != 0L) {
-                            terminalViewModel.runtime.updateNativeWindow(
-                                windowPointer,
-                                terminalViewModel.surfaceWidth,
-                                terminalViewModel.surfaceHeight,
-                            )
-                        }
-                        val runtimeState = terminalViewModel.runtime.state.value
-                        if (runtimeState.rows > 0 && runtimeState.cols > 0) {
-                            rows = runtimeState.rows
-                            cols = runtimeState.cols
-                        }
-                        lastConfiguredWidth = terminalViewModel.surfaceWidth
-                        lastConfiguredHeight = terminalViewModel.surfaceHeight
-                    }.also { postDelayed(it, RESIZE_SETTLE_MS) }
-                lastConfiguredWidth = width
-                lastConfiguredHeight = height
-                return
-            }
+                    }
+                    val runtimeState = terminalViewModel.runtime.state.value
+                    if (runtimeState.rows > 0 && runtimeState.cols > 0) {
+                        rows = runtimeState.rows
+                        cols = runtimeState.cols
+                    }
+                    lastConfiguredWidth = terminalViewModel.surfaceWidth
+                    lastConfiguredHeight = terminalViewModel.surfaceHeight
+                }.also { postDelayed(it, RESIZE_SETTLE_MS) }
+            lastConfiguredWidth = width
+            lastConfiguredHeight = height
+        }
 
-            // Normal (non-animation) resize — full path including grid recompute
+        private fun applyResizeNormal(
+            width: Int,
+            height: Int,
+            terminalViewModel: TerminalViewModel,
+        ) {
             terminalViewModel.runtime.recomputeGrid(width, height)
             val surface =
                 cachedSurface ?: (
