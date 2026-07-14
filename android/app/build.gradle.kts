@@ -184,7 +184,7 @@ check(File(workingDirForCargo, "Cargo.toml").exists()) {
     "Cargo.toml not found at $workingDirForCargo"
 }
 
-tasks.named<Test>("testDebugUnitTest") {
+tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach {
     filter {
         // These tests require the native .so library (JNA via TorvoxBridge.ensureLib()),
         // which is unavailable in the JVM unit test environment. They are covered
