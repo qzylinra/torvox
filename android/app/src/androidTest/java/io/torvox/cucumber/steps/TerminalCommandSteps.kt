@@ -69,6 +69,7 @@ constructor(
             composeRuleHolder.composeRule.getBridge()
                 ?: throw AssertionError("Bridge is null")
         composeRuleHolder.composeRule.waitUntil(timeoutMillis = 15000) {
+            bridge.render()
             val dataText = bridge.getTerminalText()
             dataText != null && (dataText.contains(expected1) || dataText.contains(expected2))
         }
