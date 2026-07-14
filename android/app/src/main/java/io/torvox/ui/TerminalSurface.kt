@@ -1095,15 +1095,21 @@ class TerminalSurface
                     predictiveCellWidth = cellWidth
                     predictiveCellHeight = cellHeight
                 }
+                imeAnimationInProgress = true
+            } else if (imeAnimationInProgress) {
+                // IME was visible and is now hidden — animation will follow.
+                // Don't set imeAnimationInProgress=false yet; let the settle
+                // runnable handle it after the final size change.
             } else {
-                // IME is hidden — grid will expand back to full height
+                // No IME involved — nothing to predict.
                 predictiveRows = 0
                 predictiveCols = 0
+                imeAnimationInProgress = false
+                return result
             }
             // Cancel any pending settle runnable
             imeAnimationEndRunnable?.let { removeCallbacks(it) }
             imeAnimationEndRunnable = null
-            imeAnimationInProgress = true
             return result
         }
 
@@ -1692,10 +1698,14 @@ class TerminalSurface
             terminalViewModel.runtime.bridge()?.setSurfaceSize(width, height)
 
             if (imeAnimationInProgress) {
-                // During IME animation, skip the full grid recompute and
-                // defer it until the animation settles. The GPU buffer is
-                // already updated via setSurfaceSize above, preventing
-                // text stretch/compression between frames.
+                // During IME animation: set grid from predictive cache
+                // (zero JNA), then defer full recompute until settle.
+                if (predictiveRows > 0 && predictiveCols > 0) {
+                    rows = predictiveRows
+                    cols = predictiveCols
+                    terminalViewModel.runtime.cellWidth = predictiveCellWidth
+                    terminalViewModel.runtime.cellHeight = predictiveCellHeight
+                }
                 imeAnimationEndRunnable?.let { removeCallbacks(it) }
                 imeAnimationEndRunnable =
                     Runnable {

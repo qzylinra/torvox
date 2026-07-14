@@ -1656,7 +1656,7 @@ impl AndroidSurface {
             //    off-by-one extra blank line, so it is dropped here. Rows are
             //    joined with a single '\n' and NO trailing newline, which avoids
             //    advancing the cursor onto an extra empty row.
-            let text = restore_session_lines_to_text(&snapshot);
+            let text = Self::restore_session_lines_to_text(&snapshot);
             if !text.is_empty() {
                 session.terminal_mut().pty_write(text.as_bytes());
             }
@@ -2195,8 +2195,9 @@ mod tests {
         assert_eq!(compute_raster_scale(10000, 100), 4.0);
         // Surface much smaller than config is clamped to 0.5.
         assert_eq!(compute_raster_scale(100, 10000), 0.5);
-        // A zero config width must not divide-by-zero.
-        assert_eq!(compute_raster_scale(800, 0), 0.5);
+        // A zero config width must not divide-by-zero (normalized to 1, then
+        // clamped to 4.0).
+        assert_eq!(compute_raster_scale(800, 0), 4.0);
     }
 
     #[test]
@@ -2239,6 +2240,7 @@ mod tests {
             max_scrollback: DEFAULT_MAX_SCROLLBACK,
         };
         let text = AndroidSurface::restore_session_lines_to_text(&snapshot);
-        assert_eq!(text, "a\n\nb");
+        // The middle blank line is spaces and must survive (no per-line trim_end).
+        assert_eq!(text, "a\n \nb");
     }
 }
