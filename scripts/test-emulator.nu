@@ -10,6 +10,7 @@ def main [] {
     ^./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notPackage=io.torvox.benchmark
     try { ^adb shell am force-stop com.termux }
     try { ^adb uninstall com.termux } catch { null }
+    ^./gradlew :app:installRelease
     ^./gradlew benchmark:lockClocks
     ^./gradlew :benchmark:connectedReleaseAndroidTest
     ^./gradlew :baselineprofile:generateBaselineProfile
