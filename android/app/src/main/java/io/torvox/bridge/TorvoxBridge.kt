@@ -1283,7 +1283,13 @@ class TorvoxBridge(
 
     fun scrollbackLength(): UInt = ensureLib().torvox_bridge_scrollback_len(handle).toUInt()
 
-    fun writeToPty(data: ByteArray): Boolean = ensureLib().torvox_bridge_write_to_pty(handle, data, data.size) == 0
+    fun writeToPty(data: ByteArray): Boolean {
+        val result = ensureLib().torvox_bridge_write_to_pty(handle, data, data.size)
+        if (result == 0) {
+            ensureLib().torvox_bridge_render(handle)
+        }
+        return result == 0
+    }
 
     fun processKeyEvent(
         keyCode: Int,
