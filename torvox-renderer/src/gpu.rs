@@ -223,6 +223,14 @@ pub struct GpuUniforms {
     pub default_bg: [f32; 4],
 }
 
+/// Requirement 4 (background image, Fix F): `image_active` is the uniform flag
+/// that tells the cell shader to make default-background cells transparent. It
+/// is 1.0 exactly when a background-image bind group is present, else 0.0.
+/// Pure + testable so the branch logic can be unit-tested without a GPU.
+pub fn image_active_value(bg_bind_group_present: bool) -> f32 {
+    if bg_bind_group_present { 1.0 } else { 0.0 }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct BgUniforms {
@@ -785,11 +793,7 @@ impl GpuContext {
             projection: proj,
             atlas_size: [self.kgp_atlas_width as f32, self.kgp_atlas_height as f32],
             raster_scale: self.raster_scale,
-            image_active: if self.bg_bind_group.is_some() {
-                1.0
-            } else {
-                0.0
-            },
+            image_active: image_active_value(self.bg_bind_group.is_some()),
             default_bg: [
                 self.bg_color.r as f32,
                 self.bg_color.g as f32,
@@ -1342,11 +1346,7 @@ impl GpuContext {
             projection: proj,
             atlas_size: [atlas_width, atlas_height],
             raster_scale: self.raster_scale,
-            image_active: if self.bg_bind_group.is_some() {
-                1.0
-            } else {
-                0.0
-            },
+            image_active: image_active_value(self.bg_bind_group.is_some()),
             default_bg: [
                 self.bg_color.r as f32,
                 self.bg_color.g as f32,
@@ -1418,11 +1418,7 @@ impl GpuContext {
             projection: proj,
             atlas_size: [atlas_width as f32, atlas_height as f32],
             raster_scale: self.raster_scale,
-            image_active: if self.bg_bind_group.is_some() {
-                1.0
-            } else {
-                0.0
-            },
+            image_active: image_active_value(self.bg_bind_group.is_some()),
             default_bg: [
                 self.bg_color.r as f32,
                 self.bg_color.g as f32,
@@ -1799,11 +1795,7 @@ impl GpuContext {
                 projection: proj,
                 atlas_size: [aw as f32, ah as f32],
                 raster_scale: self.raster_scale,
-                image_active: if self.bg_bind_group.is_some() {
-                    1.0
-                } else {
-                    0.0
-                },
+                image_active: image_active_value(self.bg_bind_group.is_some()),
                 default_bg: [
                     self.bg_color.r as f32,
                     self.bg_color.g as f32,
@@ -5201,6 +5193,14 @@ mod tests {
             [0.5, 0.3, 0.8, 0.7],
             "custom cursor color should be reflected with block alpha multiplier"
         );
+    }
+
+    #[test]
+    fn image_active_value_flag_matches_bg_bind_group() {
+        // Fix F branch logic: a background image being active is exactly the
+        // uniform flag that makes default-background cells transparent.
+        assert_eq!(image_active_value(true), 1.0);
+        assert_eq!(image_active_value(false), 0.0);
     }
 
     include!("screenshot_tests.rs");

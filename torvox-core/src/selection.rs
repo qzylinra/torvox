@@ -1443,4 +1443,50 @@ mod tests {
         assert!(!char_is_cjk('1'));
         assert!(!char_is_cjk(' '));
     }
+
+    #[test]
+    fn expand_word_pure_ascii_word() {
+        // Long-press inside a plain ASCII identifier selects the whole word.
+        let grid = make_grid_with_text(&["hello world"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 2 },
+            SelectionAnchor { row: 0, col: 2 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 0);
+        assert_eq!(expanded.end.col, 4);
+        assert_eq!(expanded.text(&grid), "hello");
+    }
+
+    #[test]
+    fn expand_word_long_press_on_whitespace_bridges_adjacent_words() {
+        // A long-press on the space between words expands left/right across the
+        // blank to include both adjacent word runs (the seed is non-word so the
+        // run bridges the whitespace rather than stopping at it).
+        let grid = make_grid_with_text(&["foo bar"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 3 },
+            SelectionAnchor { row: 0, col: 3 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 0);
+        assert_eq!(expanded.end.col, 6);
+        assert_eq!(expanded.text(&grid), "foo bar");
+    }
+
+    #[test]
+    fn expand_word_url_trailing_punctuation_stripped() {
+        // Trailing sentence punctuation after a URL must NOT be included in the
+        // selection (the URL extends to the period, then the period is stripped).
+        let grid = make_grid_with_text(&["see https://example.com. now"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 6 },
+            SelectionAnchor { row: 0, col: 6 },
+            SelectionMode::Word,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.text(&grid), "https://example.com");
+    }
 }

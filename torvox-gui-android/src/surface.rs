@@ -2206,9 +2206,18 @@ mod tests {
         // whitespace-only row that simulates the off-by-one blank line.
         let row_a = cell_to_line(
             &[
-                CellSnapshot { codepoint: 0x61, ..Default::default() }, // a
-                CellSnapshot { codepoint: 0x62, ..Default::default() }, // b
-                CellSnapshot { codepoint: 0x00, ..Default::default() }, // NUL
+                CellSnapshot {
+                    codepoint: 0x61,
+                    ..Default::default()
+                }, // a
+                CellSnapshot {
+                    codepoint: 0x62,
+                    ..Default::default()
+                }, // b
+                CellSnapshot {
+                    codepoint: 0x00,
+                    ..Default::default()
+                }, // NUL
             ],
             3,
         );
@@ -2229,9 +2238,21 @@ mod tests {
     #[test]
     fn restore_session_preserves_middle_blank_lines() {
         // A blank line in the MIDDLE must survive (no per-line trim_end).
-        let row_a = cell_to_line(&[CellSnapshot { codepoint: 0x61, ..Default::default() }], 1);
+        let row_a = cell_to_line(
+            &[CellSnapshot {
+                codepoint: 0x61,
+                ..Default::default()
+            }],
+            1,
+        );
         let middle_blank = cell_to_line(&[], 1);
-        let row_b = cell_to_line(&[CellSnapshot { codepoint: 0x62, ..Default::default() }], 1);
+        let row_b = cell_to_line(
+            &[CellSnapshot {
+                codepoint: 0x62,
+                ..Default::default()
+            }],
+            1,
+        );
         let snapshot = SessionSnapshot {
             visible_lines: vec![row_a, middle_blank, row_b],
             scrollback_lines: vec![],
