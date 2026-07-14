@@ -1239,6 +1239,7 @@ impl TorvoxBridge {
     ///   selection origin for the renderer).
     ///
     /// Returns the resulting ordered `(start_row, start_col, end_row, end_col)`.
+    #[allow(clippy::too_many_arguments)]
     pub fn set_selection_endpoint(
         &self,
         handle_side: u8,
@@ -1835,12 +1836,11 @@ impl TorvoxBridge {
     }
 
     pub fn set_render_paused(&self, paused: bool) {
-        if let Ok(mut guard) = self.surface.lock() {
-            if let Some(surface) = guard.as_mut() {
-                if let Some(gpu) = surface.gpu_mut() {
-                    gpu.set_render_paused(paused);
-                }
-            }
+        if let Ok(mut guard) = self.surface.lock()
+            && let Some(surface) = guard.as_mut()
+            && let Some(gpu) = surface.gpu_mut()
+        {
+            gpu.set_render_paused(paused);
         }
     }
 
@@ -3612,6 +3612,12 @@ fn to_argb(color: &[f32; 4]) -> u32 {
 }
 
 #[unsafe(no_mangle)]
+/// # Safety
+///
+/// - `handle` must be a valid bridge handle previously returned by
+///   `torvox_bridge_create` and not yet destroyed.
+/// - `buf` must point to a valid, writable memory region of at least `buf_len`
+///   bytes. The caller is responsible for the buffer's lifetime.
 pub unsafe extern "C" fn torvox_bridge_get_snapshot(
     handle: i64,
     scroll_offset: u32,
