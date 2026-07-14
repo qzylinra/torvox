@@ -63,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -109,11 +110,11 @@ fun SettingsScreen(
     BackHandler(enabled = true) { onBack() }
     Surface(
         modifier =
-        Modifier.fillMaxSize().testTag("SettingsScreen").clickable(
-            indication = null,
-            interactionSource = remember { MutableInteractionSource() },
-            onClick = {},
-        ),
+            Modifier.fillMaxSize().testTag("SettingsScreen").clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = {},
+            ),
         color = backgroundColor,
     ) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -239,11 +240,13 @@ private fun AppearanceSectionContent(
     )
     if (fontInfo.isNotEmpty() || defaultFontName.isNotEmpty()) {
         Spacer(modifier = Modifier.height(8.dp))
+        val densityDpi = LocalDensity.current.density
         FontInfoSection(
             fontInfo =
-            fontInfo.ifEmpty {
-                "Active: $defaultFontName\n(CJK fallback info available after session starts)\nFont size: ${fontSize.toInt()}"
-            },
+                fontInfo.ifEmpty {
+                    val pixelSize = (fontSize * densityDpi).toInt()
+                    "Active: $defaultFontName\n(CJK fallback info available after session starts)\nFont size: ${fontSize.toInt()}SP (~${pixelSize}px)"
+                },
             textColor = textColor,
             secondaryText = secondaryText,
         )
@@ -539,11 +542,11 @@ private fun SettingsCard(
 ) {
     Column(
         modifier =
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(if (isSmallScreen) 8.dp else 12.dp))
-            .background(cardBackground)
-            .padding(if (isSmallScreen) 12.dp else 16.dp),
+            modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(if (isSmallScreen) 8.dp else 12.dp))
+                .background(cardBackground)
+                .padding(if (isSmallScreen) 12.dp else 16.dp),
     ) {
         content()
     }
@@ -635,14 +638,14 @@ private fun SystemFontSelector(
     Box {
         Row(
             modifier =
-            Modifier
-                .testTag("FontFamilySelector")
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(cardBackground)
-                .clickable {
-                    showFontPicker = true
-                }.padding(horizontal = 12.dp, vertical = 12.dp),
+                Modifier
+                    .testTag("FontFamilySelector")
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(cardBackground)
+                    .clickable {
+                        showFontPicker = true
+                    }.padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -715,13 +718,13 @@ private fun FontPickerDialog(
                 item {
                     Row(
                         modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable {
-                                onPickFontFile?.invoke()
-                                onDismiss()
-                            }.padding(horizontal = 12.dp, vertical = 10.dp),
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    onPickFontFile?.invoke()
+                                    onDismiss()
+                                }.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(text = stringResource(R.string.pick_font_file), color = accentColor, fontWeight = FontWeight.Bold)
@@ -730,17 +733,17 @@ private fun FontPickerDialog(
                 items(fonts) { font ->
                     Row(
                         modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable { onFamilySelected(font) }
-                            .background(
-                                if (selectedFamily == font) {
-                                    accentColor.copy(alpha = 0.2f)
-                                } else {
-                                    Color.Transparent
-                                },
-                            ).padding(horizontal = 12.dp, vertical = 10.dp),
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onFamilySelected(font) }
+                                .background(
+                                    if (selectedFamily == font) {
+                                        accentColor.copy(alpha = 0.2f)
+                                    } else {
+                                        Color.Transparent
+                                    },
+                                ).padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -781,13 +784,13 @@ internal fun AppThemeSelector(
                     val isSelected = selectedMode == mode
                     Box(
                         modifier =
-                        Modifier
-                            .testTag("AppTheme_$mode")
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSelected) accentColor else cardBackground)
-                            .clickable { onModeSelected(mode) }
-                            .padding(vertical = 8.dp),
+                            Modifier
+                                .testTag("AppTheme_$mode")
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isSelected) accentColor else cardBackground)
+                                .clickable { onModeSelected(mode) }
+                                .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(text = label, color = if (isSelected) Color.White else textColor, style = MaterialTheme.typography.bodySmall)
@@ -803,13 +806,13 @@ internal fun AppThemeSelector(
                     val isSelected = selectedMode == mode
                     Box(
                         modifier =
-                        Modifier
-                            .testTag("AppTheme_$mode")
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) accentColor else cardBackground)
-                            .clickable { onModeSelected(mode) }
-                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                            Modifier
+                                .testTag("AppTheme_$mode")
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) accentColor else cardBackground)
+                                .clickable { onModeSelected(mode) }
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(text = label, color = if (isSelected) Color.White else textColor, style = MaterialTheme.typography.bodyMedium)
@@ -846,12 +849,12 @@ internal fun TerminalThemeModeSelector(
             },
             modifier = Modifier.testTag("TerminalThemeFollowSystemSwitch"),
             colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = accentColor,
-                uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBackground,
-            ),
+                SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = accentColor,
+                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                    uncheckedTrackColor = cardBackground,
+                ),
         )
     }
 }
@@ -881,13 +884,13 @@ private fun ShellInput(
             placeholder = { Text(stringResource(R.string.shell_placeholder), color = textColor.copy(alpha = 0.5f)) },
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = textColor),
             colors =
-            OutlinedTextFieldDefaults.colors(
-                focusedTextColor = textColor,
-                unfocusedTextColor = textColor,
-                cursorColor = accentColor,
-                focusedBorderColor = accentColor,
-                unfocusedBorderColor = textColor.copy(alpha = 0.5f),
-            ),
+                OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = textColor,
+                    unfocusedTextColor = textColor,
+                    cursorColor = accentColor,
+                    focusedBorderColor = accentColor,
+                    unfocusedBorderColor = textColor.copy(alpha = 0.5f),
+                ),
         )
     }
 }
@@ -921,13 +924,13 @@ private fun ScrollbackSlider(
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text =
-                value.toInt().let {
-                    if (it >= 1000) {
-                        "${it / 1000}K"
-                    } else {
-                        "$it"
-                    }
-                },
+                    value.toInt().let {
+                        if (it >= 1000) {
+                            "${it / 1000}K"
+                        } else {
+                            "$it"
+                        }
+                    },
                 style = valueStyle,
                 color = secondaryText,
             )
@@ -965,10 +968,10 @@ internal fun ThemeSelector(
                 ThemePreview(
                     theme = theme,
                     isSelected =
-                    theme.name == selectedTheme ||
-                        io.torvox.ui.theme.BuiltInThemes
-                            .byName(selectedTheme)
-                            .name == theme.name,
+                        theme.name == selectedTheme ||
+                            io.torvox.ui.theme.BuiltInThemes
+                                .byName(selectedTheme)
+                                .name == theme.name,
                     onClick = { onThemeSelected(theme.name) },
                     isSmallScreen = isSmallScreen,
                     textColor = textColor,
@@ -994,18 +997,18 @@ private fun ThemePreview(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier =
-        Modifier
-            .testTag("theme_preview_${theme.name}")
-            .width(previewWidth)
-            .clickable(onClick = onClick),
+            Modifier
+                .testTag("theme_preview_${theme.name}")
+                .width(previewWidth)
+                .clickable(onClick = onClick),
     ) {
         Box(
             modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(if (isSelected) theme.background else theme.background.copy(alpha = 0.7f))
-                .padding(padding),
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isSelected) theme.background else theme.background.copy(alpha = 0.7f))
+                    .padding(padding),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 theme.ansi.take(8).forEach { color ->
@@ -1051,12 +1054,12 @@ private fun BootstrapSection(
         singleLine = true,
         modifier = Modifier.fillMaxWidth().testTag("BootstrapUrlInput"),
         colors =
-        OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = accentColor,
-            unfocusedBorderColor = textColor.copy(alpha = 0.5f),
-            cursorColor = accentColor,
-            focusedLabelColor = accentColor,
-        ),
+            OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = accentColor,
+                unfocusedBorderColor = textColor.copy(alpha = 0.5f),
+                cursorColor = accentColor,
+                focusedLabelColor = accentColor,
+            ),
     )
     Spacer(modifier = Modifier.height(4.dp))
     Text(
@@ -1093,9 +1096,9 @@ private fun BootstrapSection(
             preset = preset,
             colors = PresetColors(accentColor, textColor, secondaryText),
             modifier =
-            Modifier.testTag(
-                if (index == 0) "BootstrapPreset_TermuxDefault" else "BootstrapPreset_CustomEmpty",
-            ),
+                Modifier.testTag(
+                    if (index == 0) "BootstrapPreset_TermuxDefault" else "BootstrapPreset_CustomEmpty",
+                ),
             onAction = {
                 url = preset.second
                 onUrlChanged(preset.second)
@@ -1134,12 +1137,12 @@ private fun BootstrapInstallButton(
         }
         Text(
             text =
-            if (bootstrapRunning) {
-                progress?.stepDescription()
-                    ?: stringResource(R.string.bootstrap_installing)
-            } else {
-                stringResource(R.string.bootstrap_install)
-            },
+                if (bootstrapRunning) {
+                    progress?.stepDescription()
+                        ?: stringResource(R.string.bootstrap_installing)
+                } else {
+                    stringResource(R.string.bootstrap_install)
+                },
             color = textColor,
         )
     }
@@ -1294,11 +1297,11 @@ private fun SessionRestoreToggle(
             )
             Text(
                 text =
-                if (enabled) {
-                    stringResource(R.string.session_restore_desc)
-                } else {
-                    stringResource(R.string.session_restore_off_desc)
-                },
+                    if (enabled) {
+                        stringResource(R.string.session_restore_desc)
+                    } else {
+                        stringResource(R.string.session_restore_off_desc)
+                    },
                 style = MaterialTheme.typography.bodySmall,
                 color = textColor.copy(alpha = 0.6f),
             )
@@ -1314,12 +1317,12 @@ private fun SessionRestoreToggle(
                 checked = enabled,
                 onCheckedChange = onToggle,
                 colors =
-                SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = accentColor,
-                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                    uncheckedTrackColor = cardBackground,
-                ),
+                    SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = accentColor,
+                        uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                        uncheckedTrackColor = cardBackground,
+                    ),
             )
         }
     }
@@ -1382,20 +1385,20 @@ private fun KeyboardModeSelectorItem(
 ) {
     Row(
         modifier =
-        Modifier
-            .fillMaxWidth()
-            .clickable { onModeSelected(mode) }
-            .padding(vertical = 4.dp),
+            Modifier
+                .fillMaxWidth()
+                .clickable { onModeSelected(mode) }
+                .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RadioButton(
             selected = selectedMode == mode,
             onClick = { onModeSelected(mode) },
             colors =
-            RadioButtonDefaults.colors(
-                selectedColor = accentColor,
-                unselectedColor = textColor.copy(alpha = 0.6f),
-            ),
+                RadioButtonDefaults.colors(
+                    selectedColor = accentColor,
+                    unselectedColor = textColor.copy(alpha = 0.6f),
+                ),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -1442,12 +1445,12 @@ private fun UsbSerialToggle(
             checked = enabled,
             onCheckedChange = onToggle,
             colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = accentColor,
-                uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBackground,
-            ),
+                SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = accentColor,
+                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                    uncheckedTrackColor = cardBackground,
+                ),
         )
     }
 }
@@ -1481,12 +1484,12 @@ private fun McpServerToggle(
             checked = enabled,
             onCheckedChange = onToggle,
             colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = accentColor,
-                uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBackground,
-            ),
+                SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = accentColor,
+                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                    uncheckedTrackColor = cardBackground,
+                ),
         )
     }
 }
@@ -1520,12 +1523,12 @@ private fun VolumeKeyMapToggle(
             checked = enabled,
             onCheckedChange = onToggle,
             colors =
-            SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = accentColor,
-                uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                uncheckedTrackColor = cardBackground,
-            ),
+                SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = accentColor,
+                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                    uncheckedTrackColor = cardBackground,
+                ),
         )
     }
 }
@@ -1702,12 +1705,12 @@ private fun CursorBlinkToggle(
                 checked = enabled,
                 onCheckedChange = onToggle,
                 colors =
-                SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = accentColor,
-                    uncheckedThumbColor = textColor.copy(alpha = 0.6f),
-                    uncheckedTrackColor = cardBackground,
-                ),
+                    SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = accentColor,
+                        uncheckedThumbColor = textColor.copy(alpha = 0.6f),
+                        uncheckedTrackColor = cardBackground,
+                    ),
             )
         }
     }
@@ -1788,13 +1791,13 @@ private fun CursorStyleSelector(
                 val isSelected = selectedStyle == key
                 Box(
                     modifier =
-                    Modifier
-                        .testTag("CursorStyle_$key")
-                        .weight(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) accentColor else cardBackground)
-                        .clickable { onStyleSelected(key) }
-                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                        Modifier
+                            .testTag("CursorStyle_$key")
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) accentColor else cardBackground)
+                            .clickable { onStyleSelected(key) }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(

@@ -759,7 +759,9 @@ impl TorvoxBridge {
             self.store_cell_metrics(surface);
             // Cache scrollback length so the main thread can read it lock-free
             // via `scrollback_length()` without contending on the session lock.
-            if let Some(session_arc) = self.session.lock().ok().and_then(|g| g.as_ref().cloned())
+            // Only query when there's new output to avoid polluting logs on idle.
+            if session_out.0
+                && let Some(session_arc) = self.session.lock().ok().and_then(|g| g.as_ref().cloned())
                 && let Ok(session) = session_arc.lock()
             {
                 self.scrollback_length.store(
