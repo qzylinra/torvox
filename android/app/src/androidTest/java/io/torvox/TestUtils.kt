@@ -47,8 +47,12 @@ fun AndroidComposeTestRule<*, *>.waitForSession(timeoutMs: Long = 60_000) {
 fun AndroidComposeTestRule<*, *>.getBridge(): TorvoxBridge? {
     var bridge: TorvoxBridge? = null
     val rule = activityRule as ActivityScenarioRule<*>
-    rule.scenario.onActivity { activity: android.app.Activity ->
-        bridge = (activity as MainActivity).torvoxRuntime.bridge()
+    val deadlineMs = System.currentTimeMillis() + 15_000
+    while (bridge == null && System.currentTimeMillis() < deadlineMs) {
+        Thread.sleep(100)
+        rule.scenario.onActivity { activity: android.app.Activity ->
+            bridge = (activity as MainActivity).torvoxRuntime.bridge()
+        }
     }
     return bridge
 }
@@ -223,17 +227,18 @@ fun matchConfidence(
     return matching.toDouble() / len.toDouble()
 }
 
-fun rowProfile(frame: PixelFrame): IntArray = IntArray(frame.height) { row ->
-    var count = 0
-    for (col in 0 until frame.width) {
-        val p = frame.pixels[row * frame.width + col]
-        val r = (p shr 16) and 0xFF
-        val g = (p shr 8) and 0xFF
-        val b = p and 0xFF
-        if (r > 10 || g > 10 || b > 10) count++
+fun rowProfile(frame: PixelFrame): IntArray =
+    IntArray(frame.height) { row ->
+        var count = 0
+        for (col in 0 until frame.width) {
+            val p = frame.pixels[row * frame.width + col]
+            val r = (p shr 16) and 0xFF
+            val g = (p shr 8) and 0xFF
+            val b = p and 0xFF
+            if (r > 10 || g > 10 || b > 10) count++
+        }
+        count
     }
-    count
-}
 
 fun lastGridRowsDensity(
     profile: IntArray,
@@ -370,7 +375,8 @@ fun findTerminalSurface(activity: Activity): View {
 private fun u32FromLe(
     bytes: ByteArray,
     offset: Int,
-): Int = (bytes[offset].toInt() and 0xFF) or
-    ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
-    ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
-    ((bytes[offset + 3].toInt() and 0xFF) shl 24)
+): Int =
+    (bytes[offset].toInt() and 0xFF) or
+        ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+        ((bytes[offset + 2].toInt() and 0xFF) shl 16) or
+        ((bytes[offset + 3].toInt() and 0xFF) shl 24)

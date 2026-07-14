@@ -20,12 +20,11 @@ const MIN_ATLAS_BUFFER_SIZE: u64 = 64;
 const DESIRED_FRAME_LATENCY: u32 = 2;
 const DESIRED_FRAME_LATENCY_ANDROID: u32 = 1;
 const GPU_POLL_TIMEOUT: Duration = Duration::from_secs(2);
-/// Internal render resolution scale. The swapchain is configured at
-/// `size * RENDER_SCALE` and the compositor upscales the buffer to the
-/// view bounds. This drastically cuts the per-frame GPU present/blit cost
-/// on software Vulkan (SwiftShader), where a full-resolution present is the
-/// dominant cost. 0.75 keeps text crisp while cutting present work ~2.4x.
-pub const RENDER_SCALE: f32 = 0.75;
+/// Internal render resolution scale. 1.0 = native resolution for crisp text
+/// on real devices. Sub-1.0 values cause compositor upscale artifacts (blurry
+/// aliased text) especially visible on Mali-G57. The performance gain from
+/// 0.75x is negligible compared to the quality loss.
+pub const RENDER_SCALE: f32 = 1.0;
 const QUAD_VERTEX_COUNT: u32 = 6;
 const DEFAULT_BG_ALPHA: f32 = 0.8;
 
@@ -547,7 +546,7 @@ impl GpuContext {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &bg_shader,
-                entry_point: Some("fs_main"),
+                entry_point: Some("fs_direct"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: Some(wgpu::BlendState::REPLACE),

@@ -373,101 +373,106 @@ class TerminalSurface
                         outRect: Rect,
                     ) {
                         try {
-                            if (width <= 0 || height <= 0) {
-                                outRect.set(0, 0, width.coerceAtLeast(0), height.coerceAtLeast(0))
-                                return
-                            }
-
-                            val selection = viewModel?.state?.value?.selection
-                            if (selection?.start == null || selection?.end == null) {
-                                outRect.set(0, 0, width, height)
-                                return
-                            }
-
-                            val rawLoRow = minOf(selection.start.row, selection.end.row) - scrollOffset
-                            val rawHiRow = maxOf(selection.start.row, selection.end.row) - scrollOffset
-
-                            val loRow: Int
-                            val hiRow: Int
-
-                            if (rawHiRow < 0 || rawLoRow >= rows) {
-                                loRow = rows / 2
-                                hiRow = rows / 2
-                            } else {
-                                loRow = rawLoRow.coerceIn(0, rows - 1)
-                                hiRow = rawHiRow.coerceIn(loRow, rows - 1)
-                            }
-
-                            val loCol = if (selection.start.row <= selection.end.row) selection.start.col else selection.end.col
-                            val hiCol = if (selection.start.row <= selection.end.row) selection.end.col else selection.start.col
-
-                            val imeInsetBottom =
-                                rootWindowInsets?.let {
-                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                                        it
-                                            .getInsets(
-                                                android.view.WindowInsets.Type
-                                                    .ime(),
-                                            ).bottom
-                                    } else {
-                                        @Suppress("DEPRECATION")
-                                        val visibleFrame = Rect()
-                                        @Suppress("DEPRECATION")
-                                        getWindowVisibleDisplayFrame(visibleFrame)
-                                        height - visibleFrame.bottom
-                                    }
-                                } ?: 0
-                            val availableHeight = (height - imeInsetBottom).coerceAtLeast(1)
-                            val safeHeight = availableHeight
-                            if (safeHeight <= 0) {
-                                outRect.set(0, 0, width, height)
-                                return
-                            }
-                            val safeWidth = width.coerceAtLeast(1)
-
-                            val topOfSelection = Math.round(loRow * cellHeight)
-                            val bottomOfSelection = Math.round((hiRow + 1) * cellHeight)
-                            val left = Math.round(loCol * cellWidth)
-                            val right = Math.round((hiCol + 1) * cellWidth)
-
-                            // Position the anchor rect OUTSIDE the selection so the floating
-                            // ActionMode toolbar does not obscure the selected text.
-                            // If selection is in the lower half, anchor above it.
-                            // If in the upper half, anchor below it.
-                            val midPoint = safeHeight / 2
-                            if (topOfSelection > midPoint) {
-                                // Selection in lower half → anchor rect above the selection
-                                val anchorTop =
-                                    Math
-                                        .round(topOfSelection - cellHeight)
-                                        .coerceIn(0, safeHeight)
-                                val anchorBottom = topOfSelection.coerceIn(0, safeHeight)
-                                outRect.set(
-                                    left.coerceIn(0, safeWidth),
-                                    anchorTop,
-                                    right.coerceIn(0, safeWidth),
-                                    anchorBottom,
-                                )
-                            } else {
-                                // Selection in upper half → anchor rect below the selection
-                                val anchorTop = bottomOfSelection.coerceIn(0, safeHeight)
-                                val anchorBottom =
-                                    Math
-                                        .round(bottomOfSelection + cellHeight)
-                                        .coerceIn(0, safeHeight)
-                                outRect.set(
-                                    left.coerceIn(0, safeWidth),
-                                    anchorTop,
-                                    right.coerceIn(0, safeWidth),
-                                    anchorBottom,
-                                )
-                            }
+                            computeContentRect(outRect)
                         } catch (_: IllegalArgumentException) {
                             outRect.set(0, 0, 0, 0)
                         }
                     }
                 }
+
             actionMode = startActionMode(callback, ActionMode.TYPE_FLOATING)
+        }
+
+        private fun computeContentRect(outRect: Rect) {
+            if (width <= 0 || height <= 0) {
+                outRect.set(0, 0, width.coerceAtLeast(0), height.coerceAtLeast(0))
+                return
+            }
+
+            val selection = viewModel?.state?.value?.selection
+            if (selection?.start == null || selection?.end == null) {
+                outRect.set(0, 0, width, height)
+                return
+            }
+
+            val rawLoRow = minOf(selection.start.row, selection.end.row) - scrollOffset
+            val rawHiRow = maxOf(selection.start.row, selection.end.row) - scrollOffset
+
+            val loRow: Int
+            val hiRow: Int
+
+            if (rawHiRow < 0 || rawLoRow >= rows) {
+                loRow = rows / 2
+                hiRow = rows / 2
+            } else {
+                loRow = rawLoRow.coerceIn(0, rows - 1)
+                hiRow = rawHiRow.coerceIn(loRow, rows - 1)
+            }
+
+            val loCol = if (selection.start.row <= selection.end.row) selection.start.col else selection.end.col
+            val hiCol = if (selection.start.row <= selection.end.row) selection.end.col else selection.start.col
+
+            val imeInsetBottom =
+                rootWindowInsets?.let {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                        it
+                            .getInsets(
+                                android.view.WindowInsets.Type
+                                    .ime(),
+                            ).bottom
+                    } else {
+                        @Suppress("DEPRECATION")
+                        val visibleFrame = Rect()
+                        @Suppress("DEPRECATION")
+                        getWindowVisibleDisplayFrame(visibleFrame)
+                        height - visibleFrame.bottom
+                    }
+                } ?: 0
+            val availableHeight = (height - imeInsetBottom).coerceAtLeast(1)
+            val safeHeight = availableHeight
+            if (safeHeight <= 0) {
+                outRect.set(0, 0, width, height)
+                return
+            }
+            val safeWidth = width.coerceAtLeast(1)
+
+            val topOfSelection = Math.round(loRow * cellHeight)
+            val bottomOfSelection = Math.round((hiRow + 1) * cellHeight)
+            val left = Math.round(loCol * cellWidth)
+            val right = Math.round((hiCol + 1) * cellWidth)
+
+            // Position the anchor rect OUTSIDE the selection so the floating
+            // ActionMode toolbar does not obscure the selected text.
+            // If selection is in the lower half, anchor above it.
+            // If in the upper half, anchor below it.
+            val midPoint = safeHeight / 2
+            if (topOfSelection > midPoint) {
+                // Selection in lower half → anchor rect above the selection
+                val anchorTop =
+                    Math
+                        .round(topOfSelection - cellHeight)
+                        .coerceIn(0, safeHeight)
+                val anchorBottom = topOfSelection.coerceIn(0, safeHeight)
+                outRect.set(
+                    left.coerceIn(0, safeWidth),
+                    anchorTop,
+                    right.coerceIn(0, safeWidth),
+                    anchorBottom,
+                )
+            } else {
+                // Selection in upper half → anchor rect below the selection
+                val anchorTop = bottomOfSelection.coerceIn(0, safeHeight)
+                val anchorBottom =
+                    Math
+                        .round(bottomOfSelection + cellHeight)
+                        .coerceIn(0, safeHeight)
+                outRect.set(
+                    left.coerceIn(0, safeWidth),
+                    anchorTop,
+                    right.coerceIn(0, safeWidth),
+                    anchorBottom,
+                )
+            }
         }
 
         fun hideContextMenu() {

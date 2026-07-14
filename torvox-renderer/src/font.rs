@@ -883,7 +883,24 @@ impl FontPipeline {
         if !cjk.is_empty() {
             parts.push(format!("CJK fallback: {}", cjk.join(", ")));
         } else {
-            parts.push("CJK fallback: none".to_string());
+            let primary_is_cjk = self.font_id.and_then(|id| db.face(id)).is_some_and(|face| {
+                face.families.iter().any(|(name, _)| {
+                    let l = name.to_lowercase();
+                    l.contains("cjk")
+                        || l.contains("chinese")
+                        || l.contains("japanese")
+                        || l.contains("korean")
+                        || l.contains(" sc")
+                        || l.contains(" tc")
+                        || l.contains(" jp")
+                        || l.contains(" kr")
+                })
+            });
+            if primary_is_cjk {
+                parts.push("CJK fallback: skipped (primary font supports CJK)".to_string());
+            } else {
+                parts.push("CJK fallback: none".to_string());
+            }
         }
         let (cw, ch) = self.cell_metrics();
         parts.push(format!("Cell: {:.1}x{:.1}px", cw, ch));

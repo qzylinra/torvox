@@ -682,14 +682,24 @@ private fun SystemFontSelector(
             ?.substringAfter("CJK fallback:")
             ?.trim()
             ?: ""
-    if (cjkFallback.isNotEmpty() && cjkFallback != "none") {
+    val activeFontCjk =
+        fontInfo.lines().any { line ->
+            line.startsWith("Active:") && (
+                line.contains("CJK", ignoreCase = true) ||
+                    line.contains("SC", ignoreCase = true) ||
+                    line.contains("TC", ignoreCase = true) ||
+                    line.contains("JP", ignoreCase = true) ||
+                    line.contains("KR", ignoreCase = true)
+            )
+        }
+    if (cjkFallback.isNotEmpty() && cjkFallback != "none" && cjkFallback != "skipped") {
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = "CJK: $cjkFallback",
             style = MaterialTheme.typography.bodySmall,
             color = textColor.copy(alpha = 0.6f),
         )
-    } else if (cjkFallback == "none" || fontInfo.isNotEmpty()) {
+    } else if (cjkFallback == "none" && !activeFontCjk) {
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.cjk_fallback_missing_warning),
@@ -1621,13 +1631,30 @@ private fun FontInfoSection(
                 }
 
                 line.startsWith("CJK fallback:") -> {
-                    val hasCjk = line.substringAfter("CJK fallback:").trim().isNotEmpty()
+                    val cjkValue = line.substringAfter("CJK fallback:").trim()
+                    val primaryIsCjk =
+                        lines.any { l ->
+                            l.startsWith("Active:") && (
+                                l.contains("CJK", ignoreCase = true) ||
+                                    l.contains("SC", ignoreCase = true) ||
+                                    l.contains("TC", ignoreCase = true) ||
+                                    l.contains("JP", ignoreCase = true) ||
+                                    l.contains("KR", ignoreCase = true)
+                            )
+                        }
+                    val hasCjk = cjkValue.isNotEmpty() && cjkValue != "none" && cjkValue != "skipped"
+                    val displayColor =
+                        when {
+                            hasCjk -> secondaryText
+                            primaryIsCjk -> secondaryText
+                            else -> WARNING_ORANGE
+                        }
                     Text(
                         text = line,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (hasCjk) secondaryText else WARNING_ORANGE,
+                        color = displayColor,
                     )
-                    if (!hasCjk) {
+                    if (!hasCjk && !primaryIsCjk) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = stringResource(R.string.cjk_fallback_missing_warning),
