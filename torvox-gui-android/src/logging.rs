@@ -6,6 +6,9 @@
 //! logs go only to logcat.
 //!
 //! Replaces the previous `android_logger::init_once()` call in `bridge.rs`.
+//!
+//! # Requirements
+//! - NFR-025 — Unified logging infrastructure (logcat + rotating file)
 
 #![cfg(target_os = "android")]
 
