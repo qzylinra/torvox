@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.concurrent.thread
 
 object LogcatFileWriter {
     private var fileWriter: OutputStreamWriter? = null
@@ -31,8 +32,8 @@ object LogcatFileWriter {
                                 Log.w("LogcatFileWriter", "Failed to create logs directory: $dir")
                             }
                         }
-                    if (!logsDirectory.isDirectory) {
-                        Log.e("LogcatFileWriter", "Failed to create logs directory at ${logsDirectory.absolutePath}")
+                    if (!logsDirectory.isDirectory || !logsDirectory.canWrite()) {
+                        Log.e("LogcatFileWriter", "Cannot write to logs directory at ${logsDirectory.absolutePath}")
                         return
                     }
                     val file = File(logsDirectory, "debug.log")
@@ -46,6 +47,12 @@ object LogcatFileWriter {
         } finally {
             StrictMode.setThreadPolicy(prev)
         }
+        thread(name = "LogcatFlush", isDaemon = true) {
+            while (!Thread.currentThread().isInterrupted()) {
+                Thread.sleep(5000L)
+                timedFlush()
+            }
+        }
     }
 
     fun write(
@@ -57,7 +64,6 @@ object LogcatFileWriter {
                 val timestamp = dateFormat.format(Date())
                 fileWriter?.apply {
                     write("$timestamp $tag: $message\n")
-                    flush()
                 }
             } catch (exception: Exception) {
                 Log.e("LogcatFileWriter", "Failed to write log entry", exception)
@@ -65,7 +71,7 @@ object LogcatFileWriter {
         }
     }
 
-    fun flush() {
+    private fun timedFlush() {
         synchronized(lock) {
             try {
                 fileWriter?.flush()
@@ -73,6 +79,10 @@ object LogcatFileWriter {
                 Log.e("LogcatFileWriter", "Failed to flush log file", exception)
             }
         }
+    }
+
+    fun flush() {
+        timedFlush()
     }
 
     fun close() {

@@ -1,11 +1,9 @@
 package io.torvox.monitor
 
 import android.os.StrictMode
-import io.torvox.BuildConfig
 
 object StrictModeConfig {
     fun install() {
-        if (!BuildConfig.DEBUG) return
         StrictMode.setThreadPolicy(
             StrictMode.ThreadPolicy
                 .Builder()

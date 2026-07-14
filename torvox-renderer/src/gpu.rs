@@ -1666,7 +1666,7 @@ impl GpuContext {
                     };
                     cached_surface.configure(&self.device, &new_config);
                     self.surface = Some(cached_surface);
-                    self.surface_config = Some(new_config);
+                    self.surface_config = Some(new_config.clone());
                     log::info!(
                         "configure_android_surface: {}x{} (reused cached surface)",
                         new_config.width,

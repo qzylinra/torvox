@@ -1350,6 +1350,10 @@ impl AndroidSurface {
         self.session.is_some()
     }
 
+    pub fn gpu_mut(&mut self) -> Option<&mut GpuContext> {
+        self.gpu.as_mut()
+    }
+
     pub fn release_gpu_surface(&mut self) {
         if let Some(gpu) = &mut self.gpu {
             gpu.release_gpu_surface();
