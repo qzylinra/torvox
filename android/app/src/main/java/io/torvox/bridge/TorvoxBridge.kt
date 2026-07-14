@@ -225,17 +225,6 @@ data class TerminalConfig(
         private const val DEFAULT_SCROLLBACK = 50_000u
         private const val DEFAULT_FONT_SIZE_TENTHS = 140u
 
-        /** Initialise the Rust logging (idempotent). */
-        fun initLogger() {
-            ensureLib().torvox_init_logger()
-        }
-
-        /** Set the Rust log file path (called from TorvoxApp.onCreate). */
-        fun setLogFilePath(path: String) {
-            val bytes = path.toByteArray(Charsets.UTF_8)
-            ensureLib().torvox_set_log_file_path(bytes, bytes.size)
-        }
-
         @Suppress("FunctionNaming")
         fun wireDecode(reader: WireReader): TerminalConfig = TerminalConfig(
             shell =
@@ -1528,6 +1517,19 @@ class TorvoxBridge(
     }
 
     fun isClosed(): Boolean = closed
+
+    companion object {
+        /** Initialise the Rust logging (idempotent). */
+        fun initLogger() {
+            ensureLib().torvox_init_logger()
+        }
+
+        /** Set the Rust log file path (called from TorvoxApp.onCreate). */
+        fun setLogFilePath(path: String) {
+            val bytes = path.toByteArray(Charsets.UTF_8)
+            ensureLib().torvox_set_log_file_path(bytes, bytes.size)
+        }
+    }
 }
 
 /**
