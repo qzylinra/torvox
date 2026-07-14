@@ -803,7 +803,7 @@ impl AndroidSurface {
             .map(|cfg| cfg.width.max(1))
             .unwrap_or(1);
         let raster_scale = compute_raster_scale(surf_w, cfg_w);
-        if self.last_raster_scale != raster_scale {
+        if (self.last_raster_scale - raster_scale).abs() > f32::EPSILON {
             self.last_raster_scale = raster_scale;
             log::debug!(
                 "RASTER_SCALE: scale={} (surface_w={} config_w={})",

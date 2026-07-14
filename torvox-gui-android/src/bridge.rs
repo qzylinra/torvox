@@ -3624,49 +3624,55 @@ pub unsafe extern "C" fn torvox_bridge_get_snapshot(
     buf: *mut u8,
     buf_len: u32,
 ) -> i32 {
-    let bridge = match (handle as *mut TorvoxBridge).as_mut() {
-        Some(b) => b,
-        None => return -1,
-    };
-    let session_guard = match bridge.session.lock() {
-        Ok(g) => g,
-        Err(_) => return -1,
-    };
-    let session = match session_guard.as_ref() {
-        Some(s) => s,
-        None => return 0,
-    };
-    let session_inner = match session.lock() {
-        Ok(g) => g,
-        Err(_) => return -1,
-    };
-    let snapshot = match session_inner
-        .terminal()
-        .try_take_snapshot_with_scroll(scroll_offset)
-    {
-        Some(s) => s,
-        None => return 0,
-    };
-    let rows = snapshot.rows;
-    let cols = snapshot.cols;
-    let total = (rows * cols) as usize;
-    let needed = 20 + total * 12;
-    if (buf_len as usize) < needed {
-        return -1;
+    // SAFETY: This entire function body operates on raw pointers provided
+    // by the caller under the safety contract documented above. The unsafe
+    // block is required despite being inside an unsafe fn because Rust 2024
+    // requires explicit unsafe blocks for every unsafe operation.
+    unsafe {
+        let bridge = match (handle as *mut TorvoxBridge).as_mut() {
+            Some(b) => b,
+            None => return -1,
+        };
+        let session_guard = match bridge.session.lock() {
+            Ok(g) => g,
+            Err(_) => return -1,
+        };
+        let session = match session_guard.as_ref() {
+            Some(s) => s,
+            None => return 0,
+        };
+        let session_inner = match session.lock() {
+            Ok(g) => g,
+            Err(_) => return -1,
+        };
+        let snapshot = match session_inner
+            .terminal()
+            .try_take_snapshot_with_scroll(scroll_offset)
+        {
+            Some(s) => s,
+            None => return 0,
+        };
+        let rows = snapshot.rows;
+        let cols = snapshot.cols;
+        let total = (rows * cols) as usize;
+        let needed = 20 + total * 12;
+        if (buf_len as usize) < needed {
+            return -1;
+        }
+        *(buf as *mut u32) = rows;
+        *(buf.add(4) as *mut u32) = cols;
+        *(buf.add(8) as *mut u32) = snapshot.cursor_row;
+        *(buf.add(12) as *mut u32) = snapshot.cursor_col;
+        *(buf.add(16) as *mut u8) = if snapshot.cursor_visible { 1 } else { 0 };
+        for i in 0..total {
+            let cell = &snapshot.cells[i];
+            let off = buf.add(20 + i * 12);
+            *(off as *mut u32) = cell.codepoint;
+            *(off.add(4) as *mut u32) = to_argb(&cell.foreground);
+            *(off.add(8) as *mut u32) = to_argb(&cell.background);
+        }
+        total as i32
     }
-    *(buf as *mut u32) = rows;
-    *(buf.add(4) as *mut u32) = cols;
-    *(buf.add(8) as *mut u32) = snapshot.cursor_row;
-    *(buf.add(12) as *mut u32) = snapshot.cursor_col;
-    *(buf.add(16) as *mut u8) = if snapshot.cursor_visible { 1 } else { 0 };
-    for i in 0..total {
-        let cell = &snapshot.cells[i];
-        let off = buf.add(20 + i * 12);
-        *(off as *mut u32) = cell.codepoint;
-        *(off.add(4) as *mut u32) = to_argb(&cell.foreground);
-        *(off.add(8) as *mut u32) = to_argb(&cell.background);
-    }
-    total as i32
 }
 
 /// # Safety
