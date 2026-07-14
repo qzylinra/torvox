@@ -54,15 +54,14 @@ class SelectionMenuComposeTest {
             activityProvider = { it.activity },
         )
 
-    private fun activeSelection(): SelectionState =
-        SelectionState(
-            active = true,
-            dragging = false,
-            start = SelectionAnchor(row = 2, col = 3),
-            end = SelectionAnchor(row = 2, col = 8),
-            mode = SelectionMode.Char,
-            selectedText = "select",
-        )
+    private fun activeSelection(): SelectionState = SelectionState(
+        active = true,
+        dragging = false,
+        start = SelectionAnchor(row = 2, col = 3),
+        end = SelectionAnchor(row = 2, col = 8),
+        mode = SelectionMode.Char,
+        selectedText = "select",
+    )
 
     /**
      * The overlay wraps its content in [androidx.compose.animation.AnimatedVisibility].
