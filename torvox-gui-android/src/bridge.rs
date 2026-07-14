@@ -3618,6 +3618,10 @@ fn to_argb(color: &[f32; 4]) -> u32 {
 ///   `torvox_bridge_create` and not yet destroyed.
 /// - `buf` must point to a valid, writable memory region of at least `buf_len`
 ///   bytes. The caller is responsible for the buffer's lifetime.
+///
+/// The buffer must be suitably aligned for `u32` writes (4-byte aligned). JNA
+/// always provides aligned buffers.
+#[allow(clippy::cast_ptr_alignment)]
 pub unsafe extern "C" fn torvox_bridge_get_snapshot(
     handle: i64,
     scroll_offset: u32,
