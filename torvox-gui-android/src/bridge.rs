@@ -761,7 +761,8 @@ impl TorvoxBridge {
             // via `scrollback_length()` without contending on the session lock.
             // Only query when there's new output to avoid polluting logs on idle.
             if session_out.0
-                && let Some(session_arc) = self.session.lock().ok().and_then(|g| g.as_ref().cloned())
+                && let Some(session_arc) =
+                    self.session.lock().ok().and_then(|g| g.as_ref().cloned())
                 && let Ok(session) = session_arc.lock()
             {
                 self.scrollback_length.store(
