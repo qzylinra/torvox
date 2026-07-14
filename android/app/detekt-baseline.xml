@@ -7,6 +7,7 @@
     <ID>CognitiveComplexMethod:SettingsScreen.kt$@Composable internal fun AppThemeSelector( selectedMode: String, onModeSelected: (String) -> Unit, textColor: Color, cardBackground: Color, accentColor: Color, )</ID>
     <ID>CognitiveComplexMethod:TerminalScreen.kt$@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class) @Suppress("DEPRECATION", "CyclomaticComplexMethod", "LongMethod") @Composable fun TerminalScreen( modifier: Modifier = Modifier, viewModel: TerminalViewModel = hiltViewModel(), onSettings: () -> Unit = {}, isOverlayVisible: Boolean = false, )</ID>
     <ID>CognitiveComplexMethod:TerminalSurface.kt$TerminalSurface$@Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth") // Acceptable — dispatches ~15 distinct gesture/intent types override fun onTouchEvent(event: MotionEvent): Boolean</ID>
+    <ID>CognitiveComplexMethod:TerminalSurface.kt$TerminalSurface$internal fun showContextMenu( row: Int, col: Int, hasSelection: Boolean, hasClipboard: Boolean, selectionStartRow: Int = row, selectionEndRow: Int = row, selectionStartCol: Int = col, selectionEndCol: Int = col, )</ID>
     <ID>CognitiveComplexMethod:TerminalSurface.kt$TerminalSurface$override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection</ID>
     <ID>CognitiveComplexMethod:TerminalViewModel.kt$TerminalViewModel$@Suppress("CyclomaticComplexMethod") private fun extractSelectedText( selection: SelectionState, scrollOffset: Int = 0, ): String</ID>
     <ID>CognitiveComplexMethod:TorvoxRuntime.kt$TorvoxRuntime$private fun startRenderThread(entry: SessionEntry)</ID>
@@ -49,7 +50,6 @@
     <ID>UnusedImports:ModifierBarScreenshotTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
     <ID>UnusedImports:ScreenshotGoldenTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
     <ID>UnusedImports:TerminalScreenScreenshotTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
-    <ID>UnusedPrivateProperty:TorvoxRuntime.kt$TorvoxRuntime.Companion$private const val GRACE_RESET_THRESHOLD_CYCLES = 4</ID>
     <ID>UseDataClass:SettingsDataStoreProvider.kt$SettingsDataStoreProvider</ID>
   </CurrentIssues>
 </SmellBaseline>

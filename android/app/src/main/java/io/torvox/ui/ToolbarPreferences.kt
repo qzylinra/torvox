@@ -108,21 +108,20 @@ class ToolbarPreferences(
         sharedPreferences.edit().putString("layout", arr.toString()).apply()
     }
 
-    private fun defaultLayout(): List<ToolbarItem> =
-        listOf(
-            ToolbarItem.Default(ToolbarKey.ESC),
-            ToolbarItem.Default(ToolbarKey.DRAWER),
-            ToolbarItem.Default(ToolbarKey.SCROLL),
-            ToolbarItem.Default(ToolbarKey.HOME),
-            ToolbarItem.Default(ToolbarKey.ARROW_UP),
-            ToolbarItem.Default(ToolbarKey.END),
-            ToolbarItem.Default(ToolbarKey.PGUP),
-            ToolbarItem.Default(ToolbarKey.TAB),
-            ToolbarItem.Default(ToolbarKey.CTRL),
-            ToolbarItem.Default(ToolbarKey.ALT),
-            ToolbarItem.Default(ToolbarKey.ARROW_LEFT),
-            ToolbarItem.Default(ToolbarKey.ARROW_DOWN),
-            ToolbarItem.Default(ToolbarKey.ARROW_RIGHT),
-            ToolbarItem.Default(ToolbarKey.PGDN),
-        )
+    private fun defaultLayout(): List<ToolbarItem> = listOf(
+        ToolbarItem.Default(ToolbarKey.ESC),
+        ToolbarItem.Default(ToolbarKey.DRAWER),
+        ToolbarItem.Default(ToolbarKey.SCROLL),
+        ToolbarItem.Default(ToolbarKey.HOME),
+        ToolbarItem.Default(ToolbarKey.ARROW_UP),
+        ToolbarItem.Default(ToolbarKey.END),
+        ToolbarItem.Default(ToolbarKey.PGUP),
+        ToolbarItem.Default(ToolbarKey.TAB),
+        ToolbarItem.Default(ToolbarKey.CTRL),
+        ToolbarItem.Default(ToolbarKey.ALT),
+        ToolbarItem.Default(ToolbarKey.ARROW_LEFT),
+        ToolbarItem.Default(ToolbarKey.ARROW_DOWN),
+        ToolbarItem.Default(ToolbarKey.ARROW_RIGHT),
+        ToolbarItem.Default(ToolbarKey.PGDN),
+    )
 }

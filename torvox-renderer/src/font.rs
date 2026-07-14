@@ -286,7 +286,8 @@ impl FontPipeline {
 
         let scaler_context = ScaleContext::new();
         let atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(atlas_width, atlas_height));
-        let atlas_bitmap = vec![0u8; (atlas_width * atlas_height) as usize];
+        // Rgba8Unorm (4 bytes/pixel) for Mali-G57 compatibility
+        let atlas_bitmap = vec![0u8; (atlas_width * atlas_height * 4) as usize];
 
         let mut pipeline = Self {
             font_system,
@@ -1145,8 +1146,9 @@ impl FontPipeline {
                         if dst_x >= atlas_w {
                             break;
                         }
-                        let dst_idx = dst_y * atlas_w + dst_x;
+                        let dst_idx = (dst_y * atlas_w + dst_x) * 4;
                         if dst_idx < self.atlas_bitmap.len() {
+                            // R channel = coverage, GBA = 0 (Rgba8Unorm)
                             self.atlas_bitmap[dst_idx] = alpha;
                         }
                     }
@@ -1167,9 +1169,9 @@ impl FontPipeline {
                             break;
                         }
                         let src_idx = (y * width as usize + x) * bpp;
-                        let dst_idx = dst_y * atlas_w + dst_x;
+                        let dst_idx = (dst_y * atlas_w + dst_x) * 4;
                         if dst_idx < self.atlas_bitmap.len() && src_idx + 3 < image.data.len() {
-                            // RGBA→luminance for R8Unorm: use alpha as coverage
+                            // RGBA→luminance for Rgba8Unorm: use alpha as coverage in R channel
                             self.atlas_bitmap[dst_idx] = image.data[src_idx + 3];
                         }
                     }

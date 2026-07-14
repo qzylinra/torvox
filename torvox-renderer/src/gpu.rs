@@ -1373,7 +1373,7 @@ impl GpuContext {
 
     /// Create GPU atlas texture.
     ///
-    /// Format: `R8Unorm` — a single-channel **linear** (non-sRGB) byte layout
+    /// Format: `Rgba8Unorm` — R channel holds glyph coverage; GBA = 0
     /// that matches font.rs CPU bitmap output. The glyph alpha-coverage data
     /// is already in the correct (linear) space, so no gamma correction is
     /// applied by the GPU on sampling. (Despite the "Unorm" name, this is NOT
@@ -1389,7 +1389,8 @@ impl GpuContext {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
+            // Rgba8Unorm: Mali-G57 driver has issues with R8Unorm + Linear filtering
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -1398,8 +1399,8 @@ impl GpuContext {
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
 
@@ -1420,7 +1421,7 @@ impl GpuContext {
                 data,
                 wgpu::TexelCopyBufferLayout {
                     offset: 0,
-                    bytes_per_row: Some(width),
+                    bytes_per_row: Some(4 * width),
                     rows_per_image: Some(height),
                 },
                 wgpu::Extent3d {

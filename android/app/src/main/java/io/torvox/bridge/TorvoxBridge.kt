@@ -856,6 +856,10 @@ private val libLock = Any()
 /** Force JNA into Android mode so it uses System.loadLibrary instead of dlopen. */
 fun initNativeProxy() {
     if (nativeLib != null) return
+    if (isRunningRobolectric()) {
+        android.util.Log.i("TorvoxBridge", "Robolectric environment detected — skipping native library load")
+        return
+    }
     // Tell JNA we're on Android so it uses System.loadLibrary (which works with the
     // classloader namespace) instead of dlopen (which fails on Android 15+ linker
     // namespaces). Must be set before any Native.load() call.
@@ -868,7 +872,21 @@ fun initNativeProxy() {
     nativeLib = Native.load("torvox_android", TorvoxNative::class.java)
 }
 
+/** Detect whether we are running in a Robolectric unit test environment. */
+private fun isRunningRobolectric(): Boolean = try {
+    Class.forName("org.robolectric.RobolectricTestRunner")
+    true
+} catch (_: ClassNotFoundException) {
+    false
+}
+
 private fun ensureLib(): TorvoxNative {
+    if (isRunningRobolectric()) {
+        throw IllegalStateException(
+            "TorvoxBridge native library is not available in Robolectric unit tests. " +
+                "Do not call TorvoxBridge functions from tests that run on Robolectric.",
+        )
+    }
     nativeLib?.let { return it }
     synchronized(libLock) {
         nativeLib?.let { return it }
@@ -1521,11 +1539,13 @@ class TorvoxBridge(
     companion object {
         /** Initialise the Rust logging (idempotent). */
         fun initLogger() {
+            if (isRunningRobolectric()) return
             ensureLib().torvox_init_logger()
         }
 
         /** Set the Rust log file path (called from TorvoxApp.onCreate). */
         fun setLogFilePath(path: String) {
+            if (isRunningRobolectric()) return
             val bytes = path.toByteArray(Charsets.UTF_8)
             ensureLib().torvox_set_log_file_path(bytes, bytes.size)
         }
