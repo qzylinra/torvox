@@ -50,6 +50,10 @@ constructor(
         val bridge =
             composeRuleHolder.composeRule.getBridge()
                 ?: throw AssertionError("Bridge is null")
+        // Force a render pass to drain PTY output that arrived after the last
+        // render call.  This is necessary because the render loop may have
+        // exited before the shell had a chance to respond.
+        bridge.render()
         val dataText = bridge.getTerminalText()
         assert(dataText != null && dataText.contains("HELLO_TORVOX")) {
             "Expected HELLO_TORVOX in output, got: $dataText"
@@ -76,6 +80,7 @@ constructor(
             composeRuleHolder.composeRule.getBridge()
                 ?: throw AssertionError("Bridge is null")
         composeRuleHolder.composeRule.waitUntil(timeoutMillis = 20000) {
+            bridge.render()
             val text = bridge.getTerminalText()
             text != null && text.contains("first") && text.contains("second") && text.contains("third")
         }
