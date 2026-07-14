@@ -42,6 +42,7 @@
     <ID>TooGenericExceptionCaught:ToolbarPreferences.kt$ToolbarPreferences$e: Exception</ID>
     <ID>TooGenericExceptionCaught:TorvoxApp.kt$TorvoxApp$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:TorvoxRuntime.kt$TorvoxRuntime$exception: Exception</ID>
+    <ID>TooGenericExceptionCaught:TorvoxRuntime.kt$TorvoxRuntime$e: Exception</ID>
     <ID>TooGenericExceptionCaught:TorvoxRuntime.kt$TorvoxRuntime$exception: Throwable</ID>
     <ID>TooGenericExceptionCaught:UsbSerialManager.kt$UsbSerialManager$exception: Exception</ID>
     <ID>TooManyFunctions:SettingsRepository.kt$SettingsRepository</ID>
@@ -55,6 +56,7 @@
     <ID>UnusedImports:ModifierBarScreenshotTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
     <ID>UnusedImports:ScreenshotGoldenTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
     <ID>UnusedImports:TerminalScreenScreenshotTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
+    <ID>UnusedPrivateProperty:TorvoxRuntime.kt$TorvoxRuntime$GRACE_RESET_THRESHOLD_CYCLES</ID>
     <ID>UseDataClass:SettingsDataStoreProvider.kt$SettingsDataStoreProvider</ID>
   </CurrentIssues>
 </SmellBaseline>

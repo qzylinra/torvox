@@ -19,8 +19,8 @@ use torvox_renderer::font::FontPipeline;
 use torvox_renderer::gpu::GpuContext;
 use torvox_renderer::gpu::SearchHighlight;
 use torvox_renderer::gpu::SelectionRange;
-use torvox_terminal::ghostty_terminal::KgpImageData;
 use torvox_terminal::ghostty_terminal::CellSnapshot;
+use torvox_terminal::ghostty_terminal::KgpImageData;
 use torvox_terminal::session::Session;
 use torvox_terminal::shell_env::ShellEnv;
 

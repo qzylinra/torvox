@@ -22,10 +22,12 @@ import io.torvox.settings.SettingsRepository
 import io.torvox.ui.theme.BuiltInThemes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +47,14 @@ data class RuntimeState(
     val sessionIds: List<Long> = emptyList(),
 )
 
+/**
+ * Session state is encoded in two booleans:
+ * - running=true, renderThreadExited=false  → alive
+ * - running=true, renderThreadExited=true   → dead (needs cleanup)
+ * - running=false, renderThreadExited=*     → stopped (flag is stale; skip)
+ * renderThreadExited is set by the render thread after loop exit;
+ * always read under sessionLock alongside running.
+ */
 private data class SessionEntry(
     val id: Long,
     var bridge: TorvoxBridge?,
@@ -52,6 +62,9 @@ private data class SessionEntry(
     @Volatile var running: Boolean,
     val savePath: String,
     @Volatile var blitCallback: (() -> Unit)? = null,
+    @Volatile var renderThreadExited: Boolean = false,
+    @Volatile var restartAttempts: Int = 0,
+    @Volatile var nextRestartDelayMs: Long = 200L,
 ) {
     // per-frame `CountDownLatch`, which had a lost-wakeup race: after
     // `bridge.render()` the loop published a fresh latch and waited, but a
@@ -119,6 +132,151 @@ constructor(
     private val sessionLock = Any()
 
     private var foregroundServiceRunning = false
+
+    @Volatile private var renderMonitorJob: Job? = null
+
+    private fun startRenderMonitor() {
+        if (renderMonitorJob?.isActive == true) return
+        renderMonitorJob =
+            scope.launch {
+                while (isActive) {
+                    delay(RENDER_MONITOR_INTERVAL_MS)
+                    checkSessions()
+                }
+            }
+    }
+
+    private fun stopRenderMonitor() {
+        renderMonitorJob?.cancel()
+        renderMonitorJob = null
+    }
+
+    private fun checkSessions() {
+        val deadSessions = mutableListOf<SessionEntry>()
+        val healthySessions = mutableListOf<SessionEntry>()
+        synchronized(sessionLock) {
+            for (entry in sessions.values) {
+                if (!entry.running) continue
+                if (entry.renderThreadExited) {
+                    deadSessions.add(entry)
+                } else {
+                    // Belt-and-suspenders: thread crashed without setting renderThreadExited
+                    val thread = entry.renderThreadRef
+                    if (thread != null && !thread.isAlive) {
+                        deadSessions.add(entry)
+                    }
+                    // Decay restart count on sustained health
+                    if (entry.restartAttempts > 0) {
+                        healthySessions.add(entry)
+                    }
+                }
+            }
+        }
+        for (entry in healthySessions) {
+            synchronized(sessionLock) {
+                if (!entry.running || entry.renderThreadExited) continue
+                if (entry.restartAttempts > 0) {
+                    entry.restartAttempts = 0
+                    entry.nextRestartDelayMs = INITIAL_RESTART_DELAY_MS
+                }
+            }
+        }
+        for (entry in deadSessions) {
+            scope.launch {
+                handleDeadRenderThread(entry)
+            }
+        }
+    }
+
+    private suspend fun handleDeadRenderThread(entry: SessionEntry) {
+        LogUtil.w(
+            "TorvoxRuntime",
+            "session ${entry.id} render thread exited, restart attempt ${entry.restartAttempts + 1}",
+        )
+
+        synchronized(sessionLock) {
+            if (!entry.running || !entry.renderThreadExited) return
+            if (entry.bridge == null) return
+
+            entry.renderWatchDog?.stop()
+            entry.renderWatchDog = null
+            entry.running = false
+            entry.renderThreadRef?.let { t ->
+                t.interrupt()
+                t.join(THREAD_JOIN_TIMEOUT_MS)
+            }
+            entry.renderThreadRef = null
+            entry.renderSignaled.set(false)
+
+            try {
+                entry.bridge?.releaseGpuSurface()
+            } catch (e: Exception) {
+                LogUtil.e(
+                    "TorvoxRuntime",
+                    "session ${entry.id} releaseGpuSurface during cleanup failed",
+                    e,
+                )
+            }
+
+            entry.restartAttempts++
+            if (entry.restartAttempts > RENDER_MAX_RESTART_ATTEMPTS) {
+                LogUtil.e(
+                    "TorvoxRuntime",
+                    "session ${entry.id} exceeded max restart attempts, closing session",
+                )
+                LogcatFileWriter.write(
+                    "TorvoxRuntime",
+                    "session ${entry.id} exceeded max restart attempts, closing session",
+                )
+                entry.bridge?.close()
+                sessions.remove(entry.id)
+                if (entry.id == activeSessionId) {
+                    val remaining = sessions.keys.sorted()
+                    activeSessionId = remaining.lastOrNull() ?: 0L
+                }
+                updateState()
+                return
+            }
+
+            val delayMs = entry.nextRestartDelayMs
+            entry.nextRestartDelayMs = (entry.nextRestartDelayMs * 2).coerceAtMost(MAX_RESTART_DELAY_MS)
+        }
+
+        // Wait outside lock
+        delay(delayMs)
+
+        synchronized(sessionLock) {
+            if (!sessions.containsKey(entry.id)) return
+            if (entry.running) return
+            if (entry.bridge == null) return
+
+            entry.renderThreadExited = false
+            startRenderThread(entry)
+            LogUtil.d(
+                "TorvoxRuntime",
+                "session ${entry.id} render thread restarted (attempt ${entry.restartAttempts})",
+            )
+        }
+
+        // Grace period — verify restart survived
+        delay(GRACE_PERIOD_AFTER_RESTART_MS)
+
+        synchronized(sessionLock) {
+            if (!sessions.containsKey(entry.id)) return
+            if (!entry.running) return
+            if (entry.renderThreadExited) return
+
+            val thread = entry.renderThreadRef
+            if (thread != null && thread.isAlive) {
+                entry.restartAttempts = 0
+                entry.nextRestartDelayMs = INITIAL_RESTART_DELAY_MS
+                LogUtil.d(
+                    "TorvoxRuntime",
+                    "session ${entry.id} render thread healthy after restart",
+                )
+            }
+        }
+    }
 
     private fun startForegroundServiceIfNeeded() {
         if (!foregroundServiceRunning) {
@@ -263,6 +421,14 @@ constructor(
         private const val RENDER_HANG_TIMEOUT_NANOS = 30_000_000_000L // 30 seconds
         private const val RENDER_INITIAL_RETRY_MAX = 5
         private const val RENDER_INITIAL_RETRY_DELAY_MS = 150L
+
+        // Render monitor — proactive death detection
+        private const val RENDER_MONITOR_INTERVAL_MS = 500L
+        private const val RENDER_MAX_RESTART_ATTEMPTS = 5
+        private const val INITIAL_RESTART_DELAY_MS = 200L
+        private const val MAX_RESTART_DELAY_MS = 2000L
+        private const val GRACE_PERIOD_AFTER_RESTART_MS = 500L
+        private const val GRACE_RESET_THRESHOLD_CYCLES = 4
         private val nextSessionId = AtomicLong(1L)
     }
 
@@ -539,6 +705,7 @@ constructor(
             )
             LogUtil.d("TorvoxRuntime", "session $sessionId started")
             startForegroundServiceIfNeeded()
+            startRenderMonitor()
         } catch (exception: Exception) {
             LogUtil.e("TorvoxRuntime", "Failed to start terminal", exception)
             LogcatFileWriter.write("TorvoxRuntime", "FAILED to start terminal: ${exception.message}\n${exception.stackTraceToString()}")
@@ -933,6 +1100,7 @@ constructor(
     }
 
     fun stop() {
+        stopRenderMonitor()
         synchronized(stopLock) {
             if (stopped) return
             stopped = true
@@ -976,6 +1144,7 @@ constructor(
                 }
             }
         }
+        startRenderMonitor()
     }
 
     fun setSelection(
@@ -1114,9 +1283,24 @@ constructor(
     }
 
     private fun startRenderThread(entry: SessionEntry) {
-        if (!stopRenderThread(entry)) {
-            LogUtil.e("TorvoxRuntime", "session ${entry.id} previous render thread hung — cannot start new one")
-            return
+        entry.renderWatchDog?.stop()
+        entry.renderWatchDog = null
+        entry.renderThreadExited = false
+        entry.restartAttempts = 0
+        entry.nextRestartDelayMs = INITIAL_RESTART_DELAY_MS
+        entry.running = false
+        entry.renderSignaled.set(false)
+        val oldThread = entry.renderThreadRef
+        entry.renderThreadRef = null
+        oldThread?.let { t ->
+            t.interrupt()
+            t.join(THREAD_JOIN_TIMEOUT_MS)
+            if (t.isAlive) {
+                LogUtil.w(
+                    "TorvoxRuntime",
+                    "session ${entry.id} previous render thread still alive after join — forcing new thread anyway",
+                )
+            }
         }
         val generation = renderGeneration.incrementAndGet()
         entry.running = true
@@ -1274,6 +1458,7 @@ constructor(
                         Thread.sleep(RENDER_ERROR_SLEEP_MS)
                     }
                 }
+                entry.renderThreadExited = true
                 LogUtil.d("TorvoxRuntime", "render thread stopped for session ${entry.id}")
             }, "TorvoxRender-${entry.id}").apply {
                 isDaemon = true
@@ -1284,7 +1469,7 @@ constructor(
             RenderWatchDog(
                 getStart = { entry.lastRenderStart },
                 getDone = { entry.lastRenderDone },
-                isRunning = { entry.running && activeSessionId == entry.id },
+                isRunning = { entry.running && !entry.renderThreadExited && activeSessionId == entry.id },
                 onHangDetected = {
                     LogUtil.e("TorvoxRuntime", "session ${entry.id} render thread hung")
                     LogcatFileWriter.write("TorvoxRuntime", "session ${entry.id} render thread hung")
