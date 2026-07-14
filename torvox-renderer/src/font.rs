@@ -688,6 +688,17 @@ impl FontPipeline {
             Self::find_font_by_name(db, family_name)
         };
         if let Some(id) = found {
+            let db = self.font_system.db();
+            let name = db
+                .face(id)
+                .and_then(|f| f.families.first().map(|(n, _)| n.clone()))
+                .unwrap_or_default();
+            log::info!(
+                "FONT_DIAG: set_font_family('{}') found id={:?} name='{}'",
+                family_name,
+                id,
+                name
+            );
             self.font_id = Some(id);
             self.glyph_cache.clear();
             self.atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(
@@ -701,6 +712,10 @@ impl FontPipeline {
             self.find_cjk_fallback_fonts(&system_locale);
             return true;
         }
+        log::warn!(
+            "FONT_DIAG: set_font_family('{}') NOT FOUND in fontdb",
+            family_name
+        );
         false
     }
 
@@ -714,7 +729,12 @@ impl FontPipeline {
     pub fn set_font_size_in_place(&mut self, new_size: f32) -> (f32, f32) {
         self.font_size = new_size;
         self.glyph_cache.clear();
-        self.atlas_generation = 0;
+        self.atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(
+            self.atlas_width as i32,
+            self.atlas_height as i32,
+        ));
+        self.atlas_bitmap.fill(0);
+        self.atlas_generation = self.atlas_generation.wrapping_add(1);
         self.rasterize_ascii();
         let (cw, ch) = self.cell_metrics();
         log::info!(
@@ -742,7 +762,12 @@ impl FontPipeline {
         }
         self.raster_scale = scale;
         self.glyph_cache.clear();
-        self.atlas_generation = 0;
+        self.atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(
+            self.atlas_width as i32,
+            self.atlas_height as i32,
+        ));
+        self.atlas_bitmap.fill(0);
+        self.atlas_generation = self.atlas_generation.wrapping_add(1);
         self.rasterize_ascii();
         log::info!("RASTER_SCALE: scale={:.3}", scale);
     }

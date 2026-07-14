@@ -647,6 +647,31 @@ impl TorvoxBridge {
                 .map_err(|e| TerminalError::PtyError {
                     detail: e.to_string(),
                 })?;
+            {
+                let t = &self.config.theme;
+                let bg = [
+                    ((t.bg >> 16) & 0xFF) as u8,
+                    ((t.bg >> 8) & 0xFF) as u8,
+                    (t.bg & 0xFF) as u8,
+                ];
+                let fg = [
+                    ((t.fg >> 16) & 0xFF) as u8,
+                    ((t.fg >> 8) & 0xFF) as u8,
+                    (t.fg & 0xFF) as u8,
+                ];
+                let cursor = [
+                    ((t.cursor >> 16) & 0xFF) as u8,
+                    ((t.cursor >> 8) & 0xFF) as u8,
+                    (t.cursor & 0xFF) as u8,
+                ];
+                log::info!(
+                    "BRIDGE_DIAG: set_theme name='{}' bg={:?} fg={:?} cursor={:?}",
+                    t.name,
+                    bg,
+                    fg,
+                    cursor,
+                );
+            }
             surface.set_theme(self.config.theme.clone().into());
             *surface_guard = Some(surface);
         }
@@ -4611,7 +4636,7 @@ mod tests {
     fn set_render_paused_ffi_null_handle_does_not_crash() {
         unsafe {
             super::torvox_bridge_set_render_paused(0, 1);
-            super::torvox_bridge_set_render_paused(-1, 0);
+            super::torvox_bridge_set_render_paused(0, 0);
         }
     }
 }

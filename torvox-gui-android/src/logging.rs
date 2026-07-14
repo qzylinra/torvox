@@ -21,7 +21,6 @@ use std::sync::Mutex;
 
 // ── Android log priorities (from <android/log.h>) ──────────────────────
 
-const ANDROID_LOG_UNKNOWN: i32 = 0;
 const ANDROID_LOG_VERBOSE: i32 = 2;
 const ANDROID_LOG_DEBUG: i32 = 3;
 const ANDROID_LOG_INFO: i32 = 4;
@@ -29,7 +28,7 @@ const ANDROID_LOG_WARN: i32 = 5;
 const ANDROID_LOG_ERROR: i32 = 6;
 
 #[link(name = "log")]
-extern "C" {
+unsafe extern "C" {
     fn __android_log_write(prio: i32, tag: *const c_char, text: *const c_char) -> i32;
 }
 
@@ -60,7 +59,8 @@ impl Log for TorvoxLogger {
         let msg = format!("{}", record.args());
         let prio = level_to_android(record.level());
         let tag_c = CString::new(tag).unwrap_or(CString::new("TorvoxRust").unwrap());
-        let msg_c = CString::new(&msg).unwrap_or_default();
+        let msg_c =
+            CString::new(msg.as_str()).unwrap_or_else(|_| CString::new(Vec::<u8>::new()).unwrap());
         // SAFETY: __android_log_write is a public NDK function; the pointers
         // point to valid NUL-terminated C strings.
         unsafe {

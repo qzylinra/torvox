@@ -16,6 +16,7 @@ use thiserror::Error;
 use torvox_core::line::Line;
 use torvox_core::snapshot::SessionSnapshot;
 use torvox_renderer::font::FontPipeline;
+use torvox_renderer::gpu::CellInstance;
 use torvox_renderer::gpu::GpuContext;
 use torvox_renderer::gpu::SearchHighlight;
 use torvox_renderer::gpu::SelectionRange;
@@ -846,12 +847,61 @@ impl AndroidSurface {
         self.dirty_rows_buf = dirty_rows;
 
         let instances = &self.instance_buffer[..];
+
+        // DIAG: log first non-space cell's foreground color and instance count
+        let diag_has_glyph = |i: &CellInstance| i.atlas_size[0] > 0.0 && i.atlas_size[1] > 0.0;
+        let diag_first = instances.iter().find(|i| {
+            i.fg_color[0].abs() > 0.001
+                || i.fg_color[1].abs() > 0.001
+                || i.fg_color[2].abs() > 0.001
+        });
+        if let Some(diag) = diag_first {
+            log::warn!(
+                "RENDER_DIAG: instances={} fg=[{:.3},{:.3},{:.3}] bg=[{:.3},{:.3},{:.3}] has_glyph={} quad_size=[{:.1},{:.1}]",
+                instances.len(),
+                diag.fg_color[0],
+                diag.fg_color[1],
+                diag.fg_color[2],
+                diag.bg_color[0],
+                diag.bg_color[1],
+                diag.bg_color[2],
+                diag_has_glyph(diag),
+                diag.quad_size[0],
+                diag.quad_size[1],
+            );
+        } else if !instances.is_empty() {
+            log::warn!(
+                "RENDER_DIAG: {} instances all have black fg",
+                instances.len()
+            );
+            log::warn!(
+                "RENDER_DIAG: first instance fg=[{:.3},{:.3},{:.3}] bg=[{:.3},{:.3},{:.3}] has_glyph={} quad_size=[{:.1},{:.1}]",
+                instances[0].fg_color[0],
+                instances[0].fg_color[1],
+                instances[0].fg_color[2],
+                instances[0].bg_color[0],
+                instances[0].bg_color[1],
+                instances[0].bg_color[2],
+                diag_has_glyph(&instances[0]),
+                instances[0].quad_size[0],
+                instances[0].quad_size[1],
+            );
+        } else {
+            log::warn!("RENDER_DIAG: zero instances");
+        }
+
         let gen_after = self.font_pipeline.atlas_generation();
-        if gen_after > gen_before {
+        log::warn!(
+            "RENDER_DIAG: atlas gen {}->{}, {} instances",
+            gen_before,
+            gen_after,
+            instances.len(),
+        );
+        if gen_after != gen_before {
             let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
             let non_zero = atlas_data.iter().filter(|&&b| b != 0).count();
-            log::debug!(
-                "atlas re-upload gen={}->{} non_zero_pixels={}",
+            log::info!(
+                "RENDER_DIAG: atlas re-upload gen={}->{} non_zero_pixels={}",
                 gen_before,
                 gen_after,
                 non_zero,
@@ -1379,6 +1429,17 @@ impl AndroidSurface {
             if let Some(ref prev) = previous_name {
                 self.font_pipeline.set_font_family(prev);
                 self.font_pipeline.rasterize_ascii();
+                if let Some(gpu) = &mut self.gpu {
+                    let (aw, ah) = self.font_pipeline.atlas_dimensions();
+                    gpu.update_bind_group(
+                        aw as f32,
+                        ah as f32,
+                        self.render_width as f32,
+                        self.render_height as f32,
+                    );
+                    let atlas_data = self.font_pipeline.atlas_bitmap().to_vec();
+                    gpu.upload_atlas(&atlas_data, aw, ah);
+                }
             }
             return false;
         }
