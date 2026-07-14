@@ -541,11 +541,7 @@ where
 impl TorvoxBridge {
     pub fn new(config: TerminalConfig) -> Self {
         #[cfg(target_os = "android")]
-        android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(log::LevelFilter::Debug)
-                .with_tag("TorvoxRust"),
-        );
+        crate::logging::init();
         std::panic::set_hook(Box::new(|info| {
             log::error!("PANIC: {info}");
             if let Some(location) = info.location() {

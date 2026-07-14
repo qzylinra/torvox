@@ -3,6 +3,7 @@ package io.torvox
 import android.app.Application
 import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
+import io.torvox.bridge.TorvoxBridge
 import io.torvox.monitor.AnrWatchDog
 import io.torvox.monitor.BootGuard
 import io.torvox.monitor.MemoryMonitor
@@ -37,6 +38,8 @@ class TorvoxApp : Application() {
         BootGuard(logDir).check()
         StrictModeConfig.install()
         LogcatFileWriter.init(this)
+        TorvoxBridge.initLogger()
+        LogcatFileWriter.getLogFilePath()?.let { TorvoxBridge.setLogFilePath(it) }
         installAnrWatchDog()
         installMemoryMonitor()
         installThermalMonitor()

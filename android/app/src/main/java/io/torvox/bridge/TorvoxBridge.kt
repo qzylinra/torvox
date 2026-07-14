@@ -225,6 +225,17 @@ data class TerminalConfig(
         private const val DEFAULT_SCROLLBACK = 50_000u
         private const val DEFAULT_FONT_SIZE_TENTHS = 140u
 
+        /** Initialise the Rust logging (idempotent). */
+        fun initLogger() {
+            ensureLib().torvox_init_logger()
+        }
+
+        /** Set the Rust log file path (called from TorvoxApp.onCreate). */
+        fun setLogFilePath(path: String) {
+            val bytes = path.toByteArray(Charsets.UTF_8)
+            ensureLib().torvox_set_log_file_path(bytes, bytes.size)
+        }
+
         @Suppress("FunctionNaming")
         fun wireDecode(reader: WireReader): TerminalConfig = TerminalConfig(
             shell =
@@ -261,6 +272,16 @@ private interface TorvoxNative : Library {
     fun boltffi_torvox_bridge_ping(handle: Long): Int
 
     fun torvox_bridge_ping(handle: Long): Int
+
+    // / Global logger: initialise the Rust logging (idempotent).
+    // / Called once from TorvoxApp.onCreate.
+    fun torvox_init_logger()
+
+    // / Global logger: set the log file path for Rust log output.
+    fun torvox_set_log_file_path(
+        path: ByteArray,
+        path_len: Int,
+    )
 
     // Raw C-ABI wrappers for methods with scalar parameters
     fun torvox_bridge_set_native_window(

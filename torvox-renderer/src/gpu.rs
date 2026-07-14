@@ -4333,6 +4333,9 @@ mod tests {
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
             raster_scale: 1.0,
+            blur_h_pipeline: None,
+            blur_v_pipeline: None,
+            render_paused: false,
         };
         ctx.initialize_pipeline_and_bind_group(256, 256, 50, 50);
         Some(ctx)
@@ -4406,6 +4409,9 @@ mod tests {
             kgp_atlas_width: 0,
             kgp_atlas_height: 0,
             raster_scale: 1.0,
+            blur_h_pipeline: None,
+            blur_v_pipeline: None,
+            render_paused: false,
         };
         ctx.initialize_pipeline_and_bind_group(width.max(256), height.max(256), width, height);
         Some(ctx)
