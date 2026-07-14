@@ -1605,10 +1605,10 @@ impl GpuContext {
         if self.surface.is_some() {
             let surface = self.surface.take().unwrap();
             let config = self.surface_config.take();
-            if let Some(config) = config {
-                if let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock() {
-                    *guard = Some((surface, config));
-                }
+            if let Some(config) = config
+                && let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock()
+            {
+                *guard = Some((surface, config));
             }
         }
         self.surface_config = None;
@@ -1656,9 +1656,9 @@ impl GpuContext {
     ) -> Result<(), GpuError> {
         // 1. Reuse a globally-cached surface when available (avoids recreating
         //    on the same ANativeWindow — the source of the multi-session hang).
-        if self.surface.is_none() {
-            if let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock() {
-                if let Some((cached_surface, cached_config)) = guard.take() {
+        if self.surface.is_none()
+            && let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock()
+            && let Some((cached_surface, cached_config)) = guard.take() {
                     let new_config = wgpu::SurfaceConfiguration {
                         width: ((width as f32 * RENDER_SCALE) as u32).max(1),
                         height: ((height as f32 * RENDER_SCALE) as u32).max(1),
@@ -1674,9 +1674,7 @@ impl GpuContext {
                     );
                     return Ok(());
                 }
-            }
-        }
-
+        
         // 2. No cached surface — drop any old surface first, then create new.
         self.surface = None;
         self.surface_config = None;

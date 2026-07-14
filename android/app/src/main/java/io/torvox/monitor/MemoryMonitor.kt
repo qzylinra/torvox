@@ -114,5 +114,6 @@ class MemoryMonitor(
         private const val POLL_INTERVAL_MS = 30_000L
         private const val BYTES_PER_MB = 1024L * 1024L
         private const val LOW_MEMORY_FACTOR = 2.0f
+        private const val PSS_CHECK_INTERVAL = 5
     }
 }
