@@ -8,7 +8,7 @@ class InputBatchBufferTest {
     @Test
     fun single_write_flushes_on_choreographer() {
         val flushed = mutableListOf<ByteArray>()
-        val buffer = InputBatchBuffer({ data -> flushed.add(data) })
+        val buffer = InputBatchBuffer.forTest({ data -> flushed.add(data) })
         buffer.write("hello".toByteArray())
         buffer.flush()
         assertEquals(1, flushed.size)
@@ -18,7 +18,7 @@ class InputBatchBufferTest {
     @Test
     fun multiple_writes_batch_into_single_flush() {
         val flushed = mutableListOf<ByteArray>()
-        val buffer = InputBatchBuffer({ data -> flushed.add(data) })
+        val buffer = InputBatchBuffer.forTest({ data -> flushed.add(data) })
         buffer.write("a".toByteArray())
         buffer.write("b".toByteArray())
         buffer.write("c".toByteArray())
@@ -30,7 +30,7 @@ class InputBatchBufferTest {
     @Test
     fun empty_buffer_flush_does_nothing() {
         var flushCount = 0
-        val buffer = InputBatchBuffer({ flushCount++ })
+        val buffer = InputBatchBuffer.forTest({ flushCount++ })
         buffer.flush()
         assertEquals(0, flushCount)
     }
@@ -38,7 +38,7 @@ class InputBatchBufferTest {
     @Test
     fun large_write_exceeds_capacity_flushes_immediately() {
         val flushed = mutableListOf<ByteArray>()
-        val buffer = InputBatchBuffer({ data -> flushed.add(data) }, capacity = 16)
+        val buffer = InputBatchBuffer.forTest({ data -> flushed.add(data) }, capacity = 16)
         val large = ByteArray(32) { 'x'.code.toByte() }
         buffer.write(large)
         buffer.flush()
@@ -49,7 +49,7 @@ class InputBatchBufferTest {
     @Test
     fun exact_capacity_write_works() {
         val flushed = mutableListOf<ByteArray>()
-        val buffer = InputBatchBuffer({ data -> flushed.add(data) }, capacity = 16)
+        val buffer = InputBatchBuffer.forTest({ data -> flushed.add(data) }, capacity = 16)
         val exact = "1234567890123456".toByteArray()
         assertEquals(16, exact.size)
         buffer.write(exact)
@@ -61,7 +61,7 @@ class InputBatchBufferTest {
     @Test
     fun multiple_flushes_clear_between() {
         val flushed = mutableListOf<ByteArray>()
-        val buffer = InputBatchBuffer({ data -> flushed.add(data) })
+        val buffer = InputBatchBuffer.forTest({ data -> flushed.add(data) })
         buffer.write("first".toByteArray())
         buffer.flush()
         buffer.write("second".toByteArray())
@@ -74,7 +74,7 @@ class InputBatchBufferTest {
     @Test
     fun reset_clears_pending() {
         var flushCount = 0
-        val buffer = InputBatchBuffer({ flushCount++ })
+        val buffer = InputBatchBuffer.forTest({ flushCount++ })
         buffer.write("data".toByteArray())
         buffer.reset()
         buffer.flush()
@@ -84,7 +84,7 @@ class InputBatchBufferTest {
     @Test
     fun write_after_reset_still_works() {
         val flushed = mutableListOf<ByteArray>()
-        val buffer = InputBatchBuffer({ data -> flushed.add(data) })
+        val buffer = InputBatchBuffer.forTest({ data -> flushed.add(data) })
         buffer.write("first".toByteArray())
         buffer.reset()
         buffer.write("second".toByteArray())
