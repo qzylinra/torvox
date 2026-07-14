@@ -1832,6 +1832,8 @@ constructor(
     }
 
     override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+        viewModel?.runtime?.onSurfaceDestroyed()
+        viewModel?.runtime?.releaseAllGpuSurfaces()
         if (isAttachedToWindow) {
             hideContextMenu()
         }

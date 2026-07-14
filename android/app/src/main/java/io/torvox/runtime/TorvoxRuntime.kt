@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -226,7 +228,7 @@ constructor(
                 val d = entry.nextRestartDelayMs
                 entry.nextRestartDelayMs = (entry.nextRestartDelayMs * 2).coerceAtMost(MAX_RESTART_DELAY_MS)
                 d
-            } ?: return
+            }
 
         delay(delayMs)
         restartRenderThreadAfterDelay(entry)
@@ -1551,5 +1553,17 @@ constructor(
         }
         LogUtil.e("TorvoxRuntime", "All methods to get native window pointer failed")
         return 0L
+    }
+
+    fun onSurfaceDestroyed() {
+        for (entry in sessions.values) {
+            entry.bridge?.setRenderPaused(true)
+        }
+    }
+
+    fun releaseAllGpuSurfaces() {
+        for (entry in sessions.values) {
+            entry.renderThreadExited = true
+        }
     }
 }

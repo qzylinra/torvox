@@ -3689,7 +3689,7 @@ pub unsafe extern "C" fn torvox_bridge_load_font_file(
     path_ptr: *const u8,
     path_len: i32,
 ) -> *mut core::ffi::c_char {
-    let bridge = match (handle as *mut TorvoxBridge).as_mut() {
+    let bridge = match unsafe { (handle as *mut TorvoxBridge).as_mut() } {
         Some(b) => b,
         None => return std::ptr::null_mut(),
     };
