@@ -6,9 +6,8 @@
     <ID>CognitiveComplexMethod:ModifierBar.kt$@Suppress("LongParameterList", "CyclomaticComplexMethod") @Composable private fun ConfigurableModifierBar( toolbarLayout: List&lt;ToolbarItem>, onKeyClick: (String) -> Unit, onDrawerClick: () -> Unit, onScrollClick: () -> Unit, ctrlState: ModifierState, altState: ModifierState, onToggleCtrl: () -> Unit, onToggleAlt: () -> Unit, textColor: Color, backgroundColor: Color, modifier: Modifier, label: (String) -> String, )</ID>
     <ID>CognitiveComplexMethod:SettingsScreen.kt$@Composable internal fun AppThemeSelector( selectedMode: String, onModeSelected: (String) -> Unit, textColor: Color, cardBackground: Color, accentColor: Color, )</ID>
     <ID>CognitiveComplexMethod:TerminalScreen.kt$@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class) @Suppress("DEPRECATION", "CyclomaticComplexMethod", "LongMethod") @Composable fun TerminalScreen( modifier: Modifier = Modifier, viewModel: TerminalViewModel = hiltViewModel(), onSettings: () -> Unit = {}, isOverlayVisible: Boolean = false, )</ID>
-    <ID>CognitiveComplexMethod:TerminalSurface.kt$@Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth") // Acceptable — dispatches ~15 distinct gesture/intent types override fun onTouchEvent(event: MotionEvent): Boolean</ID>
-    <ID>CognitiveComplexMethod:TerminalSurface.kt$TerminalSurface$internal fun showContextMenu( row: Int, col: Int, hasSelection: Boolean, hasClipboard: Boolean, selectionStartRow: Int = row, selectionEndRow: Int = row, selectionStartCol: Int = col, selectionEndCol: Int = col, )</ID>
-    <ID>CognitiveComplexMethod:TerminalSurface.kt$override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection</ID>
+    <ID>CognitiveComplexMethod:TerminalSurface.kt$TerminalSurface$@Suppress("CyclomaticComplexMethod", "LongMethod", "NestedBlockDepth") // Acceptable — dispatches ~15 distinct gesture/intent types override fun onTouchEvent(event: MotionEvent): Boolean</ID>
+    <ID>CognitiveComplexMethod:TerminalSurface.kt$TerminalSurface$override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection</ID>
     <ID>CognitiveComplexMethod:TerminalViewModel.kt$TerminalViewModel$@Suppress("CyclomaticComplexMethod") private fun extractSelectedText( selection: SelectionState, scrollOffset: Int = 0, ): String</ID>
     <ID>CognitiveComplexMethod:TorvoxRuntime.kt$TorvoxRuntime$private fun startRenderThread(entry: SessionEntry)</ID>
     <ID>CognitiveComplexMethod:TorvoxRuntime.kt$TorvoxRuntime$suspend fun start( surface: Surface?, width: Int, height: Int, blitCallback: (() -> Unit)? = null, )</ID>
@@ -31,8 +30,8 @@
     <ID>TooGenericExceptionCaught:SecondStageRunner.kt$SecondStageRunner$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SecondStageRunner.kt$SecondStageRunner$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:SettingsScreen.kt$exception: Exception</ID>
-    <ID>TooGenericExceptionCaught:TerminalSurface.kt$error: Exception</ID>
-    <ID>TooGenericExceptionCaught:TerminalSurface.kt$exception: Exception</ID>
+    <ID>TooGenericExceptionCaught:TerminalSurface.kt$TerminalSurface$error: Exception</ID>
+    <ID>TooGenericExceptionCaught:TerminalSurface.kt$TerminalSurface$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:TerminalViewModel.kt$TerminalViewModel$e: Exception</ID>
     <ID>TooGenericExceptionCaught:TerminalViewModel.kt$TerminalViewModel$exception: Exception</ID>
     <ID>TooGenericExceptionCaught:ToolbarPreferences.kt$ToolbarPreferences$e: Exception</ID>
@@ -42,7 +41,7 @@
     <ID>TooGenericExceptionCaught:TorvoxRuntime.kt$TorvoxRuntime$exception: Throwable</ID>
     <ID>TooGenericExceptionCaught:UsbSerialManager.kt$UsbSerialManager$exception: Exception</ID>
     <ID>TooManyFunctions:SettingsRepository.kt$SettingsRepository</ID>
-    <ID>TooManyFunctions:TerminalSurface.kt$io.torvox.ui.TerminalSurface.kt</ID>
+    <ID>TooManyFunctions:TerminalSurface.kt$TerminalSurface : TextureViewSurfaceTextureListener</ID>
     <ID>TooManyFunctions:TerminalViewModel.kt$TerminalViewModel : ViewModel</ID>
     <ID>TooManyFunctions:TorvoxBridge.kt$TorvoxBridge : AutoCloseable</ID>
     <ID>TooManyFunctions:TorvoxBridge.kt$TorvoxNative : Library</ID>
@@ -52,7 +51,6 @@
     <ID>UnusedImports:ModifierBarScreenshotTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
     <ID>UnusedImports:ScreenshotGoldenTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
     <ID>UnusedImports:TerminalScreenScreenshotTest.kt$import kotlin.coroutines.EmptyCoroutineContext</ID>
-    <ID>UnusedPrivateProperty:TerminalSurface.kt$TerminalSurface$val callback: ActionMode.Callback2 = object : ActionMode.Callback2() { override fun onCreateActionMode( mode: ActionMode, menu: Menu, ): Boolean { if (hasSelection) { menu.add(Menu.NONE, MENU_COPY, 0, android.R.string.copy) menu.add(Menu.NONE, MENU_SELECT_ALL, 1, "Select All") } if (hasClipboard) { menu.add(Menu.NONE, MENU_PASTE, 2, android.R.string.paste) } return true } override fun onPrepareActionMode( mode: ActionMode, menu: Menu, ): Boolean { styleActionMode(mode) return false } override fun onActionItemClicked( mode: ActionMode, item: MenuItem, ): Boolean { when (item.itemId) { MENU_COPY -> { viewModel?.copySelectionToClipboard() onCopyRequested?.invoke(getSelectedText()) viewModel?.clearSelection() mode.finish() return true } MENU_SELECT_ALL -> { viewModel?.selectAll(scrollOffset) mode.finish() return true } MENU_PASTE -> { onPasteRequested?.invoke() mode.finish() return true } } return false } override fun onDestroyActionMode(mode: ActionMode) { actionMode = null viewModel?.let { viewModel -> if (viewModel.state.value.selection.active) { viewModel.clearSelection() } } hideSelectionHandles() } override fun onGetContentRect( mode: ActionMode, view: View, outRect: Rect, ) { try { computeContentRect(outRect) } catch (_: IllegalArgumentException) { outRect.set(0, 0, 0, 0) } } }</ID>
     <ID>UseDataClass:SettingsDataStoreProvider.kt$SettingsDataStoreProvider</ID>
   </CurrentIssues>
 </SmellBaseline>
