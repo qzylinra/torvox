@@ -1343,7 +1343,7 @@ impl FontPipeline {
 
         let scaler_context = ScaleContext::new();
         let atlas = guillotiere::AtlasAllocator::new(guillotiere::size2(atlas_width, atlas_height));
-        let atlas_bitmap = vec![0u8; (atlas_width * atlas_height) as usize];
+        let atlas_bitmap = vec![0u8; (atlas_width * atlas_height * 4) as usize];
 
         let mut pipeline = Self {
             font_system,
@@ -1892,7 +1892,8 @@ mod tests {
 
                 for y in 0..cmp_h {
                     for x in 0..cmp_w {
-                        let ai = (ay + y) * atlas_w + ax + x;
+                        let pixel = (ay + y) * atlas_w + ax + x;
+                        let ai = pixel * 4;
                         let fi = y * ft_stride + x * 4;
                         let atlas_pixel = atlas[ai];
                         let freetype_pixel = ft_data[fi + 3];
@@ -1978,8 +1979,8 @@ mod tests {
         let mut has_ink = false;
         for y in 0..info.height as usize {
             for x in 0..info.width as usize {
-                let idx = (ay + y) * atlas_w + ax + x;
-                if idx < atlas.len() && atlas[idx] > 0 {
+                let byte_offset = ((ay + y) * atlas_w + ax + x) * 4;
+                if byte_offset < atlas.len() && atlas[byte_offset] > 0 {
                     has_ink = true;
                     break;
                 }
@@ -2131,10 +2132,9 @@ mod tests {
     #[test]
     fn cjk_glyph_zhong() {
         let mut pipeline = FontPipeline::new(512, 512, 14.0);
-        let Some(info) = pipeline.glyph_information('中') else {
-            eprintln!("SKIP: No CJK font available for '中'");
-            return;
-        };
+        let info = pipeline
+            .glyph_information('中')
+            .expect("CJK '中' (U+4E2D) should have glyph info");
         assert!(
             info.width > 0,
             "CJK '中' width should be non-zero, got {}",
@@ -2152,8 +2152,8 @@ mod tests {
         let mut has_ink = false;
         for y in 0..info.height as usize {
             for x in 0..info.width as usize {
-                let idx = (ay + y) * atlas_w + ax + x;
-                if idx < atlas.len() && atlas[idx] > 0 {
+                let byte_offset = ((ay + y) * atlas_w + ax + x) * 4;
+                if byte_offset < atlas.len() && atlas[byte_offset] > 0 {
                     has_ink = true;
                     break;
                 }
@@ -2162,9 +2162,7 @@ mod tests {
                 break;
             }
         }
-        if !has_ink {
-            eprintln!("SKIP: CJK '中' has zero coverage in atlas (no CJK font available)");
-        }
+        assert!(has_ink, "CJK '中' should have non-zero coverage in atlas");
     }
 
     // ── 13.3: Emoji glyph ──────────────────────────────────────────
