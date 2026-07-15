@@ -390,7 +390,8 @@ mod config_file_validation {
                     if line.contains("concurrency:") {
                         concurrency_seen = true;
                     }
-                    if concurrency_seen && line.contains("cancel-in-progress:")
+                    if concurrency_seen
+                        && line.contains("cancel-in-progress:")
                         && line.contains("cancel-in-progress: true")
                     {
                         cancel_in_progress_true = true;

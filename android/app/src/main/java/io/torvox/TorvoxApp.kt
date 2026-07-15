@@ -25,7 +25,7 @@ import java.util.Date
 import java.util.Locale
 
 @HiltAndroidApp
-class TorvoxApp : Application() {
+open class TorvoxApp : Application() {
     private var anrWatchDog: AnrWatchDog? = null
     private var memoryMonitor: MemoryMonitor? = null
     private var thermalMonitor: ThermalMonitor? = null

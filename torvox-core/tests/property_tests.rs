@@ -582,6 +582,7 @@ mod color_ops_invariants {
         assert_eq!(a.saturating_mul(1), a);
     }
 
+    #[allow(clippy::many_single_char_names)]
     #[quickcheck]
     fn color_saturating_mul_zero(r: u8, g: u8, b: u8) {
         let a = Color { r, g, b, a: 255 };

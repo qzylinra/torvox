@@ -100,7 +100,7 @@ constructor(
         private const val ZOOM_THRESHOLD_LOW = 0.9f
         private const val ZOOM_THRESHOLD_HIGH = 1.1f
         private const val DRAWER_WIDTH_DP = 280
-        private const val RESIZE_SETTLE_MS = 400L
+        private const val RESIZE_SETTLE_MS = 150L
         private const val FLING_VELOCITY_DIVISOR = 100f
         private const val SUPPRESS_GRACE_PERIOD_NS = 50_000_000L
         private const val FLING_MAX_LINES = 50
@@ -1232,7 +1232,7 @@ constructor(
     private var currentInputConnection: InputConnection? = null
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
-        val mode = viewModel?.state?.value?.keyboardMode ?: KeyboardMode.Secure
+        val mode = viewModel?.state?.value?.keyboardMode ?: KeyboardMode.Raw
         mode.toEditorInfo(outAttrs)
         val connection =
             object : BaseInputConnection(this, true) {

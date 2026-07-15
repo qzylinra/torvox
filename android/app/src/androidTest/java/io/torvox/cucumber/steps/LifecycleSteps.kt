@@ -63,6 +63,9 @@ constructor(
     @Then("^the session is still functional$")
     fun sessionIsStillFunctional() {
         composeRuleHolder.composeRule.waitForSession()
+        composeRuleHolder.composeRule
+            .onNodeWithTag("TerminalScreen", useUnmergedTree = true)
+            .assertIsDisplayed()
     }
 
     @Then("^the session is restored$")

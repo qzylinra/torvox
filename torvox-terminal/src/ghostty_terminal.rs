@@ -37,6 +37,7 @@ pub struct GridSnapshot {
     pub kgp_placements: Vec<KgpPlacement>,
     pub title: String,
     pub scrollback_length: u32,
+    pub sync_active: bool,
 }
 
 /// A Kitty Graphics Protocol (KGP) placement for rendering.
@@ -73,6 +74,7 @@ impl GridSnapshot {
             kgp_placements: Vec::new(),
             title: String::new(),
             scrollback_length: 0,
+            sync_active: false,
         }
     }
     pub fn cell_at(&self, row: u32, col: u32) -> &CellSnapshot {
@@ -162,7 +164,7 @@ const MAX_GRAPHEME_CLUSTERS: usize = 8;
 const DEFAULT_CELL_WIDTH: u32 = 8;
 const DEFAULT_CELL_HEIGHT: u32 = 16;
 
-enum Command {
+pub enum Command {
     Write(Vec<u8>),
     FlushAck(Sender<()>),
     SetTheme {
@@ -1178,6 +1180,38 @@ impl GhosttyTerminal {
         }
     }
 
+    /// Returns a clone of the lock-free command sender for direct ghostty thread access.
+    /// The caller uses this with Self::key_encode_submit_via to bypass the session mutex,
+    /// eliminating UI-thread stalls when the render thread holds the session lock.
+    pub fn clone_cmd_tx(&self) -> Sender<Command> {
+        self.cmd_tx.clone()
+    }
+
+    /// Send a key event for encoding using a pre-cloned sender.
+    /// Returns a receiver for the encoded result. This function does NOT need
+    /// `&self` — the caller can submit directly to ghostty without any session lock.
+    pub fn key_encode_submit_via(
+        cmd_tx: &Sender<Command>,
+        key_code: u32,
+        modifiers: u16,
+        action: u8,
+        unicode_char: u32,
+        unshifted_char: u32,
+    ) -> Option<Receiver<Vec<u8>>> {
+        let (tx, rx) = flume::bounded(1);
+        cmd_tx
+            .send(Command::KeyEncode {
+                key_code,
+                modifiers,
+                action,
+                unicode_char,
+                unshifted_char,
+                tx,
+            })
+            .ok()?;
+        Some(rx)
+    }
+
     pub fn key_encode(
         &self,
         key_code: u32,
@@ -1703,6 +1737,7 @@ impl GhosttyTerminal {
         let dirty = vec![true; rows as usize];
 
         let kgp_placements = Self::collect_kgp_placements(terminal);
+        let sync_active = terminal.mode(Mode::SYNC_OUTPUT).unwrap_or(false);
 
         GridSnapshot {
             rows,
@@ -1716,6 +1751,7 @@ impl GhosttyTerminal {
             kgp_placements,
             title: terminal.title().unwrap_or_default().to_string(),
             scrollback_length: terminal.scrollback_rows().unwrap_or(0) as u32,
+            sync_active,
         }
     }
 
@@ -2696,6 +2732,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn cell_snapshot_default() {
         let c = CellSnapshot::default();
         assert_eq!(c.codepoint, 0);
@@ -2707,6 +2744,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn cell_snapshot_clone() {
         let c = CellSnapshot {
             codepoint: 65,
@@ -2842,7 +2880,7 @@ mod tests {
             .collect();
         let s: String = text_chars.iter().collect();
         assert!(
-            s.contains("0") || s.contains("A"),
+            s.contains('0') || s.contains('A'),
             "autowrap should show wrapped text, got: {s:?}"
         );
         assert_invariants(&snap);
@@ -4585,7 +4623,7 @@ mod tests {
     #[test]
     fn osc_52_clipboard_large_payload() {
         let mut t = GhosttyTerminal::new(3, 10, 100).expect("term");
-        let base64_payload = "A".repeat(100000);
+        let base64_payload = "A".repeat(100_000);
         let seq = format!("\x1b]52;c;{}\x07", base64_payload);
         t.vt_write(seq.as_bytes());
         t.flush();
@@ -10024,7 +10062,7 @@ mod tests {
         // The first 8 cells ("prompt> ") should be Prompt
         let mut found_prompt = false;
         let mut found_input = false;
-        for cell in snap.cells.iter() {
+        for cell in &snap.cells {
             match cell.codepoint as u8 as char {
                 'p' | 'r' | 'o' | 'm' | 't' | '>' | ' '
                     if cell.semantic == SemanticContent::Prompt =>
@@ -10128,8 +10166,8 @@ mod tests_s2_fixes {
         // the already-present CR was not doubled into an extra line break.
         let lf_snap = lf.take_snapshot();
         let crlf_snap = crlf.take_snapshot();
-        let lf_b = lf_snap.cells.get((1 * lf_snap.cols + 0) as usize);
-        let crlf_b = crlf_snap.cells.get((1 * crlf_snap.cols + 0) as usize);
+        let lf_b = lf_snap.cells.get(lf_snap.cols as usize);
+        let crlf_b = crlf_snap.cells.get(crlf_snap.cols as usize);
         assert_eq!(
             lf_b.map(|c| c.codepoint),
             Some('b' as u32),
@@ -10141,12 +10179,12 @@ mod tests_s2_fixes {
             "a\\r\\nb: 'b' must be at row1 col0 (no double CR)"
         );
         assert_eq!(
-            lf_snap.cells[(1 * lf_snap.cols + 1) as usize].codepoint,
+            lf_snap.cells[(lf_snap.cols + 1) as usize].codepoint,
             0,
             "a\\nb: row1 col1 must stay empty (cursor advanced past 'b')"
         );
         assert_eq!(
-            crlf_snap.cells[(1 * crlf_snap.cols + 1) as usize].codepoint,
+            crlf_snap.cells[(crlf_snap.cols + 1) as usize].codepoint,
             0,
             "a\\r\\nb: row1 col1 must stay empty (no spurious CR)"
         );
@@ -10164,8 +10202,7 @@ mod tests_s2_fixes {
         t.flush();
         let snap = t.take_snapshot();
         assert_eq!(
-            snap.cells[(1 * snap.cols + 0) as usize].codepoint,
-            'b' as u32,
+            snap.cells[snap.cols as usize].codepoint, 'b' as u32,
             "LF must advance to next row (CRLF); 'b' at row1 col0"
         );
         assert_invariants(&snap);
@@ -10264,7 +10301,7 @@ mod tests_s2_fixes {
     /// codepoint (the malformed `1;5u` form).
     #[test]
     fn key_encode_ctrl_a_passes_null_utf8() {
-        let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
+        let t = GhosttyTerminal::new(24, 80, 1000).expect("term");
         let ctrl = key::Mods::CTRL.bits();
         let out = t.key_encode(29, ctrl, 0, 0x01, 0).expect("encode");
         assert!(
