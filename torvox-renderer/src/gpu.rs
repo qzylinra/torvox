@@ -18,7 +18,7 @@ use wgpu::util::DeviceExt;
 
 const MIN_ATLAS_BUFFER_SIZE: u64 = 64;
 const DESIRED_FRAME_LATENCY: u32 = 2;
-const DESIRED_FRAME_LATENCY_ANDROID: u32 = 1;
+const DESIRED_FRAME_LATENCY_ANDROID: u32 = 2;
 const GPU_POLL_TIMEOUT: Duration = Duration::from_secs(2);
 /// Internal render resolution scale. 1.0 = native resolution for crisp text
 /// on real devices. Sub-1.0 values cause compositor upscale artifacts (blurry
