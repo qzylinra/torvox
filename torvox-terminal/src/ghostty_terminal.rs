@@ -929,8 +929,17 @@ impl GhosttyTerminal {
     /// into one buffer and pass it here in a single call. Plain text and
     /// complete sequences may be concatenated freely.
     pub fn vt_write(&mut self, data: &[u8]) {
+        // Sanitize bytes that the underlying C library cannot handle.
+        // 0xF8–0xFF are not valid UTF-8 lead bytes and are not standard
+        // VT100 C1 control codes. The C parser may crash on long runs of
+        // these bytes, so we replace them with spaces to preserve input
+        // length while avoiding the crash.
+        let sanitized: Vec<u8> = data
+            .iter()
+            .map(|&b| if b > 0xF7 { b' ' } else { b })
+            .collect();
         let mut buf = Vec::with_capacity(data.len() + 4);
-        buf.extend_from_slice(data);
+        buf.extend_from_slice(&sanitized);
         // Append ST + SGR reset to close any incomplete escape sequence
         // (OSC, DCS, SOS, PM, APC) that may have been truncated at the end
         // of this chunk. vt_write is only used for programmatic VT data
