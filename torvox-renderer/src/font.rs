@@ -234,6 +234,9 @@ pub struct FontPipeline {
     /// never hardcoded. A value of 1.0 preserves the legacy logical rasterization.
     raster_scale: f32,
     atlas_generation: u64,
+    /// Bounding box of the glyph region modified since the last take.
+    /// `None` means no glyphs have been rasterized since the last upload.
+    dirty_rect: Option<(i32, i32, u32, u32)>,
     system_locale: String,
     shaping_buffer: Option<cosmic_text::Buffer>,
     /// Cache of ligature-aware shaped runs keyed by run text. Shaping is
@@ -302,6 +305,7 @@ impl FontPipeline {
             cjk_fallback_ids: Vec::new(),
             font_size,
             atlas_generation: 0,
+            dirty_rect: None,
             system_locale: String::new(),
             shaping_buffer: None,
             shape_cache: LruCache::new(
@@ -1145,6 +1149,24 @@ impl FontPipeline {
         let ax = rect.min.x as i32;
         let ay = rect.min.y as i32;
 
+        if width > 0 && height > 0 {
+            let gw = width as u32;
+            let gh = height as u32;
+            match &mut self.dirty_rect {
+                Some((dx, dy, dw, dh)) => {
+                    let cx2 = (*dx + *dw as i32).max(ax + gw as i32);
+                    let cy2 = (*dy + *dh as i32).max(ay + gh as i32);
+                    *dx = (*dx).min(ax);
+                    *dy = (*dy).min(ay);
+                    *dw = (cx2 - *dx) as u32;
+                    *dh = (cy2 - *dy) as u32;
+                }
+                None => {
+                    self.dirty_rect = Some((ax, ay, gw, gh));
+                }
+            }
+        }
+
         match image.content {
             swash::scale::image::Content::Mask => {
                 let atlas_w = self.atlas_width as usize;
@@ -1229,10 +1251,22 @@ impl FontPipeline {
         // (which just guards against that impossible overflow) is clearer than
         // `wrapping_add` and avoids any silent wraparound.
         self.atlas_generation = self.atlas_generation.saturating_add(1);
+        self.reset_dirty_rect_full();
     }
 
     pub fn atlas_generation(&self) -> u64 {
         self.atlas_generation
+    }
+
+    /// Take the accumulated dirty rect, resetting it to `None`.
+    /// Returns `None` when no new glyphs have been placed since the last take.
+    pub fn take_dirty_rect(&mut self) -> Option<(u32, u32, u32, u32)> {
+        self.dirty_rect.take()
+    }
+
+    /// Reset dirty rect to the full atlas (used when the atlas is rebuilt).
+    pub fn reset_dirty_rect_full(&mut self) {
+        self.dirty_rect = Some((0, 0, self.atlas_width, self.atlas_height));
     }
 
     pub fn rasterize_ascii(&mut self) {
@@ -1375,6 +1409,7 @@ impl FontPipeline {
             cjk_fallback_ids: Vec::new(),
             font_size,
             atlas_generation: 0,
+            dirty_rect: None,
             system_locale: String::new(),
             shaping_buffer: None,
             shape_cache: LruCache::new(

@@ -1172,18 +1172,23 @@ impl GpuContext {
     }
 
     fn select_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
-        // Fix F: prefer a transparent composite alpha mode so the window (and the
-        // in-app background image) can be transparent. Opaque is only used as a
-        // last resort when no transparent mode is supported by the WSI.
+        // Prefer Opaque to avoid Mali-G57 legacy gralloc R8 buffer allocation.
+        // On Mali-G57 with Vulkan, PreMultiplied/Inherit alpha triggers an
+        // internal R8 staging buffer for the alpha channel. Legacy gralloc
+        // does not support R8, so the driver falls back to a slow CPU path
+        // that stalls on every present.
         if caps
+            .alpha_modes
+            .contains(&wgpu::CompositeAlphaMode::Opaque)
+        {
+            wgpu::CompositeAlphaMode::Opaque
+        } else if caps
             .alpha_modes
             .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
         {
             wgpu::CompositeAlphaMode::PreMultiplied
         } else if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Auto) {
             wgpu::CompositeAlphaMode::Auto
-        } else if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
-            wgpu::CompositeAlphaMode::Opaque
         } else {
             caps.alpha_modes
                 .first()
@@ -1408,24 +1413,43 @@ impl GpuContext {
         self.atlas_sampler = Some(sampler);
     }
 
-    pub fn upload_atlas(&self, data: &[u8], width: u32, height: u32) {
+    pub fn upload_atlas(
+        &self,
+        data: &[u8],
+        width: u32,
+        height: u32,
+        dirty_rect: Option<(u32, u32, u32, u32)>,
+    ) {
         if let Some(texture) = &self.atlas_texture {
+            let (origin_x, origin_y, upload_w, upload_h) = match dirty_rect {
+                Some((x, y, w, h)) => {
+                    let w = w.min(width);
+                    let h = h.min(height);
+                    (x.min(width - w), y.min(height - h), w, h)
+                }
+                None => (0, 0, width, height),
+            };
+            let offset = (origin_y * width + origin_x) as usize * 4;
             self.queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     texture,
                     mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
+                    origin: wgpu::Origin3d {
+                        x: origin_x,
+                        y: origin_y,
+                        z: 0,
+                    },
                     aspect: wgpu::TextureAspect::All,
                 },
                 data,
                 wgpu::TexelCopyBufferLayout {
-                    offset: 0,
+                    offset,
                     bytes_per_row: Some(4 * width),
-                    rows_per_image: Some(height),
+                    rows_per_image: Some(upload_h),
                 },
                 wgpu::Extent3d {
-                    width,
-                    height,
+                    width: upload_w,
+                    height: upload_h,
                     depth_or_array_layers: 1,
                 },
             );

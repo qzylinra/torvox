@@ -560,7 +560,7 @@ impl AndroidSurface {
                 gpu.set_surface_from_native_window(window_ptr, width, height, true)
                     .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
                 gpu.create_atlas_texture(aw, ah);
-                gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah);
+                gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah, None);
                 gpu.update_bind_group(
                     aw as f32,
                     ah as f32,
@@ -584,7 +584,7 @@ impl AndroidSurface {
                         .map_err(|e| SurfaceError::GpuInit(e.to_string()))?;
                 }
                 gpu.initialize_pipeline_and_bind_group(aw, ah, width, height);
-                gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah);
+                gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah, None);
                 // The clear color defaults to the deep mocha blue; re-apply the
                 // per-session theme background so a freshly created surface (or a
                 // surface re-bound to a different session) never shows the wrong
@@ -918,6 +918,7 @@ impl AndroidSurface {
             );
         }
         if gen_after != gen_before {
+            let dirty = self.font_pipeline.take_dirty_rect();
             self.gpu
                 .as_mut()
                 .ok_or_else(|| {
@@ -927,6 +928,7 @@ impl AndroidSurface {
                     self.font_pipeline.atlas_bitmap(),
                     self.atlas_width,
                     self.atlas_height,
+                    dirty,
                 );
         }
 
@@ -1204,6 +1206,7 @@ impl AndroidSurface {
             self.font_pipeline.atlas_bitmap(),
             self.atlas_width,
             self.atlas_height,
+            None,
         );
         let pixels = gpu
             .render_to_buffer(instances, &[])
@@ -1436,7 +1439,7 @@ impl AndroidSurface {
                         self.render_width as f32,
                         self.render_height as f32,
                     );
-                    gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah);
+                    gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah, None);
                 }
             }
             return false;
@@ -1451,7 +1454,7 @@ impl AndroidSurface {
                 self.render_width as f32,
                 self.render_height as f32,
             );
-            gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah);
+            gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah, None);
         }
         if self.surface_width.load(Ordering::Relaxed) > 0
             && self.surface_height.load(Ordering::Relaxed) > 0
@@ -1507,7 +1510,7 @@ impl AndroidSurface {
                 self.render_width as f32,
                 self.render_height as f32,
             );
-            gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah);
+            gpu.upload_atlas(self.font_pipeline.atlas_bitmap(), aw, ah, None);
         }
 
         if self.surface_width.load(Ordering::Relaxed) > 0
