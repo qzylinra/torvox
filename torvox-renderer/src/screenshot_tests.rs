@@ -468,7 +468,7 @@ fn ocr_search_highlight_reverses_colors() {
     let (pixels, w, h) = render_grid(
         "SEARCH_HIGHLIGHT",
         &grid,
-        Some("TEXT"),
+        Some("OTHER"),
         Some(theme_clear_color()),
     );
 
