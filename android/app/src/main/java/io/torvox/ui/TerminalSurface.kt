@@ -1114,7 +1114,8 @@ constructor(
             val cellHeight = viewModel?.runtime?.cellHeight ?: return result
             if (cellWidth <= 0f || cellHeight <= 0f) return result
             if (imeBottom > 0) {
-                val availableHeight = height - imeBottom
+                // ModifierBar is now a Compose overlay; terminal grid must not render rows behind it.
+                val availableHeight = height - imeBottom - modifierBarHeightPx
                 if (availableHeight <= 0) return result
                 val newCols = (width.toFloat() / cellWidth).toInt().coerceAtLeast(1)
                 val newRows = (availableHeight.toFloat() / cellHeight).toInt().coerceAtLeast(1)
@@ -1124,7 +1125,7 @@ constructor(
                     this.cols = newCols
                 }
             } else if (imeBottom == 0) {
-                val fullRows = (height.toFloat() / cellHeight).toInt().coerceAtLeast(1)
+                val fullRows = ((height - modifierBarHeightPx).toFloat() / cellHeight).toInt().coerceAtLeast(1)
                 val fullCols = (width.toFloat() / cellWidth).toInt().coerceAtLeast(1)
                 if (fullRows != this.rows || fullCols != this.cols) {
                     viewModel?.runtime?.resize(fullRows, fullCols)
@@ -1509,34 +1510,8 @@ constructor(
             return false
         }
 
-        // Reduced modifier bar touch exclusion: only exclude touches that
-        // would land on the actual ModifierBar child views. We check the
-        // x-coordinate against the last known mod bar button positions so
-        // that taps on the terminal cells behind the mod bar overlay still
-        // reach the gesture detector and can trigger IME focus, while taps
-        // on the buttons themselves are intercepted by the Compose layer.
-        // When searchActive= true, the modifier bar is hidden entirely so we
-        // skip the exclusion altogether.
-        val isInModBarZone =
-            !searchActive && modifierBarHeightPx > 0 &&
-                event.y >= height - modifierBarHeightPx
-        // When the terminal surface is tall enough (> 2x mod bar height),
-        // touches in the mod bar zone are passed to the parent for Compose
-        // dispatch, allowing modifier bar buttons to work correctly.
-        // When the surface is small (IME open), this is skipped so the
-        // gesture detector can still process taps for IME focus.
-        val passThrough =
-            isInModBarZone &&
-                viewModel
-                    ?.state
-                    ?.value
-                    ?.selection
-                    ?.active == false &&
-                height > modifierBarHeightPx * 2
-
-        if (passThrough && event.action == MotionEvent.ACTION_DOWN) {
-            return super.onTouchEvent(event)
-        }
+        // No longer needed — ModifierBar is now a Compose overlay at higher
+        // z-index which naturally intercepts touches in the mod bar zone.
 
         val fromMouse = event.isFromSource(InputDevice.SOURCE_MOUSE)
 
