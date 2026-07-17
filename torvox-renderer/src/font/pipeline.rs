@@ -6,7 +6,9 @@ use cosmic_text::FontSystem;
 use lru::LruCache;
 
 use super::font_db;
-use super::{GlyphInfo, GlyphKey, GLYPH_CACHE_CAPACITY, CJK_IDEOGRAPHIC_START, PREFERRED_MONOSPACE_FONTS};
+use super::{
+    CJK_IDEOGRAPHIC_START, GLYPH_CACHE_CAPACITY, GlyphInfo, GlyphKey, PREFERRED_MONOSPACE_FONTS,
+};
 
 pub struct FontPipeline {
     pub(crate) font_system: FontSystem,

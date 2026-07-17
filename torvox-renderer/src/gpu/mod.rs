@@ -18,6 +18,7 @@ pub(crate) mod cell_builder;
 mod pipeline;
 mod render;
 mod surface;
+#[cfg(test)]
 mod tests;
 
 pub use cell_builder::{
@@ -26,6 +27,7 @@ pub use cell_builder::{
 };
 #[cfg(test)]
 pub(crate) use cell_builder::{build_cell_instances_from_flat, FlatGrid};
+#[cfg(test)]
 pub(crate) use cell_builder::{blend_highlight, cell_highlight, color_f32x4_eq};
 pub use pipeline::{image_active_value, GpuUniforms};
 pub(crate) use pipeline::{DEFAULT_BG_ALPHA, QUAD_CORNERS};

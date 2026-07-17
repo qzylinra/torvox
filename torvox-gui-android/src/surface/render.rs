@@ -12,8 +12,6 @@ use torvox_terminal::ghostty_terminal::KgpImageData;
 use super::{AndroidSurface, SurfaceError};
 use super::{FRAME_TIME_TARGET_MS, KGP_ATLAS_WIDTH};
 
-use crate::lock_util::lock_or_recover;
-
 fn color_changed(a: [f32; 4], b: [f32; 4]) -> bool {
     a[0].to_bits() != b[0].to_bits()
         || a[1].to_bits() != b[1].to_bits()

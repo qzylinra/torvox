@@ -3,8 +3,6 @@ use std::sync::atomic::Ordering;
 use super::AndroidSurface;
 use super::{BLINK_SPEED_MAX_MS, BLINK_SPEED_MIN_MS, MAX_COLS, MAX_ROWS, MIN_COLS, MIN_ROWS};
 
-use crate::lock_util::lock_or_recover;
-
 impl AndroidSurface {
     fn blink_period(&self) -> std::time::Duration {
         std::time::Duration::from_millis(self.blink_speed_ms as u64)

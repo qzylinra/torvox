@@ -1,7 +1,9 @@
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
-use super::pipeline::{quad_corner_buffer_layout, QUAD_CORNERS};
+use wgpu::util::DeviceExt;
+
+use super::pipeline::QUAD_CORNERS;
 use super::GpuContext;
 use super::GpuError;
 
