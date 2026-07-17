@@ -120,7 +120,7 @@ fn resolve_system_monospace_from_fonts_xml() -> Option<String> {
                         if let Some(lt_pos) = after_font[text_start..].find('<') {
                             let filename = after_font[text_start..text_start + lt_pos].trim();
                             if !filename.is_empty() {
-                                log::info!("FONT_XML: monospace target='{}'", filename);
+                                log::debug!("FONT_XML: monospace target='{}'", filename);
                                 return Some(filename.to_string());
                             }
                         }
@@ -164,7 +164,7 @@ pub fn set_extra_font_paths(paths: Vec<std::path::PathBuf>) {
     match EXTRA_FONT_PATHS.write() {
         Ok(mut extra) => {
             *extra = paths;
-            log::info!("FONT_LOAD: set {} extra font paths", extra.len());
+            log::debug!("FONT_LOAD: set {} extra font paths", extra.len());
         }
         Err(poisoned) => {
             let mut extra = poisoned.into_inner();
@@ -198,7 +198,7 @@ fn load_font_database() -> fontdb::Database {
                     }
                 }
             }
-            log::info!("FONT_LOAD: cached {} font paths", paths.len());
+            log::debug!("FONT_LOAD: cached {} font paths", paths.len());
             paths
         });
 
@@ -209,7 +209,7 @@ fn load_font_database() -> fontdb::Database {
                 count += 1;
             }
         }
-        log::info!("FONT_LOAD: loaded {count} fonts from cached paths");
+        log::debug!("FONT_LOAD: loaded {count} fonts from cached paths");
         db
     });
     db.clone()
@@ -351,7 +351,7 @@ impl FontPipeline {
                         .first()
                         .map(|(n, _)| n.clone())
                         .unwrap_or_default();
-                    log::info!(
+                    log::debug!(
                         "FONT_SELECT: fonts.xml monospace id={:?} name='{}' (stem='{}')",
                         face.id,
                         display,
@@ -382,7 +382,7 @@ impl FontPipeline {
                         .first()
                         .map(|(n, _)| n.clone())
                         .unwrap_or_default();
-                    log::info!(
+                    log::debug!(
                         "FONT_SELECT: fonts.xml monospace (nospace) id={:?} name='{}'",
                         face.id,
                         display
@@ -409,7 +409,7 @@ impl FontPipeline {
                     .first()
                     .map(|(n, _)| n.clone())
                     .unwrap_or_default();
-                log::info!(
+                log::debug!(
                     "FONT_SELECT: preferred monospace id={:?} name='{}'",
                     face.id,
                     display
@@ -441,7 +441,7 @@ impl FontPipeline {
                     .first()
                     .map(|(n, _)| n.clone())
                     .unwrap_or_default();
-                log::info!("FONT_SELECT: monospace id={:?} name='{}'", face.id, display);
+                log::debug!("FONT_SELECT: monospace id={:?} name='{}'", face.id, display);
                 self.font_id = Some(face.id);
                 return;
             }
@@ -455,7 +455,7 @@ impl FontPipeline {
                     .first()
                     .map(|(n, _)| n.clone())
                     .unwrap_or_default();
-                log::info!(
+                log::debug!(
                     "FONT_SELECT: monospace (CJK ok) id={:?} name='{}'",
                     face.id,
                     name
@@ -515,7 +515,7 @@ impl FontPipeline {
                 .unwrap_or(None)
                 .unwrap_or(false);
             if primary_supports_cjk {
-                log::info!("CJK_FALLBACK: skipped (primary font already supports CJK)");
+                log::debug!("CJK_FALLBACK: skipped (primary font already supports CJK)");
                 return;
             }
         }
@@ -637,7 +637,7 @@ impl FontPipeline {
                 };
                 let effective_priority =
                     priority.saturating_sub(source_quality_penalty as i16) + outline_bonus;
-                log::info!(
+                log::debug!(
                     "CJK_CANDIDATE: family='{}' base={} locale={} is_vector={} eff_pri={}",
                     family_name,
                     base_priority,
@@ -661,10 +661,10 @@ impl FontPipeline {
                 .and_then(|f| f.families.first())
                 .map(|(n, _)| n.clone())
                 .unwrap_or_default();
-            log::info!("CJK_FALLBACK: selected font id={:?} name='{}'", id, name);
+            log::debug!("CJK_FALLBACK: selected font id={:?} name='{}'", id, name);
             self.cjk_fallback_ids.push(*id);
         }
-        log::info!(
+        log::debug!(
             "CJK_FALLBACK: found {} fallback fonts (limited to {})",
             self.cjk_fallback_ids.len(),
             MAX_CJK_FALLBACK_FONTS
@@ -704,7 +704,7 @@ impl FontPipeline {
                 .face(id)
                 .and_then(|f| f.families.first().map(|(n, _)| n.clone()))
                 .unwrap_or_default();
-            log::info!(
+            log::debug!(
                 "FONT_DIAG: set_font_family('{}') found id={:?} name='{}'",
                 family_name,
                 id,
@@ -748,7 +748,7 @@ impl FontPipeline {
         self.atlas_generation = self.atlas_generation.wrapping_add(1);
         self.rasterize_ascii();
         let (cw, ch) = self.cell_metrics();
-        log::info!(
+        log::debug!(
             "FONT_SIZE_IN_PLACE: size={} cell={:.1}x{:.1}",
             new_size,
             cw,
@@ -780,7 +780,7 @@ impl FontPipeline {
         self.atlas_bitmap.fill(0);
         self.atlas_generation = self.atlas_generation.wrapping_add(1);
         self.rasterize_ascii();
-        log::info!("RASTER_SCALE: scale={:.3}", scale);
+        log::debug!("RASTER_SCALE: scale={:.3}", scale);
     }
 
     pub fn get_raster_scale(&self) -> f32 {
@@ -1275,7 +1275,7 @@ impl FontPipeline {
             self.glyph_information(ch as char);
         }
         let after = self.cache_length();
-        log::info!(
+        log::debug!(
             "FONT_RASTERIZE_ASCII: before={} after={} font_id={:?}",
             before,
             after,

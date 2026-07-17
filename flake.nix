@@ -20,12 +20,32 @@
           system,
           ...
         }:
+        let
+          verus = pkgs.stdenv.mkDerivation {
+            name = "verus-0.2026.07.12.0b42f4c";
+            src = pkgs.fetchzip {
+              url = "https://github.com/verus-lang/verus/releases/download/release/0.2026.07.12.0b42f4c/verus-0.2026.07.12.0b42f4c-x86-linux.zip";
+              sha256 = "cvCoeahf60IBn4j9L38wpqxnBK5bL5Rc/cUkeCZEhBc=";
+              stripRoot = false;
+            };
+            sourceRoot = "source/verus-x86-linux";
+            installPhase = ''
+              mkdir -p $out/bin $out/verus-lib
+              cp verus $out/bin/
+              cp cargo-verus $out/bin/
+              cp -r builtin builtin_macros state_machines_macros vstd $out/verus-lib/
+              cp libverus_builtin.rlib libverus_builtin_macros.so libverus_state_machines_macros.so libvstd.rlib vstd.vir z3 $out/verus-lib/
+              cp version.json version.txt verus-root $out/verus-lib/
+            '';
+          };
+        in
         {
           _module.args.pkgs = import inputs.nixpkgs {
             inherit system;
             config.allowUnfree = true;
             overlays = [ inputs.fenix.overlays.default ];
           };
+          packages.verus = verus;
           formatter = pkgs.nixfmt-tree.override {
             nixfmtPackage = pkgs.nixfmt-rs;
             runtimeInputs = with pkgs; [
@@ -96,6 +116,7 @@
               cargo-deny
               cargo-machete
               cargo-mutants
+              verus
               rust-analyzer
               kotlin
               gradle_9
@@ -152,6 +173,7 @@
               patch
             ];
             env = {
+              VERUS_ROOT = "${verus}/verus-lib";
               LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath (
                 with pkgs;
                 [

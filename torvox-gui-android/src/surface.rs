@@ -472,9 +472,7 @@ impl AndroidSurface {
             self.cols,
         );
 
-        self.font_pipeline =
-            FontPipeline::new(self.atlas_width as i32, self.atlas_height as i32, font_size);
-        self.font_pipeline.rasterize_ascii();
+        self.font_pipeline.set_font_size_in_place(font_size);
         let (_aw, _ah) = self.font_pipeline.atlas_dimensions();
         let (cw, ch) = self.font_pipeline.cell_metrics();
 
@@ -660,7 +658,7 @@ impl AndroidSurface {
         // Render even without PTY output when search highlights are pending
         // so the user sees the highlighted matches immediately.
         if has_search_highlights {
-            log::info!(
+            log::debug!(
                 "render: search highlights pending, proceeding (count={})",
                 self.search_highlights.len()
             );
@@ -869,7 +867,7 @@ impl AndroidSurface {
         });
         if let Some(diag) = diag_first {
             if self.frame_count.is_multiple_of(60) {
-                log::info!(
+                log::debug!(
                     "RENDER_DIAG: instances={} fg=[{:.3},{:.3},{:.3}] bg=[{:.3},{:.3},{:.3}] has_glyph={} quad_size=[{:.1},{:.1}]",
                     instances.len(),
                     diag.fg_color[0],
@@ -884,11 +882,11 @@ impl AndroidSurface {
                 );
             }
         } else if !instances.is_empty() && self.frame_count.is_multiple_of(60) {
-            log::info!(
+            log::debug!(
                 "RENDER_DIAG: {} instances all have black fg",
                 instances.len()
             );
-            log::info!(
+            log::debug!(
                 "RENDER_DIAG: first instance fg=[{:.3},{:.3},{:.3}] bg=[{:.3},{:.3},{:.3}] has_glyph={} quad_size=[{:.1},{:.1}]",
                 instances[0].fg_color[0],
                 instances[0].fg_color[1],
@@ -901,12 +899,12 @@ impl AndroidSurface {
                 instances[0].quad_size[1],
             );
         } else if instances.is_empty() && self.frame_count.is_multiple_of(60) {
-            log::info!("RENDER_DIAG: zero instances");
+            log::debug!("RENDER_DIAG: zero instances");
         }
 
         let gen_after = self.font_pipeline.atlas_generation();
         if self.frame_count.is_multiple_of(60) {
-            log::info!(
+            log::debug!(
                 "RENDER_DIAG: atlas gen {}->{}, {} instances",
                 gen_before,
                 gen_after,

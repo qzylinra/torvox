@@ -434,6 +434,63 @@ pub enum TerminalError {
     SessionUnavailable { detail: String },
 }
 
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum BridgeError {
+    #[error("PTY error: {0}")]
+    Pty(String),
+    #[error("render error: {0}")]
+    Render(String),
+    #[error("lock contention: {context}")]
+    Lock { context: &'static str },
+    #[error("session unavailable: {detail}")]
+    SessionUnavailable { detail: &'static str },
+    #[error("invalid config: {detail}")]
+    InvalidConfig { detail: &'static str },
+    #[error("unsupported: {0}")]
+    Unsupported(String),
+}
+
+impl From<BridgeError> for TerminalError {
+    fn from(e: BridgeError) -> Self {
+        match e {
+            BridgeError::Pty(d) => TerminalError::PtyError { detail: d },
+            BridgeError::Render(d) => TerminalError::PtyError { detail: d },
+            BridgeError::Lock { context } => TerminalError::PtyError {
+                detail: format!("lock contention: {context}"),
+            },
+            BridgeError::SessionUnavailable { detail } => TerminalError::SessionUnavailable {
+                detail: detail.to_string(),
+            },
+            BridgeError::InvalidConfig { detail } => TerminalError::InvalidConfig {
+                detail: detail.to_string(),
+            },
+            BridgeError::Unsupported(d) => TerminalError::PtyError { detail: d },
+        }
+    }
+}
+
+macro_rules! lock_surface {
+    ($bridge:expr) => {
+        $bridge
+            .surface
+            .lock()
+            .map_err(|_| $crate::bridge::BridgeError::Lock {
+                context: "surface",
+            })?
+    };
+}
+
+macro_rules! lock_session {
+    ($bridge:expr) => {
+        $bridge
+            .session
+            .lock()
+            .map_err(|_| $crate::bridge::BridgeError::Lock {
+                context: "session",
+            })?
+    };
+}
+
 /// Bridge between Kotlin and the Rust terminal stack.
 /// Owns the render surface, session, and configuration.
 pub struct TorvoxBridge {
@@ -459,6 +516,19 @@ pub struct TorvoxBridge {
 }
 
 impl TorvoxBridge {
+    fn active_session(
+        &self,
+    ) -> Result<std::sync::Arc<std::sync::Mutex<torvox_terminal::session::Session>>, BridgeError>
+    {
+        let guard = lock_session!(self);
+        guard
+            .as_ref()
+            .cloned()
+            .ok_or(BridgeError::SessionUnavailable {
+                detail: "no active session",
+            })
+    }
+
     fn shell_env(&self) -> torvox_terminal::shell_env::ShellEnv {
         if self.config.home.is_empty() {
             torvox_terminal::shell_env::ShellEnv::default()
@@ -507,7 +577,7 @@ impl TorvoxBridge {
 /// for the duration of the call.
 fn with_bridge<F, T>(handle: i64, f: F) -> Result<T, TerminalError>
 where
-    F: FnOnce(&TorvoxBridge) -> Result<T, TerminalError>,
+    F: FnOnce(&TorvoxBridge) -> Result<T, BridgeError>,
 {
     let ptr = handle as *const TorvoxBridge;
     if ptr.is_null() {
@@ -523,7 +593,7 @@ where
     // once after all concurrent calls complete.
     let bridge = unsafe { &*ptr };
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(bridge))) {
-        Ok(result) => result,
+        Ok(result) => result.map_err(TerminalError::from),
         Err(panic_info) => {
             let message = if let Some(s) = panic_info.downcast_ref::<&str>() {
                 s.to_string()
@@ -563,7 +633,7 @@ impl TorvoxBridge {
         }
     }
 
-    pub fn ping(&self) -> Result<String, TerminalError> {
+    pub fn ping(&self) -> Result<String, BridgeError> {
         let ptr = self as *const TorvoxBridge;
         log::info!(
             "ping: self={:p}, aligned={}",
@@ -573,25 +643,21 @@ impl TorvoxBridge {
         Ok("pong".to_string())
     }
 
-    pub fn spawn_terminal(&self, _rows: u32, _cols: u32) -> Result<i32, TerminalError> {
+    pub fn spawn_terminal(&self, _rows: u32, _cols: u32) -> Result<i32, BridgeError> {
         let shell: torvox_core::config::Shell = self.config.shell.clone().into();
         let shell_path = match &shell {
             torvox_core::config::Shell::SystemDefault => "/system/bin/sh",
             torvox_core::config::Shell::Custom(path) => path.as_str(),
         };
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
-        let surface = surface_guard.as_mut().ok_or(TerminalError::InvalidConfig {
-            detail: "no surface — call set_native_window first".to_string(),
+        let mut surface_guard = lock_surface!(self);
+        let surface = surface_guard.as_mut().ok_or(BridgeError::InvalidConfig {
+            detail: "no surface — call set_native_window first",
         })?;
         let env = self.shell_env();
         let session_arc =
             surface
                 .spawn_session(shell_path, &env)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
+                .map_err(|e| BridgeError::Pty(e.to_string()))?;
         match self.session.lock() {
             Ok(mut session_guard) => *session_guard = Some(session_arc.clone()),
             Err(poisoned) => {
@@ -619,22 +685,18 @@ impl TorvoxBridge {
         window_ptr: i64,
         width: u32,
         height: u32,
-    ) -> Result<(), TerminalError> {
+    ) -> Result<(), BridgeError> {
         log::debug!(
             "set_native_window: window_ptr={:#x}, width={}, height={}",
             window_ptr,
             width,
             height
         );
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .update_native_window(window_ptr as *mut std::ffi::c_void, width, height)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
+                .map_err(|e| BridgeError::Render(e.to_string()))?;
         } else {
             let mut surface = crate::surface::AndroidSurface::new(
                 self.config.rows,
@@ -649,9 +711,7 @@ impl TorvoxBridge {
                     height,
                     self.config.font_size_tenths,
                 )
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
+                .map_err(|e| BridgeError::Render(e.to_string()))?;
             {
                 let t = &self.config.theme;
                 let bg = [
@@ -713,21 +773,13 @@ impl TorvoxBridge {
     /// surface mutex.  Returns `(had_output, snapshot)`.
     fn process_session_for_render(
         &self,
-    ) -> Result<(bool, torvox_terminal::ghostty_terminal::GridSnapshot), TerminalError> {
-        let session_arc = self
-            .session
+    ) -> Result<(bool, torvox_terminal::ghostty_terminal::GridSnapshot), BridgeError> {
+        let session_arc = self.active_session()?;
+        let mut session_guard = session_arc
             .lock()
-            .map_err(|e| TerminalError::PtyError {
-                detail: format!("session lock poisoned: {e}"),
-            })?
-            .as_ref()
-            .cloned()
-            .ok_or(TerminalError::PtyError {
-                detail: "no active session for render".to_string(),
+            .map_err(|_| BridgeError::Lock {
+                context: "session inner",
             })?;
-        let mut session_guard = session_arc.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("session inner lock poisoned: {e}"),
-        })?;
         let scroll_offset = self
             .scroll_offset
             .load(std::sync::atomic::Ordering::Relaxed);
@@ -735,9 +787,9 @@ impl TorvoxBridge {
         let snapshot = session_guard
             .terminal()
             .try_take_snapshot_with_scroll(scroll_offset)
-            .ok_or(TerminalError::PtyError {
-                detail: "snapshot unavailable — VT thread busy".to_string(),
-            })?;
+            .ok_or(BridgeError::Pty(
+                "snapshot unavailable — VT thread busy".into(),
+            ))?;
         Ok((had_output, snapshot))
     }
 
@@ -746,35 +798,26 @@ impl TorvoxBridge {
     /// data has arrived, avoiding a ~50ms stall per frame from ghostty C code.
     fn process_session_for_render_skip_output(
         &self,
-    ) -> Result<(bool, torvox_terminal::ghostty_terminal::GridSnapshot), TerminalError> {
-        let session_arc = self
-            .session
+    ) -> Result<(bool, torvox_terminal::ghostty_terminal::GridSnapshot), BridgeError> {
+        let session_arc = self.active_session()?;
+        let session_guard = session_arc
             .lock()
-            .map_err(|e| TerminalError::PtyError {
-                detail: format!("session lock poisoned: {e}"),
-            })?
-            .as_ref()
-            .cloned()
-            .ok_or(TerminalError::PtyError {
-                detail: "no active session for render".to_string(),
+            .map_err(|_| BridgeError::Lock {
+                context: "session inner",
             })?;
-        let session_guard = session_arc.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("session inner lock poisoned: {e}"),
-        })?;
         let scroll_offset = self
             .scroll_offset
             .load(std::sync::atomic::Ordering::Relaxed);
-        // Intentionally skip process_output() — no new ghostty data to process.
         let snapshot = session_guard
             .terminal()
             .try_take_snapshot_with_scroll(scroll_offset)
-            .ok_or(TerminalError::PtyError {
-                detail: "snapshot unavailable — VT thread busy".to_string(),
-            })?;
+            .ok_or(BridgeError::Pty(
+                "snapshot unavailable — VT thread busy".into(),
+            ))?;
         Ok((false, snapshot))
     }
 
-    pub fn render(&self, skip_output: bool) -> Result<bool, TerminalError> {
+    pub fn render(&self, skip_output: bool) -> Result<bool, BridgeError> {
         let session_out = if skip_output {
             self.process_session_for_render_skip_output()?
         } else {
@@ -782,18 +825,14 @@ impl TorvoxBridge {
         };
 
         // Step 2 – lock surface only for the fast GPU path
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             let scroll_offset = self
                 .scroll_offset
                 .load(std::sync::atomic::Ordering::Relaxed);
             let result = surface
                 .render_frame(scroll_offset, session_out.0, session_out.1)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                });
+                .map_err(|e| BridgeError::Render(e.to_string()));
             self.store_cell_metrics(surface);
             // Cache scrollback length so the main thread can read it lock-free
             // via `scrollback_length()` without contending on the session lock.
@@ -814,20 +853,14 @@ impl TorvoxBridge {
         }
     }
 
-    pub fn save_test_frame(&self, data_dir: &str) -> Result<String, TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn save_test_frame(&self, data_dir: &str) -> Result<String, BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .save_test_frame(data_dir)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })
+                .map_err(|e| BridgeError::Render(e.to_string()))
         } else {
-            Err(TerminalError::PtyError {
-                detail: "No surface".to_string(),
-            })
+            Err(BridgeError::Render("no surface".into()))
         }
     }
 
@@ -844,10 +877,8 @@ impl TorvoxBridge {
         end_col: i32,
         active: bool,
         mode: u8,
-    ) -> Result<String, TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    ) -> Result<String, BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             if active && start_row >= 0 && end_row >= 0 {
                 surface.set_selection(Some(torvox_renderer::gpu::SelectionRange {
@@ -864,13 +895,9 @@ impl TorvoxBridge {
             }
             surface
                 .save_test_frame(data_dir)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })
+                .map_err(|e| BridgeError::Render(e.to_string()))
         } else {
-            Err(TerminalError::PtyError {
-                detail: "No surface".to_string(),
-            })
+            Err(BridgeError::Render("no surface".into()))
         }
     }
 
@@ -944,10 +971,8 @@ impl TorvoxBridge {
         s.focus_event(focused);
     }
 
-    pub fn resize(&self, rows: u32, cols: u32) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn resize(&self, rows: u32, cols: u32) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.resize(rows, cols);
         }
@@ -962,10 +987,8 @@ impl TorvoxBridge {
         }
     }
 
-    pub fn recompute_grid(&self, width: u32, height: u32) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn recompute_grid(&self, width: u32, height: u32) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.recompute_grid(width, height);
         }
@@ -977,21 +1000,13 @@ impl TorvoxBridge {
         window_ptr: i64,
         width: u32,
         height: u32,
-    ) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    ) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
-            // Re-apply the theme background before updating the native window
-            // so the wgpu swapchain clear color matches this session's theme
-            // rather than the default deep-blue (catppuccin mocha bg) or
-            // the previous session's background.
             surface.set_theme(self.config.theme.clone().into());
             surface
                 .update_native_window(window_ptr as *mut std::ffi::c_void, width, height)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
+                .map_err(|e| BridgeError::Render(e.to_string()))?;
             self.store_cell_metrics(surface);
         }
         self.surface_ready
@@ -1077,11 +1092,9 @@ impl TorvoxBridge {
             .map(|t| t.into())
     }
 
-    pub fn set_font_size(&self, size_tenths: u32) -> Result<(), TerminalError> {
+    pub fn set_font_size(&self, size_tenths: u32) -> Result<(), BridgeError> {
         let size = size_tenths as f32 / 10.0;
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_font_size(size);
         }
@@ -1097,11 +1110,9 @@ impl TorvoxBridge {
         }
     }
 
-    pub fn set_font_size_in_place(&self, size_tenths: u32) -> Result<(), TerminalError> {
+    pub fn set_font_size_in_place(&self, size_tenths: u32) -> Result<(), BridgeError> {
         let size = size_tenths as f32 / 10.0;
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_font_size_in_place(size);
         }
@@ -1116,10 +1127,8 @@ impl TorvoxBridge {
         end_col: i32,
         active: bool,
         mode: u8,
-    ) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    ) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             if active && start_row >= 0 && end_row >= 0 {
                 surface.set_selection(Some(torvox_renderer::gpu::SelectionRange {
@@ -1186,10 +1195,8 @@ impl TorvoxBridge {
         row: u32,
         col: u32,
         mode: u8,
-    ) -> Result<(u32, u32, u32, u32), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    ) -> Result<(u32, u32, u32, u32), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             let mode_enum = torvox_core::selection::SelectionMode::from_u8(mode);
 
@@ -1258,11 +1265,9 @@ impl TorvoxBridge {
         mode: u8,
         origin_row: i32,
         origin_col: i32,
-    ) -> Result<(u32, u32, u32, u32), TerminalError> {
+    ) -> Result<(u32, u32, u32, u32), BridgeError> {
         let mode_enum = torvox_core::selection::SelectionMode::from_u8(mode);
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             if let Ok(guard) = self.session.lock()
                 && let Some(session_arc) = guard.as_ref()
@@ -1356,12 +1361,10 @@ impl TorvoxBridge {
     ///
     /// Wire format: [count: i32 LE] then for each highlight:
     ///   [row: i32 LE][start_col: i32 LE][end_col_exclusive: i32 LE][r: u8][g: u8][b: u8][a: u8]
-    pub fn set_search_highlights(&self, serialized: Vec<u8>) -> Result<(), TerminalError> {
+    pub fn set_search_highlights(&self, serialized: Vec<u8>) -> Result<(), BridgeError> {
         let data = serialized;
         if data.len() < 4 {
-            let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-                detail: format!("lock failed: {}", e),
-            })?;
+            let mut surface_guard = lock_surface!(self);
             if let Some(surface) = surface_guard.as_mut() {
                 surface.clear_search_highlights();
             }
@@ -1407,34 +1410,28 @@ impl TorvoxBridge {
             });
             pos += 16;
         }
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_search_highlights(highlights);
         }
         Ok(())
     }
 
-    pub fn set_font_family(&self, family_name: String) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
-        let surface = surface_guard.as_mut().ok_or(TerminalError::InvalidConfig {
-            detail: "no surface available".to_string(),
+    pub fn set_font_family(&self, family_name: String) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
+        let surface = surface_guard.as_mut().ok_or(BridgeError::InvalidConfig {
+            detail: "no surface available",
         })?;
         if !surface.set_font_family(&family_name) {
-            return Err(TerminalError::InvalidConfig {
-                detail: format!("font family '{}' not found", family_name),
+            return Err(BridgeError::InvalidConfig {
+                detail: "font family not found",
             });
         }
         Ok(())
     }
 
-    pub fn set_theme(&self, theme: BridgeTheme) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn set_theme(&self, theme: BridgeTheme) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_theme(theme.into());
         }
@@ -1550,40 +1547,30 @@ impl TorvoxBridge {
         }
     }
 
-    pub fn set_save_path(&self, path: String) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn set_save_path(&self, path: String) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_save_path(path);
         }
         Ok(())
     }
 
-    pub fn save_session(&self, path: String) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn save_session(&self, path: String) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .save_session(&path)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
+                .map_err(|e| BridgeError::Render(e.to_string()))?;
         }
         Ok(())
     }
 
-    pub fn restore_session(&self, path: String) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn restore_session(&self, path: String) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface
                 .restore_session(&path)
-                .map_err(|e| TerminalError::PtyError {
-                    detail: e.to_string(),
-                })?;
+                .map_err(|e| BridgeError::Render(e.to_string()))?;
         }
         Ok(())
     }
@@ -1592,10 +1579,8 @@ impl TorvoxBridge {
         crate::surface::AndroidSurface::has_saved_session(&path)
     }
 
-    pub fn set_mouse_position(&self, row: u32, col: u32) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn set_mouse_position(&self, row: u32, col: u32) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_mouse_position(row, col);
         }
@@ -1686,22 +1671,20 @@ impl TorvoxBridge {
         f32::from_bits(self.cell_height.load(std::sync::atomic::Ordering::Relaxed))
     }
 
-    pub fn write_to_pty(&self, data: Vec<u8>) -> Result<(), TerminalError> {
+    pub fn write_to_pty(&self, data: Vec<u8>) -> Result<(), BridgeError> {
         let guard = self
             .user_write_tx
             .lock()
-            .map_err(|_| TerminalError::SessionUnavailable {
-                detail: "user-write channel mutex poisoned".to_string(),
+            .map_err(|_| BridgeError::SessionUnavailable {
+                detail: "user-write channel mutex poisoned",
             })?;
         match guard.as_ref() {
             Some(sender) => sender.send(data).map_err(|error| {
                 log::error!("bridge: user PTY write channel closed: {error}");
-                TerminalError::PtyError {
-                    detail: format!("user PTY write channel closed: {error}"),
-                }
+                BridgeError::Pty(format!("user PTY write channel closed: {error}"))
             }),
-            None => Err(TerminalError::SessionUnavailable {
-                detail: "no active session — user-write channel not initialized".to_string(),
+            None => Err(BridgeError::SessionUnavailable {
+                detail: "no active session — user-write channel not initialized",
             }),
         }
     }
@@ -1713,7 +1696,7 @@ impl TorvoxBridge {
         action: u8,
         unicode_char: u32,
         unshifted_char: u32,
-    ) -> Result<(), TerminalError> {
+    ) -> Result<(), BridgeError> {
         // Step 1: Submit key encode via pre-cloned ghostty cmd_tx.
         // NO session lock is acquired — the render thread may hold the session
         // mutex for 50ms during process_output, and we must not block UI input.
@@ -1721,8 +1704,8 @@ impl TorvoxBridge {
             let guard = self
                 .key_cmd_tx
                 .lock()
-                .map_err(|_| TerminalError::SessionUnavailable {
-                    detail: "key-cmd channel mutex poisoned".to_string(),
+                .map_err(|_| BridgeError::SessionUnavailable {
+                    detail: "key-cmd channel mutex poisoned",
                 })?;
             match guard.as_ref() {
                 Some(cmd_tx) => {
@@ -1736,8 +1719,8 @@ impl TorvoxBridge {
                     )
                 }
                 None => {
-                    return Err(TerminalError::SessionUnavailable {
-                        detail: "no active session — key-cmd channel not initialized".to_string(),
+                    return Err(BridgeError::SessionUnavailable {
+                        detail: "no active session — key-cmd channel not initialized",
                     });
                 }
             }
@@ -1755,18 +1738,16 @@ impl TorvoxBridge {
             let guard =
                 self.user_write_tx
                     .lock()
-                    .map_err(|_| TerminalError::SessionUnavailable {
-                        detail: "user-write channel mutex poisoned".to_string(),
+                    .map_err(|_| BridgeError::SessionUnavailable {
+                        detail: "user-write channel mutex poisoned",
                     })?;
             match guard.as_ref() {
                 Some(sender) => sender.send(encoded).map_err(|error| {
                     log::error!("bridge: key PTY write channel closed: {error}");
-                    TerminalError::PtyError {
-                        detail: format!("key PTY write channel closed: {error}"),
-                    }
+                    BridgeError::Pty(format!("key PTY write channel closed: {error}"))
                 }),
-                None => Err(TerminalError::SessionUnavailable {
-                    detail: "no active session — user-write channel not initialized".to_string(),
+                None => Err(BridgeError::SessionUnavailable {
+                    detail: "no active session — user-write channel not initialized",
                 }),
             }
         } else {
@@ -1779,20 +1760,16 @@ impl TorvoxBridge {
         rgba_data: Vec<u8>,
         width: u32,
         height: u32,
-    ) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    ) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_background_image(&rgba_data, width, height);
         }
         Ok(())
     }
 
-    pub fn clear_background_image(&self) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn clear_background_image(&self) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.clear_background_image();
         }
@@ -1803,12 +1780,10 @@ impl TorvoxBridge {
         &self,
         blur_radius: i32,
         alpha_tenths: i32,
-    ) -> Result<(), TerminalError> {
+    ) -> Result<(), BridgeError> {
         let blur = blur_radius as f32;
         let alpha = alpha_tenths as f32 / 10.0;
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_background_params(blur, alpha);
         }
@@ -1824,45 +1799,37 @@ impl TorvoxBridge {
         }
     }
 
-    pub fn set_cursor_blink_enabled(&self, enabled: bool) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn set_cursor_blink_enabled(&self, enabled: bool) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_blink_enabled(enabled);
         }
         Ok(())
     }
 
-    pub fn set_cursor_blink_speed_ms(&self, speed_ms: u32) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn set_cursor_blink_speed_ms(&self, speed_ms: u32) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_blink_speed_ms(speed_ms);
         }
         Ok(())
     }
 
-    pub fn reset_cursor_blink(&self) -> Result<(), TerminalError> {
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+    pub fn reset_cursor_blink(&self) -> Result<(), BridgeError> {
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.reset_blink();
         }
         Ok(())
     }
 
-    pub fn set_cursor_style(&self, style: String) -> Result<(), TerminalError> {
+    pub fn set_cursor_style(&self, style: String) -> Result<(), BridgeError> {
         let cursor_style = match style.as_str() {
             "bar" => torvox_core::cursor::CursorStyle::Bar,
             "underline" => torvox_core::cursor::CursorStyle::Underline,
             _ => torvox_core::cursor::CursorStyle::Block,
         };
-        let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
-            detail: format!("lock failed: {}", e),
-        })?;
+        let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             surface.set_cursor_style(cursor_style);
         }
@@ -1955,7 +1922,7 @@ pub unsafe extern "C" fn torvox_bridge_recompute_grid(handle: i64, width: u32, h
 pub unsafe extern "C" fn torvox_bridge_set_surface_size(handle: i64, width: u32, height: u32) {
     with_bridge(handle, |bridge| {
         bridge.set_surface_size(width, height);
-        Ok::<_, TerminalError>(())
+        Ok::<_, BridgeError>(())
     })
     .ok();
 }
