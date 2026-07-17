@@ -12,6 +12,7 @@ use crate::line::Line;
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
 )]
+/// Complete terminal snapshot for rendering — visible grid plus scrollback history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionSnapshot {
     pub visible_lines: Vec<Line>,

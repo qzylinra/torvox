@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cell::Cell;
 
+/// Line-level attributes for double-width and double-height rendering.
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)

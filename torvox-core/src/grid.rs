@@ -45,6 +45,7 @@ impl GridSnapshot for Grid {
     }
 }
 
+/// Terminal grid buffer — rows, columns, scrolling, and dirty tracking.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(
     feature = "rkyv",

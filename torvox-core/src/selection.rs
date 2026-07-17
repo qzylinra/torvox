@@ -59,6 +59,7 @@ fn is_url_safe(character: char) -> bool {
         || char_is_cjk(character)
 }
 
+/// Selection granularity — character, word, line, or rectangular block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[cfg_attr(
     feature = "rkyv",
@@ -119,6 +120,7 @@ pub struct SelectionAnchor {
 
 /// A selection with start, end anchors and mode.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+/// Active text selection with start/end anchors and selection mode.
 #[cfg_attr(
     feature = "rkyv",
     derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
