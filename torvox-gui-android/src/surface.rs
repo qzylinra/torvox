@@ -202,9 +202,15 @@ pub struct AndroidSurface {
     prev_render_height: u32,
 }
 
+fn color_changed(a: [f32; 4], b: [f32; 4]) -> bool {
+    a[0].to_bits() != b[0].to_bits()
+        || a[1].to_bits() != b[1].to_bits()
+        || a[2].to_bits() != b[2].to_bits()
+        || a[3].to_bits() != b[3].to_bits()
+}
+
 /// Compare two CellSnapshots for equality of fields that affect rendering.
 /// Returns `true` if they differ (row should be marked dirty).
-#[allow(clippy::float_cmp)]
 fn cell_ne(a: &CellSnapshot, b: &CellSnapshot) -> bool {
     a.codepoint != b.codepoint
         || a.width != b.width
@@ -217,8 +223,8 @@ fn cell_ne(a: &CellSnapshot, b: &CellSnapshot) -> bool {
         || a.strikethrough != b.strikethrough
         || a.overline != b.overline
         || a.hidden != b.hidden
-        || a.foreground != b.foreground
-        || a.background != b.background
+        || color_changed(a.foreground, b.foreground)
+        || color_changed(a.background, b.background)
         || a.uri != b.uri
         || a.graphemes.len() != b.graphemes.len()
         || (!a.graphemes.is_empty() && a.graphemes != b.graphemes)

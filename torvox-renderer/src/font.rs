@@ -692,6 +692,7 @@ impl FontPipeline {
             self.cjk_fallback_ids.clear();
             let system_locale = self.system_locale.clone();
             self.find_cjk_fallback_fonts(&system_locale);
+            self.rasterize_ascii();
             return true;
         }
         let found = {
@@ -721,6 +722,7 @@ impl FontPipeline {
             self.cjk_fallback_ids.clear();
             let system_locale = self.system_locale.clone();
             self.find_cjk_fallback_fonts(&system_locale);
+            self.rasterize_ascii();
             return true;
         }
         log::warn!(
@@ -1431,15 +1433,7 @@ impl FontPipeline {
     pub fn load_font_file(&mut self, path: &std::path::Path) -> Option<String> {
         let db = self.font_system.db_mut();
         let source = fontdb::Source::File(path.into());
-        let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| db.load_font_source(source)));
-        let ids = match result {
-            Ok(ids) => ids,
-            Err(_) => {
-                log::error!("FONT_LOAD_FILE: panic loading font source, file may be corrupt");
-                return None;
-            }
-        };
+        let ids = db.load_font_source(source);
         let first_id = ids.first()?;
         let face = db.face(*first_id)?;
         face.families.first().map(|(name, _)| name.clone())
