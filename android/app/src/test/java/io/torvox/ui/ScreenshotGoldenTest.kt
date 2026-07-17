@@ -39,12 +39,12 @@ class ScreenshotGoldenTest {
         RoborazziRule(
             RoborazziRule.Options(
                 roborazziOptions =
-                    RoborazziOptions(
-                        compareOptions =
-                            RoborazziOptions.CompareOptions(
-                                changeThreshold = 0.05f,
-                            ),
+                RoborazziOptions(
+                    compareOptions =
+                    RoborazziOptions.CompareOptions(
+                        changeThreshold = 0.05f,
                     ),
+                ),
             ),
         )
 
