@@ -1177,10 +1177,7 @@ impl GpuContext {
         // internal R8 staging buffer for the alpha channel. Legacy gralloc
         // does not support R8, so the driver falls back to a slow CPU path
         // that stalls on every present.
-        if caps
-            .alpha_modes
-            .contains(&wgpu::CompositeAlphaMode::Opaque)
-        {
+        if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
             wgpu::CompositeAlphaMode::Opaque
         } else if caps
             .alpha_modes
@@ -2730,7 +2727,7 @@ impl SelectionRange {
             SelectionMode::Block => {
                 row >= lo_row && row <= hi_row && col >= lo_col && col <= hi_col
             }
-            SelectionMode::Char | SelectionMode::Word => {
+            SelectionMode::Char | SelectionMode::Word | SelectionMode::Semantic => {
                 if row < lo_row || row > hi_row {
                     return false;
                 }

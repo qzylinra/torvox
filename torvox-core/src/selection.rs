@@ -70,6 +70,7 @@ pub enum SelectionMode {
     Word,
     Line,
     Block,
+    Semantic,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,7 +121,7 @@ impl Selection {
     pub fn contains(&self, row: u32, col: u32) -> bool {
         let (lo, hi) = self.ordered();
         match self.mode {
-            SelectionMode::Char | SelectionMode::Word => {
+            SelectionMode::Char | SelectionMode::Word | SelectionMode::Semantic => {
                 if row < lo.row || row > hi.row {
                     return false;
                 }
@@ -146,7 +147,7 @@ impl Selection {
         let (lo, hi) = self.ordered();
         let mut result = alloc::string::String::new();
         match self.mode {
-            SelectionMode::Char | SelectionMode::Word => {
+            SelectionMode::Char | SelectionMode::Word | SelectionMode::Semantic => {
                 for row in lo.row..=hi.row {
                     if let Some(cells) = grid.row_cells(row) {
                         if cells.is_empty() {
@@ -343,6 +344,15 @@ impl Selection {
             SelectionMode::Word => {
                 let expanded = self.expand_word(&cell_at);
                 expanded.expand_url(cell_at)
+            }
+            SelectionMode::Semantic => {
+                let after_url = self.expand_url(&cell_at);
+                if after_url.start != self.start || after_url.end != self.end {
+                    after_url
+                } else {
+                    let expanded = self.expand_word(&cell_at);
+                    expanded.expand_url(cell_at)
+                }
             }
             SelectionMode::Char | SelectionMode::Line | SelectionMode::Block => self,
         }
@@ -894,6 +904,7 @@ mod tests {
             SelectionMode::Word,
             SelectionMode::Line,
             SelectionMode::Block,
+            SelectionMode::Semantic,
         ] {
             let s = Selection::new(
                 SelectionAnchor { row: 0, col: 0 },
@@ -1489,5 +1500,59 @@ mod tests {
         let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
         assert_eq!(expanded.text(&grid), "https://example.com");
     }
+
+    #[test]
+    fn expand_semantic_no_url_fallback_word() {
+        let grid = make_grid_with_text(&["select this word"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 9 },
+            SelectionAnchor { row: 0, col: 9 },
+            SelectionMode::Semantic,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 7);
+        assert_eq!(expanded.end.col, 10);
+        assert_eq!(expanded.text(&grid), "this");
+    }
+
+    #[test]
+    fn expand_semantic_url_at_start() {
+        let grid = make_grid_with_text(&["https://example.com/path now"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 10 },
+            SelectionAnchor { row: 0, col: 10 },
+            SelectionMode::Semantic,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.text(&grid), "https://example.com/path");
+    }
+
+    #[test]
+    fn expand_semantic_empty_noop() {
+        let grid = crate::grid::Grid::new(1, 10);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionAnchor { row: 0, col: 5 },
+            SelectionMode::Semantic,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        assert_eq!(expanded.start.col, 5);
+        assert_eq!(expanded.end.col, 5);
+    }
+
+    #[test]
+    fn expand_semantic_fallback_on_email_like() {
+        let grid = make_grid_with_text(&["contact user@host.com for info"]);
+        let s = Selection::new(
+            SelectionAnchor { row: 0, col: 10 },
+            SelectionAnchor { row: 0, col: 10 },
+            SelectionMode::Semantic,
+        );
+        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char));
+        let text = expanded.text(&grid);
+        assert!(
+            text == "user" || text == "user@host.com",
+            "expected user or user@host.com, got '{text}'"
+        );
+    }
 }
-// test

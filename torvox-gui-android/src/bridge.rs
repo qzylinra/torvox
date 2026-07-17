@@ -403,7 +403,7 @@ impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
                             torvox_core::selection::SelectionMode::Word => 1,
                             torvox_core::selection::SelectionMode::Line => 2,
                             torvox_core::selection::SelectionMode::Block => 3,
-                        },
+                            torvox_core::selection::SelectionMode::Semantic => 4,
                     }
                 }
                 None => TerminalEvent::SelectionChanged {
@@ -864,6 +864,7 @@ impl TorvoxBridge {
                         1 => torvox_core::selection::SelectionMode::Word,
                         2 => torvox_core::selection::SelectionMode::Line,
                         3 => torvox_core::selection::SelectionMode::Block,
+                        4 => torvox_core::selection::SelectionMode::Semantic,
                         _ => torvox_core::selection::SelectionMode::Char,
                     },
                     origin: None,
@@ -1178,6 +1179,7 @@ impl TorvoxBridge {
                         1 => torvox_core::selection::SelectionMode::Word,
                         2 => torvox_core::selection::SelectionMode::Line,
                         3 => torvox_core::selection::SelectionMode::Block,
+                        4 => torvox_core::selection::SelectionMode::Semantic,
                         _ => torvox_core::selection::SelectionMode::Char,
                     },
                     origin: None,
@@ -1247,6 +1249,7 @@ impl TorvoxBridge {
                 1 => torvox_core::selection::SelectionMode::Word,
                 2 => torvox_core::selection::SelectionMode::Line,
                 3 => torvox_core::selection::SelectionMode::Block,
+                4 => torvox_core::selection::SelectionMode::Semantic,
                 _ => torvox_core::selection::SelectionMode::Char,
             };
 
