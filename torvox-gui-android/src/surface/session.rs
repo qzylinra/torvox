@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 
 use torvox_core::line::Line;
@@ -13,7 +14,7 @@ use super::{DEFAULT_MAX_SCROLLBACK, MAX_SURFACE_DIMENSION, SYNC_MODE_NUMBER};
 use crate::bridge::PollAllResult;
 use crate::lock_util::lock_or_recover;
 
-pub(super) fn cell_to_line(
+pub(crate) fn cell_to_line(
     cells: &[torvox_terminal::ghostty_terminal::CellSnapshot],
     cols: u32,
 ) -> Line {
@@ -44,7 +45,7 @@ pub(super) fn cell_to_line(
     line
 }
 
-pub(super) fn line_to_text(line: &Line) -> String {
+pub(crate) fn line_to_text(line: &Line) -> String {
     (0..line.len())
         .filter_map(|c| line.get(c))
         .map(|cell| cell.char)
@@ -151,10 +152,16 @@ impl AndroidSurface {
         if let Some(ref session_arc) = self.session
             && let Ok(session) = session_arc.lock()
         {
+            let notification = session.poll_notification();
+            let (notification_title, notification_body) = match notification {
+                Some((t, b)) => (Some(t), Some(b)),
+                None => (None, None),
+            };
             return PollAllResult {
                 bel: session.poll_bel(),
                 clipboard: session.poll_clipboard(),
-                notification: session.poll_notification(),
+                notification_title,
+                notification_body,
                 sync_active: session.mode_get(SYNC_MODE_NUMBER, 0),
                 shell_integration: session.poll_shell_integration() as u8,
             };

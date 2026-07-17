@@ -24,9 +24,6 @@ use torvox_terminal::session::Session;
 
 use crate::lock_util::lock_or_recover;
 
-pub(crate) use self::render::compute_raster_scale;
-pub(crate) use self::session::{cell_to_line, line_to_text};
-
 #[cfg(target_os = "android")]
 const WINDOW_FORMAT_RGBA_8888: i32 = 1;
 const FONT_SIZE_FALLBACK_MULTIPLIER: f32 = 1.6;
@@ -567,6 +564,8 @@ impl Drop for AndroidSurface {
 
 #[cfg(test)]
 mod tests {
+    use super::render::compute_raster_scale;
+    use super::session::{cell_to_line, line_to_text};
     use super::*;
 
     #[test]

@@ -5,12 +5,12 @@
 //! - [FR-049](crate) — Bridge: boltffi ↔ JNA wire format
 //! - [FR-050](crate) — Bridge: rkyv serialization
 
-pub(crate) mod core;
 pub(crate) mod ffi;
+#[macro_use]
 mod types;
+pub(crate) mod core;
 
 pub use core::TorvoxBridge;
-pub(crate) use core::with_bridge;
 pub use ffi::*;
 pub use types::*;
 

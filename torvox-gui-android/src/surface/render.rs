@@ -44,7 +44,7 @@ fn cell_ne(a: &CellSnapshot, b: &CellSnapshot) -> bool {
 /// the physical surface width (ANativeWindow pixels) to the wgpu surface-config
 /// width (logical density). It is clamped to a sane range so a misreported
 /// surface metric cannot blow up the atlas. Pure + testable.
-pub(super) fn compute_raster_scale(surface_width: u32, config_width: u32) -> f32 {
+pub(crate) fn compute_raster_scale(surface_width: u32, config_width: u32) -> f32 {
     let surface_width = surface_width.max(1);
     let config_width = config_width.max(1);
     (surface_width as f32 / config_width as f32).clamp(0.5, 4.0)

@@ -386,15 +386,18 @@ impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
     }
 }
 
+#[boltffi::data]
 #[derive(Debug, Default)]
 pub struct PollAllResult {
     pub bel: bool,
     pub clipboard: Option<String>,
-    pub notification: Option<(String, String)>,
+    pub notification_title: Option<String>,
+    pub notification_body: Option<String>,
     pub sync_active: bool,
     pub shell_integration: u8,
 }
 
+#[boltffi::data]
 #[derive(Debug, Clone, Copy)]
 pub struct SelectionEndpointParams {
     pub handle_side: u8,
@@ -454,7 +457,6 @@ impl From<BridgeError> for TerminalError {
     }
 }
 
-#[macro_export]
 macro_rules! lock_surface {
     ($bridge:expr) => {
         $bridge
@@ -466,7 +468,6 @@ macro_rules! lock_surface {
     };
 }
 
-#[macro_export]
 macro_rules! lock_session {
     ($bridge:expr) => {
         $bridge

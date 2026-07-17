@@ -75,6 +75,8 @@ pub struct ShapedGlyphInfo {
     pub y_offset: f32,
 }
 
+#[cfg(target_os = "android")]
+pub use font_db::set_extra_font_paths;
 pub use pipeline::FontPipeline;
 
 #[cfg(test)]

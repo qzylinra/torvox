@@ -1,4 +1,4 @@
-use super::core::{TorvoxBridge, with_bridge};
+use super::core::{with_bridge, TorvoxBridge};
 use super::types::*;
 
 pub fn read_string(ptr: *const u8, len: i32) -> String {
@@ -887,8 +887,8 @@ pub unsafe extern "C" fn torvox_bridge_poll_all(handle: i64) -> i64 {
         },
         None => 0,
     };
-    let notification_ptr = match result.notification {
-        Some((title, body)) => {
+    let notification_ptr = match (result.notification_title, result.notification_body) {
+        (Some(title), Some(body)) => {
             let title_c = match safe_cstring(title) {
                 Some(c) => c,
                 None => return 0,
@@ -906,7 +906,7 @@ pub unsafe extern "C" fn torvox_bridge_poll_all(handle: i64) -> i64 {
             let buf = Box::new([title_c.into_raw(), body_c.into_raw()]);
             Box::into_raw(buf) as i64
         }
-        None => 0,
+        _ => 0,
     };
     let ffi = PollAllFFI {
         bel: if result.bel { 1 } else { 0 },

@@ -107,5 +107,6 @@ fn is_font_file(entry: &std::path::Path) -> bool {
 }
 
 /// Extra font paths provided by the GUI layer (Android).
+#[cfg(target_os = "android")]
 pub(crate) static EXTRA_FONT_PATHS_RW: std::sync::RwLock<Vec<std::path::PathBuf>> =
     std::sync::RwLock::new(Vec::new());

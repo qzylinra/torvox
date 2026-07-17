@@ -402,18 +402,6 @@ impl TorvoxBridge {
             .unwrap_or(0)
     }
 
-    pub fn poll_all(&self) -> PollAllResult {
-        #[cfg(target_os = "android")]
-        unsafe {
-            std::hint::black_box(torvox_bridge_poll_all(0));
-        }
-        let mut surface_guard = lock_or_recover(&self.surface, "poll_all");
-        surface_guard
-            .as_mut()
-            .map(|s| s.poll_all())
-            .unwrap_or_default()
-    }
-
     pub fn poll_sync_active(&self) -> bool {
         let mut surface_guard = lock_or_recover(&self.surface, "poll_sync_active");
         surface_guard
