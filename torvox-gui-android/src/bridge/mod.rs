@@ -5,6 +5,8 @@
 //! - [FR-049](crate) — Bridge: boltffi ↔ JNA wire format
 //! - [FR-050](crate) — Bridge: rkyv serialization
 
+use crate::lock_util::lock_or_recover;
+
 const DEFAULT_GRID_ROWS: u32 = 24;
 const DEFAULT_GRID_COLS: u32 = 80;
 /// FFI-safe bridge type for a terminal cell.
@@ -398,13 +400,7 @@ impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
                         start_col: start.col,
                         end_row: end.row,
                         end_col: end.col,
-                        mode: match selection.mode {
-                            torvox_core::selection::SelectionMode::Char => 0,
-                            torvox_core::selection::SelectionMode::Word => 1,
-                            torvox_core::selection::SelectionMode::Line => 2,
-                            torvox_core::selection::SelectionMode::Block => 3,
-                            torvox_core::selection::SelectionMode::Semantic => 4,
-                        },
+                        mode: selection.mode.to_u8(),
                     }
                 }
                 None => TerminalEvent::SelectionChanged {
@@ -860,14 +856,7 @@ impl TorvoxBridge {
                     end_row,
                     end_col,
                     active: true,
-                    mode: match mode {
-                        0 => torvox_core::selection::SelectionMode::Char,
-                        1 => torvox_core::selection::SelectionMode::Word,
-                        2 => torvox_core::selection::SelectionMode::Line,
-                        3 => torvox_core::selection::SelectionMode::Block,
-                        4 => torvox_core::selection::SelectionMode::Semantic,
-                        _ => torvox_core::selection::SelectionMode::Char,
-                    },
+                    mode: torvox_core::selection::SelectionMode::from_u8(mode),
                     origin: None,
                 }));
             } else {
@@ -886,13 +875,7 @@ impl TorvoxBridge {
     }
 
     pub fn poll_bel(&self) -> bool {
-        let mut surface_guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in poll_bel");
-                poisoned.into_inner()
-            }
-        };
+        let mut surface_guard = lock_or_recover(&self.surface, "poll_bel");
         surface_guard
             .as_mut()
             .map(|s| s.poll_bel())
@@ -900,35 +883,17 @@ impl TorvoxBridge {
     }
 
     pub fn poll_clipboard(&self) -> Option<String> {
-        let mut surface_guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in poll_clipboard");
-                poisoned.into_inner()
-            }
-        };
+        let mut surface_guard = lock_or_recover(&self.surface, "poll_clipboard");
         surface_guard.as_mut()?.poll_clipboard()
     }
 
     pub(crate) fn poll_notification_raw(&self) -> Option<(String, String)> {
-        let mut surface_guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in poll_notification_raw");
-                poisoned.into_inner()
-            }
-        };
+        let mut surface_guard = lock_or_recover(&self.surface, "poll_notification_raw");
         surface_guard.as_mut()?.poll_notification()
     }
 
     pub fn poll_shell_integration(&self) -> u8 {
-        let mut surface_guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in poll_shell_integration");
-                poisoned.into_inner()
-            }
-        };
+        let mut surface_guard = lock_or_recover(&self.surface, "poll_shell_integration");
         surface_guard
             .as_mut()
             .map(|s| s.poll_shell_integration())
@@ -946,13 +911,7 @@ impl TorvoxBridge {
         unsafe {
             std::hint::black_box(torvox_bridge_poll_all(0));
         }
-        let mut surface_guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in poll_all");
-                poisoned.into_inner()
-            }
-        };
+        let mut surface_guard = lock_or_recover(&self.surface, "poll_all");
         surface_guard
             .as_mut()
             .map(|s| s.poll_all())
@@ -960,13 +919,7 @@ impl TorvoxBridge {
     }
 
     pub fn poll_sync_active(&self) -> bool {
-        let mut surface_guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in poll_sync_active");
-                poisoned.into_inner()
-            }
-        };
+        let mut surface_guard = lock_or_recover(&self.surface, "poll_sync_active");
         surface_guard
             .as_mut()
             .map(|s| s.poll_sync_active())
@@ -1175,14 +1128,7 @@ impl TorvoxBridge {
                     end_row,
                     end_col,
                     active: true,
-                    mode: match mode {
-                        0 => torvox_core::selection::SelectionMode::Char,
-                        1 => torvox_core::selection::SelectionMode::Word,
-                        2 => torvox_core::selection::SelectionMode::Line,
-                        3 => torvox_core::selection::SelectionMode::Block,
-                        4 => torvox_core::selection::SelectionMode::Semantic,
-                        _ => torvox_core::selection::SelectionMode::Char,
-                    },
+                    mode: torvox_core::selection::SelectionMode::from_u8(mode),
                     origin: None,
                 }));
             } else {
@@ -1245,14 +1191,7 @@ impl TorvoxBridge {
             detail: format!("lock failed: {}", e),
         })?;
         if let Some(surface) = surface_guard.as_mut() {
-            let mode_enum = match mode {
-                0 => torvox_core::selection::SelectionMode::Char,
-                1 => torvox_core::selection::SelectionMode::Word,
-                2 => torvox_core::selection::SelectionMode::Line,
-                3 => torvox_core::selection::SelectionMode::Block,
-                4 => torvox_core::selection::SelectionMode::Semantic,
-                _ => torvox_core::selection::SelectionMode::Char,
-            };
+            let mode_enum = torvox_core::selection::SelectionMode::from_u8(mode);
 
             // Get snapshot data for grid access
             if let Ok(guard) = self.session.lock()
@@ -1320,13 +1259,7 @@ impl TorvoxBridge {
         origin_row: i32,
         origin_col: i32,
     ) -> Result<(u32, u32, u32, u32), TerminalError> {
-        let mode_enum = match mode {
-            0 => torvox_core::selection::SelectionMode::Char,
-            1 => torvox_core::selection::SelectionMode::Word,
-            2 => torvox_core::selection::SelectionMode::Line,
-            3 => torvox_core::selection::SelectionMode::Block,
-            _ => torvox_core::selection::SelectionMode::Char,
-        };
+        let mode_enum = torvox_core::selection::SelectionMode::from_u8(mode);
         let mut surface_guard = self.surface.lock().map_err(|e| TerminalError::PtyError {
             detail: format!("lock failed: {}", e),
         })?;
@@ -1552,13 +1485,7 @@ impl TorvoxBridge {
     }
 
     pub fn list_fonts(&self) -> String {
-        let guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in list_fonts");
-                poisoned.into_inner()
-            }
-        };
+        let guard = lock_or_recover(&self.surface, "list_fonts");
         guard
             .as_ref()
             .map(|s| {
@@ -1594,13 +1521,7 @@ impl TorvoxBridge {
     }
 
     pub fn list_font_families(&self) -> String {
-        let guard = match self.surface.lock() {
-            Ok(g) => g,
-            Err(poisoned) => {
-                log::error!("surface mutex poisoned in list_font_families");
-                poisoned.into_inner()
-            }
-        };
+        let guard = lock_or_recover(&self.surface, "list_font_families");
         guard
             .as_ref()
             .map(|s| s.font_pipeline().list_all_font_families().join("\x1f"))
@@ -1609,13 +1530,7 @@ impl TorvoxBridge {
 
     pub fn load_font_file(&self, path: String) -> Option<String> {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let mut surface_guard = match self.surface.lock() {
-                Ok(g) => g,
-                Err(poisoned) => {
-                    log::error!("surface mutex poisoned in load_font_file");
-                    poisoned.into_inner()
-                }
-            };
+            let mut surface_guard = lock_or_recover(&self.surface, "load_font_file");
             let surface = surface_guard.as_mut()?;
             let std_path = std::path::PathBuf::from(&path);
             let family = surface.load_font_file(&std_path);

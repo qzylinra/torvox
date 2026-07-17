@@ -73,6 +73,37 @@ pub enum SelectionMode {
     Semantic,
 }
 
+const SELECTION_MODE_WIRES: [SelectionMode; 5] = [
+    SelectionMode::Char,
+    SelectionMode::Word,
+    SelectionMode::Line,
+    SelectionMode::Block,
+    SelectionMode::Semantic,
+];
+
+impl SelectionMode {
+    /// Convert a wire `u8` discriminant to a `SelectionMode`.
+    ///
+    /// Unknown values fall back to [`SelectionMode::Char`].
+    pub fn from_u8(value: u8) -> Self {
+        SELECTION_MODE_WIRES
+            .get(value as usize)
+            .copied()
+            .unwrap_or(Self::Char)
+    }
+
+    /// Convert a `SelectionMode` to its wire `u8` discriminant.
+    pub fn to_u8(self) -> u8 {
+        match self {
+            Self::Char => 0,
+            Self::Word => 1,
+            Self::Line => 2,
+            Self::Block => 3,
+            Self::Semantic => 4,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// A single endpoint of a selection (row, col).
 #[cfg_attr(
@@ -1554,5 +1585,23 @@ mod tests {
             text == "user" || text == "user@host.com",
             "expected user or user@host.com, got '{text}'"
         );
+    }
+
+    #[test]
+    fn selection_mode_from_u8_roundtrip() {
+        for mode in [
+            SelectionMode::Char,
+            SelectionMode::Word,
+            SelectionMode::Line,
+            SelectionMode::Block,
+            SelectionMode::Semantic,
+        ] {
+            assert_eq!(SelectionMode::from_u8(mode.to_u8()), mode);
+        }
+    }
+
+    #[test]
+    fn selection_mode_from_u8_unknown_defaults_to_char() {
+        assert_eq!(SelectionMode::from_u8(255), SelectionMode::Char);
     }
 }

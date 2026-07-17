@@ -25,6 +25,8 @@ use torvox_terminal::ghostty_terminal::KgpImageData;
 use torvox_terminal::session::Session;
 use torvox_terminal::shell_env::ShellEnv;
 
+use crate::lock_util::lock_or_recover;
+
 #[cfg(target_os = "android")]
 const WINDOW_FORMAT_RGBA_8888: i32 = 1;
 const FONT_SIZE_FALLBACK_MULTIPLIER: f32 = 1.6;
@@ -345,13 +347,7 @@ impl AndroidSurface {
         .map_err(|e| SurfaceError::Session(e.to_string()))?;
         let session_arc = Arc::new(Mutex::new(session));
         {
-            let mut guard = match session_arc.lock() {
-                Ok(g) => g,
-                Err(poisoned) => {
-                    log::error!("spawn_session: session mutex poisoned, recovering");
-                    poisoned.into_inner()
-                }
-            };
+            let mut guard = lock_or_recover(&session_arc, "spawn_session");
             self.exited = guard.exited_flag().clone();
             guard.set_pixel_size(
                 (self.surface_width.load(Ordering::Relaxed) as u16).min(MAX_SURFACE_DIMENSION),
@@ -1282,14 +1278,7 @@ impl AndroidSurface {
         self.rows = rows;
         self.cols = cols;
         if let Some(ref session_arc) = self.session {
-            let mut session = match session_arc.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => {
-                    let guard = poisoned.into_inner();
-                    log::warn!("resize: session mutex was poisoned, recovered");
-                    guard
-                }
-            };
+            let mut session = lock_or_recover(session_arc, "resize");
             if let Err(error) = session.resize(rows, cols) {
                 log::error!("surface: session resize failed: {error}");
             }
@@ -1298,14 +1287,7 @@ impl AndroidSurface {
 
     pub fn write_to_pty(&mut self, data: &[u8]) {
         if let Some(ref session_arc) = self.session {
-            let mut session = match session_arc.lock() {
-                Ok(guard) => guard,
-                Err(poisoned) => {
-                    let guard = poisoned.into_inner();
-                    log::warn!("write_to_pty: session mutex was poisoned, recovered");
-                    guard
-                }
-            };
+            let mut session = lock_or_recover(session_arc, "write_to_pty");
             if let Err(error) = session.write(data) {
                 log::error!("surface: PTY write failed: {error}");
             }
@@ -1581,14 +1563,8 @@ impl AndroidSurface {
         let ansi = theme.ansi;
         self.theme = theme;
         if let Some(ref session_arc) = self.session {
-            match session_arc.lock() {
-                Ok(session) => session.terminal().set_theme(bg, fg, ansi),
-                Err(poisoned) => {
-                    let session = poisoned.into_inner();
-                    session.terminal().set_theme(bg, fg, ansi);
-                    log::warn!("set_theme: session mutex was poisoned, recovered");
-                }
-            }
+            let session = lock_or_recover(session_arc, "set_theme");
+            session.terminal().set_theme(bg, fg, ansi);
         }
         if let Some(gpu) = self.gpu.as_mut() {
             gpu.set_bg_color(bg);
