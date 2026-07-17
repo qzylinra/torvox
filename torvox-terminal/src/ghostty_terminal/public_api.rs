@@ -157,7 +157,6 @@ impl super::GhosttyTerminal {
         !self.cmd_tx.is_disconnected()
     }
 
-
     pub fn flush(&self) {
         let (tx, rx) = bounded(1);
         if let Err(error) = self.cmd_tx.send(Command::FlushAck(tx)) {

@@ -9,8 +9,8 @@ pub(crate) mod core;
 pub(crate) mod ffi;
 mod types;
 
-pub(crate) use core::with_bridge;
 pub use core::TorvoxBridge;
+pub(crate) use core::with_bridge;
 pub use ffi::*;
 pub use types::*;
 

@@ -36,12 +36,21 @@ const MAX_COLS: f32 = 300.0;
 const MIN_ROWS: f32 = 5.0;
 const MAX_ROWS: f32 = 200.0;
 const FRAME_TIME_TARGET_MS: f64 = 16.0;
+/// DEC private mode number for synchronous update mode (DECSET/DECRST 2026).
+/// When active, the terminal suppresses rendering until an explicit sync
+/// boundary is reached, batching multiple mutations into a single frame.
 const SYNC_MODE_NUMBER: u16 = 2026;
 pub(crate) const DEFAULT_MAX_SCROLLBACK: usize = 2000;
 const ATLAS_WIDTH: u32 = 2048;
 const ATLAS_HEIGHT: u32 = 2048;
 const KGP_ATLAS_WIDTH: u32 = 2048;
 const MAX_SURFACE_DIMENSION: u16 = 4096;
+/// Default cursor blink period in milliseconds.
+const DEFAULT_BLINK_SPEED_MS: u32 = 530;
+/// Minimum allowed cursor blink period in milliseconds.
+const BLINK_SPEED_MIN_MS: u32 = 100;
+/// Maximum allowed cursor blink period in milliseconds.
+const BLINK_SPEED_MAX_MS: u32 = 1000;
 
 // SAFETY: These are FFI function declarations from the Android NDK. They are safe
 // to declare — the unsafety is in calling them, which is already annotated at each
@@ -236,7 +245,7 @@ impl AndroidSurface {
             last_cursor_col: 0,
             blink_phase: true,
             blink_enabled: true,
-            blink_speed_ms: 530,
+            blink_speed_ms: DEFAULT_BLINK_SPEED_MS,
             last_blink_toggle: std::time::Instant::now(),
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             render_requested: false,

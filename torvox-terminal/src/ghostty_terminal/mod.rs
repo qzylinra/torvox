@@ -10,10 +10,9 @@ mod keymap;
 mod public_api;
 mod types;
 
-pub use types::*;
 pub use commands::Command;
 pub(crate) use commands::SnapshotCache;
-pub(crate) use internal::snapshot_needs_rebuild;
+pub use types::*;
 
 pub struct GhosttyTerminal {
     pub(crate) cmd_tx: Sender<Command>,
@@ -36,7 +35,6 @@ impl Drop for GhosttyTerminal {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests;

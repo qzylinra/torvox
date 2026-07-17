@@ -1,5 +1,3 @@
-
-
 /// A single match from search_all_in_scrollback.
 /// Row and column positions are byte offsets in the line text.
 #[derive(Debug, Clone, PartialEq)]

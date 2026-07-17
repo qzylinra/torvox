@@ -2,6 +2,12 @@ use super::{FontPipeline, ShapedGlyphInfo};
 
 pub(super) const SHAPE_CACHE_CAPACITY: usize = 4_096;
 
+/// Line height as a multiple of font size for cosmic-text Metrics.
+const DEFAULT_LINE_HEIGHT_RATIO: f32 = 1.2;
+
+/// Width used for an effectively infinite shaping buffer.
+const INFINITE_BUFFER_WIDTH: f32 = 999_999.0;
+
 impl FontPipeline {
     pub fn shape_run(&mut self, text: &str) -> Vec<ShapedGlyphInfo> {
         if text.is_empty() {
@@ -11,14 +17,15 @@ impl FontPipeline {
             return cached.clone();
         }
 
-        let metrics = cosmic_text::Metrics::new(self.font_size, self.font_size * 1.2);
+        let metrics =
+            cosmic_text::Metrics::new(self.font_size, self.font_size * DEFAULT_LINE_HEIGHT_RATIO);
         let mut buffer = self.shaping_buffer.take().unwrap_or_else(|| {
             let mut b = cosmic_text::Buffer::new_empty(metrics);
-            b.set_size(Some(999_999.0), None);
+            b.set_size(Some(INFINITE_BUFFER_WIDTH), None);
             b
         });
         buffer.set_metrics(metrics);
-        buffer.set_size(Some(999_999.0), None);
+        buffer.set_size(Some(INFINITE_BUFFER_WIDTH), None);
 
         let family_name = self.default_font_name();
         let family = if family_name.is_empty() {
@@ -28,7 +35,9 @@ impl FontPipeline {
         };
         let attrs = cosmic_text::Attrs::new().family(family);
 
-        let has_cjk = text.chars().any(|c| (c as u32) >= 0x2E80);
+        let has_cjk = text
+            .chars()
+            .any(|c| (c as u32) >= super::CJK_IDEOGRAPHIC_START);
         buffer.set_text(text, &attrs, cosmic_text::Shaping::Advanced, None);
         if has_cjk && !self.cjk_fallback_ids.is_empty() {
             let db = self.font_system.db();

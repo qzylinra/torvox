@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use super::AndroidSurface;
-use super::{MIN_COLS, MAX_COLS, MIN_ROWS, MAX_ROWS};
+use super::{BLINK_SPEED_MAX_MS, BLINK_SPEED_MIN_MS, MAX_COLS, MAX_ROWS, MIN_COLS, MIN_ROWS};
 
 use crate::lock_util::lock_or_recover;
 
@@ -23,7 +23,7 @@ impl AndroidSurface {
     }
 
     pub fn set_blink_speed_ms(&mut self, speed_ms: u32) {
-        self.blink_speed_ms = speed_ms.clamp(100, 1000);
+        self.blink_speed_ms = speed_ms.clamp(BLINK_SPEED_MIN_MS, BLINK_SPEED_MAX_MS);
         self.render_requested = true;
     }
 

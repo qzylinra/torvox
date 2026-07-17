@@ -3,6 +3,20 @@ use super::{FontPipeline, GlyphInfo};
 pub(super) const CJK_BITMAP_PENALTY: u8 = 20;
 pub(super) const OUTLINE_BONUS: u8 = 10;
 
+/// Priority boost applied to CJK fallback fonts whose family name matches
+/// the current system locale tag (e.g. "sc" for Simplified Chinese).
+const CJK_LOCALE_BONUS: i16 = 6;
+
+/// Priority for well-known CJK font families (Noto Sans/Serif CJK, Source Han,
+/// Droid Sans Fallback, WenQuanYi).
+const CJK_PRIORITY_KNOWN_FAMILY: u8 = 5;
+/// Priority for fonts with a generic "cjk" tag in their family name.
+const CJK_PRIORITY_GENERIC_CJK: u8 = 4;
+/// Priority for fonts with a locale-specific tag (sc, tc, jp, kr).
+const CJK_PRIORITY_LOCALE_TAG: u8 = 3;
+/// Baseline priority for any other CJK-capable font.
+const CJK_PRIORITY_FALLBACK: u8 = 2;
+
 impl FontPipeline {
     pub(crate) fn find_cjk_fallback_fonts(&mut self, system_locale: &str) {
         let locale_tag = match system_locale {
@@ -43,7 +57,6 @@ impl FontPipeline {
         let db = self.font_system.db();
         let test_chars = ['中', '日', '가'];
         let mut candidates: Vec<(fontdb::ID, f32, i16)> = Vec::new();
-        let locale_bonus: u8 = 6;
 
         for face in db.faces() {
             if face.id == self.font_id.unwrap_or_default() {
@@ -90,7 +103,7 @@ impl FontPipeline {
             if let Some(Some(Some(advance_px))) = result {
                 let is_locale_match = !locale_tag.is_empty() && family_name.contains(locale_tag);
                 let is_generic_cjk = family_name.contains("cjk");
-                let locale_boost = if is_locale_match { locale_bonus } else { 0 };
+                let locale_boost = if is_locale_match { CJK_LOCALE_BONUS } else { 0 };
 
                 let base_priority: u8 = if family_name.contains("noto sans sc")
                     || family_name.contains("noto sans tc")
@@ -104,17 +117,17 @@ impl FontPipeline {
                     || family_name.contains("droid sans fallback")
                     || family_name.contains("wenquanyi")
                 {
-                    5
+                    CJK_PRIORITY_KNOWN_FAMILY
                 } else if is_generic_cjk {
-                    4
+                    CJK_PRIORITY_GENERIC_CJK
                 } else if family_name.contains("sc")
                     || family_name.contains("tc")
                     || family_name.contains("jp")
                     || family_name.contains("kr")
                 {
-                    3
+                    CJK_PRIORITY_LOCALE_TAG
                 } else {
-                    2
+                    CJK_PRIORITY_FALLBACK
                 };
                 let priority = (base_priority as i16).saturating_add(locale_boost as i16);
                 let (is_vector, source_quality_penalty): (bool, u8) = {

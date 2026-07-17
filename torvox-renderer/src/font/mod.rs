@@ -13,6 +13,10 @@ use crate::lock_util::write_or_recover;
 
 pub const GLYPH_CACHE_CAPACITY: usize = 10_000;
 
+/// Unicode code point where CJK Ideographic characters begin (U+2E80).
+/// Used to decide whether to attempt CJK fallback font lookup.
+pub(crate) const CJK_IDEOGRAPHIC_START: u32 = 0x2E80;
+
 #[derive(Debug, Error)]
 pub enum FontError {
     #[error("no monospace font found")]
@@ -769,7 +773,7 @@ impl FontPipeline {
 
         let has_cjk_fallback = !self.cjk_fallback_ids.is_empty();
 
-        if glyph_id != 0 && (ch as u32) >= 0x2E80 && has_cjk_fallback {
+        if glyph_id != 0 && (ch as u32) >= CJK_IDEOGRAPHIC_START && has_cjk_fallback {
             let is_outline = self.glyph_source_is_outline(primary_font_id, glyph_id);
             if !is_outline && let Some(fallback_info) = self.try_cjk_outline_fallback(ch) {
                 return Some(fallback_info);

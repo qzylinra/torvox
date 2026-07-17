@@ -18,8 +18,8 @@ use crate::{
     DirEntry, GridCellData, GridSnapshotData, ReadRequest, ReadResponse, SearchMatch, SessionInfo,
     SessionStore, SignalKind,
 };
-use torvox_terminal::session::Session;
 use torvox_terminal::ShellEnv;
+use torvox_terminal::session::Session;
 
 /// Maximum rows we walk when collecting scrollback text from the VT thread.
 const SCROLLBACK_READ_LIMIT: u32 = 5000;
@@ -75,19 +75,21 @@ impl LiveShellStore {
         let arc = Arc::new(Mutex::new(session));
         // Pump the VT output into the terminal grid so read tools observe it.
         let pump = arc.clone();
-        std::thread::spawn(move || loop {
-            let exited = {
-                let mut s = match pump.lock() {
-                    Ok(s) => s,
-                    Err(_) => break,
+        std::thread::spawn(move || {
+            loop {
+                let exited = {
+                    let mut s = match pump.lock() {
+                        Ok(s) => s,
+                        Err(_) => break,
+                    };
+                    s.process_output();
+                    s.is_exited()
                 };
-                s.process_output();
-                s.is_exited()
-            };
-            if exited {
-                break;
+                if exited {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(10));
             }
-            std::thread::sleep(Duration::from_millis(10));
         });
         lock_or_recover(&self.sessions, "spawn_session::sessions").insert(id, arc);
         id

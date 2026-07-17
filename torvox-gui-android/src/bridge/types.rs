@@ -454,20 +454,26 @@ impl From<BridgeError> for TerminalError {
     }
 }
 
-pub(crate) macro_rules! lock_surface {
+#[macro_export]
+macro_rules! lock_surface {
     ($bridge:expr) => {
         $bridge
             .surface
             .lock()
-            .map_err(|_| $crate::bridge::BridgeError::Lock { context: "surface".into() })?
+            .map_err(|_| $crate::bridge::BridgeError::Lock {
+                context: "surface".into(),
+            })?
     };
 }
 
-pub(crate) macro_rules! lock_session {
+#[macro_export]
+macro_rules! lock_session {
     ($bridge:expr) => {
         $bridge
             .session
             .lock()
-            .map_err(|_| $crate::bridge::BridgeError::Lock { context: "session".into() })?
+            .map_err(|_| $crate::bridge::BridgeError::Lock {
+                context: "session".into(),
+            })?
     };
 }

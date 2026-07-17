@@ -13,7 +13,10 @@ use super::{DEFAULT_MAX_SCROLLBACK, MAX_SURFACE_DIMENSION, SYNC_MODE_NUMBER};
 use crate::bridge::PollAllResult;
 use crate::lock_util::lock_or_recover;
 
-pub(super) fn cell_to_line(cells: &[torvox_terminal::ghostty_terminal::CellSnapshot], cols: u32) -> Line {
+pub(super) fn cell_to_line(
+    cells: &[torvox_terminal::ghostty_terminal::CellSnapshot],
+    cols: u32,
+) -> Line {
     let mut line = Line::new(cols);
     for col in 0..cols as usize {
         if let Some(cs) = cells.get(col)
@@ -178,8 +181,12 @@ impl AndroidSurface {
 
     pub fn recompute_grid(&mut self, width: u32, height: u32) {
         let (cw, ch) = self.font_pipeline.cell_metrics();
-        let new_cols = (width as f32 / cw).floor().clamp(super::MIN_COLS, super::MAX_COLS) as u32;
-        let new_rows = (height as f32 / ch).floor().clamp(super::MIN_ROWS, super::MAX_ROWS) as u32;
+        let new_cols = (width as f32 / cw)
+            .floor()
+            .clamp(super::MIN_COLS, super::MAX_COLS) as u32;
+        let new_rows = (height as f32 / ch)
+            .floor()
+            .clamp(super::MIN_ROWS, super::MAX_ROWS) as u32;
 
         self.render_width = width;
         self.render_height = height;

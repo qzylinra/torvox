@@ -1,4 +1,4 @@
-use super::core::{with_bridge, TorvoxBridge};
+use super::core::{TorvoxBridge, with_bridge};
 use super::types::*;
 
 pub fn read_string(ptr: *const u8, len: i32) -> String {

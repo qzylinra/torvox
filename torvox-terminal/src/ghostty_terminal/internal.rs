@@ -7,8 +7,8 @@ use libghostty_vt::terminal::{Mode, ModeKind, Point, PointCoordinate};
 use libghostty_vt::{Terminal, TerminalOptions};
 
 use super::commands::{Command, RunConfig};
-use super::types::*;
 use super::keymap::map_android_key_code;
+use super::types::*;
 
 /// Decide whether the VT thread must rebuild the grid snapshot from the
 /// terminal, as opposed to cloning the previously built (cached) snapshot.
@@ -26,7 +26,6 @@ pub(crate) fn snapshot_needs_rebuild(
 ) -> bool {
     grid_dirty || scroll_offset != cached_scroll_offset || !has_cache
 }
-
 
 impl super::GhosttyTerminal {
     pub(crate) fn osc_sequence(command: u8, r: u8, g: u8, b: u8) -> Vec<u8> {
@@ -962,7 +961,10 @@ impl super::GhosttyTerminal {
         }
     }
 
-    pub(crate) fn search_in_scrollback_impl(terminal: &Terminal, query: &str) -> Option<(u32, u32)> {
+    pub(crate) fn search_in_scrollback_impl(
+        terminal: &Terminal,
+        query: &str,
+    ) -> Option<(u32, u32)> {
         if query.is_empty() {
             return None;
         }
