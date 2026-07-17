@@ -1,7 +1,7 @@
-use super::GpuContext;
-use super::GpuError;
 use super::atlas::MIN_ATLAS_BUFFER_SIZE;
 use super::pipeline::QUAD_VERTEX_COUNT;
+use super::GpuContext;
+use super::GpuError;
 
 const GPU_POLL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 

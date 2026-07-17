@@ -1,7 +1,5 @@
 //! MCP protocol types — error, request/response, session info, commands.
 
-use std::collections::BTreeMap;
-
 use flume::Sender;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};

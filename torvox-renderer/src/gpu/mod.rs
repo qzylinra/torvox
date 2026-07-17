@@ -21,14 +21,14 @@ mod surface;
 mod tests;
 
 pub use cell_builder::{
-    CellInstanceConfig, SearchHighlight, SelectionRange, build_cell_instances_from_snapshot,
-    build_cell_instances_into,
+    build_cell_instances_into, build_cell_instances_from_snapshot,
+    CellInstanceConfig, SearchHighlight, SelectionRange,
 };
 #[cfg(test)]
-pub(crate) use cell_builder::{FlatGrid, build_cell_instances_from_flat};
+pub(crate) use cell_builder::{build_cell_instances_from_flat, FlatGrid};
 pub(crate) use cell_builder::{blend_highlight, cell_highlight, color_f32x4_eq};
+pub use pipeline::{image_active_value, GpuUniforms};
 pub(crate) use pipeline::{DEFAULT_BG_ALPHA, QUAD_CORNERS};
-pub use pipeline::{GpuUniforms, image_active_value};
 
 pub const RENDER_SCALE: f32 = 1.0;
 
