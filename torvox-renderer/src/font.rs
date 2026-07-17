@@ -236,7 +236,7 @@ pub struct FontPipeline {
     atlas_generation: u64,
     /// Bounding box of the glyph region modified since the last take.
     /// `None` means no glyphs have been rasterized since the last upload.
-    dirty_rect: Option<(i32, i32, u32, u32)>,
+    dirty_rect: Option<(u32, u32, u32, u32)>,
     system_locale: String,
     shaping_buffer: Option<cosmic_text::Buffer>,
     /// Cache of ligature-aware shaped runs keyed by run text. Shaping is
@@ -1146,20 +1146,20 @@ impl FontPipeline {
         };
         let rect = allocation.rectangle;
         let allocation_id = Some(allocation.id);
-        let ax = rect.min.x as i32;
-        let ay = rect.min.y as i32;
+        let ax = rect.min.x as u32;
+        let ay = rect.min.y as u32;
 
         if width > 0 && height > 0 {
             let gw = width as u32;
             let gh = height as u32;
             match &mut self.dirty_rect {
                 Some((dx, dy, dw, dh)) => {
-                    let cx2 = (*dx + *dw as i32).max(ax + gw as i32);
-                    let cy2 = (*dy + *dh as i32).max(ay + gh as i32);
+                    let cx2 = (*dx + *dw).max(ax + gw);
+                    let cy2 = (*dy + *dh).max(ay + gh);
                     *dx = (*dx).min(ax);
                     *dy = (*dy).min(ay);
-                    *dw = (cx2 - *dx) as u32;
-                    *dh = (cy2 - *dy) as u32;
+                    *dw = cx2 - *dx;
+                    *dh = cy2 - *dy;
                 }
                 None => {
                     self.dirty_rect = Some((ax, ay, gw, gh));
@@ -1217,8 +1217,8 @@ impl FontPipeline {
         }
 
         let info = GlyphInfo {
-            atlas_x: ax,
-            atlas_y: ay,
+            atlas_x: ax as i32,
+            atlas_y: ay as i32,
             width,
             height,
             placement: image.placement,
