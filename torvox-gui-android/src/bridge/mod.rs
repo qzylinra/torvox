@@ -422,6 +422,27 @@ impl From<torvox_core::event::TerminalEvent> for TerminalEvent {
 const LIST_SEPARATOR: &str = "\x1f";
 const TEXT_PREVIEW_MAX_CHARS: usize = 80;
 
+#[derive(Debug, Default)]
+pub struct PollAllResult {
+    pub bel: bool,
+    pub clipboard: Option<String>,
+    pub notification: Option<(String, String)>,
+    pub sync_active: bool,
+    pub shell_integration: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SelectionEndpointParams {
+    pub handle_side: u8,
+    pub anchor_row: i32,
+    pub anchor_col: i32,
+    pub other_row: i32,
+    pub other_col: i32,
+    pub mode: u8,
+    pub origin_row: i32,
+    pub origin_col: i32,
+}
+
 /// Errors returned across the FFI boundary.
 #[boltffi::error]
 #[derive(Debug, Clone, thiserror::Error)]
@@ -924,7 +945,7 @@ impl TorvoxBridge {
     /// separate `poll_*` calls that each acquired the surface mutex on their
     /// own, eliminating ~4 extra JNI round-trips and lock acquisitions per
     /// render frame and reducing surface-lock contention with the main thread.
-    pub fn poll_all(&self) -> (bool, Option<String>, Option<(String, String)>, bool, u8) {
+    pub fn poll_all(&self) -> PollAllResult {
         // Keep the C symbol alive for JNA — LTO strips unreferenced extern functions.
         #[cfg(target_os = "android")]
         unsafe {
@@ -1238,27 +1259,12 @@ impl TorvoxBridge {
     /// drag-grow with long-press so word/URL/CJK boundaries stay consistent and
     /// there is no divergent client-side expansion.
     ///
-    /// * `handle_side` — 0 to move the start endpoint, 1 to move the end endpoint.
-    /// * `anchor_row`/`anchor_col` — the cell the dragged handle moved to.
-    /// * `other_row`/`other_col` — the fixed (opposite) endpoint.
-    /// * `mode` — selection mode (0=Char, 1=Word, 2=Line, 3=Block).
-    /// * `origin_row`/`origin_col` — the original long-press cell (preserved as the
-    ///   selection origin for the renderer).
-    ///
     /// Returns the resulting ordered `(start_row, start_col, end_row, end_col)`.
-    #[allow(clippy::too_many_arguments)]
     pub fn set_selection_endpoint(
         &self,
-        handle_side: u8,
-        anchor_row: i32,
-        anchor_col: i32,
-        other_row: i32,
-        other_col: i32,
-        mode: u8,
-        origin_row: i32,
-        origin_col: i32,
+        params: SelectionEndpointParams,
     ) -> Result<(u32, u32, u32, u32), BridgeError> {
-        let mode_enum = torvox_core::selection::SelectionMode::from_u8(mode);
+        let mode_enum = torvox_core::selection::SelectionMode::from_u8(params.mode);
         let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             if let Ok(guard) = self.session.lock()
@@ -1276,27 +1282,26 @@ impl TorvoxBridge {
                 };
 
                 let fixed = torvox_core::selection::SelectionAnchor {
-                    row: other_row.max(0) as u32,
-                    col: other_col.max(0) as u32,
+                    row: params.other_row.max(0) as u32,
+                    col: params.other_col.max(0) as u32,
                 };
                 let moved = torvox_core::selection::SelectionAnchor {
-                    row: anchor_row.max(0) as u32,
-                    col: anchor_col.max(0) as u32,
+                    row: params.anchor_row.max(0) as u32,
+                    col: params.anchor_col.max(0) as u32,
                 };
 
                 let (new_start, new_end) =
                     if mode_enum == torvox_core::selection::SelectionMode::Word {
-                        // Re-expand only the word the dragged handle landed on.
                         let moved_word =
                             torvox_core::selection::Selection::new(moved, moved, mode_enum)
                                 .expand(cell_at);
                         let (mws, mwe) = moved_word.ordered();
-                        if handle_side == 0 {
+                        if params.handle_side == 0 {
                             (mws, fixed)
                         } else {
                             (fixed, mwe)
                         }
-                    } else if handle_side == 0 {
+                    } else if params.handle_side == 0 {
                         (moved, fixed)
                     } else {
                         (fixed, moved)
@@ -1309,7 +1314,7 @@ impl TorvoxBridge {
                     end_col: new_end.col as i32,
                     active: true,
                     mode: mode_enum,
-                    origin: Some((origin_row, origin_col)),
+                    origin: Some((params.origin_row, params.origin_col)),
                 }));
                 let (lo, hi) = if new_start.row < new_end.row
                     || (new_start.row == new_end.row && new_start.col <= new_end.col)
@@ -1320,18 +1325,18 @@ impl TorvoxBridge {
                 };
                 log::debug!(
                     "set_selection_endpoint handle={} mode={} -> start=({},{}), end=({},{}), anchor=({},{}), fixed=({},{}), origin=({},{}), moved_word=({},{}),({},{}))",
-                    handle_side,
-                    mode,
+                    params.handle_side,
+                    params.mode,
                     lo.row,
                     lo.col,
                     hi.row,
                     hi.col,
-                    anchor_row,
-                    anchor_col,
-                    other_row,
-                    other_col,
-                    origin_row,
-                    origin_col,
+                    params.anchor_row,
+                    params.anchor_col,
+                    params.other_row,
+                    params.other_col,
+                    params.origin_row,
+                    params.origin_col,
                     new_start.row,
                     new_start.col,
                     new_end.row,
@@ -1342,10 +1347,10 @@ impl TorvoxBridge {
             surface.set_selection(None);
         }
         Ok((
-            anchor_row.max(0) as u32,
-            anchor_col.max(0) as u32,
-            anchor_row.max(0) as u32,
-            anchor_col.max(0) as u32,
+            params.anchor_row.max(0) as u32,
+            params.anchor_col.max(0) as u32,
+            params.anchor_row.max(0) as u32,
+            params.anchor_col.max(0) as u32,
         ))
     }
 
@@ -2381,16 +2386,16 @@ pub unsafe extern "C" fn torvox_bridge_set_selection_endpoint(
     origin_col: i32,
 ) -> i64 {
     with_bridge(handle, |bridge| {
-        bridge.set_selection_endpoint(
+        bridge.set_selection_endpoint(SelectionEndpointParams {
             handle_side,
             anchor_row,
             anchor_col,
             other_row,
             other_col,
-            mode as u8,
+            mode: mode as u8,
             origin_row,
             origin_col,
-        )
+        })
     })
     .map(|(sr, sc, er, ec)| {
         (sr as i64 & 0xFFFF)
@@ -2752,14 +2757,14 @@ pub unsafe extern "C" fn torvox_bridge_poll_all(handle: i64) -> i64 {
             return 0;
         }
     };
-    let clipboard_ptr = match result.1 {
+    let clipboard_ptr = match result.clipboard {
         Some(s) => match safe_cstring(s) {
             Some(c) => c.into_raw() as i64,
             None => 0,
         },
         None => 0,
     };
-    let notification_ptr = match result.2 {
+    let notification_ptr = match result.notification {
         Some((title, body)) => {
             let title_c = match safe_cstring(title) {
                 Some(c) => c,
@@ -2781,9 +2786,9 @@ pub unsafe extern "C" fn torvox_bridge_poll_all(handle: i64) -> i64 {
         None => 0,
     };
     let ffi = PollAllFFI {
-        bel: if result.0 { 1 } else { 0 },
-        sync_active: if result.3 { 1 } else { 0 },
-        shell_integration: result.4,
+        bel: if result.bel { 1 } else { 0 },
+        sync_active: if result.sync_active { 1 } else { 0 },
+        shell_integration: result.shell_integration,
         clipboard_ptr,
         notification_ptr,
     };

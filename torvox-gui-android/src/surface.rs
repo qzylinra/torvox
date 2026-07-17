@@ -20,6 +20,8 @@ use torvox_renderer::gpu::CellInstance;
 use torvox_renderer::gpu::GpuContext;
 use torvox_renderer::gpu::SearchHighlight;
 use torvox_renderer::gpu::SelectionRange;
+
+use crate::bridge::PollAllResult;
 use torvox_terminal::ghostty_terminal::CellSnapshot;
 use torvox_terminal::ghostty_terminal::KgpImageData;
 use torvox_terminal::session::Session;
@@ -1346,19 +1348,19 @@ impl AndroidSurface {
     /// Poll all deferred events (BEL, clipboard, notification, sync mode, shell
     /// integration) in a single session lock acquisition. This avoids the
     /// per-poll session-lock churn that the individual `poll_*` methods incur.
-    pub fn poll_all(&mut self) -> (bool, Option<String>, Option<(String, String)>, bool, u8) {
+    pub fn poll_all(&mut self) -> PollAllResult {
         if let Some(ref session_arc) = self.session
             && let Ok(session) = session_arc.lock()
         {
-            return (
-                session.poll_bel(),
-                session.poll_clipboard(),
-                session.poll_notification(),
-                session.mode_get(SYNC_MODE_NUMBER, 0),
-                session.poll_shell_integration() as u8,
-            );
+            return PollAllResult {
+                bel: session.poll_bel(),
+                clipboard: session.poll_clipboard(),
+                notification: session.poll_notification(),
+                sync_active: session.mode_get(SYNC_MODE_NUMBER, 0),
+                shell_integration: session.poll_shell_integration() as u8,
+            };
         }
-        (false, None, None, false, 0)
+        PollAllResult::default()
     }
 
     pub fn cwd(&self) -> String {
