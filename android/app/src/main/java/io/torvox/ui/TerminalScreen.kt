@@ -223,11 +223,11 @@ fun TerminalScreen(
 
         Box(
             modifier =
-                Modifier
-                    .fillMaxSize()
-                    .testTag("TerminalScreen")
-                    .background(terminalBg)
-                    .statusBarsPadding(),
+            Modifier
+                .fillMaxSize()
+                .testTag("TerminalScreen")
+                .background(terminalBg)
+                .statusBarsPadding(),
         ) {
             LaunchedEffect(drawerState.isOpen) {
                 surfaceRef.value?.drawerOpen = drawerState.isOpen
@@ -318,17 +318,17 @@ fun TerminalScreen(
 
             Column(
                 modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .testTag("TerminalContent")
-                        .navigationBarsPadding(),
+                Modifier
+                    .fillMaxSize()
+                    .testTag("TerminalContent")
+                    .navigationBarsPadding(),
             ) {
                 // Terminal content area — stays full height behind IME
                 Box(
                     modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
                 ) {
                     AndroidView(
                         factory = { context ->
@@ -396,7 +396,7 @@ fun TerminalScreen(
                                 (
                                     surface.getRows() != runtimeState.rows ||
                                         surface.getCols() != runtimeState.cols
-                                )
+                                    )
                             ) {
                                 surface.setDimensions(runtimeState.rows, runtimeState.cols)
                                 surface.requestLayout()
@@ -421,13 +421,12 @@ fun TerminalScreen(
                         }
                         val themeAccent = if (state.selectionAccent != 0) Color(state.selectionAccent) else resolvedTerminalTheme.foreground
 
-                        fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int =
-                            android.graphics.Color.argb(
-                                (color.alpha * 255).toInt(),
-                                (color.red * 255).toInt(),
-                                (color.green * 255).toInt(),
-                                (color.blue * 255).toInt(),
-                            )
+                        fun colorToArgb(color: androidx.compose.ui.graphics.Color): Int = android.graphics.Color.argb(
+                            (color.alpha * 255).toInt(),
+                            (color.red * 255).toInt(),
+                            (color.green * 255).toInt(),
+                            (color.blue * 255).toInt(),
+                        )
                         val themeAccentArgb = colorToArgb(themeAccent)
 
                         if (selection.dragging) {
@@ -543,13 +542,13 @@ fun TerminalScreen(
             // Floating overlay for bottom bar — sits above IME
             Box(
                 modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .imePadding()
-                        .background(resolvedTerminalTheme.background)
-                        .testTag("ModifierBarOverlay"),
+                Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .background(resolvedTerminalTheme.background)
+                    .testTag("ModifierBarOverlay"),
             ) {
                 // Bottom bar — below terminal, above IME
                 if (showTextSearch) {
@@ -631,9 +630,9 @@ fun TerminalScreen(
 
                     ModifierBar(
                         modifier =
-                            Modifier
-                                .testTag("ModifierBar")
-                                .navigationBarsPadding(),
+                        Modifier
+                            .testTag("ModifierBar")
+                            .navigationBarsPadding(),
                         onKeyClick = { data ->
                             viewModel.writeToPty(data.toByteArray())
                         },
@@ -657,38 +656,38 @@ fun TerminalScreen(
                         toolbarLayout = rememberToolbarLayout(),
                         barMode = barMode,
                         onCopy =
-                            if (selectionActive) {
-                                {
-                                    viewModel.copySelectionToClipboard()
-                                    viewModel.clearSelection()
-                                }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            {
+                                viewModel.copySelectionToClipboard()
+                                viewModel.clearSelection()
+                            }
+                        } else {
+                            null
+                        },
                         onSelectAll =
-                            if (selectionActive) {
-                                { viewModel.selectAll() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.selectAll() }
+                        } else {
+                            null
+                        },
                         onPaste =
-                            if (selectionActive && hasClipboard) {
-                                { viewModel.pasteFromClipboard() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive && hasClipboard) {
+                            { viewModel.pasteFromClipboard() }
+                        } else {
+                            null
+                        },
                         onShare =
-                            if (selectionActive) {
-                                { viewModel.shareSelection() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.shareSelection() }
+                        } else {
+                            null
+                        },
                         onDismiss =
-                            if (selectionActive) {
-                                { viewModel.clearSelection() }
-                            } else {
-                                null
-                            },
+                        if (selectionActive) {
+                            { viewModel.clearSelection() }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
@@ -756,12 +755,12 @@ fun SelectionMenuOverlay(
     ) {
         Box(
             modifier =
-                Modifier
-                    .testTag("SelectionMenuOverlay")
-                    .offset { IntOffset(pos.menuX.roundToInt(), pos.menuY.roundToInt()) }
-                    .onSizeChanged { menuSize = it }
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+            Modifier
+                .testTag("SelectionMenuOverlay")
+                .offset { IntOffset(pos.menuX.roundToInt(), pos.menuY.roundToInt()) }
+                .onSizeChanged { menuSize = it }
+                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
         ) {
             Row(modifier = Modifier.padding(4.dp)) {
                 if (!pasteOnly) {
@@ -860,9 +859,9 @@ private fun SelectionMenuItem(
 ) {
     Box(
         modifier =
-            Modifier
-                .clickable { onClick() }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+        Modifier
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(
             text = text,

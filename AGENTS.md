@@ -7,11 +7,13 @@ Torvox is a GPU-accelerated Android terminal emulator using wgpu (Vulkan) for re
 ## Setup and Commands
 
 One-time setup:
+
 ```bash
 git config core.hooksPath .githooks
 ```
 
 Commands:
+
 ```bash
 cargo test --workspace # All Rust tests
 cargo clippy --all -- --deny warnings # Lint
@@ -30,8 +32,6 @@ cargo test run --package torvox-core --test property_tests
 
 Checklist (run `git config core.hooksPath .githooks` once before first commit):
 
-
-
 1. `cargo test --workspace` exits 0
 2. `cargo clippy --all -- --deny warnings` exits 0
 3. `cargo fmt --check` exits 0
@@ -44,6 +44,7 @@ Checklist (run `git config core.hooksPath .githooks` once before first commit):
 ## Hooks
 
 Install once:
+
 ```bash
 git config core.hooksPath .githooks
 ```

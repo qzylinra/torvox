@@ -1,7 +1,10 @@
-use super::core::{with_bridge, TorvoxBridge};
+use super::core::{TorvoxBridge, with_bridge};
 use super::types::*;
 
-pub fn read_string(ptr: *const u8, len: i32) -> String {
+/// # Safety
+///
+/// `ptr` must point to a readable buffer of at least `len` bytes.
+pub unsafe fn read_string(ptr: *const u8, len: i32) -> String {
     if ptr.is_null() || len <= 0 {
         String::new()
     } else {
@@ -183,7 +186,7 @@ pub unsafe extern "C" fn torvox_bridge_set_save_path(
     path_ptr: *const u8,
     path_len: i32,
 ) -> i32 {
-    let path = read_string(path_ptr, path_len);
+    let path = unsafe { read_string(path_ptr, path_len) };
     with_bridge(handle, |bridge| bridge.set_save_path(path))
         .map(|_| 0)
         .unwrap_or(-1)
@@ -198,7 +201,7 @@ pub unsafe extern "C" fn torvox_bridge_has_saved_session(
     path_ptr: *const u8,
     path_len: i32,
 ) -> bool {
-    let path = read_string(path_ptr, path_len);
+    let path = unsafe { read_string(path_ptr, path_len) };
     with_bridge(handle, |bridge| Ok(bridge.has_saved_session(path))).unwrap_or(false)
 }
 
@@ -211,7 +214,7 @@ pub unsafe extern "C" fn torvox_bridge_save_session(
     path_ptr: *const u8,
     path_len: i32,
 ) -> i32 {
-    let path = read_string(path_ptr, path_len);
+    let path = unsafe { read_string(path_ptr, path_len) };
     with_bridge(handle, |bridge| bridge.save_session(path))
         .map(|_| 0)
         .unwrap_or(-1)
@@ -226,7 +229,7 @@ pub unsafe extern "C" fn torvox_bridge_restore_session(
     path_ptr: *const u8,
     path_len: i32,
 ) -> i32 {
-    let path = read_string(path_ptr, path_len);
+    let path = unsafe { read_string(path_ptr, path_len) };
     with_bridge(handle, |bridge| bridge.restore_session(path))
         .map(|_| 0)
         .unwrap_or(-1)
@@ -460,7 +463,7 @@ pub unsafe extern "C" fn torvox_bridge_set_extra_font_paths(
         // elements. Each element pointer is checked by read_string.
         let path_ptr = unsafe { *paths_ptr.add(i) };
         let path_len = unsafe { *lens_ptr.add(i) };
-        paths.push(read_string(path_ptr, path_len));
+        paths.push(unsafe { read_string(path_ptr, path_len) });
     }
     with_bridge(handle, |bridge| {
         bridge.set_extra_font_paths(paths);
@@ -585,7 +588,7 @@ pub unsafe extern "C" fn torvox_bridge_set_font_family(
     family_ptr: *const u8,
     family_len: i32,
 ) -> i32 {
-    let family = read_string(family_ptr, family_len);
+    let family = unsafe { read_string(family_ptr, family_len) };
     with_bridge(handle, |bridge| bridge.set_font_family(family))
         .map(|_| 0)
         .unwrap_or(-1)
@@ -1000,7 +1003,7 @@ pub unsafe extern "C" fn torvox_bridge_search_in_scrollback(
     query_ptr: *const u8,
     query_len: i32,
 ) -> i64 {
-    let query = read_string(query_ptr, query_len);
+    let query = unsafe { read_string(query_ptr, query_len) };
     let result = match with_bridge(handle, |bridge| Ok(bridge.search_in_scrollback(query))) {
         Ok(r) => r,
         Err(e) => {
@@ -1028,7 +1031,7 @@ pub unsafe extern "C" fn torvox_bridge_search_all_in_scrollback(
     case_sensitive: u8,
     fuzzy: u8,
 ) -> i64 {
-    let query = read_string(query_ptr, query_len);
+    let query = unsafe { read_string(query_ptr, query_len) };
     let case_sensitive = case_sensitive != 0;
     let fuzzy = fuzzy != 0;
     let result = with_bridge(handle, |bridge| {
@@ -1171,7 +1174,7 @@ pub unsafe extern "C" fn torvox_bridge_set_cursor_style(
     style_ptr: *const u8,
     style_len: i32,
 ) {
-    let style = read_string(style_ptr, style_len);
+    let style = unsafe { read_string(style_ptr, style_len) };
     if let Err(error) = with_bridge(handle, |bridge| bridge.set_cursor_style(style)) {
         log::error!("bridge: torvox_bridge_set_cursor_style failed: {error}");
     }

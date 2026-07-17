@@ -1,10 +1,13 @@
 //! MCP server runners — TCP and Unix socket transports.
+//!
+//! # Requirements
+//! - FR-044 — MCP server over Unix socket
 
 use std::io::BufRead;
 use std::path::Path;
 use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::server::McpServer;
 use crate::types::{JsonRpcRequest, SessionStore};

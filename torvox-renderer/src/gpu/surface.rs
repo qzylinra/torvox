@@ -3,9 +3,9 @@ use std::time::Duration;
 
 use wgpu::util::DeviceExt;
 
-use super::pipeline::QUAD_CORNERS;
 use super::GpuContext;
 use super::GpuError;
+use super::pipeline::QUAD_CORNERS;
 
 const DESIRED_FRAME_LATENCY: u32 = 2;
 const DESIRED_FRAME_LATENCY_ANDROID: u32 = 2;
@@ -14,8 +14,9 @@ const GPU_POLL_TIMEOUT: Duration = Duration::from_secs(2);
 #[cfg(target_os = "android")]
 const SURFACE_RELEASE_POLL_MS: u64 = 500;
 
-pub(crate) static GLOBAL_SURFACE: OnceLock<Mutex<Option<(wgpu::Surface, wgpu::SurfaceConfiguration)>>> =
-    OnceLock::new();
+pub(crate) static GLOBAL_SURFACE: OnceLock<
+    Mutex<Option<(wgpu::Surface, wgpu::SurfaceConfiguration)>>,
+> = OnceLock::new();
 
 impl GpuContext {
     pub(crate) fn select_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
@@ -260,8 +261,10 @@ impl GpuContext {
             if let Some(buf) = &self.cell_uniform_buffer {
                 let aw = self.atlas_texture.as_ref().map_or(0, |t| t.width());
                 let ah = self.atlas_texture.as_ref().map_or(0, |t| t.height());
-                let proj =
-                    super::orthographic_projection(new_config.width as f32, new_config.height as f32);
+                let proj = super::orthographic_projection(
+                    new_config.width as f32,
+                    new_config.height as f32,
+                );
                 let uniforms = super::pipeline::GpuUniforms {
                     projection: proj,
                     atlas_size: [aw as f32, ah as f32],

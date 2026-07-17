@@ -12,6 +12,8 @@ mod types;
 
 pub use commands::Command;
 pub(crate) use commands::SnapshotCache;
+#[cfg(test)]
+pub(crate) use internal::snapshot_needs_rebuild;
 pub use types::*;
 
 pub struct GhosttyTerminal {

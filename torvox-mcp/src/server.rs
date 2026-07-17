@@ -1,9 +1,13 @@
 //! MCP server — handles JSON-RPC 2.0 requests and tool dispatch.
+//!
+//! # Requirements
+//! - FR-045 — Read-only MCP tools
+//! - FR-046 — Write-gated MCP tools
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::input_queue::InputQueue;
 use crate::types::{McpError, ReadRequest, SessionStore, SignalKind};

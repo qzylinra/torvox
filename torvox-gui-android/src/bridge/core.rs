@@ -1247,3 +1247,13 @@ impl TorvoxBridge {
         Ok(())
     }
 }
+
+impl TorvoxBridge {
+    pub fn poll_all(&self) -> PollAllResult {
+        let mut surface_guard = lock_or_recover(&self.surface, "poll_all");
+        surface_guard
+            .as_mut()
+            .map(|s| s.poll_all())
+            .unwrap_or_default()
+    }
+}
