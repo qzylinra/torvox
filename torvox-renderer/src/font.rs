@@ -15,6 +15,8 @@ use swash::scale::{Render, ScaleContext, Source};
 use swash::zeno::Placement;
 use thiserror::Error;
 
+use crate::lock_util::write_or_recover;
+
 #[derive(Debug, Error)]
 pub enum FontError {
     #[error("no monospace font found")]
@@ -161,20 +163,9 @@ static EXTRA_FONT_PATHS: std::sync::RwLock<Vec<std::path::PathBuf>> =
 
 #[cfg(target_os = "android")]
 pub fn set_extra_font_paths(paths: Vec<std::path::PathBuf>) {
-    match EXTRA_FONT_PATHS.write() {
-        Ok(mut extra) => {
-            *extra = paths;
-            log::debug!("FONT_LOAD: set {} extra font paths", extra.len());
-        }
-        Err(poisoned) => {
-            let mut extra = poisoned.into_inner();
-            *extra = paths;
-            log::warn!(
-                "FONT_LOAD: RwLock poisoned, recovered and set {} extra font paths",
-                extra.len()
-            );
-        }
-    }
+    let mut extra = write_or_recover(&EXTRA_FONT_PATHS, "set_extra_font_paths");
+    *extra = paths;
+    log::debug!("FONT_LOAD: set {} extra font paths", extra.len());
 }
 
 #[cfg(target_os = "android")]

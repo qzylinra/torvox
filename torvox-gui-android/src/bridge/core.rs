@@ -217,14 +217,8 @@ impl TorvoxBridge {
         let session_arc = surface
             .spawn_session(shell_path, &env)
             .map_err(|e| BridgeError::Pty(e.to_string()))?;
-        match self.session.lock() {
-            Ok(mut session_guard) => *session_guard = Some(session_arc.clone()),
-            Err(poisoned) => {
-                let mut session_guard = poisoned.into_inner();
-                *session_guard = Some(session_arc.clone());
-                log::warn!("spawn_terminal: session mutex was poisoned, recovered");
-            }
-        }
+        let mut session_guard = lock_or_recover(&self.session, "spawn_terminal");
+        *session_guard = Some(session_arc.clone());
         if let Ok(session_guard) = session_arc.lock() {
             let user_tx = session_guard.user_write_sender();
             if let Ok(mut guard) = self.user_write_tx.lock() {
