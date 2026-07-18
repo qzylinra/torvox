@@ -252,7 +252,7 @@ fn flat_grid_zero_size() {
 fn flat_grid_set_out_of_bounds_no_panic() {
     let mut grid = FlatGrid::new(2, 2);
     grid.set_cell(100, 100, 'X', [1.0; 4], [0.0; 4]); // out of bounds
-                                                      // Should not panic, value not stored
+    // Should not panic, value not stored
     assert_eq!(grid.chars.len(), 4);
 }
 
