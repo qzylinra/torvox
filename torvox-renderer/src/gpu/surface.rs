@@ -39,9 +39,9 @@ impl GpuContext {
     }
 
     pub(crate) fn select_present_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::PresentMode {
-        if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
-            wgpu::PresentMode::Mailbox
-        } else if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
+        if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
+            wgpu::PresentMode::Fifo
+        } else if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
             wgpu::PresentMode::Fifo
         } else if caps.present_modes.contains(&wgpu::PresentMode::AutoVsync) {
             wgpu::PresentMode::AutoVsync
