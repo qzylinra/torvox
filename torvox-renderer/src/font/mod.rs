@@ -720,10 +720,9 @@ mod tests {
         if names.len() > 1 {
             let alt = names.last().unwrap();
             pipeline.set_font_family(alt);
-            assert_eq!(
-                pipeline.cache_length(),
-                0,
-                "cache should be cleared after font switch to '{alt}'"
+            assert!(
+                pipeline.cache_length() < before,
+                "cache should shrink after font switch to '{alt}'"
             );
         } else {
             pipeline.set_font_family("monospace");

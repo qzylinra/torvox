@@ -496,8 +496,8 @@ impl super::GhosttyTerminal {
 
     pub fn read_line_text(&self, row: u32) -> Option<String> {
         let (tx, rx) = bounded(1);
-        if let Err(error) = self.cmd_tx.send(Command::ReadLineText { row, tx }) {
-            log::error!("ghostty_terminal: cmd_tx send failed: {error}");
+        if let Err(error) = self.query_tx.send(Command::ReadLineText { row, tx }) {
+            log::error!("ghostty_terminal: query_tx send failed for ReadLineText: {error}");
         }
         match rx.recv_timeout(std::time::Duration::from_millis(QUERY_TIMEOUT_MS)) {
             Ok(text) => text,
