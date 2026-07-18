@@ -177,6 +177,7 @@ pub enum ReadResponse {
     ClipboardContent(String),
 }
 
+/// A single search result from terminal scrollback.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SearchMatch {
     pub line_number: u32,
@@ -185,6 +186,7 @@ pub struct SearchMatch {
     pub end_col: u32,
 }
 
+/// A file or directory entry from the filesystem.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DirEntry {
     pub name: String,
@@ -224,11 +226,16 @@ pub enum McpCommand {
     },
 }
 
+/// Unix signal types that can be sent to a session's child process.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SignalKind {
+    /// SIGINT — interrupt (Ctrl-C).
     Interrupt,
+    /// SIGTERM — terminate (graceful shutdown).
     Terminate,
+    /// SIGHUP — hangup (terminal closed).
     Hangup,
+    /// SIGQUIT — quit (core dump).
     Quit,
 }
 
