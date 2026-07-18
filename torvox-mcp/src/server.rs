@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::input_queue::InputQueue;
 use crate::types::{McpError, ReadRequest, SessionStore, SignalKind};

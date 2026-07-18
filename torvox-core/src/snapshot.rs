@@ -172,8 +172,8 @@ mod tests {
         grid.scroll_up(0, 2, 3); // A goes into scrollback
         grid.get_mut(0).unwrap().get_mut(0).unwrap().char = 'B';
         grid.scroll_up(0, 2, 3); // B goes into scrollback
-                                 // The grid top is now empty (newly allocated row); the two prior rows are
-                                 // in scrollback as 'A' (oldest) and 'B' (newest).
+        // The grid top is now empty (newly allocated row); the two prior rows are
+        // in scrollback as 'A' (oldest) and 'B' (newest).
         let snap = SessionSnapshot::from_grid(&grid);
         let mut restored = Grid::new(2, 3);
         snap.apply_to_scrollback(&mut restored, 1000);

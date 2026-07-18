@@ -604,12 +604,7 @@ fun TerminalScreen(
                         modifier = Modifier.testTag("TextSearchBar"),
                     )
                 } else {
-                    val barMode =
-                        if (selectionActive) {
-                            io.torvox.ui.ModifierBarMode.SelectionActions
-                        } else {
-                            io.torvox.ui.ModifierBarMode.Normal
-                        }
+                    val barMode = io.torvox.ui.ModifierBarMode.Normal
                     val clipboardManager =
                         context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
                             as android.content.ClipboardManager

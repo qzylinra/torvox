@@ -102,11 +102,7 @@ impl FontPipeline {
                     .filter_map(|&ch| {
                         let gid = charmap.map(ch as u32);
                         let adv = glyph_metrics.advance_width(gid);
-                        if adv > 0.0 {
-                            Some(adv * scale)
-                        } else {
-                            None
-                        }
+                        if adv > 0.0 { Some(adv * scale) } else { None }
                     })
                     .fold(0.0f32, f32::max);
 

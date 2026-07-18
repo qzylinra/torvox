@@ -5,7 +5,7 @@
 
 use flume::Sender;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use thiserror::Error;
 use torvox_core::cell::Cell;
 
