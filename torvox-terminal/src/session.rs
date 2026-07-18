@@ -422,8 +422,9 @@ impl Session {
             *pending = false;
             return true;
         }
-        let (mut pending_inner, _result) =
-            cvar.wait_timeout(pending, timeout).unwrap_or_else(|e| e.into_inner());
+        let (mut pending_inner, _result) = cvar
+            .wait_timeout(pending, timeout)
+            .unwrap_or_else(|e| e.into_inner());
         let woke = *pending_inner;
         *pending_inner = false;
         woke

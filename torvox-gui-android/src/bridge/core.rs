@@ -585,15 +585,19 @@ impl TorvoxBridge {
         let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
             if active && start_row >= 0 && end_row >= 0 {
-                surface.set_selection(Some(torvox_renderer::gpu::SelectionRange {
-                    start_row,
-                    start_col,
-                    end_row,
-                    end_col,
-                    active: true,
-                    mode: torvox_core::selection::SelectionMode::from_u8(mode),
-                    origin: None,
-                }));
+                let range = crate::bridge::selection::range_from(
+                    torvox_core::selection::SelectionAnchor {
+                        row: start_row as u32,
+                        col: start_col as u32,
+                    },
+                    torvox_core::selection::SelectionAnchor {
+                        row: end_row as u32,
+                        col: end_col as u32,
+                    },
+                    torvox_core::selection::SelectionMode::from_u8(mode),
+                    None,
+                );
+                surface.set_selection(Some(range));
             } else {
                 surface.set_selection(None);
             }
@@ -644,41 +648,28 @@ impl TorvoxBridge {
         col: u32,
         mode: u8,
     ) -> Result<(u32, u32, u32, u32), BridgeError> {
+        let mode_enum = torvox_core::selection::SelectionMode::from_u8(mode);
         let mut surface_guard = lock_surface!(self);
         if let Some(surface) = surface_guard.as_mut() {
-            let mode_enum = torvox_core::selection::SelectionMode::from_u8(mode);
-
             if let Ok(guard) = self.session.lock()
                 && let Some(session_arc) = guard.as_ref()
                 && let Ok(session) = session_arc.lock()
             {
                 let snapshot = session.terminal().take_snapshot();
-                let cols = snapshot.cols;
-                let cell_at = |r: u32, c: u32| -> Option<char> {
-                    let idx = (r * cols + c) as usize;
-                    snapshot
-                        .cells
-                        .get(idx)
-                        .and_then(|s| char::from_u32(s.codepoint))
-                };
-
-                let selection = torvox_core::selection::Selection::new(
-                    torvox_core::selection::SelectionAnchor { row, col },
-                    torvox_core::selection::SelectionAnchor { row, col },
+                let anchor = torvox_core::selection::SelectionAnchor { row, col };
+                let (start, end) = crate::bridge::selection::expand_at(
+                    &snapshot.cells,
+                    snapshot.cols,
+                    anchor,
                     mode_enum,
                 );
-                let expanded = selection.expand(cell_at);
-                let (start, end) = expanded.ordered();
 
-                surface.set_selection(Some(torvox_renderer::gpu::SelectionRange {
-                    start_row: start.row as i32,
-                    start_col: start.col as i32,
-                    end_row: end.row as i32,
-                    end_col: end.col as i32,
-                    active: true,
-                    mode: mode_enum,
-                    origin: Some((row as i32, col as i32)),
-                }));
+                surface.set_selection(Some(crate::bridge::selection::range_from(
+                    start,
+                    end,
+                    mode_enum,
+                    Some((row as i32, col as i32)),
+                )));
                 return Ok((start.row, start.col, end.row, end.col));
             }
             surface.set_selection(None);
@@ -698,14 +689,6 @@ impl TorvoxBridge {
                 && let Ok(session) = session_arc.lock()
             {
                 let snapshot = session.terminal().take_snapshot();
-                let cols = snapshot.cols;
-                let cell_at = |r: u32, c: u32| -> Option<char> {
-                    let idx = (r * cols + c) as usize;
-                    snapshot
-                        .cells
-                        .get(idx)
-                        .and_then(|s| char::from_u32(s.codepoint))
-                };
 
                 let fixed = torvox_core::selection::SelectionAnchor {
                     row: params.other_row.max(0) as u32,
@@ -718,10 +701,12 @@ impl TorvoxBridge {
 
                 let (new_start, new_end) =
                     if mode_enum == torvox_core::selection::SelectionMode::Word {
-                        let moved_word =
-                            torvox_core::selection::Selection::new(moved, moved, mode_enum)
-                                .expand(cell_at);
-                        let (mws, mwe) = moved_word.ordered();
+                        let (mws, mwe) = crate::bridge::selection::expand_at(
+                            &snapshot.cells,
+                            snapshot.cols,
+                            moved,
+                            mode_enum,
+                        );
                         if params.handle_side == 0 {
                             (mws, fixed)
                         } else {
@@ -733,15 +718,12 @@ impl TorvoxBridge {
                         (fixed, moved)
                     };
 
-                surface.set_selection(Some(torvox_renderer::gpu::SelectionRange {
-                    start_row: new_start.row as i32,
-                    start_col: new_start.col as i32,
-                    end_row: new_end.row as i32,
-                    end_col: new_end.col as i32,
-                    active: true,
-                    mode: mode_enum,
-                    origin: Some((params.origin_row, params.origin_col)),
-                }));
+                surface.set_selection(Some(crate::bridge::selection::range_from(
+                    new_start,
+                    new_end,
+                    mode_enum,
+                    Some((params.origin_row, params.origin_col)),
+                )));
                 let (lo, hi) = if new_start.row < new_end.row
                     || (new_start.row == new_end.row && new_start.col <= new_end.col)
                 {

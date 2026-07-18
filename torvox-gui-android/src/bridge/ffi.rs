@@ -1,4 +1,4 @@
-use super::core::{with_bridge, TorvoxBridge};
+use super::core::{TorvoxBridge, with_bridge};
 use super::types::*;
 use super::wire_format::*;
 
