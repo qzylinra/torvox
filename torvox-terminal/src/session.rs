@@ -1,5 +1,36 @@
 //! Session orchestrator — wires PTY reader, VT parser, and process waiter together.
 //!
+//! # Session Lifecycle
+//!
+//! ```text
+//!                     ┌─────────────┐
+//!                     │   Spawned   │
+//!                     └──────┬──────┘
+//!                            │ PTY created, threads started
+//!                            ▼
+//!                     ┌─────────────┐
+//!                     │   Running   │◄──────┐
+//!                     └──────┬──────┘       │ process_output()
+//!                            │              │
+//!              ┌─────────────┼─────────────┐│
+//!              │             │             ││
+//!              ▼             ▼             ││
+//!       ┌──────────┐  ┌──────────┐        ││
+//!       │  Paused  │  │   Idle   │────────┘│
+//!       └──────────┘  └──────────┘  output  │
+//!                            │             │
+//!                            │ EOF / exit  │
+//!                            ▼             │
+//!                     ┌─────────────┐      │
+//!                     │   Exited    │      │
+//!                     └──────┬──────┘      │
+//!                            │             │
+//!                            ▼             │
+//!                     ┌─────────────┐      │
+//!                     │   Cleaned   │──────┘
+//!                     └─────────────┘  cleanup_resources()
+//! ```
+//!
 //! # Requirements
 //! - [FR-009](crate) — Input: Ctrl-C, Ctrl-D, Ctrl-Z signal passthrough
 //! - [FR-027](crate) — Session: double-fork child with PID tracking
