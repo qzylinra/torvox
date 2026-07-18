@@ -77,7 +77,7 @@ impl GpuContext {
             let _ = tx.send(result);
         });
 
-        match rx.recv_timeout(std::time::Duration::from_millis(2000)) {
+        match rx.recv_timeout(std::time::Duration::from_secs(2)) {
             Ok(Ok(result)) => match result {
                 wgpu::CurrentSurfaceTexture::Success(tex)
                 | wgpu::CurrentSurfaceTexture::Suboptimal(tex) => Some(tex),

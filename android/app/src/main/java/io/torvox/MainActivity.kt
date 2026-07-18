@@ -203,7 +203,7 @@ class MainActivity : ComponentActivity() {
 
     private var previousNightMode: Int? = null
 
-    private val terminalViewModel: io.torvox.TerminalViewModel by viewModels()
+    internal val terminalViewModel: io.torvox.TerminalViewModel by viewModels()
 
     private val selectAllReceiver =
         object : BroadcastReceiver() {

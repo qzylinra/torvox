@@ -12,14 +12,12 @@ const DESIRED_FRAME_LATENCY: u32 = 2;
 const DESIRED_FRAME_LATENCY_ANDROID: u32 = 2;
 const GPU_POLL_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub(crate) static GLOBAL_SURFACE: OnceLock<
-    Mutex<
-        Option<(
-            std::sync::Arc<wgpu::Surface<'static>>,
-            wgpu::SurfaceConfiguration,
-        )>,
-    >,
-> = OnceLock::new();
+type CachedSurface = (
+    std::sync::Arc<wgpu::Surface<'static>>,
+    wgpu::SurfaceConfiguration,
+);
+
+pub(crate) static GLOBAL_SURFACE: OnceLock<Mutex<Option<CachedSurface>>> = OnceLock::new();
 
 impl GpuContext {
     pub(crate) fn select_alpha_mode(caps: &wgpu::SurfaceCapabilities) -> wgpu::CompositeAlphaMode {
