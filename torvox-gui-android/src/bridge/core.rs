@@ -1256,4 +1256,22 @@ impl TorvoxBridge {
             .map(|s| s.poll_all())
             .unwrap_or_default()
     }
+
+    /// Wait for PTY output or timeout. Returns `true` if output arrived.
+    /// This does NOT hold the session mutex — only the Condvar mutex.
+    pub fn wait_for_output_timeout(&self, timeout_ms: u64) -> bool {
+        let session_arc = {
+            let Ok(guard) = self.session.lock() else {
+                return false;
+            };
+            let Some(arc) = guard.as_ref().cloned() else {
+                return false;
+            };
+            arc
+        };
+        let Ok(session) = session_arc.lock() else {
+            return false;
+        };
+        session.wait_for_output_timeout(std::time::Duration::from_millis(timeout_ms))
+    }
 }

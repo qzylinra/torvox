@@ -1,73 +1,6 @@
-use super::core::{TorvoxBridge, with_bridge};
+use super::core::{with_bridge, TorvoxBridge};
 use super::types::*;
-
-/// # Safety
-///
-/// `ptr` must point to a readable buffer of at least `len` bytes.
-pub unsafe fn read_string(ptr: *const u8, len: i32) -> String {
-    if ptr.is_null() || len <= 0 {
-        String::new()
-    } else {
-        // SAFETY: The caller guarantees ptr is valid for reads of len bytes
-        // and is properly aligned for u8 access. The returned slice is
-        // immediately converted to an owned String, so no aliasing issues.
-        let slice = unsafe { std::slice::from_raw_parts(ptr, len as usize) };
-        String::from_utf8_lossy(slice).to_string()
-    }
-}
-
-pub fn safe_cstring(string: String) -> Option<std::ffi::CString> {
-    if string.contains('\0') {
-        log::warn!(
-            "bridge: safe_cstring encountered interior NUL(s) — data truncated. Original length: {}",
-            string.len()
-        );
-    }
-    let stripped: String = string
-        .chars()
-        .filter(|&character| character != '\0')
-        .collect();
-    if stripped.is_empty() {
-        None
-    } else {
-        std::ffi::CString::new(stripped).ok()
-    }
-}
-
-pub fn read_u32_le(bytes: &[u8], pos: usize) -> Option<u32> {
-    if pos + 4 > bytes.len() {
-        log::error!(
-            "wire deserialization: buffer too short at pos={pos}, len={}",
-            bytes.len()
-        );
-        return None;
-    }
-    Some(u32::from_le_bytes(bytes[pos..pos + 4].try_into().ok()?))
-}
-
-pub fn read_wire_string(bytes: &[u8], pos: &mut usize) -> Option<String> {
-    let len = read_u32_le(bytes, *pos)? as usize;
-    *pos += 4;
-    if *pos + len > bytes.len() {
-        log::error!(
-            "wire deserialization: string length {len} exceeds buffer at pos={}",
-            *pos
-        );
-        return None;
-    }
-    let string_value = String::from_utf8_lossy(&bytes[*pos..*pos + len]).to_string();
-    *pos += len;
-    Some(string_value)
-}
-
-#[inline]
-fn to_argb(color: &[f32; 4]) -> u32 {
-    let r = (color[0].clamp(0.0, 1.0) * 255.0) as u32;
-    let g = (color[1].clamp(0.0, 1.0) * 255.0) as u32;
-    let b = (color[2].clamp(0.0, 1.0) * 255.0) as u32;
-    let a = (color[3].clamp(0.0, 1.0) * 255.0) as u32;
-    (a << 24) | (r << 16) | (g << 8) | b
-}
+use super::wire_format::*;
 
 /// # Safety
 /// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
@@ -919,6 +852,23 @@ pub unsafe extern "C" fn torvox_bridge_poll_all(handle: i64) -> i64 {
         notification_ptr,
     };
     Box::into_raw(Box::new(ffi)) as i64
+}
+
+/// # Safety
+/// `handle` must be a valid bridge handle previously returned by `torvox_bridge_new`.
+/// Waits for PTY output or timeout. Returns 1 if output arrived, 0 if timeout.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_wait_output(handle: i64, timeout_ms: u64) -> i32 {
+    match with_bridge(handle, |bridge| {
+        Ok(bridge.wait_for_output_timeout(timeout_ms))
+    }) {
+        Ok(true) => 1,
+        Ok(false) => 0,
+        Err(e) => {
+            log::debug!("torvox_bridge_wait_output: {e}");
+            0
+        }
+    }
 }
 
 /// # Safety

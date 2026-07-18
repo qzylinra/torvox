@@ -9,10 +9,12 @@ pub(crate) mod ffi;
 #[macro_use]
 mod types;
 pub(crate) mod core;
+pub(crate) mod wire_format;
 
 pub use core::TorvoxBridge;
 pub use ffi::*;
 pub use types::*;
+pub use wire_format::*;
 
 #[cfg(test)]
 mod tests;

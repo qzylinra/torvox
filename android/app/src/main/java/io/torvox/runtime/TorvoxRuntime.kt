@@ -1446,15 +1446,10 @@ class TorvoxRuntime
                                             RENDER_LATCH_TIMEOUT_NANOS
                                         }
                                     if (!entry.renderSignaled.get() && !entry.forceRenderRequested) {
-                                        java.util.concurrent.locks.LockSupport
-                                            .parkNanos(timeoutNanos)
+                                        val timeoutMs = timeoutNanos / 1_000_000L
+                                        bridge.waitOutput(timeoutMs)
                                         if (Thread.interrupted()) throw InterruptedException()
                                     }
-                                    // Always process ghostty output on the next iteration.
-                                    // The PTY reader signals a Condvar (output_notify) when
-                                    // new data arrives, but nothing bridges that to the
-                                    // Kotlin renderSignaled flag, so skipping on timeout
-                                    // would starve the terminal of PTY data.
                                     shouldSkipOutput = false
                                     entry.renderSignaled.set(false)
                                 } else {
