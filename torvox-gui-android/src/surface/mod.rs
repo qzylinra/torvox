@@ -175,14 +175,35 @@ pub struct AndroidSurface {
     blink_speed_ms: u32,
     last_blink_toggle: std::time::Instant,
     render_requested: bool,
+    /// Cached CellSnapshot cells from the previous frame for cell-level
+    /// dirty tracking. When empty (first frame), all rows are dirty.
+    prev_cells: Vec<torvox_terminal::ghostty_terminal::CellSnapshot>,
+    /// Per-frame scratch buffers (instance buffer, instance cache, row-end
+    /// cache, dirty-row scratch, row-end scratch) reused across frames to
+    /// avoid reallocation on the render hot path.
+    frame_buffers: FrameBuffers,
+    /// Scroll offset used in the previous frame. When it changes, all rows
+    /// are marked dirty because the grid cells shift.
+    prev_scroll_offset: u32,
+    /// Render height from the previous frame. When it changes (e.g. IME
+    /// opens/closes), all rows are marked dirty because the cached instances
+    /// were built for a different projection_height, and clean rows beyond
+    /// the new projection_height would otherwise be incorrectly reused.
+    prev_render_height: u32,
+}
+
+/// Per-frame scratch buffers for the cell-instance pipeline, owned as a unit
+/// so the render hot path reuses allocations across frames without
+/// reallocating any of the five buffers. Centralizing them behind one field
+/// keeps the `AndroidSurface` field list shorter and groups the buffer
+/// lifecycle (allocation, clear, resize) in one place.
+#[derive(Default)]
+struct FrameBuffers {
     /// Persistent instance buffer reused across frames so the per-frame cell
     /// instance `Vec` is not reallocated on every render (see
     /// `build_cell_instances_into`). `CellInstance` is `Copy`/`Pod`, so reuse
     /// via `clear` + `reserve` is safe.
     instance_buffer: Vec<torvox_renderer::gpu::CellInstance>,
-    /// Cached CellSnapshot cells from the previous frame for cell-level
-    /// dirty tracking. When empty (first frame), all rows are dirty.
-    prev_cells: Vec<torvox_terminal::ghostty_terminal::CellSnapshot>,
     /// Cached CellInstances from the previous frame. Clean rows are copied
     /// from this cache instead of rebuilding them through the shaping/color
     /// atlas-lookup hot path.
@@ -196,14 +217,6 @@ pub struct AndroidSurface {
     dirty_rows_buf: Vec<bool>,
     /// Reused scratch buffer for per-frame row-end offsets.
     row_ends_buf: Vec<usize>,
-    /// Scroll offset used in the previous frame. When it changes, all rows
-    /// are marked dirty because the grid cells shift.
-    prev_scroll_offset: u32,
-    /// Render height from the previous frame. When it changes (e.g. IME
-    /// opens/closes), all rows are marked dirty because the cached instances
-    /// were built for a different projection_height, and clean rows beyond
-    /// the new projection_height would otherwise be incorrectly reused.
-    prev_render_height: u32,
 }
 
 impl AndroidSurface {
@@ -246,12 +259,8 @@ impl AndroidSurface {
             last_blink_toggle: std::time::Instant::now(),
             cursor_style: torvox_core::cursor::CursorStyle::Block,
             render_requested: false,
-            instance_buffer: Vec::new(),
             prev_cells: Vec::new(),
-            cached_instances: Vec::new(),
-            cached_row_ends: Vec::new(),
-            dirty_rows_buf: Vec::new(),
-            row_ends_buf: Vec::new(),
+            frame_buffers: FrameBuffers::default(),
             prev_scroll_offset: 0,
             prev_render_height: 0,
         }
