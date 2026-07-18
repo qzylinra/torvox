@@ -1,3 +1,4 @@
+//! Action parser — converts CSI sequences into terminal actions.
 use std::fmt;
 
 use crate::ghostty_terminal::GhosttyTerminal;

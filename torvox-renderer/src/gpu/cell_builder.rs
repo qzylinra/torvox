@@ -1,3 +1,4 @@
+//! Cell instance builder — converts terminal grid state into GPU instance data.
 use std::collections::HashMap;
 
 use super::CellInstance;

@@ -1,3 +1,4 @@
+//! Surface management — Android ANativeWindow integration and wgpu surface lifecycle.
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 

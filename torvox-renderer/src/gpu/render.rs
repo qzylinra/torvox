@@ -1,3 +1,4 @@
+//! Render loop — frame submission, synchronization, and error recovery.
 use super::GpuContext;
 use super::GpuError;
 use super::atlas::MIN_ATLAS_BUFFER_SIZE;

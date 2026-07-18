@@ -1,3 +1,8 @@
+//! Ghostty terminal engine — VT parser, command dispatch, and public API.
+//!
+//! Wraps the Ghostty VT parser in a thread-safe terminal engine with
+//! command-based communication between the PTY reader and render thread.
+
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::thread;

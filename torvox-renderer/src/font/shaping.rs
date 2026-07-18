@@ -1,3 +1,4 @@
+//! Text shaping — cosmic-text integration for Unicode ligature and complex script support.
 use super::{FontPipeline, ShapedGlyphInfo};
 
 pub(super) const SHAPE_CACHE_CAPACITY: usize = 4_096;
