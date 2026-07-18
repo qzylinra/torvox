@@ -61,40 +61,43 @@ impl GpuContext {
 
     fn acquire_texture(
         &self,
-        surface: &wgpu::Surface<'static>,
+        surface: &std::sync::Arc<wgpu::Surface<'static>>,
         _cfg_width: u32,
         _cfg_height: u32,
     ) -> Option<wgpu::SurfaceTexture> {
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            surface.get_current_texture()
-        })) {
-            Ok(
+        // Mali-G57 (Unisoc SoCs) can hang vkAcquireNextImageKHR indefinitely when
+        // SURFACE_VIEW_FORMATS is missing. Spawn get_current_texture on a separate
+        // thread with a timeout to prevent blocking the render thread forever.
+        let surface_clone = std::sync::Arc::clone(surface);
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                surface_clone.get_current_texture()
+            }));
+            let _ = tx.send(result);
+        });
+
+        match rx.recv_timeout(std::time::Duration::from_millis(2000)) {
+            Ok(Ok(result)) => match result {
                 wgpu::CurrentSurfaceTexture::Success(tex)
-                | wgpu::CurrentSurfaceTexture::Suboptimal(tex),
-            ) => Some(tex),
-            Ok(wgpu::CurrentSurfaceTexture::Lost) => {
-                if let Some(config) = &self.surface_config {
-                    surface.configure(&self.device, config);
+                | wgpu::CurrentSurfaceTexture::Suboptimal(tex) => Some(tex),
+                wgpu::CurrentSurfaceTexture::Lost => {
+                    if let Some(config) = &self.surface_config {
+                        surface.configure(&self.device, config);
+                    }
+                    None
                 }
+                _ => None,
+            },
+            Ok(Err(_)) => {
+                log::warn!("acquire_texture: get_current_texture panicked");
                 None
             }
-            Ok(_) => None,
             Err(_) => {
-                log::warn!(
-                    "render_frame: get_current_texture panicked (unconfigured surface), reconfiguring"
+                log::error!(
+                    "acquire_texture: get_current_texture hung for 2000ms (Mali-G57 driver issue)"
                 );
-                if let Some(config) = &self.surface_config {
-                    surface.configure(&self.device, config);
-                }
-                match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    surface.get_current_texture()
-                })) {
-                    Ok(
-                        wgpu::CurrentSurfaceTexture::Success(tex)
-                        | wgpu::CurrentSurfaceTexture::Suboptimal(tex),
-                    ) => Some(tex),
-                    _ => None,
-                }
+                None
             }
         }
     }
@@ -106,6 +109,14 @@ impl GpuContext {
     ) -> Result<(), GpuError> {
         if self.render_paused {
             return Ok(());
+        }
+        // Drain deferred GPU work from release_gpu_surface before acquiring new texture.
+        if self.pending_gpu_drain {
+            let _ = self.device.poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(std::time::Duration::from_millis(200)),
+            });
+            self.pending_gpu_drain = false;
         }
         let mut cfg_width = self
             .surface_config

@@ -184,7 +184,7 @@ pub struct GpuContext {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    pub surface: Option<wgpu::Surface<'static>>,
+    pub surface: Option<std::sync::Arc<wgpu::Surface<'static>>>,
     pub surface_config: Option<wgpu::SurfaceConfiguration>,
     pub cell_pipeline: Option<wgpu::RenderPipeline>,
     pub quad_vertex_buffer: wgpu::Buffer,
@@ -223,6 +223,7 @@ pub struct GpuContext {
     pub(crate) blur_h_pipeline: Option<wgpu::RenderPipeline>,
     pub(crate) blur_v_pipeline: Option<wgpu::RenderPipeline>,
     pub(crate) render_paused: bool,
+    pub(crate) pending_gpu_drain: bool,
 }
 
 impl Drop for GpuContext {
@@ -361,6 +362,7 @@ impl GpuContext {
             blur_h_pipeline: None,
             blur_v_pipeline: None,
             render_paused: false,
+            pending_gpu_drain: false,
         })
     }
 
@@ -420,6 +422,7 @@ impl GpuContext {
             blur_h_pipeline: None,
             blur_v_pipeline: None,
             render_paused: false,
+            pending_gpu_drain: false,
         }
     }
 

@@ -246,7 +246,13 @@ impl super::GhosttyTerminal {
     /// is at most 1 frame behind, which is harmless because the surface diffs
     /// against `prev_cells`.
     pub fn try_take_snapshot_with_scroll(&self, scroll_offset: u32) -> Option<GridSnapshot> {
-        let mut cache = self.snapshot_cache.lock().expect("snapshot mutex");
+        let mut cache = match self.snapshot_cache.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                log::warn!("snapshot_cache mutex poisoned, recovering");
+                poisoned.into_inner()
+            }
+        };
 
         // Collect any pending response from the previous command.
         if let Some(rx) = &cache.pending_rx

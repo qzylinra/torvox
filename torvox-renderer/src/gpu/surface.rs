@@ -12,11 +12,13 @@ const DESIRED_FRAME_LATENCY: u32 = 2;
 const DESIRED_FRAME_LATENCY_ANDROID: u32 = 2;
 const GPU_POLL_TIMEOUT: Duration = Duration::from_secs(2);
 
-#[cfg(target_os = "android")]
-const SURFACE_RELEASE_POLL_MS: u64 = 500;
-
 pub(crate) static GLOBAL_SURFACE: OnceLock<
-    Mutex<Option<(wgpu::Surface, wgpu::SurfaceConfiguration)>>,
+    Mutex<
+        Option<(
+            std::sync::Arc<wgpu::Surface<'static>>,
+            wgpu::SurfaceConfiguration,
+        )>,
+    >,
 > = OnceLock::new();
 
 impl GpuContext {
@@ -162,7 +164,7 @@ impl GpuContext {
 
         self.cell_pipeline = Some(Self::create_cell_pipeline(&self.device, format));
         self.pipeline_format = format;
-        self.surface = Some(surface);
+        self.surface = Some(std::sync::Arc::new(surface));
 
         if configure_surface {
             let config = wgpu::SurfaceConfiguration {
@@ -172,7 +174,11 @@ impl GpuContext {
                 height: initial_height,
                 present_mode,
                 alpha_mode,
-                view_formats: vec![],
+                // Include the base format in view_formats. Mali-G57 (Unisoc) can hang
+                // vkAcquireNextImageKHR when this is empty, due to missing
+                // SURFACE_VIEW_FORMATS flag. Including the base format tells the Vulkan
+                // driver to create a compatible swapchain, preventing the hang.
+                view_formats: vec![format],
                 desired_maximum_frame_latency: DESIRED_FRAME_LATENCY,
             };
 
@@ -215,14 +221,9 @@ impl GpuContext {
             }
         }
         self.surface_config = None;
-        if let Err(error) = self.device.poll(wgpu::PollType::Wait {
-            submission_index: None,
-            timeout: Some(GPU_POLL_TIMEOUT),
-        }) {
-            log::warn!("release_gpu_surface: device poll error: {error}");
-        }
-        #[cfg(target_os = "android")]
-        std::thread::sleep(std::time::Duration::from_millis(SURFACE_RELEASE_POLL_MS));
+        // Mark that we need to drain GPU work before the next frame.
+        // The poll is deferred to avoid blocking session switches.
+        self.pending_gpu_drain = true;
     }
 
     pub fn clear_global_surface() {
@@ -344,11 +345,11 @@ impl GpuContext {
             height: ((height as f32 * super::RENDER_SCALE) as u32).max(1),
             present_mode: Self::select_present_mode(&caps),
             alpha_mode,
-            view_formats: vec![],
+            view_formats: vec![format],
             desired_maximum_frame_latency: DESIRED_FRAME_LATENCY_ANDROID,
         };
         surface.configure(&self.device, &config);
-        self.surface = Some(surface);
+        self.surface = Some(std::sync::Arc::new(surface));
 
         self.projection_width = config.width;
         self.projection_height = config.height;

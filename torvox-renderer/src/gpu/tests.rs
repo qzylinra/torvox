@@ -1033,6 +1033,7 @@ fn setup_test_gpu_context(
         blur_h_pipeline: None,
         blur_v_pipeline: None,
         render_paused: false,
+        pending_gpu_drain: false,
     };
     ctx.initialize_pipeline_and_bind_group(256, 256, 50, 50);
     ctx
@@ -1109,6 +1110,7 @@ fn setup_test_gpu_context_custom(
         blur_h_pipeline: None,
         blur_v_pipeline: None,
         render_paused: false,
+        pending_gpu_drain: false,
     };
     ctx.initialize_pipeline_and_bind_group(width.max(256), height.max(256), width, height);
     ctx
