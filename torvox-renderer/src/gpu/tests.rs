@@ -41,7 +41,8 @@ fn select_present_mode_prefers_vsync() {
         }
     }
 
-    // Mailbox available -> Mailbox (vsync + drop oldest). Never Immediate.
+    // Fifo available -> Fifo (compatible with Mali-G57).
+    // Mailbox can hang with SURFACE_VIEW_FORMATS missing.
     let mut caps = base_caps();
     caps.present_modes = vec![
         wgpu::PresentMode::Immediate,
@@ -50,8 +51,8 @@ fn select_present_mode_prefers_vsync() {
     ];
     assert_eq!(
         GpuContext::select_present_mode(&caps),
-        wgpu::PresentMode::Mailbox,
-        "Mailbox (vsync) must win over Immediate"
+        wgpu::PresentMode::Fifo,
+        "Fifo must win over Mailbox (Mailbox hangs Mali-G57)"
     );
 
     // No Mailbox -> Fifo (vsync).
@@ -251,7 +252,7 @@ fn flat_grid_zero_size() {
 fn flat_grid_set_out_of_bounds_no_panic() {
     let mut grid = FlatGrid::new(2, 2);
     grid.set_cell(100, 100, 'X', [1.0; 4], [0.0; 4]); // out of bounds
-    // Should not panic, value not stored
+                                                      // Should not panic, value not stored
     assert_eq!(grid.chars.len(), 4);
 }
 
