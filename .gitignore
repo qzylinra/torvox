@@ -21,12 +21,13 @@ fuzz/corpus/
 fuzz/artifacts/
 .opencode
 vendor/
-.omo/
+omo/
 .slim/*
 .workflows/
 
 # Working scratch directory
 ultragoal/
+screenshots/
 
 # boltffi
 android/app/src/main/java/io/torvox/bridge/kotlin/
