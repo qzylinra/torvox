@@ -106,12 +106,23 @@ impl TorvoxBridge {
             .scroll_offset
             .load(std::sync::atomic::Ordering::Relaxed);
         let had_output = session_guard.process_output();
-        let snapshot = session_guard
-            .terminal()
-            .try_take_snapshot_with_scroll(scroll_offset)
-            .ok_or(BridgeError::Pty(
-                "snapshot unavailable — VT thread busy".into(),
-            ))?;
+        let mut attempts = 0;
+        let snapshot = loop {
+            if let Some(snap) = session_guard
+                .terminal()
+                .try_take_snapshot_with_scroll(scroll_offset)
+            {
+                break snap;
+            }
+            attempts += 1;
+            if attempts >= 5 {
+                return Err(BridgeError::Pty(
+                    "snapshot unavailable — VT thread busy".into(),
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            session_guard.process_output();
+        };
         Ok((had_output, snapshot))
     }
 
@@ -125,12 +136,22 @@ impl TorvoxBridge {
         let scroll_offset = self
             .scroll_offset
             .load(std::sync::atomic::Ordering::Relaxed);
-        let snapshot = session_guard
-            .terminal()
-            .try_take_snapshot_with_scroll(scroll_offset)
-            .ok_or(BridgeError::Pty(
-                "snapshot unavailable — VT thread busy".into(),
-            ))?;
+        let mut attempts = 0;
+        let snapshot = loop {
+            if let Some(snap) = session_guard
+                .terminal()
+                .try_take_snapshot_with_scroll(scroll_offset)
+            {
+                break snap;
+            }
+            attempts += 1;
+            if attempts >= 5 {
+                return Err(BridgeError::Pty(
+                    "snapshot unavailable — VT thread busy".into(),
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
         Ok((false, snapshot))
     }
 }
