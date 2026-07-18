@@ -176,6 +176,7 @@ impl Session {
         )
     }
 
+    /// Spawn a new session with the default Catppuccin Mocha theme.
     pub fn spawn(shell: &str, rows: u32, cols: u32, env: &ShellEnv) -> Result<Self, SessionError> {
         let (palette_ansi, palette_background, palette_foreground) =
             GhosttyTerminal::catppuccin_mocha_palette();
@@ -191,6 +192,7 @@ impl Session {
         )
     }
 
+    /// Spawn a new session with a custom theme and scrollback buffer size.
     pub fn spawn_with_theme(
         shell: &str,
         rows: u32,
@@ -392,6 +394,7 @@ impl Session {
         })
     }
 
+    /// Write raw bytes to the PTY (keyboard input, paste).
     pub fn write(&mut self, data: &[u8]) -> Result<(), SessionError> {
         if self.is_exited() {
             return Err(SessionError::Closed);
@@ -400,6 +403,7 @@ impl Session {
         Ok(())
     }
 
+    /// Resize the terminal to the given number of rows and columns.
     pub fn resize(&mut self, rows: u32, cols: u32) -> Result<(), SessionError> {
         self.pty.resize(rows as u16, cols as u16)?;
         self.terminal.resize(rows, cols);
@@ -418,10 +422,12 @@ impl Session {
         })
     }
 
+    /// Set the pixel dimensions of the terminal for graphics protocol support.
     pub fn set_pixel_size(&mut self, width: u16, height: u16) {
         self.pty.set_pixel_size(width, height);
     }
 
+    /// Block until new output is available from the PTY.
     pub fn wait_for_output(&self) {
         let (lock, cvar) = &*self.output_notify;
         let mut pending = lock.lock().unwrap_or_else(|e| e.into_inner());
@@ -535,50 +541,61 @@ impl Session {
         changed
     }
 
+    /// Poll for a BEL (bell character) event. Returns true if a BEL was received since last poll.
     pub fn poll_bel(&self) -> bool {
         self.bel_triggered.swap(false, Ordering::AcqRel)
     }
 
+    /// Poll for clipboard text set by an OSC 52 escape sequence.
     pub fn poll_clipboard(&self) -> Option<String> {
         let mut guard = lock_or_recover(&self.clipboard_text, "poll_clipboard");
         guard.take()
     }
 
+    /// Poll for a desktop notification set by an OSC 9 escape sequence.
     pub fn poll_notification(&self) -> Option<(String, String)> {
         let mut guard = lock_or_recover(&self.notification, "poll_notification");
         guard.take()
     }
 
+    /// Poll for a hyperlink URL set by an OSC 8 escape sequence.
     pub fn poll_hyperlink(&self) -> Option<String> {
         let mut guard = lock_or_recover(&self.hyperlink, "poll_hyperlink");
         guard.take()
     }
 
+    /// Poll for a shell integration marker (OSC 133).
     pub fn poll_shell_integration(&self) -> ShellIntegration {
         let raw_value = self.shell_integration.swap(0, Ordering::AcqRel);
         ShellIntegration::from(raw_value)
     }
 
+    /// Returns true if the child process has exited.
     pub fn is_exited(&self) -> bool {
         self.exited.load(Ordering::Acquire)
     }
 
+    /// Get a clone of the exit flag for external monitoring.
     pub fn exited_flag(&self) -> Arc<AtomicBool> {
         self.exited.clone()
     }
 
+    /// Get a reference to the terminal engine.
     pub fn terminal(&self) -> &GhosttyTerminal {
         &self.terminal
     }
 
+    /// Get a mutable reference to the terminal engine.
     pub fn terminal_mut(&mut self) -> &mut GhosttyTerminal {
         &mut self.terminal
     }
 
+    /// Get the current window title set by the shell.
     pub fn title(&self) -> String {
         self.terminal.title()
     }
 
+    /// Get the current working directory of the child process.
     pub fn cwd(&self) -> String {
         if let Ok(guard) = self.cwd.lock()
             && let Some(tracked) = guard.as_ref()
@@ -588,6 +605,7 @@ impl Session {
         self.terminal.cwd()
     }
 
+    /// Encode a key event into terminal escape sequences.
     pub fn key_encode(
         &self,
         key_code: u32,
@@ -606,6 +624,7 @@ impl Session {
         self.terminal.clone_cmd_tx()
     }
 
+    /// Submit a key for encoding and return a receiver for the result.
     pub fn key_encode_submit(
         &self,
         key_code: u32,

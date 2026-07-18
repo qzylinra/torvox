@@ -137,6 +137,7 @@ impl DirtyMask {
             .is_some_and(|p| *p & (1 << bit) != 0)
     }
 
+    /// Mark a single row as dirty (needing re-render).
     pub fn mark(&mut self, row: u32) {
         let (part, bit) = Self::partition_index(row);
         if let Some(p) = self.partitions.get_mut(part) {
@@ -144,6 +145,7 @@ impl DirtyMask {
         }
     }
 
+    /// Mark all rows as dirty (full redraw needed).
     pub fn mark_all(&mut self, rows: u32) {
         let num_partitions = (rows as usize).div_ceil(BITS_PER_PARTITION as usize);
         self.partitions.clear();
@@ -156,14 +158,17 @@ impl DirtyMask {
         }
     }
 
+    /// Clear all dirty flags (called after rendering).
     pub fn clear(&mut self) {
         self.partitions.fill(0);
     }
 
+    /// Check if any row is dirty (needs re-rendering).
     pub fn any_dirty(&self) -> bool {
         self.partitions.iter().any(|&p| p != 0)
     }
 
+    /// Resize the dirty mask to accommodate a new number of rows.
     pub fn resize(&mut self, total_rows: u32) {
         let num_partitions = (total_rows as usize).div_ceil(BITS_PER_PARTITION as usize);
         self.partitions.resize(num_partitions.max(1), 0);

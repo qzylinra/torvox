@@ -132,10 +132,12 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// Create a new selection with the given start, end, and mode.
     pub fn new(start: SelectionAnchor, end: SelectionAnchor, mode: SelectionMode) -> Self {
         Self { start, end, mode }
     }
 
+    /// Returns true if start <= end (start comes before end in reading order).
     pub fn is_ordered(&self) -> bool {
         if self.start.row < self.end.row {
             return true;
@@ -143,6 +145,7 @@ impl Selection {
         self.start.row == self.end.row && self.start.col <= self.end.col
     }
 
+    /// Return (start, end) in reading order (top-left to bottom-right).
     pub fn ordered(&self) -> (SelectionAnchor, SelectionAnchor) {
         if self.is_ordered() {
             (self.start, self.end)
@@ -151,6 +154,7 @@ impl Selection {
         }
     }
 
+    /// Returns true if the given position is within the selection.
     pub fn contains(&self, row: u32, col: u32) -> bool {
         let (lo, hi) = self.ordered();
         match self.mode {
