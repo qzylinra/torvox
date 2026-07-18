@@ -1448,11 +1448,12 @@ constructor(
                                         .parkNanos(timeoutNanos)
                                     if (Thread.interrupted()) throw InterruptedException()
                                 }
-                                // Determine whether NEXT iteration needs ghostty output:
-                                // - Signal (renderSignaled == true) → new PTY data → process
-                                // - Timeout (both false) → blink → skip
-                                // - forceRenderRequested → force → skip (handled in else branch)
-                                shouldSkipOutput = !entry.renderSignaled.get()
+                                // Always process ghostty output on the next iteration.
+                                // The PTY reader signals a Condvar (output_notify) when
+                                // new data arrives, but nothing bridges that to the
+                                // Kotlin renderSignaled flag, so skipping on timeout
+                                // would starve the terminal of PTY data.
+                                shouldSkipOutput = false
                                 entry.renderSignaled.set(false)
                             } else {
                                 entry.forceRenderRequested = false

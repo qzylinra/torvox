@@ -5,7 +5,7 @@
 
 use flume::Sender;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use thiserror::Error;
 use torvox_core::cell::Cell;
 
@@ -77,6 +77,7 @@ pub struct GridCellData {
     pub hidden: bool,
 }
 
+/// A serialized snapshot of the terminal grid for MCP client consumption.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GridSnapshotData {
     pub rows: u32,

@@ -70,6 +70,10 @@ pub trait Pty: Send {
     }
 }
 
+/// A PTY pair consisting of a master file descriptor and child process.
+///
+/// The master side is used by the terminal emulator to read output and write input.
+/// The child process runs the shell and communicates via the slave side.
 pub struct PtyPair {
     master: OwnedFd,
     child_pid: nix::unistd::Pid,
@@ -474,6 +478,10 @@ fn base_env(prefix: Option<&str>) -> Vec<(String, String)> {
     result
 }
 
+/// Build the environment variables for the child process.
+///
+/// Combines the base system environment with user-specified overrides from
+/// `ShellEnv`, including HOME, USER, TERM, and terminal size variables.
 pub fn build_env(env: &ShellEnv, shell_path: &str, rows: u16, cols: u16) -> Vec<(String, String)> {
     let prefix_str = env.prefix.as_deref();
     let mut result = base_env(prefix_str);
@@ -511,10 +519,9 @@ mod tests {
     #[test]
     fn base_env_includes_xterm_256color() {
         let env = base_env(None);
-        assert!(
-            env.iter()
-                .any(|(k, v)| k == "TERM" && v == "xterm-256color")
-        );
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "TERM" && v == "xterm-256color"));
     }
 
     #[test]
@@ -526,56 +533,47 @@ mod tests {
     #[test]
     fn base_env_includes_tmpdir_without_prefix() {
         let env = base_env(None);
-        assert!(
-            env.iter()
-                .any(|(k, v)| k == "TMPDIR" && v == "/data/local/tmp")
-        );
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "TMPDIR" && v == "/data/local/tmp"));
     }
 
     #[test]
     fn base_env_includes_prefix_and_tmpdir_when_set() {
         let env = base_env(Some("/data/data/com.termux/files/usr"));
-        assert!(
-            env.iter()
-                .any(|(k, v)| k == "PREFIX" && v == "/data/data/com.termux/files/usr")
-        );
-        assert!(
-            env.iter()
-                .any(|(k, v)| k == "TMPDIR" && v == "/data/data/com.termux/files/usr/tmp")
-        );
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "PREFIX" && v == "/data/data/com.termux/files/usr"));
+        assert!(env
+            .iter()
+            .any(|(k, v)| k == "TMPDIR" && v == "/data/data/com.termux/files/usr/tmp"));
     }
 
     #[test]
     fn build_env_includes_term() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "TERM" && v == "xterm-256color")
-        );
+        assert!(result
+            .iter()
+            .any(|(k, v)| k == "TERM" && v == "xterm-256color"));
     }
 
     #[test]
     fn build_env_includes_colorterm() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "COLORTERM" && v == "truecolor")
-        );
+        assert!(result
+            .iter()
+            .any(|(k, v)| k == "COLORTERM" && v == "truecolor"));
     }
 
     #[test]
     fn build_env_includes_term_program() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "TERM_PROGRAM" && v == "torvox")
-        );
+        assert!(result
+            .iter()
+            .any(|(k, v)| k == "TERM_PROGRAM" && v == "torvox"));
     }
 
     #[test]
@@ -589,11 +587,9 @@ mod tests {
     fn build_env_includes_home_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "HOME" && v == "/tmp/test_home")
-        );
+        assert!(result
+            .iter()
+            .any(|(k, v)| k == "HOME" && v == "/tmp/test_home"));
     }
 
     #[test]
@@ -614,22 +610,18 @@ mod tests {
     fn build_env_includes_path_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "PATH" && v == "/usr/bin:/bin")
-        );
+        assert!(result
+            .iter()
+            .any(|(k, v)| k == "PATH" && v == "/usr/bin:/bin"));
     }
 
     #[test]
     fn build_env_includes_pwd_from_env() {
         let env = test_env();
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "PWD" && v == "/tmp/test_home")
-        );
+        assert!(result
+            .iter()
+            .any(|(k, v)| k == "PWD" && v == "/tmp/test_home"));
     }
 
     #[test]
@@ -660,11 +652,9 @@ mod tests {
         env.extra
             .push(("ANDROID_ROOT".to_string(), "/system".to_string()));
         let result = build_env(&env, "/bin/sh", 24, 80);
-        assert!(
-            result
-                .iter()
-                .any(|(k, v)| k == "ANDROID_ROOT" && v == "/system")
-        );
+        assert!(result
+            .iter()
+            .any(|(k, v)| k == "ANDROID_ROOT" && v == "/system"));
     }
 
     #[test]

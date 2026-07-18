@@ -89,6 +89,7 @@ impl From<u8> for ShellIntegration {
     }
 }
 
+/// Errors that can occur during session operations.
 #[derive(Debug, Error)]
 pub enum SessionError {
     #[error("pty error: {0}")]
@@ -101,6 +102,38 @@ pub enum SessionError {
     Closed,
 }
 
+/// A terminal session — wires PTY reader, VT parser, and process waiter together.
+///
+/// # Lifecycle
+///
+/// ```text
+///                     ┌─────────────┐
+///                     │   Spawned   │
+///                     └──────┬──────┘
+///                            │ PTY created, threads started
+///                            ▼
+///                     ┌─────────────┐
+///                     │   Running   │◄──────┐
+///                     └──────┬──────┘       │ process_output()
+///                            │              │
+///              ┌─────────────┼─────────────┐│
+///              │             │             ││
+///              ▼             ▼             ││
+///       ┌──────────┐  ┌──────────┐        ││
+///       │  Paused  │  │   Idle   │────────┘│
+///       └──────────┘  └──────────┘  output  │
+///                            │             │
+///                            │ EOF / exit  │
+///                            ▼             │
+///                     ┌─────────────┐      │
+///                     │   Exited    │      │
+///                     └──────┬──────┘      │
+///                            │             │
+///                            ▼             │
+///                     ┌─────────────┐      │
+///                     │   Cleaned   │──────┘
+///                     └─────────────┘  cleanup_resources()
+/// ```
 pub struct Session {
     pty: Box<dyn Pty>,
     terminal: GhosttyTerminal,

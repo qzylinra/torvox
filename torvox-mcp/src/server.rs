@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::input_queue::InputQueue;
 use crate::types::{McpError, ReadRequest, SessionStore, SignalKind};
@@ -584,6 +584,7 @@ impl McpServer {
     }
 }
 
+/// Generate an empty JSON Schema object (no properties, no additional properties).
 pub(crate) fn empty_schema() -> Value {
     json!({
         "type": "object",
@@ -592,6 +593,7 @@ pub(crate) fn empty_schema() -> Value {
     })
 }
 
+/// Generate a JSON Schema object with the given required properties.
 pub(crate) fn schema_required(required: &[&str]) -> Value {
     let mut properties = BTreeMap::new();
     for r in required {
