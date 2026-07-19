@@ -51,6 +51,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "android-gui"
+version = "0.1.0"
+dependencies = [
+ "boltffi",
+ "flume",
+ "gpu-renderer",
+ "log",
+ "rkyv",
+ "terminal-core",
+ "terminal-engine",
+ "thiserror 2.0.18",
+ "wgpu",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -222,6 +237,18 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "benchmarks"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "gpu-renderer",
+ "guillotiere",
+ "terminal-core",
+ "terminal-engine",
+ "wgpu",
+]
 
 [[package]]
 name = "bit-set"
@@ -859,6 +886,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "exec-bin"
+version = "0.1.0"
+dependencies = [
+ "nix",
+]
+
+[[package]]
 name = "exr"
 version = "1.74.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1096,6 +1130,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuzz-targets"
+version = "0.1.0"
+dependencies = [
+ "libfuzzer-sys",
+ "naga 23.1.0",
+ "serde_json",
+ "terminal-core",
+ "terminal-engine",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1206,6 +1251,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdf242682df893b86f33a73828fb09ca4b2d3bb6cc95249707fc684d27484b91"
 dependencies = [
  "bitflags 2.13.0",
+]
+
+[[package]]
+name = "gpu-renderer"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "cosmic-text",
+ "fontdb",
+ "futures",
+ "guillotiere",
+ "image",
+ "log",
+ "lru",
+ "naga 29.0.4",
+ "raw-window-handle",
+ "renderdoc",
+ "swash",
+ "terminal-core",
+ "terminal-engine",
+ "thiserror 2.0.18",
+ "wgpu",
 ]
 
 [[package]]
@@ -1454,6 +1521,19 @@ dependencies = [
  "proc-macro2-diagnostics",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "integration-tests"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "gpu-renderer",
+ "regex-lite",
+ "terminal-core",
+ "terminal-engine",
+ "toml",
+ "wgpu",
 ]
 
 [[package]]
@@ -1707,6 +1787,23 @@ checksum = "8ea1f30cedd69f0a2954655f7188c6a834246d2bcf1e315e2ac40c4b24dc9519"
 dependencies = [
  "cfg-if",
  "rayon",
+]
+
+[[package]]
+name = "mcp-server"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "env_logger",
+ "flume",
+ "log",
+ "quickcheck",
+ "quickcheck_macros",
+ "serde",
+ "serde_json",
+ "terminal-core",
+ "terminal-engine",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3038,6 +3135,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "terminal-core"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "quickcheck",
+ "quickcheck_macros",
+ "rkyv",
+ "serde",
+ "serde_json",
+ "unicode-width 0.2.2",
+]
+
+[[package]]
+name = "terminal-engine"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "flume",
+ "libc",
+ "libghostty-vt",
+ "log",
+ "nix",
+ "proptest",
+ "quickcheck",
+ "quickcheck_macros",
+ "serde",
+ "serde_json",
+ "shuttle",
+ "terminal-core",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3164,136 +3294,6 @@ name = "toml_writer"
 version = "1.1.1+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "756daf9b1013ebe47a8776667b466417e2d4c5679d441c26230efd9ef78692db"
-
-[[package]]
-name = "torvox-bench"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "guillotiere",
- "torvox-core",
- "torvox-renderer",
- "torvox-terminal",
- "wgpu",
-]
-
-[[package]]
-name = "torvox-core"
-version = "0.1.0"
-dependencies = [
- "proptest",
- "quickcheck",
- "quickcheck_macros",
- "rkyv",
- "serde",
- "serde_json",
- "unicode-width 0.2.2",
-]
-
-[[package]]
-name = "torvox-exec"
-version = "0.1.0"
-dependencies = [
- "nix",
-]
-
-[[package]]
-name = "torvox-fuzz"
-version = "0.1.0"
-dependencies = [
- "libfuzzer-sys",
- "naga 23.1.0",
- "serde_json",
- "torvox-core",
- "torvox-terminal",
-]
-
-[[package]]
-name = "torvox-gui-android"
-version = "0.1.0"
-dependencies = [
- "boltffi",
- "flume",
- "log",
- "rkyv",
- "thiserror 2.0.18",
- "torvox-core",
- "torvox-renderer",
- "torvox-terminal",
- "wgpu",
-]
-
-[[package]]
-name = "torvox-integration-tests"
-version = "0.1.0"
-dependencies = [
- "futures",
- "regex-lite",
- "toml",
- "torvox-core",
- "torvox-renderer",
- "torvox-terminal",
- "wgpu",
-]
-
-[[package]]
-name = "torvox-mcp"
-version = "0.1.0"
-dependencies = [
- "clap",
- "env_logger",
- "flume",
- "log",
- "quickcheck",
- "quickcheck_macros",
- "serde",
- "serde_json",
- "thiserror 2.0.18",
- "torvox-core",
- "torvox-terminal",
-]
-
-[[package]]
-name = "torvox-renderer"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "cosmic-text",
- "fontdb",
- "futures",
- "guillotiere",
- "image",
- "log",
- "lru",
- "naga 29.0.4",
- "raw-window-handle",
- "renderdoc",
- "swash",
- "thiserror 2.0.18",
- "torvox-core",
- "torvox-terminal",
- "wgpu",
-]
-
-[[package]]
-name = "torvox-terminal"
-version = "0.1.0"
-dependencies = [
- "base64",
- "flume",
- "libc",
- "libghostty-vt",
- "log",
- "nix",
- "proptest",
- "quickcheck",
- "quickcheck_macros",
- "serde",
- "serde_json",
- "shuttle",
- "thiserror 2.0.18",
- "torvox-core",
-]
 
 [[package]]
 name = "tracing"

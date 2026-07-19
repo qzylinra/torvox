@@ -3,27 +3,27 @@ initial_threshold = 25.0
 target_threshold = 60.0
 ratchet_increment = 1.0
 
-[crates.torvox-core]
+[crates.terminal-core]
 threshold = 45.0
 target = 60.0
 
-[crates.torvox-terminal]
+[crates.terminal-engine]
 threshold = 30.0
 target = 60.0
 
-[crates.torvox-renderer]
+[crates.gpu-renderer]
 threshold = 25.0
 target = 60.0
 
-[crates.torvox-gui-android]
+[crates.android-gui]
 threshold = 15.0
 target = 50.0
 
-[crates.torvox-integration-tests]
+[crates.integration-tests]
 threshold = 15.0
 target = 50.0
 
-[crates.torvox-mcp]
+[crates.mcp-server]
 threshold = 20.0
 target = 55.0
 

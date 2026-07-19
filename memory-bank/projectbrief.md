@@ -16,9 +16,9 @@ Build a GPU-accelerated Android terminal emulator that rivals desktop-class term
 
 ## Key Requirements
 
-- `torvox-core` is `#![no_std]` with `#![forbid(unsafe_code)]` — zero unsafe in the data model crate
+- `terminal-core` is `#![no_std]` with `#![forbid(unsafe_code)]` — zero unsafe in the data model crate
 - `unsafe` isolated to `pty.rs` (fork/exec) and `gui-android` FFI only, each with safety comments
-- Strict one-way crate dependency chain: `libghostty-vt ← torvox-core ← torvox-terminal ← torvox-renderer ← torvox-gui-android ← android/app`
+- Strict one-way crate dependency chain: `libghostty-vt ← terminal-core ← terminal-engine ← gpu-renderer ← android-gui ← android/app`
 - All Rust tests pass, zero clippy warnings, zero fmt violations, zero new `unsafe` in core
 - Golden images banned — use OCR (rapidocr) or pixel-coordinate assertions instead
 - Font files banned — fonts come from Nix store, not bundled in git

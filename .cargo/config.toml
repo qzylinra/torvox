@@ -1,4 +1,2 @@
 # Dylint needs RUSTUP_TOOLCHAIN to find nightly sysroot for lint library linking.
-# dylint unsets it from the environment, so cargo re-applies it from config.
-[env]
-RUSTUP_TOOLCHAIN = "nightly-2026-05-28"
+# dylint unsets it from the environment, so we set it via dylint-link-wrapper.sh.

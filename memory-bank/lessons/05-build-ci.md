@@ -30,7 +30,7 @@
 
 ### 相关提交
 - `86b01d0fb`: fix(build): use --whole-archive for ghostty-vt static linking on Android
-- `ce4dc68e3b`: fix(build): add torvox-gui-android/build.rs with --whole-archive
+- `ce4dc68e3b`: fix(build): add android-gui/build.rs with --whole-archive
 - `6a0d9b3132`: fix(build): bundle libghostty-vt.so instead of static linking
 - `3eac6629`: fix(android): restore ghostty dynamic linking with patchelf + libc++_shared bundling
 - `88cd1b51`: fix(build): add patchelf and ghostty .so copy to Android build script

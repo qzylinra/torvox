@@ -52,7 +52,7 @@ fuzz_target!(|data: &[u8]| {
             let spirv_bytes: Vec<u8> = spirv_words.iter().flat_map(|w| w.to_le_bytes()).collect();
 
             let temp_path =
-                std::env::temp_dir().join(format!("torvox_fuzz_shader_{}.spv", std::process::id()));
+                std::env::temp_dir().join(format!("fuzz_shader_{}.spv", std::process::id()));
 
             if std::fs::write(&temp_path, &spirv_bytes).is_ok() {
                 if is_available {

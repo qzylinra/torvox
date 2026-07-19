@@ -33,8 +33,8 @@ A structured knowledge base for the Torvox GPU-accelerated Android terminal emul
 ### Crate Direction
 
 ```
-libghostty-vt / libghostty-vt-sys ← torvox-core ← torvox-terminal ←
-torvox-renderer ← torvox-gui-android ← android/app
+libghostty-vt / libghostty-vt-sys ← terminal-core ← terminal-engine ←
+gpu-renderer ← android-gui ← android/app
 ```
 
 ### Pre-commit Checklist
@@ -43,5 +43,5 @@ torvox-renderer ← torvox-gui-android ← android/app
 2. `cargo clippy --all -- --deny warnings` exits 0
 3. `cargo fmt --check` exits 0
 4. `cd android && ./gradlew spotlessCheck detekt` exits 0
-5. `cargo geiger --package torvox-core` shows no new `unsafe`
-6. Bridge type sync: if `torvox-core` types changed, `bridge.rs` + `TorvoxBridge.kt` updated
+5. `cargo geiger --package terminal-core` shows no new `unsafe`
+6. Bridge type sync: if `terminal-core` types changed, `bridge.rs` + `TorvoxBridge.kt` updated

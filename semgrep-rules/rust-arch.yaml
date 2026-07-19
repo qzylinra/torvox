@@ -1,63 +1,63 @@
 # @REQ_SYS_005 — Cross-crate architecture enforcement
 rules:
-  - id: no-torvox-terminal-in-core
+  - id: no-terminal-engine-in-core
     patterns:
       - pattern: torvox_terminal
       - pattern-not: torvox_terminal_config
     paths:
       include:
-        - "torvox-core/src/**/*.rs"
-    message: "torvox-core must not depend on torvox-terminal (violates crate direction)"
+        - "terminal-core/src/**/*.rs"
+    message: "terminal-core must not depend on terminal-engine (violates crate direction)"
     severity: ERROR
     languages:
       - rust
 
-  - id: no-torvox-renderer-in-core
+  - id: no-gpu-renderer-in-core
     pattern: torvox_renderer
     paths:
       include:
-        - "torvox-core/src/**/*.rs"
-    message: "torvox-core must not depend on torvox-renderer (violates crate direction)"
+        - "terminal-core/src/**/*.rs"
+    message: "terminal-core must not depend on gpu-renderer (violates crate direction)"
     severity: ERROR
     languages:
       - rust
 
-  - id: no-torvox-gui-android-in-core
+  - id: no-android-gui-in-core
     pattern: torvox_gui_android
     paths:
       include:
-        - "torvox-core/src/**/*.rs"
-    message: "torvox-core must not depend on torvox-gui-android (violates crate direction)"
+        - "terminal-core/src/**/*.rs"
+    message: "terminal-core must not depend on android-gui (violates crate direction)"
     severity: ERROR
     languages:
       - rust
 
-  - id: no-torvox-renderer-in-terminal
+  - id: no-gpu-renderer-in-terminal
     pattern: torvox_renderer
     paths:
       include:
-        - "torvox-terminal/src/**/*.rs"
-    message: "torvox-terminal must not depend on torvox-renderer (violates crate direction)"
+        - "terminal-engine/src/**/*.rs"
+    message: "terminal-engine must not depend on gpu-renderer (violates crate direction)"
     severity: ERROR
     languages:
       - rust
 
-  - id: no-torvox-gui-android-in-terminal
+  - id: no-android-gui-in-terminal
     pattern: torvox_gui_android
     paths:
       include:
-        - "torvox-terminal/src/**/*.rs"
-    message: "torvox-terminal must not depend on torvox-gui-android (violates crate direction)"
+        - "terminal-engine/src/**/*.rs"
+    message: "terminal-engine must not depend on android-gui (violates crate direction)"
     severity: ERROR
     languages:
       - rust
 
-  - id: no-torvox-gui-android-in-renderer
+  - id: no-android-gui-in-renderer
     pattern: torvox_gui_android
     paths:
       include:
-        - "torvox-renderer/src/**/*.rs"
-    message: "torvox-renderer must not depend on torvox-gui-android (violates crate direction)"
+        - "gpu-renderer/src/**/*.rs"
+    message: "gpu-renderer must not depend on android-gui (violates crate direction)"
     severity: ERROR
     languages:
       - rust
@@ -69,8 +69,8 @@ rules:
       - pattern-not-inside: '#\[cfg\(test\)\]'
     paths:
       include:
-        - "torvox-core/src/**/*.rs"
-    message: "torvox-core is #![no_std] — use core:: or alloc:: instead of std::"
+        - "terminal-core/src/**/*.rs"
+    message: "terminal-core is #![no_std] — use core:: or alloc:: instead of std::"
     severity: ERROR
     languages:
       - rust
@@ -79,10 +79,10 @@ rules:
     pattern-regex: 'use anyhow::'
     paths:
       include:
-        - "torvox-core/src/**/*.rs"
-        - "torvox-terminal/src/**/*.rs"
-        - "torvox-renderer/src/**/*.rs"
-        - "torvox-gui-android/src/**/*.rs"
+        - "terminal-core/src/**/*.rs"
+        - "terminal-engine/src/**/*.rs"
+        - "gpu-renderer/src/**/*.rs"
+        - "android-gui/src/**/*.rs"
     message: "anyhow is forbidden in library crates — use thiserror 2"
     severity: ERROR
     languages:
@@ -103,11 +103,11 @@ rules:
     pattern-regex: torvox_exec
     paths:
       include:
-        - "torvox-core/src/**/*.rs"
-        - "torvox-terminal/src/**/*.rs"
-        - "torvox-renderer/src/**/*.rs"
-        - "torvox-gui-android/src/**/*.rs"
-    message: "torvox-exec must not be a dependency of library crates"
+        - "terminal-core/src/**/*.rs"
+        - "terminal-engine/src/**/*.rs"
+        - "gpu-renderer/src/**/*.rs"
+        - "android-gui/src/**/*.rs"
+    message: "exec-bin must not be a dependency of library crates"
     severity: ERROR
     languages:
       - rust
@@ -118,10 +118,10 @@ rules:
       - pattern-not-inside: '#[cfg(test)]'
     paths:
       include:
-        - "torvox-core/src/**/*.rs"
-        - "torvox-terminal/src/**/*.rs"
-        - "torvox-renderer/src/**/*.rs"
-        - "torvox-gui-android/src/**/*.rs"
+        - "terminal-core/src/**/*.rs"
+        - "terminal-engine/src/**/*.rs"
+        - "gpu-renderer/src/**/*.rs"
+        - "android-gui/src/**/*.rs"
       exclude:
         - "**/test_helpers*"
     message: "No #[allow] in production source code — fix the underlying issue instead"

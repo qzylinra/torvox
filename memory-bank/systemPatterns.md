@@ -5,13 +5,13 @@
 ```
 libghostty-vt / libghostty-vt-sys    ← Ghostty VT parser (vendored Zig)
     ↑
-torvox-core (no_std, serde + unicode-width)  ← Data model, Grid, Cell, Event
+terminal-core (no_std, serde + unicode-width)  ← Data model, Grid, Cell, Event
     ↑
-torvox-terminal (libghostty-vt + nix + flume)  ← PTY, VT parse, Session
+terminal-engine (libghostty-vt + nix + flume)  ← PTY, VT parse, Session
     ↑
-torvox-renderer (wgpu + cosmic-text + swash + guillotiere)  ← GPU render
+gpu-renderer (wgpu + cosmic-text + swash + guillotiere)  ← GPU render
     ↑
-torvox-gui-android (boltffi + JNA)  ← Kotlin↔Rust bridge
+android-gui (boltffi + JNA)  ← Kotlin↔Rust bridge
     ↑
 android/app (Kotlin + Compose)  ← Android UI
 ```
@@ -62,7 +62,7 @@ Each stage receives input from the previous stage and produces output for the ne
 ### 5. Error Handling
 
 - No `anyhow` in library crates — use `thiserror 2` with `std` feature gate
-- `torvox-core` uses `#![no_std]` — Error impls only with `std` feature enabled
+- `terminal-core` uses `#![no_std]` — Error impls only with `std` feature enabled
 - Render thread exits after 100 consecutive errors (~10s), must be restarted via generation counter
 - `Option` for graceful fallbacks (e.g., headless Vulkan detection)
 

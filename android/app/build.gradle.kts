@@ -16,7 +16,7 @@ detekt {
 }
 
 android {
-    namespace = "io.torvox"
+    namespace = "io.term"
     compileSdk = 37
 
     signingConfigs {
@@ -266,7 +266,7 @@ androidComponents {
                 "--reportDir",
                 reportDir,
                 "--targetClasses",
-                "io.torvox.*",
+                "io.term.*",
                 "--sourceDirs",
                 srcDirs,
                 "--threads",

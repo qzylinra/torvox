@@ -53,8 +53,8 @@ cd android && ./gradlew spotlessCheck detekt  # Kotlin lint
 
 ### Rust
 
-- `torvox-core`: `#![no_std]`, `#![forbid(unsafe_code)]` — no `std::`, no `alloc::` without `std` feature, zero unsafe blocks
-- `unsafe` confined to `torvox-terminal/src/pty.rs` (fork/exec) and `torvox-gui-android` FFI, each with `// SAFETY:` comments
+- `terminal-core`: `#![no_std]`, `#![forbid(unsafe_code)]` — no `std::`, no `alloc::` without `std` feature, zero unsafe blocks
+- `unsafe` confined to `terminal-engine/src/pty.rs` (fork/exec) and `android-gui` FFI, each with `// SAFETY:` comments
 - No `anyhow` in library crates — use `thiserror 2`
 - No abbreviated variable names, no magic numbers, no `#[allow]` in production code
 
@@ -81,14 +81,14 @@ cd android && ./gradlew spotlessCheck detekt  # Kotlin lint
 
 ```
 torvox/
-├── torvox-core/          # Data model (no_std)
-├── torvox-terminal/      # PTY, VT parsing, session
-├── torvox-renderer/      # GPU rendering pipeline
-├── torvox-gui-android/   # Rust↔Kotlin bridge
-├── torvox-mcp/           # MCP server
-├── torvox-exec/          # SSH/Mosh executable
-├── torvox-integration-tests/
-├── torvox-bench/         # Criterion benchmarks
+├── terminal-core/          # Data model (no_std)
+├── terminal-engine/      # PTY, VT parsing, session
+├── gpu-renderer/      # GPU rendering pipeline
+├── android-gui/   # Rust↔Kotlin bridge
+├── mcp-server/           # MCP server
+├── exec-bin/          # SSH/Mosh executable
+├── integration-tests/
+├── benchmarks/         # Criterion benchmarks
 ├── fuzz/                 # cargo-fuzz targets
 ├── android/              # Android app (Kotlin + Compose)
 ├── docs/                 # Architecture, standards, SRS, ADRs

@@ -7,10 +7,10 @@ test_tool = "nextest"
 threshold = 0.60
 
 examine_globs = [
-  "torvox-core/src/**/*.rs",
-  "torvox-terminal/src/**/*.rs",
-  "torvox-renderer/src/**/*.rs",
-  "torvox-mcp/src/**/*.rs",
+  "terminal-core/src/**/*.rs",
+  "terminal-engine/src/**/*.rs",
+  "gpu-renderer/src/**/*.rs",
+  "mcp-server/src/**/*.rs",
 ]
 
 # Files excluded from mutation testing:
@@ -19,7 +19,7 @@ examine_globs = [
 # - pty.rs: contains unsafe fork() — mutations could create fork bombs
 # - shader/** : WGSL shader source, not Rust code
 # - grid.rs, selection.rs: excluded from --mutants (quick) for speed;
-#   run `nix develop --command "cargo mutants --package torvox-core --include grid.rs selection.rs"`
+#   run `nix develop --command "cargo mutants --package terminal-core --include grid.rs selection.rs"`
 #   for deep coverage
 exclude_globs = [
   "**/target/**",
@@ -29,8 +29,8 @@ exclude_globs = [
   "**/fuzz/**",
   "**/test_data/**",
   "**/build.rs",
-  "torvox-core/src/grid.rs",
-  "torvox-core/src/selection.rs",
-  "torvox-terminal/src/pty.rs",
-  "torvox-renderer/src/shader/**",
+  "terminal-core/src/grid.rs",
+  "terminal-core/src/selection.rs",
+  "terminal-engine/src/pty.rs",
+  "gpu-renderer/src/shader/**",
 ]
