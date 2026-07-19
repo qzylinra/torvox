@@ -172,7 +172,7 @@ impl GpuContext {
                 height: initial_height,
                 present_mode,
                 alpha_mode,
-                view_formats: &[],
+                view_formats: Vec::new(),
                 desired_maximum_frame_latency: DESIRED_FRAME_LATENCY,
             };
             if let Some(ref configured_surface) = self.surface {
@@ -241,11 +241,11 @@ impl GpuContext {
     ) -> Result<(), GpuError> {
         if self.surface.is_none()
             && let Ok(mut guard) = GLOBAL_SURFACE.get_or_init(|| Mutex::new(None)).lock()
-            && let Some((cached_surface, mut cached_config)) = guard.take()
+            && let Some((_cached_surface, mut cached_config)) = guard.take()
         {
             cached_config.width = ((width as f32 * super::RENDER_SCALE) as u32).max(1);
             cached_config.height = ((height as f32 * super::RENDER_SCALE) as u32).max(1);
-            cached_config.view_formats = &[];
+            cached_config.view_formats = Vec::new();
             if let Some(buf) = &self.cell_uniform_buffer {
                 let aw = self.atlas_texture.as_ref().map_or(0, |t| t.width());
                 let ah = self.atlas_texture.as_ref().map_or(0, |t| t.height());
@@ -331,7 +331,7 @@ impl GpuContext {
             height: ((height as f32 * super::RENDER_SCALE) as u32).max(1),
             present_mode: Self::select_present_mode(&caps),
             alpha_mode,
-            view_formats: &[],
+            view_formats: Vec::new(),
             desired_maximum_frame_latency: DESIRED_FRAME_LATENCY_ANDROID,
         };
         surface.configure(&self.device, &config);

@@ -176,6 +176,27 @@ impl Grid {
         self.lines.get(row as usize).and_then(|line| line.get(col))
     }
 
+    /// Return text content within a range of cells.
+    pub fn text_in_range(
+        &self,
+        start_row: u32,
+        start_col: u32,
+        end_row: u32,
+        end_col: u32,
+    ) -> alloc::string::String {
+        let mut result = alloc::string::String::new();
+        for r in start_row..=end_row {
+            let cstart = if r == start_row { start_col } else { 0 };
+            let cend = if r == end_row { end_col } else { u32::MAX };
+            for c in cstart..=cend {
+                if let Some(cell) = self.cell(r, c) {
+                    result.push(cell.char);
+                }
+            }
+        }
+        result
+    }
+
     /// Mark a single row dirty.
     pub fn mark_row_dirty(&mut self, row: u32) {
         self.dirty.mark(row);

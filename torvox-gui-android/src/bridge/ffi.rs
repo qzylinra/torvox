@@ -1,4 +1,4 @@
-use super::core::{TorvoxBridge, with_bridge};
+use super::core::{with_bridge, TorvoxBridge};
 use super::types::*;
 use super::wire_format::*;
 
@@ -451,6 +451,32 @@ pub unsafe extern "C" fn torvox_bridge_expand_and_set_selection(
             | ((ec as i64 & 0xFFFF) << 48)
     })
     .unwrap_or(-1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_is_cell_empty(handle: i64, row: u32, col: u32) -> i32 {
+    with_bridge(handle, |bridge| Ok(bridge.is_cell_empty(row, col)))
+        .map(|empty| if empty { 1 } else { 0 })
+        .unwrap_or(1)
+}
+
+/// # Safety
+/// `handle` must be a valid surface handle previously returned by `torvox_bridge_new`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn torvox_bridge_has_text_in_range(
+    handle: i64,
+    start_row: u32,
+    start_col: u32,
+    end_row: u32,
+    end_col: u32,
+) -> i32 {
+    with_bridge(handle, |bridge| {
+        Ok(bridge.has_text_in_range(start_row, start_col, end_row, end_col))
+    })
+    .map(|has| if has { 1 } else { 0 })
+    .unwrap_or(0)
 }
 
 /// # Safety

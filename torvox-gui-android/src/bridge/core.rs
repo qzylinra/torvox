@@ -385,6 +385,7 @@ impl TorvoxBridge {
                     active: true,
                     mode: torvox_core::selection::SelectionMode::from_u8(mode),
                     origin: None,
+                    is_empty: false,
                 }));
             } else {
                 surface.set_selection(None);
@@ -617,6 +618,7 @@ impl TorvoxBridge {
                     },
                     torvox_core::selection::SelectionMode::from_u8(mode),
                     None,
+                    false,
                 );
                 surface.set_selection(Some(range));
             } else {
@@ -663,6 +665,55 @@ impl TorvoxBridge {
         String::new()
     }
 
+    pub fn is_cell_empty(&self, row: u32, col: u32) -> bool {
+        let mut surface_guard = lock_surface!(self);
+        if let Some(surface) = surface_guard.as_mut() {
+            if let Ok(guard) = self.session.lock()
+                && let Some(session_arc) = guard.as_ref()
+                && let Ok(session) = session_arc.lock()
+            {
+                let snapshot = session.terminal().take_snapshot();
+                let idx = (row * snapshot.cols + col) as usize;
+                let ch = snapshot.cells.get(idx).and_then(|c| char::from_u32(c.codepoint));
+                return matches!(ch, None | Some('\0'));
+            }
+        }
+        true
+    }
+
+    pub fn has_text_in_range(
+        &self,
+        start_row: u32,
+        start_col: u32,
+        end_row: u32,
+        end_col: u32,
+    ) -> bool {
+        let mut surface_guard = lock_surface!(self);
+        if let Some(surface) = surface_guard.as_mut() {
+            if let Ok(guard) = self.session.lock()
+                && let Some(session_arc) = guard.as_ref()
+                && let Ok(session) = session_arc.lock()
+            {
+                let snapshot = session.terminal().take_snapshot();
+                for r in start_row..=end_row {
+                    let cstart = if r == start_row { start_col } else { 0 };
+                    let cend = if r == end_row { end_col } else { snapshot.cols - 1 };
+                    for c in cstart..=cend {
+                        let idx = (r * snapshot.cols + c) as usize;
+                        if let Some(cell) = snapshot.cells.get(idx) {
+                            if let Some(ch) = char::from_u32(cell.codepoint) {
+                                if ch != '\0' && !ch.is_whitespace() {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
     pub fn expand_and_set_selection(
         &self,
         row: u32,
@@ -683,6 +734,7 @@ impl TorvoxBridge {
                     snapshot.cols,
                     anchor,
                     mode_enum,
+                    torvox_core::selection::ExpansionOptions::default(),
                 );
 
                 surface.set_selection(Some(crate::bridge::selection::range_from(
@@ -690,6 +742,7 @@ impl TorvoxBridge {
                     end,
                     mode_enum,
                     Some((row as i32, col as i32)),
+                    false,
                 )));
                 return Ok((start.row, start.col, end.row, end.col));
             }
@@ -727,6 +780,7 @@ impl TorvoxBridge {
                             snapshot.cols,
                             moved,
                             mode_enum,
+                            torvox_core::selection::ExpansionOptions::default(),
                         );
                         if params.handle_side == 0 {
                             (mws, fixed)
@@ -744,6 +798,7 @@ impl TorvoxBridge {
                     new_end,
                     mode_enum,
                     Some((params.origin_row, params.origin_col)),
+                    false,
                 )));
                 let (lo, hi) = if new_start.row < new_end.row
                     || (new_start.row == new_end.row && new_start.col <= new_end.col)
