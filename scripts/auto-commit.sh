@@ -13,5 +13,6 @@ git add -A
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 git commit -m "auto: ${TIMESTAMP}"
 
-REMOTE="https://x-access-token:${GITHUB_TOKEN}@github.com/qzylinra/torvox.git"
+TOKEN="${GH_TOKEN:-${GITHUB_TOKEN}}"
+REMOTE="https://x-access-token:${TOKEN}@github.com/qzylinra/torvox.git"
 git push "$REMOTE" main
