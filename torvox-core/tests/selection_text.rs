@@ -529,7 +529,7 @@ fn word_selection_via_expand_punctuation_boundary() {
 fn word_selection_via_expand_hyphenated() {
     let grid = make_grid(&["well-known"]);
     let result = word_selection_with_expansion(&grid, 0, 3); // middle of "well-known"
-                                                             // Hyphen is a word boundary, so expand finds "well" as the word
+    // Hyphen is a word boundary, so expand finds "well" as the word
     assert_eq!(result, "well");
 }
 
@@ -537,7 +537,7 @@ fn word_selection_via_expand_hyphenated() {
 fn word_selection_via_expand_second_hyphen_part() {
     let grid = make_grid(&["well-known"]);
     let result = word_selection_with_expansion(&grid, 0, 6); // middle of "known"
-                                                             // Hyphen is a word boundary, so expand finds "known" as the word
+    // Hyphen is a word boundary, so expand finds "known" as the word
     assert_eq!(result, "known");
 }
 

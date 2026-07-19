@@ -919,7 +919,6 @@ fn process_session_skip_output_retries_snapshot_up_to_50ms() {
         "retry window must stay under 50ms"
     );
 }
-}
 
 #[test]
 fn set_render_paused_ffi_null_handle_does_not_crash() {

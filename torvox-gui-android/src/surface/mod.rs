@@ -1082,7 +1082,10 @@ mod tests {
 
     #[test]
     fn kgp_atlas_width_matches_atlas() {
-        assert_eq!(KGP_ATLAS_WIDTH, 1024, "KGP_ATLAS_WIDTH must match atlas width");
+        assert_eq!(
+            KGP_ATLAS_WIDTH, 1024,
+            "KGP_ATLAS_WIDTH must match atlas width"
+        );
     }
 
     #[test]

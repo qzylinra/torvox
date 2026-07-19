@@ -265,13 +265,21 @@ impl GpuContext {
         let backends = wgpu::Backends::VULKAN;
         #[cfg(not(target_os = "android"))]
         let backends = wgpu::Backends::PRIMARY;
+        #[cfg(debug_assertions)]
+        let instance_flags = wgpu::InstanceFlags::VALIDATION
+            | wgpu::InstanceFlags::DEBUG
+            | wgpu::InstanceFlags::DISCARD_HAL_LABELS;
+        #[cfg(not(debug_assertions))]
+        let instance_flags = wgpu::InstanceFlags::DISCARD_HAL_LABELS;
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends,
-            flags: wgpu::InstanceFlags::DISCARD_HAL_LABELS,
+            flags: instance_flags,
             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
             backend_options: wgpu::BackendOptions::default(),
             display: None,
         });
+
+        crate::renderdoc_capture::initialize();
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -292,6 +300,9 @@ impl GpuContext {
 
         let device_descriptor = wgpu::DeviceDescriptor {
             label: Some("Torvox Device"),
+            #[cfg(debug_assertions)]
+            required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+            #[cfg(not(debug_assertions))]
             required_features: wgpu::Features::empty(),
             required_limits: adapter.limits(),
             ..Default::default()

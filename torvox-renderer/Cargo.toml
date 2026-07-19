@@ -18,8 +18,10 @@ lru = { workspace = true }
 futures = { workspace = true }
 raw-window-handle = { workspace = true }
 log = { workspace = true }
+renderdoc = "0.12.1"
 
 [dev-dependencies]
+naga = { version = "29", default-features = false, features = ["wgsl-in", "spv-out"] }
 image = { workspace = true }
 
 [lints]

@@ -206,3 +206,87 @@ tasks.withType<Test>().matching { it.name == "testDebugUnitTest" }.configureEach
     }
     jvmArgs("-Djava.library.path=")
 }
+
+// ── PIT mutation testing (AGP 9.x compatible, no plugin dependency) ──
+
+val pitestClasspath = configurations.create("pitestClasspath")
+
+dependencies {
+    pitestClasspath("org.pitest:pitest:1.22.1")
+    pitestClasspath("org.pitest:pitest-command-line:1.22.1")
+}
+
+val excludedUnitTests =
+    listOf(
+        "*CrashHandlerTest*",
+        "*TorvoxDocumentsProviderTest*",
+        "*LogUtilTest*",
+        "*BackHandlerTest*",
+        "*ComposingTextTest*",
+        "*GestureInteractionTest*",
+        "*SelectionMenuComposeTest*",
+        "*TerminalLifecycleTest*",
+        "*TouchGestureTest*",
+        "*WordSelectionTest*",
+    )
+
+// Register pitest tasks for debug-only Android build variants
+androidComponents {
+    onVariants { variant ->
+        if (!variant.name.contains("debug", ignoreCase = true)) {
+            return@onVariants
+        }
+        val taskName = "pitest${variant.name.replaceFirstChar { it.uppercase() }}"
+        tasks.register<JavaExec>(taskName) {
+            dependsOn("test${variant.name.replaceFirstChar { it.uppercase() }}UnitTest")
+            group = "verification"
+            description = "Run PIT mutation testing on ${variant.name} unit tests"
+
+            val runtime = configurations.named("${variant.name}UnitTestRuntimeClasspath")
+            val compileOutput = tasks.named("compile${variant.name.replaceFirstChar { it.uppercase() }}Kotlin")
+            classpath = pitestClasspath + runtime.get() +
+                files(
+                    compileOutput.map { (it as org.jetbrains.kotlin.gradle.tasks.KotlinCompile).destinationDirectory },
+                )
+
+            mainClass.set("org.pitest.mutationtest.commandline.MutationCoverageReport")
+
+            val reportDir =
+                layout.buildDirectory
+                    .dir("reports/pitest/${variant.name}")
+                    .get()
+                    .asFile.absolutePath
+            val srcDirs =
+                listOf(
+                    project.projectDir.resolve("src/main/kotlin").absolutePath,
+                    project.projectDir.resolve("src/${variant.name}/kotlin").absolutePath,
+                ).filter { File(it).exists() }.joinToString(",")
+
+            args(
+                "--reportDir",
+                reportDir,
+                "--targetClasses",
+                "io.torvox.*",
+                "--sourceDirs",
+                srcDirs,
+                "--threads",
+                "4",
+                "--timeoutConst",
+                "10000",
+                "--outputFormats",
+                "XML,HTML",
+                "--verbose",
+                "--excludedTestClasses",
+                excludedUnitTests.joinToString(","),
+            )
+
+            jvmArgs("-Djava.library.path=")
+        }
+    }
+}
+
+// Convenience task that runs pitest for all variants
+tasks.register("pitest") {
+    group = "verification"
+    description = "Run PIT mutation testing on all variant unit tests"
+}

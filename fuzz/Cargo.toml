@@ -44,10 +44,17 @@ path = "fuzz_targets/fuzz_attrs.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "fuzz_shader_wgsl"
+path = "fuzz_targets/fuzz_shader_wgsl.rs"
+test = false
+bench = false
+
 [dependencies]
 torvox-core = { path = "../torvox-core" }
 torvox-terminal = { path = "../torvox-terminal" }
 libfuzzer-sys = "0.4"
+naga = { version = "23", default-features = false, features = ["wgsl-in", "spv-out"] }
 serde_json = "1"
 
 [lints]

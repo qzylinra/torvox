@@ -104,6 +104,9 @@ impl GpuContext {
         let (device, queue) =
             futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
                 label: Some("Torvox Device"),
+                #[cfg(debug_assertions)]
+                required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                #[cfg(not(debug_assertions))]
                 required_features: wgpu::Features::empty(),
                 required_limits: adapter.limits(),
                 ..Default::default()
@@ -172,7 +175,7 @@ impl GpuContext {
                 height: initial_height,
                 present_mode,
                 alpha_mode,
-                view_formats: Vec::new(),
+                view_formats: &[],
                 desired_maximum_frame_latency: DESIRED_FRAME_LATENCY,
             };
             if let Some(ref configured_surface) = self.surface {
@@ -245,7 +248,7 @@ impl GpuContext {
         {
             cached_config.width = ((width as f32 * super::RENDER_SCALE) as u32).max(1);
             cached_config.height = ((height as f32 * super::RENDER_SCALE) as u32).max(1);
-            cached_config.view_formats = Vec::new();
+            cached_config.view_formats = &[];
             if let Some(buf) = &self.cell_uniform_buffer {
                 let aw = self.atlas_texture.as_ref().map_or(0, |t| t.width());
                 let ah = self.atlas_texture.as_ref().map_or(0, |t| t.height());
@@ -331,7 +334,7 @@ impl GpuContext {
             height: ((height as f32 * super::RENDER_SCALE) as u32).max(1),
             present_mode: Self::select_present_mode(&caps),
             alpha_mode,
-            view_formats: Vec::new(),
+            view_formats: &[],
             desired_maximum_frame_latency: DESIRED_FRAME_LATENCY_ANDROID,
         };
         surface.configure(&self.device, &config);

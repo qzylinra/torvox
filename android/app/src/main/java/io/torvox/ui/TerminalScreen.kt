@@ -45,7 +45,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -739,7 +741,7 @@ fun SelectionMenuOverlay(
         "MENU placement selRect=(${pos.selLeft.toInt()},${pos.selTop.toInt()}," +
             "${pos.selRight.toInt()},${pos.selBottom.toInt()}) menuPos=(${pos.menuX.toInt()}," +
             "${pos.menuY.toInt()}) menuW=${pos.menuW.toInt()} menuH=${pos.menuH.toInt()} " +
-            "flipAbove=${pos.flipAbove} coversSelection=${pos.coversSelection} pasteOnly=$pasteOnly",
+            "flipAbove=${pos.flipAbove} coversSelection=${pos.coversSelection} pasteOnly=${selection.pasteOnly}",
     )
 
     var menuSize by remember { mutableStateOf(IntSize(0, 0)) }
@@ -754,8 +756,12 @@ fun SelectionMenuOverlay(
                     .testTag("SelectionMenuOverlay")
                     .offset { IntOffset(pos.menuX.roundToInt(), pos.menuY.roundToInt()) }
                     .onSizeChanged { menuSize = it }
-                    .shadow(4.dp, RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(8.dp))
+                    .graphicsLayer {
+                        shadowElevation = 4.dp.value
+                        shape = RoundedCornerShape(8.dp)
+                        clip = false
+                    }.background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
                     .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
         ) {
             Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {

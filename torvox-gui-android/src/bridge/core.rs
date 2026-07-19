@@ -674,7 +674,10 @@ impl TorvoxBridge {
             {
                 let snapshot = session.terminal().take_snapshot();
                 let idx = (row * snapshot.cols + col) as usize;
-                let ch = snapshot.cells.get(idx).and_then(|c| char::from_u32(c.codepoint));
+                let ch = snapshot
+                    .cells
+                    .get(idx)
+                    .and_then(|c| char::from_u32(c.codepoint));
                 return matches!(ch, None | Some('\0'));
             }
         }
@@ -697,7 +700,11 @@ impl TorvoxBridge {
                 let snapshot = session.terminal().take_snapshot();
                 for r in start_row..=end_row {
                     let cstart = if r == start_row { start_col } else { 0 };
-                    let cend = if r == end_row { end_col } else { snapshot.cols - 1 };
+                    let cend = if r == end_row {
+                        end_col
+                    } else {
+                        snapshot.cols - 1
+                    };
                     for c in cstart..=cend {
                         let idx = (r * snapshot.cols + c) as usize;
                         if let Some(cell) = snapshot.cells.get(idx) {

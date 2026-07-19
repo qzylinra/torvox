@@ -482,6 +482,7 @@ fn gpu_render_selection_swaps_fg_bg() {
         active: true,
         mode: torvox_core::selection::SelectionMode::Char,
         origin: None,
+        is_empty: false,
     };
     let pixels_sel = render_with_selection(&mut ctx, &mut font_pipeline, &snap, sel);
     let cell_w = font_pipeline.cell_metrics().0 as u32;

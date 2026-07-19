@@ -50,11 +50,14 @@ impl ExpansionOptions {
 
     pub fn to_bits(self) -> u8 {
         (if self.bridge_whitespace { 0x01 } else { 0 })
-            | (if self.strip_trailing_punctuation { 0x02 } else { 0 })
+            | (if self.strip_trailing_punctuation {
+                0x02
+            } else {
+                0
+            })
             | (if self.detect_email { 0x04 } else { 0 })
     }
 }
-
 
 fn is_email_domain(domain: &str) -> bool {
     let trimmed = domain.trim_end_matches('.');
@@ -326,8 +329,14 @@ impl Selection {
     /// `本` in `abc日本語def` should only grab `日本語`, not `abc日本語def`), the
     /// expansion keeps the run within a single script class: once the seed
     /// character is CJK, only other CJK glyphs extend the word, and vice-versa.
-    pub fn expand_word(mut self, cell_at: impl Fn(u32, u32) -> Option<char>, options: ExpansionOptions) -> Self {
-        if !options.bridge_whitespace && classify_touch(cell_at(self.start.row, self.start.col)) != TouchClass::Text {
+    pub fn expand_word(
+        mut self,
+        cell_at: impl Fn(u32, u32) -> Option<char>,
+        options: ExpansionOptions,
+    ) -> Self {
+        if !options.bridge_whitespace
+            && classify_touch(cell_at(self.start.row, self.start.col)) != TouchClass::Text
+        {
             return self;
         }
         let seed_is_cjk = cell_at(self.start.row, self.start.col)
@@ -364,7 +373,11 @@ impl Selection {
         self.expand_url_inner(&cell_at, ExpansionOptions::default())
     }
 
-    fn expand_url_inner(mut self, cell_at: &impl Fn(u32, u32) -> Option<char>, options: ExpansionOptions) -> Self {
+    fn expand_url_inner(
+        mut self,
+        cell_at: &impl Fn(u32, u32) -> Option<char>,
+        options: ExpansionOptions,
+    ) -> Self {
         let start = self.start;
         let max_lookback = 50u32.min(start.col);
         let lookback_start = start.col.saturating_sub(max_lookback);
@@ -411,7 +424,6 @@ impl Selection {
 
         let mut row = self.end.row;
         let mut col = self.end.col;
-        const URL_SCAN_LIMIT: u32 = 200;
         for _ in 0..URL_SCAN_LIMIT {
             match cell_at(row, col + 1) {
                 Some(ch) if is_url_safe(ch) => {
@@ -478,7 +490,11 @@ impl Selection {
     /// Expand the selection according to its mode.
     /// For Word mode, expands to word boundaries then tries URL detection.
     /// For other modes, returns self unchanged.
-    pub fn expand(self, cell_at: impl Fn(u32, u32) -> Option<char>, options: ExpansionOptions) -> Self {
+    pub fn expand(
+        self,
+        cell_at: impl Fn(u32, u32) -> Option<char>,
+        options: ExpansionOptions,
+    ) -> Self {
         match self.mode {
             SelectionMode::Word => {
                 let expanded = self.expand_word(&cell_at, options);
@@ -869,7 +885,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 6 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 6);
         assert_eq!(expanded.end.col, 10);
     }
@@ -882,7 +901,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 4 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 4);
         assert_eq!(expanded.end.col, 6);
     }
@@ -895,7 +917,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 4 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.text(&grid), "foo_bar_baz");
     }
 
@@ -947,7 +972,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 9 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 7);
         assert_eq!(expanded.end.col, 10);
     }
@@ -960,7 +988,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 8 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         // expand_word gives "https", then expand_url scans left and right
         assert_eq!(expanded.start.col, 6); // 'h' in https
         assert_eq!(expanded.end.col, 26); // end of "rust-lang.org" (space at 27 stops)
@@ -974,7 +1005,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 6 },
             SelectionMode::Char,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 6);
         assert_eq!(expanded.end.col, 6);
     }
@@ -987,7 +1021,10 @@ mod tests {
             SelectionAnchor { row: 1, col: 3 },
             SelectionMode::Line,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 2);
         assert_eq!(expanded.end.col, 3);
     }
@@ -1000,7 +1037,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 3 },
             SelectionMode::Block,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 1);
         assert_eq!(expanded.end.col, 3);
     }
@@ -1099,7 +1139,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 4 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.text(&grid), "hello");
     }
 
@@ -1111,7 +1154,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 10 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.text(&grid), "world");
     }
 
@@ -1248,7 +1294,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 0 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 0);
         assert_eq!(expanded.end.col, 4);
     }
@@ -1261,7 +1310,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 3 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 0);
         assert_eq!(expanded.end.col, 9);
     }
@@ -1274,7 +1326,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 10 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 6);
         assert_eq!(expanded.end.col, 10);
     }
@@ -1352,7 +1407,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 1 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         // Whole ideograph run should be selected, not a single glyph.
         assert_eq!(expanded.start.col, 0);
         assert_eq!(expanded.end.col, 5);
@@ -1367,7 +1425,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 4 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         // CJK run only; ASCII words on either side are separate boundaries.
         assert_eq!(expanded.start.col, 3);
         assert_eq!(expanded.end.col, 5);
@@ -1382,7 +1443,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 8 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 4);
         // Trailing '.' is stripped; selection ends at 'm'.
         assert_eq!(expanded.end.col, 22);
@@ -1397,7 +1461,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 5 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         // The comma is not URL-safe, so the forward scan already stops at 'm'.
         assert_eq!(expanded.end.col, 23);
         assert_eq!(expanded.text(&grid), "https://example.com");
@@ -1411,7 +1478,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 5 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         // Internal dots are preserved.
         assert_eq!(expanded.text(&grid), "https://example.com/path");
     }
@@ -1424,7 +1494,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 6 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.end.col, 24);
         assert_eq!(expanded.text(&grid), "https://example.com");
     }
@@ -1511,7 +1584,13 @@ mod tests {
             SelectionAnchor { row: 0, col: 5 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions { bridge_whitespace: true, ..ExpansionOptions::default() });
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions {
+                bridge_whitespace: true,
+                ..ExpansionOptions::default()
+            },
+        );
         assert_eq!(expanded.start.col, 0);
         assert_eq!(expanded.end.col, 10);
         assert_eq!(expanded.text(&grid), "hello world");
@@ -1526,7 +1605,13 @@ mod tests {
             SelectionAnchor { row: 0, col: 1 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions { bridge_whitespace: true, ..ExpansionOptions::default() });
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions {
+                bridge_whitespace: true,
+                ..ExpansionOptions::default()
+            },
+        );
         assert_eq!(expanded.start.col, 1);
         assert_eq!(expanded.end.col, 6);
         assert_eq!(expanded.text(&grid), " hello");
@@ -1541,7 +1626,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 5 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.text(&grid), "https://example.com/");
     }
 
@@ -1555,7 +1643,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 1 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 0);
         assert_eq!(expanded.end.col, 2);
         assert_eq!(expanded.text(&grid), "abc");
@@ -1571,7 +1662,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 1 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         // Only the CJK run "版本" is selected (col 0..1), the ASCII '2' is a
         // separate script class.
         assert_eq!(expanded.start.col, 0);
@@ -1603,7 +1697,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 2 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 0);
         assert_eq!(expanded.end.col, 4);
         assert_eq!(expanded.text(&grid), "hello");
@@ -1620,7 +1717,13 @@ mod tests {
             SelectionAnchor { row: 0, col: 3 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions { bridge_whitespace: true, ..ExpansionOptions::default() });
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions {
+                bridge_whitespace: true,
+                ..ExpansionOptions::default()
+            },
+        );
         assert_eq!(expanded.start.col, 0);
         assert_eq!(expanded.end.col, 6);
         assert_eq!(expanded.text(&grid), "foo bar");
@@ -1636,7 +1739,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 6 },
             SelectionMode::Word,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.text(&grid), "https://example.com");
     }
 
@@ -1648,7 +1754,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 9 },
             SelectionMode::Semantic,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 7);
         assert_eq!(expanded.end.col, 10);
         assert_eq!(expanded.text(&grid), "this");
@@ -1662,7 +1771,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 10 },
             SelectionMode::Semantic,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.text(&grid), "https://example.com/path");
     }
 
@@ -1674,7 +1786,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 5 },
             SelectionMode::Semantic,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         assert_eq!(expanded.start.col, 5);
         assert_eq!(expanded.end.col, 5);
     }
@@ -1687,7 +1802,10 @@ mod tests {
             SelectionAnchor { row: 0, col: 10 },
             SelectionMode::Semantic,
         );
-        let expanded = s.expand(|r, c| grid.cell(r, c).map(|cell| cell.char), ExpansionOptions::default());
+        let expanded = s.expand(
+            |r, c| grid.cell(r, c).map(|cell| cell.char),
+            ExpansionOptions::default(),
+        );
         let text = expanded.text(&grid);
         assert!(
             text == "user" || text == "user@host.com",

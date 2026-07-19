@@ -822,6 +822,7 @@ fn selection_swaps_fg_bg() {
         active: true,
         mode: SelectionMode::Char,
         origin: None,
+        is_empty: false,
     });
     let instances = build_cell_instances_from_snapshot(
         &snapshot,
@@ -1472,6 +1473,7 @@ fn selection_range_line_mode() {
         active: true,
         mode: SelectionMode::Line,
         origin: None,
+        is_empty: false,
     };
     assert!(sel.contains(3, 50, 80));
     assert!(!sel.contains(1, 0, 80));
@@ -1487,6 +1489,7 @@ fn selection_range_block_mode() {
         active: true,
         mode: SelectionMode::Block,
         origin: None,
+        is_empty: false,
     };
     assert!(sel.contains(2, 7, 80));
     assert!(!sel.contains(2, 3, 80));
@@ -1503,6 +1506,7 @@ fn selection_range_char_mode() {
         active: true,
         mode: SelectionMode::Char,
         origin: None,
+        is_empty: false,
     };
     assert!(sel.contains(2, 0, 80));
     assert!(!sel.contains(1, 4, 80)); // before start_col on start row

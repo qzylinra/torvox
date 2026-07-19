@@ -12,3 +12,4 @@
 pub mod font;
 pub mod gpu;
 mod lock_util;
+pub mod renderdoc_capture;

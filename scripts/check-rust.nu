@@ -10,6 +10,10 @@ def main [] {
     # Non-tool tests use nextest for parallelism.
     cargo test -p torvox-integration-tests --test tool_lint -- --test-threads 1
     cargo nextest run --workspace --profile ci --retries 2 -E 'not binary(tool_lint)'
+    # SPIR-V validation (shader pipeline test) — run with spirv-tools in PATH
+    # The test gracefully skips if spirv-val is unavailable, but this ensures it runs.
+    nix shell nixpkgs#spirv-tools --command cargo test --package torvox-renderer \
+        --test shader_validation_test spirv_compilation -- --ignored 2>&1 | tail -5
 
     let RUSTC = (nix build --print-out-paths --impure .#rust-toolchain-latest | str trim) + "/bin/rustc"
     for target in [

@@ -9,9 +9,13 @@ struct HeadlessEnv {
 }
 
 fn try_create_headless_env() -> Option<HeadlessEnv> {
+    #[cfg(debug_assertions)]
+    let instance_flags = wgpu::InstanceFlags::VALIDATION | wgpu::InstanceFlags::DEBUG;
+    #[cfg(not(debug_assertions))]
+    let instance_flags = wgpu::InstanceFlags::empty();
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::VULKAN,
-        flags: wgpu::InstanceFlags::empty(),
+        flags: instance_flags,
         memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
         backend_options: wgpu::BackendOptions::default(),
         display: None,
@@ -28,7 +32,7 @@ fn try_create_headless_env() -> Option<HeadlessEnv> {
     let (device, queue) =
         futures::executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("headless test device"),
-            required_features: wgpu::Features::empty(),
+            required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
             required_limits: adapter.limits(),
             ..Default::default()
         }))

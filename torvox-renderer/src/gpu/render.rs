@@ -287,7 +287,12 @@ impl GpuContext {
                 label: Some("Frame Encoder"),
             });
 
+        #[cfg(debug_assertions)]
+        encoder.push_debug_group("Torvox Frame");
+
         if !instances.is_empty() {
+            #[cfg(debug_assertions)]
+            encoder.push_debug_group("Instance Uploads");
             let instance_data = bytemuck::cast_slice(instances);
             let needed_size = instance_data.len() as u64;
             let resize_buffer = self
@@ -328,6 +333,11 @@ impl GpuContext {
             }
         }
 
+        #[cfg(debug_assertions)]
+        encoder.pop_debug_group(); // Instance Uploads
+
+        #[cfg(debug_assertions)]
+        encoder.push_debug_group("Draw Background");
         if let (Some(bg_bind_group), Some(blur_h), Some(blur_v)) = (
             self.bg_bind_group.as_ref(),
             self.blur_h_pipeline.as_ref(),
@@ -404,7 +414,11 @@ impl GpuContext {
                 bg_pass.draw(0..QUAD_VERTEX_COUNT, 0..1);
             }
         }
+        #[cfg(debug_assertions)]
+        encoder.pop_debug_group(); // Draw Background
 
+        #[cfg(debug_assertions)]
+        encoder.push_debug_group("Draw KGP");
         if let (Some(kgp_pipeline), Some(kgp_bind_group)) =
             (&self.kgp_pipeline, &self.kgp_bind_group)
             && !kgp_instances.is_empty()
@@ -433,7 +447,11 @@ impl GpuContext {
             }
             kgp_pass.draw(0..QUAD_VERTEX_COUNT, 0..kgp_instances.len() as u32);
         }
+        #[cfg(debug_assertions)]
+        encoder.pop_debug_group(); // Draw KGP
 
+        #[cfg(debug_assertions)]
+        encoder.push_debug_group("Draw Cells");
         {
             let has_bg = self.bg_bind_group.is_some();
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -483,6 +501,10 @@ impl GpuContext {
                 }
             }
         }
+        #[cfg(debug_assertions)]
+        encoder.pop_debug_group(); // Draw Cells
+        #[cfg(debug_assertions)]
+        encoder.pop_debug_group(); // Torvox Frame
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
