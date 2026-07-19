@@ -266,51 +266,92 @@ fun lastGridRowsDensity(
 // ── Gesture helpers ─────────────────────────────────
 
 fun injectLongPress(
-    activity: Activity,
     view: View,
     x: Float,
     y: Float,
 ) {
     val dt = SystemClock.uptimeMillis()
-    view.dispatchTouchEvent(MotionEvent.obtain(dt, dt, MotionEvent.ACTION_DOWN, x, y, 0))
-    Thread.sleep(800)
-    view.dispatchTouchEvent(MotionEvent.obtain(dt, dt + 800, MotionEvent.ACTION_MOVE, x + 1f, y + 1f, 0))
-    view.dispatchTouchEvent(MotionEvent.obtain(dt, dt + 850, MotionEvent.ACTION_UP, x + 1f, y + 1f, 0))
+    // Must NOT block the main thread — GestureDetector uses a Handler on the
+    // main-thread looper.  If we dispatch DOWN then sleep(800) on the main
+    // thread the long-press timer message is queued but never processed before
+    // ACTION_UP arrives — GestureDetector then cancels the pending long-press
+    // and treats the gesture as a tap (the root cause of "Action_Dismiss not
+    // displayed" in text-selection tests).
+    view.post {
+        view.dispatchTouchEvent(MotionEvent.obtain(dt, dt, MotionEvent.ACTION_DOWN, x, y, 0))
+    }
+    // Sleep on the CALLER test thread — the main thread is free to process
+    // the GestureDetector long-press handler (~500 ms) and the selection
+    // state update before MOVE / UP arrive.
+    try {
+        Thread.sleep(1200)
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+    }
+    view.post {
+        view.dispatchTouchEvent(MotionEvent.obtain(dt, dt + 1200, MotionEvent.ACTION_MOVE, x + 1f, y + 1f, 0))
+        view.dispatchTouchEvent(MotionEvent.obtain(dt, dt + 1250, MotionEvent.ACTION_UP, x + 1f, y + 1f, 0))
+    }
+    // Give the main thread time to process MOVE/UP before the caller
+    // continues to the "Then" assertion step.
+    try {
+        Thread.sleep(300)
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+    }
 }
 
 fun injectTap(
-    activity: Activity,
     view: View,
     x: Float,
     y: Float,
 ) {
     val dt = SystemClock.uptimeMillis()
-    view.dispatchTouchEvent(MotionEvent.obtain(dt, dt, MotionEvent.ACTION_DOWN, x, y, 0))
-    view.dispatchTouchEvent(MotionEvent.obtain(dt, dt + 50, MotionEvent.ACTION_UP, x, y, 0))
+    view.post {
+        view.dispatchTouchEvent(MotionEvent.obtain(dt, dt, MotionEvent.ACTION_DOWN, x, y, 0))
+    }
+    try {
+        Thread.sleep(100)
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+    }
+    view.post {
+        view.dispatchTouchEvent(MotionEvent.obtain(dt, dt + 100, MotionEvent.ACTION_UP, x, y, 0))
+    }
 }
 
 fun injectDoubleTap(
-    activity: Activity,
     view: View,
     x: Float,
     y: Float,
 ) {
-    injectTap(activity, view, x, y)
-    Thread.sleep(150)
-    injectTap(activity, view, x, y)
+    injectTap(view, x, y)
+    try {
+        Thread.sleep(200)
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+    }
+    injectTap(view, x, y)
 }
 
 fun injectTripleTap(
-    activity: Activity,
     view: View,
     x: Float,
     y: Float,
 ) {
-    injectTap(activity, view, x, y)
-    Thread.sleep(150)
-    injectTap(activity, view, x, y)
-    Thread.sleep(150)
-    injectTap(activity, view, x, y)
+    injectTap(view, x, y)
+    try {
+        Thread.sleep(200)
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+    }
+    injectTap(view, x, y)
+    try {
+        Thread.sleep(200)
+    } catch (_: InterruptedException) {
+        Thread.currentThread().interrupt()
+    }
+    injectTap(view, x, y)
 }
 
 // ── Selection assertion helpers ─────────────────────

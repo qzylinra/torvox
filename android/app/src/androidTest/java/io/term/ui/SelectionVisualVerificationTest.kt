@@ -145,17 +145,13 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Tap to focus terminal first
-        composeTestRule.activity.runOnUiThread {
-            injectTap(composeTestRule.activity, surface, cellMetrics.cellWidth * 2, cellMetrics.cellHeight * 2)
-        }
+        injectTap(surface, cellMetrics.cellWidth * 2, cellMetrics.cellHeight * 2)
         waitForStable()
 
         // Long-press on text area (around cell 5, 2)
         val longPressX = cellMetrics.cellWidth * 5
         val longPressY = cellMetrics.cellHeight * 3
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(composeTestRule.activity, surface, longPressX, longPressY)
-        }
+        injectLongPress(surface, longPressX, longPressY)
         waitForStable()
 
         saveScreenshot("01_long_press_text_selection")
@@ -194,9 +190,7 @@ class SelectionVisualVerificationTest {
         // Long-press on empty/whitespace area (lowest rows should have whitespace after echo commands)
         val longPressX = cellMetrics.cellWidth * 2
         val longPressY = cellMetrics.cellHeight * 20 // Near bottom
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(composeTestRule.activity, surface, longPressX, longPressY)
-        }
+        injectLongPress(surface, longPressX, longPressY)
         waitForStable()
 
         saveScreenshot("02_long_press_empty_paste")
@@ -214,14 +208,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Create selection via long press on first line of text
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 3,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 3,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
 
         saveScreenshot("03_selection_handles")
@@ -247,14 +238,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Create initial selection via long press
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 3,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 3,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
 
         // Drag to extend selection by simulating touch-move
@@ -263,8 +251,9 @@ class SelectionVisualVerificationTest {
         val endX = cellMetrics.cellWidth * 20
         val endY = cellMetrics.cellHeight * 4
 
-        composeTestRule.activity.runOnUiThread {
-            val dt = SystemClock.uptimeMillis()
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val dt = SystemClock.uptimeMillis()
+        handler.post {
             surface.dispatchTouchEvent(
                 android.view.MotionEvent.obtain(
                     dt,
@@ -275,22 +264,26 @@ class SelectionVisualVerificationTest {
                     0,
                 ),
             )
-            // Move in steps
-            for (step in 1..10) {
+        }
+        // Move in steps with delays
+        for (step in 1..10) {
+            val delay = step * 50L
+            handler.postDelayed({
                 val x = startX + (endX - startX) * step / 10
                 val y = startY + (endY - startY) * step / 10
                 surface.dispatchTouchEvent(
                     android.view.MotionEvent.obtain(
                         dt,
-                        dt + step * 50L,
+                        dt + delay,
                         android.view.MotionEvent.ACTION_MOVE,
                         x,
                         y,
                         0,
                     ),
                 )
-                Thread.sleep(30)
-            }
+            }, delay)
+        }
+        handler.postDelayed({
             surface.dispatchTouchEvent(
                 android.view.MotionEvent.obtain(
                     dt,
@@ -301,7 +294,8 @@ class SelectionVisualVerificationTest {
                     0,
                 ),
             )
-        }
+        }, 600)
+        Thread.sleep(700)
         waitForStable()
 
         saveScreenshot("04_drag_extend_selection")
@@ -319,14 +313,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Long press on text to trigger context menu
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 3,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 3,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
 
         saveScreenshot("05_context_menu_position")
@@ -356,14 +347,11 @@ class SelectionVisualVerificationTest {
         saveScreenshot("06_ime_open_before_selection")
 
         // Long press while IME is open
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 3,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 3,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
         saveScreenshot("07_selection_with_ime")
 
@@ -391,14 +379,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Create initial selection
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 3,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 3,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
         saveScreenshot("09_selection_before_drawer")
 
@@ -427,14 +412,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Create selection with current theme
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 3,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 3,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
         saveScreenshot("12_selection_theme_colors")
 
@@ -453,14 +435,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Create selection first to show context menu
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 3,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 3,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
 
         // Try to trigger select all via ViewModel
@@ -493,14 +472,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Long press on specific word to select it
-        composeTestRule.activity.runOnUiThread {
-            injectLongPress(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 2,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectLongPress(
+            surface,
+            cellMetrics.cellWidth * 2,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
         saveScreenshot("14_ocr_selection")
 
@@ -550,14 +526,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Double-tap to select line
-        composeTestRule.activity.runOnUiThread {
-            injectDoubleTap(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 5,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectDoubleTap(
+            surface,
+            cellMetrics.cellWidth * 5,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
         saveScreenshot("15_double_tap_line_select")
     }
@@ -574,14 +547,11 @@ class SelectionVisualVerificationTest {
         val cellMetrics = checkNotNull(estimateCellMetrics()) { "cell metrics must be estimable (terminal surface must be present)" }
 
         // Triple-tap to attempt select all
-        composeTestRule.activity.runOnUiThread {
-            injectTripleTap(
-                composeTestRule.activity,
-                surface,
-                cellMetrics.cellWidth * 5,
-                cellMetrics.cellHeight * 2,
-            )
-        }
+        injectTripleTap(
+            surface,
+            cellMetrics.cellWidth * 5,
+            cellMetrics.cellHeight * 2,
+        )
         waitForStable()
         saveScreenshot("16_triple_tap_select_all")
     }
