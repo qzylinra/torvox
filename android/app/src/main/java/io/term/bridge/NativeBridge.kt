@@ -269,7 +269,7 @@ private interface NativeLib : Library {
     fun init_logger()
 
     // / Global logger: set the log file path for Rust log output.
-    fun set_log_file_path(
+    fun ffi_set_log_file_path(
         path: ByteArray,
         path_len: Int,
     )
@@ -1264,8 +1264,7 @@ class NativeBridge(
         startCol: UInt,
         endRow: UInt,
         endCol: UInt,
-    ): Boolean =
-        ensureLib().bridge_has_text_in_range(handle, startRow.toInt(), startCol.toInt(), endRow.toInt(), endCol.toInt()) != 0
+    ): Boolean = ensureLib().bridge_has_text_in_range(handle, startRow.toInt(), startCol.toInt(), endRow.toInt(), endCol.toInt()) != 0
 
     /**
      * Move one endpoint of the active selection (set [handleSide]=0 to move the start, 1 to move
@@ -1594,7 +1593,7 @@ class NativeBridge(
         fun setLogFilePath(path: String) {
             if (isRunningRobolectric()) return
             val bytes = path.toByteArray(Charsets.UTF_8)
-            ensureLib().set_log_file_path(bytes, bytes.size)
+            ensureLib().ffi_set_log_file_path(bytes, bytes.size)
         }
     }
 }

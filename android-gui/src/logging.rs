@@ -153,7 +153,7 @@ pub unsafe extern "C" fn init_logger() {
 /// `path_ptr` must point to a valid UTF-8 byte array of length `path_len`,
 /// or be null when `path_len` is 0.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn set_log_file_path(path_ptr: *const u8, path_len: i32) {
+pub unsafe extern "C" fn ffi_set_log_file_path(path_ptr: *const u8, path_len: i32) {
     if path_ptr.is_null() || path_len <= 0 {
         return;
     }
