@@ -44,8 +44,8 @@ mod conformance_backends {
         Err("xterm backend requires X server and interactive terminal".to_string())
     }
 
-    /// Run VT sequence through Torvox GhosttyTerminal and return grid text lines.
-    fn torvox_grid_output(seq: &[u8], rows: u32, cols: u32) -> Vec<String> {
+    /// Run VT sequence through GhosttyTerminal and return grid text lines.
+    fn grid_output(seq: &[u8], rows: u32, cols: u32) -> Vec<String> {
         let mut term = GhosttyTerminal::new(rows, cols, 100).expect("GhosttyTerminal");
         term.flush();
         term.vt_write(seq);
@@ -473,8 +473,8 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_basic_text() {
-        let lines = torvox_grid_output(b"Hello World", 24, 80);
+    fn vt_conformance_basic_text() {
+        let lines = grid_output(b"Hello World", 24, 80);
         assert!(
             lines.iter().any(|l| l.contains("Hello World")),
             "Basic text: 'Hello World' not found in:\n  {:?}",
@@ -483,60 +483,60 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_sgr_bold_red() {
-        let lines = torvox_grid_output(b"\x1b[1;31mBold Red\x1b[0m", 24, 80);
+    fn vt_conformance_sgr_bold_red() {
+        let lines = grid_output(b"\x1b[1;31mBold Red\x1b[0m", 24, 80);
         assert!(lines.iter().any(|l| l.contains("Bold Red")), "SGR bold red");
     }
 
     #[test]
-    fn torvox_conformance_newline() {
-        let lines = torvox_grid_output(b"Line1\nLine2\nLine3", 24, 80);
+    fn vt_conformance_newline() {
+        let lines = grid_output(b"Line1\nLine2\nLine3", 24, 80);
         assert!(lines.iter().any(|l| l.contains("Line1")), "Line1");
         assert!(lines.iter().any(|l| l.contains("Line2")), "Line2");
         assert!(lines.iter().any(|l| l.contains("Line3")), "Line3");
     }
 
     #[test]
-    fn torvox_conformance_cr_overwrite() {
-        let lines = torvox_grid_output(b"Hello\rWorld", 24, 80);
+    fn vt_conformance_cr_overwrite() {
+        let lines = grid_output(b"Hello\rWorld", 24, 80);
         assert!(lines.iter().any(|l| l.contains("World")), "CR overwrite");
     }
 
     #[test]
-    fn torvox_conformance_cursor_up() {
-        let lines = torvox_grid_output(b"Line1\nLine2\n\x1b[ALine3", 24, 80);
+    fn vt_conformance_cursor_up() {
+        let lines = grid_output(b"Line1\nLine2\n\x1b[ALine3", 24, 80);
         assert!(lines.iter().any(|l| l.contains("Line1")), "Line1");
         assert!(lines.iter().any(|l| l.contains("Line3")), "Line3 after CUU");
     }
 
     #[test]
-    fn torvox_conformance_sgr_reverse() {
-        let lines = torvox_grid_output(b"\x1b[7mReverse\x1b[0m", 24, 80);
+    fn vt_conformance_sgr_reverse() {
+        let lines = grid_output(b"\x1b[7mReverse\x1b[0m", 24, 80);
         assert!(lines.iter().any(|l| l.contains("Reverse")), "SGR 7 reverse");
     }
 
     #[test]
-    fn torvox_conformance_sgr_underline() {
-        let lines = torvox_grid_output(b"\x1b[4mUnderline\x1b[0m", 24, 80);
+    fn vt_conformance_sgr_underline() {
+        let lines = grid_output(b"\x1b[4mUnderline\x1b[0m", 24, 80);
         assert!(lines.iter().any(|l| l.contains("Underline")), "SGR 4");
     }
 
     #[test]
-    fn torvox_conformance_256_color() {
-        let lines = torvox_grid_output(b"\x1b[38;5;196mRed256\x1b[0m", 24, 80);
+    fn vt_conformance_256_color() {
+        let lines = grid_output(b"\x1b[38;5;196mRed256\x1b[0m", 24, 80);
         assert!(lines.iter().any(|l| l.contains("Red256")), "256-color");
     }
 
     #[test]
-    fn torvox_conformance_rgb_color() {
-        let lines = torvox_grid_output(b"\x1b[38;2;255;0;0mRGB Red\x1b[0m", 24, 80);
+    fn vt_conformance_rgb_color() {
+        let lines = grid_output(b"\x1b[38;2;255;0;0mRGB Red\x1b[0m", 24, 80);
         assert!(lines.iter().any(|l| l.contains("RGB Red")), "24-bit RGB");
     }
 
     #[test]
-    fn torvox_conformance_scroll_region() {
+    fn vt_conformance_scroll_region() {
         let seq = b"\x1b[3;6r\x1b[5HScrollLine\x1b[r";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         assert!(
             lines.iter().any(|l| l.contains("Scroll")),
             "Scroll region text not found in:\n  {:?}",
@@ -545,17 +545,17 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_tab_stops() {
-        let lines = torvox_grid_output(b"A\tB\tC", 24, 40);
+    fn vt_conformance_tab_stops() {
+        let lines = grid_output(b"A\tB\tC", 24, 40);
         assert!(lines.iter().any(|l| l.contains('A')), "Tab A");
         assert!(lines.iter().any(|l| l.contains('B')), "Tab B");
     }
     #[test]
-    fn torvox_conformance_erase_display_below() {
+    fn vt_conformance_erase_display_below() {
         // ED 0 = erase from cursor to end of display.
         // CUU 1 (cursor up) preserves column; ED 0 from col 9 erases row 1 fully, row 0 partially.
         let seq = b"KeepRow0\nEraseRow1\x1b[A\x1b[J";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         assert!(
             lines.iter().any(|l| l.contains("KeepRow0")),
             "ED 0 should keep row 0: {:?}",
@@ -564,9 +564,9 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_insert_chars() {
+    fn vt_conformance_insert_chars() {
         let seq = b"Hell\x1b[@World";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         assert!(
             lines.iter().any(|l| l.contains("Hell")),
             "ICH should insert space"
@@ -575,9 +575,9 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_repeat_char() {
+    fn vt_conformance_repeat_char() {
         let seq = b"ABC\x1b[b";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         assert!(
             lines.iter().any(|l| l.contains("ABCC")),
             "REP should repeat C"
@@ -585,10 +585,10 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_erase_in_line() {
+    fn vt_conformance_erase_in_line() {
         // EL 1 = erase from start to cursor (inclusive)
         let seq = b"Hello World\x1b[1K";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         // Cursor at col 11 after 'd'. EL 1 erases cols 0-11, so nothing remains.
         assert!(
             lines[0].trim_matches('\0').is_empty(),
@@ -598,9 +598,9 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_erase_display() {
+    fn vt_conformance_erase_display() {
         let seq = b"Keep\n\x1b[2JNewTop";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         assert!(
             lines.iter().any(|l| l.contains("NewTop")),
             "ED 2 + text at top not found in:\n  {:?}",
@@ -609,17 +609,17 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_line_wrap() {
+    fn vt_conformance_line_wrap() {
         let long = vec![b'A'; 90];
-        let lines = torvox_grid_output(&long, 3, 40);
+        let lines = grid_output(&long, 3, 40);
         // With 40 cols, 80 A's fill 2 lines, remaining 10 fill line 3
         assert_eq!(lines.len(), 3, "90 chars should fill 3 rows at 40 cols");
     }
 
     #[test]
-    fn torvox_conformance_decsc_decrc() {
+    fn vt_conformance_decsc_decrc() {
         let seq = b"ABC\x1b7\x1b[5;5H\x1b8D";
-        let lines = torvox_grid_output(seq, 10, 40);
+        let lines = grid_output(seq, 10, 40);
         let all = lines.join(" ");
         assert!(
             all.contains("ABC"),
@@ -630,9 +630,9 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_alt_screen() {
+    fn vt_conformance_alt_screen() {
         let seq = b"Normal\x1b[?1049hAlt Text\x1b[?1049lBack";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         assert!(
             !lines.iter().any(|l| l.contains("Alt Text")),
             "Alt screen text should be gone after 1049l"
@@ -640,9 +640,9 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_hidden_text() {
+    fn vt_conformance_hidden_text() {
         let seq = b"\x1b[8mHidden\x1b[0mVisible";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         // Hidden text still occupies cells but renders as blank
         assert!(
             lines.iter().any(|l| l.contains("Visible")),
@@ -651,9 +651,9 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_strikethrough() {
+    fn vt_conformance_strikethrough() {
         let seq = b"\x1b[9mStrike\x1b[0m";
-        let lines = torvox_grid_output(seq, 24, 80);
+        let lines = grid_output(seq, 24, 80);
         assert!(
             lines.iter().any(|l| l.contains("Strike")),
             "SGR 9 strikethrough text should be present"
@@ -661,10 +661,10 @@ mod conformance_backends {
     }
 
     #[test]
-    fn torvox_conformance_all_cases() {
+    fn vt_conformance_all_cases() {
         // Generate dynamic tests for all conformance cases
         for case in conformance_cases() {
-            let lines = torvox_grid_output(&case.input, 24, 80);
+            let lines = grid_output(&case.input, 24, 80);
             let all = lines.join("\n");
             for expected in case.expected_substrings {
                 assert!(

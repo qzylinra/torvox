@@ -50,7 +50,7 @@ struct VteRefFile {
 }
 
 /// Run a VT sequence through GhosttyTerminal and return text from first row
-fn torvox_first_row(seq: &[u8]) -> String {
+fn first_row(seq: &[u8]) -> String {
     let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
     t.vt_write(seq);
     t.flush();
@@ -99,7 +99,7 @@ fn run_vte_ref(relpath: &str) {
             .iter()
             .map(|c| c.char.as_deref().unwrap_or(" "))
             .collect();
-        let actual = torvox_first_row(&seq);
+        let actual = first_row(&seq);
         let ta = actual.trim_end();
         let te = expected.trim_end();
         // Normalize: treat CUF spacing differences as acceptable

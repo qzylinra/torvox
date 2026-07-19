@@ -1,4 +1,4 @@
-//! Memory budget check for Torvox core types (P3.3.5 <10MB idle).
+//! Memory budget check for core types (P3.3.5 <10MB idle).
 //!
 //! Run with: cargo run -p torvox-core --example memory_check --release
 
@@ -8,7 +8,7 @@ use torvox_core::grid::Grid;
 fn main() {
     use std::mem::size_of;
 
-    println!("=== Torvox Core Memory Budget (P3.3.5: <10MB idle) ===\n");
+    println!("=== Core Memory Budget (P3.3.5: <10MB idle) ===\n");
 
     println!("Type sizes (compile-time constants):");
     println!("  Cell:    {} bytes", size_of::<Cell>());

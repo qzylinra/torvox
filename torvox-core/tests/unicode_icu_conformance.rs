@@ -66,7 +66,7 @@ fn ascii_width() {
     }
 }
 
-/// Control characters have width 0 in Torvox (via .unwrap_or(0))
+/// Control characters have width 0 (via .unwrap_or(0))
 #[test]
 fn control_chars_width_0() {
     let ctrl = ['\u{0000}', '\u{0001}', '\u{0007}', '\u{001B}', '\u{007F}'];

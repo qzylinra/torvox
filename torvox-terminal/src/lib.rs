@@ -1,11 +1,11 @@
-//! Terminal session orchestration for torvox.
+//! Terminal session orchestration.
 //!
 //! This crate owns the PTY lifecycle, the VT parsing engine
 //! ([`ghostty_terminal`], wrapping `libghostty-vt`), and the [`session`]
 //! coordinator that wires the PTY reader, input writer, process waiter, and
-//! renderer together. It depends on `torvox-core` (data model) and
+//! renderer together. It depends on the core crate (data model) and
 //! `libghostty-vt` (vendored VT parser) and is depended on by
-//! `torvox-renderer` and `torvox-gui-android`.
+//! the renderer and GUI crates.
 //!
 //! Key realities (post-overhaul):
 //! * The Ghostty key encoder (`key::Encoder` + `key::Event`) is allocated

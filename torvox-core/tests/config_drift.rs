@@ -122,7 +122,7 @@ fn shell_custom_inequality() {
     );
 }
 
-/// Verify all 5 torvox-core TerminalConfig fields are accounted for.
+/// Verify all 5 TerminalConfig fields are accounted for.
 /// This test exists to fail when new fields are added without being checked.
 #[test]
 fn terminal_config_all_fields_tested() {

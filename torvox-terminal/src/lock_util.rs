@@ -9,7 +9,7 @@ use std::sync::MutexGuard;
 ///
 /// If the mutex is poisoned (a previous holder panicked), this logs a warning
 /// and returns the inner value anyway, rather than panicking. This is the
-/// standard recovery pattern for cross-thread mutexes in torvox.
+/// standard recovery pattern for cross-thread mutexes.
 pub(crate) fn lock_or_recover<'a, T>(
     mutex: &'a std::sync::Mutex<T>,
     context: &str,

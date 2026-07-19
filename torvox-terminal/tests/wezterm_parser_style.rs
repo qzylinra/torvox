@@ -7,7 +7,7 @@
 // 3. C0/C1 parsing (raw bytes → control)
 // 4. SGR semantic tests (parameter lists → attributes)
 //
-// Since torvox uses libghostty-vt for actual parsing, we test the
+// Since we use libghostty-vt for actual parsing, we test the
 // GhosttyTerminal API's parameter extraction behavior.
 // ====================================================================
 

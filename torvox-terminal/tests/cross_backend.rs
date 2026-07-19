@@ -1,7 +1,7 @@
-//! Torvox-only VT backend tests.
+//! VT-only backend tests.
 //!
-//! These tests validate GhosttyTerminal behavior as used by Torvox.
-//! They are named `torvox_only_*` to clearly indicate they test Torvox's
+//! These tests validate GhosttyTerminal behavior.
+//! They are named `vt_only_*` to clearly indicate they test the
 //! specific backend, not a cross-backend conformance suite.
 
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
@@ -45,7 +45,7 @@ fn get_line_padded(t: &GhosttyTerminal, row: u32, width: u32) -> String {
 }
 
 #[test]
-fn torvox_only_simple_text() {
+fn vt_only_simple_text() {
     let mut t = term(3, 20);
     t.vt_write(b"Hello, world!");
     t.flush();
@@ -54,7 +54,7 @@ fn torvox_only_simple_text() {
 }
 
 #[test]
-fn torvox_only_cursor_positioning_cup() {
+fn vt_only_cursor_positioning_cup() {
     let mut t = term(5, 20);
     t.vt_write(b"\x1b[3;5HX");
     t.flush();
@@ -67,7 +67,7 @@ fn torvox_only_cursor_positioning_cup() {
 }
 
 #[test]
-fn torvox_only_sgr_31_red_inverts_after_sgr_0() {
+fn vt_only_sgr_31_red_inverts_after_sgr_0() {
     let mut t = term(3, 30);
     t.vt_write(b"\x1b[31mRed\x1b[0mNorm");
     t.flush();
@@ -77,7 +77,7 @@ fn torvox_only_sgr_31_red_inverts_after_sgr_0() {
 }
 
 #[test]
-fn torvox_only_sgr_attributes_distinct() {
+fn vt_only_sgr_attributes_distinct() {
     let mut t = term(3, 30);
     t.vt_write(b"\x1b[1mBold\x1b[0m \x1b[3mItal\x1b[0m \x1b[4mUndr\x1b[0m");
     t.flush();
@@ -88,7 +88,7 @@ fn torvox_only_sgr_attributes_distinct() {
 }
 
 #[test]
-fn torvox_only_lf_crlf_position() {
+fn vt_only_lf_crlf_position() {
     let mut t = term(4, 10);
     t.vt_write(b"ABC\n");
     t.flush();
@@ -98,7 +98,7 @@ fn torvox_only_lf_crlf_position() {
 }
 
 #[test]
-fn torvox_only_scroll_region_insert() {
+fn vt_only_scroll_region_insert() {
     let mut t = term(5, 20);
     for i in 0..5 {
         let bytes = format!("{}\n", i);
@@ -119,7 +119,7 @@ fn torvox_only_scroll_region_insert() {
 }
 
 #[test]
-fn torvox_only_scroll_reverse() {
+fn vt_only_scroll_reverse() {
     let mut t = term(3, 10);
     t.vt_write(b"1\n2\n3");
     t.flush();
@@ -134,7 +134,7 @@ fn torvox_only_scroll_reverse() {
 }
 
 #[test]
-fn torvox_only_origin_mode() {
+fn vt_only_origin_mode() {
     let mut t = term(5, 20);
     t.vt_write(b"\x1b[?6h\x1b[5;1HX");
     t.flush();
@@ -147,7 +147,7 @@ fn torvox_only_origin_mode() {
 }
 
 #[test]
-fn torvox_only_tab_stops() {
+fn vt_only_tab_stops() {
     let mut t = term(3, 30);
     t.vt_write(b"1\t2");
     t.flush();

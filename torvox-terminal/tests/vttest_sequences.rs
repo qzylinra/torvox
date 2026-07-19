@@ -23,7 +23,7 @@ fn row_text(t: &GhosttyTerminal, row: u32) -> String {
 
 /// ESC sequences sent to VT500 conformity test screens.
 /// vttest validates DEC/ISO standard compliance. We capture the sequences
-/// it sends and verify Torvox's responses match the expected state.
+/// it sends and verify responses match the expected state.
 /// Known vttest screen sequences:
 // Screen 1: Cursor keys and character sets
 pub const VTTEST_SCREEN1_SEQUENCES: &[&[u8]] = &[

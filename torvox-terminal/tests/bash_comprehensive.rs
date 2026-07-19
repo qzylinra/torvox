@@ -177,7 +177,7 @@ fn bash_pipe_grep() {
 #[test]
 fn bash_redirect_and_read() {
     let output = run_command(
-        "echo TEST_REDIRECT > /tmp/_torvox_test.txt && cat /tmp/_torvox_test.txt && rm -f /tmp/_torvox_test.txt",
+        "echo TEST_REDIRECT > /tmp/_test.txt && cat /tmp/_test.txt && rm -f /tmp/_test.txt",
     );
     assert!(
         output.contains("TEST_REDIRECT"),
@@ -345,7 +345,7 @@ fn bash_sort_unique() {
 #[test]
 fn bash_touch_and_stat() {
     let output = run_command(
-        "touch /tmp/_torvox_stat_test && test -f /tmp/_torvox_stat_test && echo EXISTS && rm -f /tmp/_torvox_stat_test",
+        "touch /tmp/_stat_test && test -f /tmp/_stat_test && echo EXISTS && rm -f /tmp/_stat_test",
     );
     assert!(
         output.contains("EXISTS"),

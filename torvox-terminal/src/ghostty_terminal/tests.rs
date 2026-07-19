@@ -1439,7 +1439,7 @@ fn osc_104_st_terminator_no_crash() {
 #[test]
 fn osc_0_set_title_no_crash() {
     let mut t = term();
-    t.vt_write(b"\x1b]0;Torvox Test\x07");
+    t.vt_write(b"\x1b]0;VT Test\x07");
     t.flush();
     t.vt_write(b"TitleOk");
     t.flush();
@@ -5263,7 +5263,7 @@ fn tc_lifecycle_save_restore_session() {
     let snap1 = t.take_snapshot();
 
     // Serialize to temp file.
-    let dir = std::env::temp_dir().join("torvox_lifecycle_test");
+    let dir = std::env::temp_dir().join("vt_lifecycle_test");
     if let Err(error) = std::fs::create_dir_all(&dir) {
         log::error!("ghostty_terminal test: create_dir_all failed: {error}");
     }

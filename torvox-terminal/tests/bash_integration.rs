@@ -200,8 +200,7 @@ fn bash_exit_code_42() {
 
 #[test]
 fn bash_redirect_and_cat() {
-    let output =
-        run_command("echo REDIRECT_OK > /tmp/test_torvox_123.txt && cat /tmp/test_torvox_123.txt");
+    let output = run_command("echo REDIRECT_OK > /tmp/test_123.txt && cat /tmp/test_123.txt");
     assert!(output.contains("REDIRECT_OK"), "got: {}", output);
 }
 

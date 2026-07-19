@@ -1,4 +1,4 @@
-//! Property-based tests for torvox-core invariants using quickcheck.
+//! Property-based tests for core invariants using quickcheck.
 //!
 //! These verify:
 //!  - Grid resize preserves invariants

@@ -1,7 +1,7 @@
-//! Cross-crate integration tests for Torvox.
+//! Cross-crate integration tests.
 //!
 //! These tests verify end-to-end behavior that exercises multiple
-//! torvox-core types through torvox-terminal's GhosttyTerminal API.
+//! core types through the terminal crate's GhosttyTerminal API.
 
 #[cfg(test)]
 mod config_file_validation {

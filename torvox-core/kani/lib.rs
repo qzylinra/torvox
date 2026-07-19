@@ -1,4 +1,4 @@
-//! Kani formal verification proofs for torvox-core.
+//! Kani formal verification proofs.
 //!
 //! Run with: `cargo kani --manifest-path torvox-core/kani/Cargo.toml`
 //!

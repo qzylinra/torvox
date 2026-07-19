@@ -175,6 +175,7 @@ impl GpuContext {
                 height: initial_height,
                 present_mode,
                 alpha_mode,
+<<<<<<< HEAD
                 view_formats: &[],
                 desired_maximum_frame_latency: DESIRED_FRAME_LATENCY,
             };

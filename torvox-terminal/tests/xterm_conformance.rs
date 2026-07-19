@@ -1,7 +1,7 @@
 //! Xterm conformance tests — implements xterm-conformance spec requirements.
 //!
 //! Covers: SGR full matrix, DECSTBM 20 configs, DECRQM, extended cursor movement.
-//! Each test verifies Torvox behavior matches xterm reference output.
+//! Each test verifies correct behavior matches xterm reference output.
 
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 

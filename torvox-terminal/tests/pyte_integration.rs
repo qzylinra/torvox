@@ -253,21 +253,21 @@ fn i2_pyte_batch_robustness() {
 }
 
 #[test]
-fn i2_torvox_hello() {
+fn i2_vt_hello() {
     let mut t = T::new(1, 20);
     t.write(b"Hello");
     assert!(t.lines()[0].contains("Hello"));
 }
 
 #[test]
-fn i2_torvox_sgr_31() {
+fn i2_vt_sgr_31() {
     let mut t = T::new(1, 10);
     t.write(b"\x1b[31mRED");
     assert!(t.lines()[0].contains("RED"));
 }
 
 #[test]
-fn i2_torvox_ed2() {
+fn i2_vt_ed2() {
     let mut t = T::new(3, 5);
     t.write(b"AAAAABBBBBCCCCC");
     t.write(b"\x1b[2J");
@@ -277,7 +277,7 @@ fn i2_torvox_ed2() {
 }
 
 #[test]
-fn i2_torvox_newline() {
+fn i2_vt_newline() {
     let mut t = T::new(3, 10);
     t.write(b"A\nB\nC");
     let lines = t.lines();
@@ -286,7 +286,7 @@ fn i2_torvox_newline() {
 }
 
 #[test]
-fn i2_torvox_cup() {
+fn i2_vt_cup() {
     let mut t = T::new(10, 20);
     t.write(b"\x1b[5;10HX");
     let snap = t.0.take_snapshot();
@@ -409,7 +409,7 @@ fn i6_cross_verify_total() {
 }
 
 #[test]
-fn i6_cross_torvox_basic() {
+fn i6_cross_vt_basic() {
     let mut t = T::new(24, 80);
     t.write(b"\x1b[2J\x1b[31mH\x1b[0m W");
     let lines = t.lines();
@@ -611,7 +611,7 @@ fn i10_tbc_0_clear_current_tab() {
     let mut t = T::new(3, 20);
     t.write(b"\x1b[5G\x1bH"); // tab at col 5
     t.write(b"\x1b[0g"); // TBC 0 at current cursor (col 5)
-    // Verify no crash; cursor still at col 5
+                         // Verify no crash; cursor still at col 5
     assert!(
         t.0.cursor_x() >= 3,
         "TBC 0: cursor survived, got {}",

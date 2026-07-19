@@ -1,6 +1,6 @@
 #![no_std]
 #![forbid(unsafe_code)]
-//! Torvox terminal data model — no_std, no_unsafe.
+//! Terminal data model — no_std, no_unsafe.
 
 extern crate alloc;
 

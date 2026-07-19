@@ -1,4 +1,4 @@
-//! Verus formal verification annotations for torvox-core.
+//! Verus formal verification annotations.
 //!
 //! Only compiled under `#[cfg(verus_only)]` (i.e. during `cargo verus verify`).
 //! Normal `cargo build` / `cargo test` skips this module entirely.

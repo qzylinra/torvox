@@ -21,7 +21,7 @@ fn hex_encode(seq: &[u8]) -> String {
     s
 }
 
-fn torvox_first_row(seq: &[u8]) -> String {
+fn first_row(seq: &[u8]) -> String {
     let mut t = GhosttyTerminal::new(24, 80, 1000).expect("term");
     t.vt_write(seq);
     t.flush();
@@ -55,7 +55,7 @@ fn libvterm_text(seq_hex: &str) -> String {
 /// Cross-check: libvterm parsed input without crashing, produced output
 fn cross_check(input: &[u8]) {
     let hex = hex_encode(input);
-    let _t_text = torvox_first_row(input);
+    let _t_text = first_row(input);
     let _l_text = libvterm_text(&hex);
     // Both must parse without crashing. Text output may differ due to
     // Ghostty vs libvterm design differences (CUF spacing, ICH priority, RI).
@@ -66,11 +66,11 @@ fn cross_check(input: &[u8]) {
 #[allow(dead_code)]
 fn cross_check_exact(input: &[u8]) {
     let hex = hex_encode(input);
-    let t_text = torvox_first_row(input);
+    let t_text = first_row(input);
     let l_text = libvterm_text(&hex);
     assert!(
         t_text == l_text,
-        "exact libvterm mismatch:\n  input:   {hex}\n  torvox:  {t_text:?}\n  libvterm: {l_text:?}"
+        "exact libvterm mismatch:\n  input:   {hex}\n  terminal:  {t_text:?}\n  libvterm: {l_text:?}"
     );
 }
 

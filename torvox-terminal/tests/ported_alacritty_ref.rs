@@ -2,7 +2,7 @@
 ///
 /// Alacritty uses `.ref` files with expected terminal output as frozen
 /// terminal dumps. These tests replicate the same VT sequences and
-/// verify Torvox produces equivalent output.
+/// verify equivalent output.
 use torvox_terminal::ghostty_terminal::GhosttyTerminal;
 use torvox_terminal::test_helpers::assert_invariants;
 
