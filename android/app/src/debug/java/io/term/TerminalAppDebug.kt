@@ -2,7 +2,7 @@ package io.term
 
 import leakcanary.LeakCanary
 
-class TorvoxAppDebug : TerminalApp() {
+class TerminalAppDebug : TerminalApp() {
     override fun onCreate() {
         LeakCanary.config =
             LeakCanary.config.copy(

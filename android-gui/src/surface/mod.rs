@@ -38,9 +38,9 @@ const FRAME_TIME_TARGET_MS: f64 = 16.0;
 /// boundary is reached, batching multiple mutations into a single frame.
 const SYNC_MODE_NUMBER: u16 = 2026;
 pub(crate) const DEFAULT_MAX_SCROLLBACK: usize = 2000;
-const ATLAS_WIDTH: u32 = 1024;
-const ATLAS_HEIGHT: u32 = 1024;
-const KGP_ATLAS_WIDTH: u32 = 1024;
+const ATLAS_WIDTH: u32 = 2048;
+const ATLAS_HEIGHT: u32 = 2048;
+const KGP_ATLAS_WIDTH: u32 = 2048;
 const MAX_SURFACE_DIMENSION: u16 = 4096;
 /// Default cursor blink period in milliseconds.
 const DEFAULT_BLINK_SPEED_MS: u32 = 530;
