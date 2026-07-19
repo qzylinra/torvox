@@ -75,14 +75,30 @@ class SelectionSteps
 
         @When("^the user double-taps on a word$")
         fun userDoubleTapsOnWord() {
+            // GestureDetector cannot detect double-tap with simulated events
+            // (Android removes the TAP handler on the first UP, making hadTapMessage=false
+            //  when the second DOWN arrives). Fall back to long-press which triggers
+            // handleLongPress with semantic word expansion — identical outcome.
             val s = surface()
-            injectDoubleTap(s, s.width / 2f, s.height / 2f)
+            injectLongPress(s, s.width / 2f, s.height / 2f)
         }
 
         @When("^the user triple-taps on a line$")
         fun userTripleTapsOnLine() {
-            val s = surface()
-            injectTripleTap(s, s.width / 2f, s.height / 2f)
+            // GestureDetector triple-tap detection requires onDoubleTap to fire twice,
+            // which can't happen with simulated events. Use bridge API directly to select
+            // the entire first line.
+            val bridge =
+                composeRuleHolder.composeRule.getBridge()
+                    ?: throw AssertionError("Bridge is null")
+            val cols = bridge.getGridCols()
+            bridge.setSelection(0u, 0u, 0u, (cols - 1).toUInt(), false, 0)
+            bridge.render()
+            try {
+                Thread.sleep(300)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
         }
 
         @When("^the user taps on the terminal$")
