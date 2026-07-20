@@ -41,27 +41,46 @@ Requires Go 1.24+. No external modules (`go.mod` has no `require`).
 ./openclaude-zen-free -quiet          # silence access logs
 ```
 
-## Point OpenClaude at it
+## Point OpenClaude at it (verified)
 
-In your OpenClaude config, add an OpenAI-compatible provider whose `baseURL` is the proxy
-and which lists a free model. Example (`config.json` / corresponding OpenClaude config):
+OpenClaude's built-in `custom` (OpenAI-compatible) route is used. It is `requiresAuth:false`,
+performs model discovery via `GET {baseURL}/models`, and treats `127.0.0.1` as a local
+provider so an **empty** API key passes validation. No config file edit and no `.env` are
+needed — only environment variables.
 
-```json
-{
-  "mcpServers": {},
-  "customProviders": {
-    "opencode-zen-free": {
-      "baseURL": "http://127.0.0.1:8787/v1",
-      "apiKey": "not-needed",
-      "models": ["hy3-free"]
-    }
-  },
-  "models": { "primary": "opencode-zen-free/hy3-free" }
-}
+### Build OpenClaude (one time)
+```sh
+git clone https://github.com/Gitlawb/openclaude
+cd openclaude
+bun install && bun run build   # produces dist/cli.mjs
 ```
 
-`openclaude` will call `GET /v1/models` against the proxy (which returns only free models)
-and can then chat with `hy3-free`. No `OPENCODE_API_KEY` or `.env` is required.
+### Run (proxy is a passive sidecar you start yourself)
+```sh
+# terminal A — start the proxy
+./openclaude-zen-free
+
+# terminal B — run OpenClaude against the proxy (isolated HOME, no config touched)
+HOME=/tmp/ocz_home CLAUDE_CODE_USE_OPENAI=1 \
+OPENAI_BASE_URL=http://127.0.0.1:8787/v1 \
+OPENAI_MODEL=hy3-free \
+OPENAI_API_KEY= \
+node bin/openclaude -p "hello" --dangerously-skip-permissions --output-format text
+```
+
+Notes:
+- `OPENAI_BASE_URL` keeps the `/v1` suffix (OpenClaude appends nothing extra), so discovery
+  hits `http://127.0.0.1:8787/v1/models` and chat hits `.../v1/chat/completions`.
+- `OPENAI_MODEL` is the raw model id (e.g. `hy3-free`) — no `provider/` prefix.
+- The model list is fetched dynamically on each `openclaude` start (and via `/model`), and
+  the proxy returns only free models. `OPENAI_MODEL` must be one of the free ids returned.
+- To avoid touching any existing OpenClaude config, run with an isolated `HOME`, e.g.
+  `HOME=/tmp/ocz_home ... node bin/openclaude ...`. Your normal OpenClaude settings are
+  untouched because the proxy is registered purely via env vars.
+- Do not set `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`, or model discovery is skipped.
+
+This was verified end-to-end: OpenClaude listed the free models and completed a real
+`hy3-free` chat through the proxy with no API key.
 
 ## Install
 
