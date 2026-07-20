@@ -148,6 +148,35 @@ Verified: `code exec` reached the proxy and completed a real `hy3-free` chat, ke
 The proxy strips the `zenfree/` provider prefix (Codex sends `zenfree/hy3-free`) so OpenCode
 Zen receives the bare id. Any `provider/` prefix is handled transparently.
 
+## Global config files
+
+All three clients were verified against their **global** config locations — no per-command
+env vars, no per-project files required:
+
+| Client    | Global config file                                      | Example                |
+|-----------|---------------------------------------------------------|------------------------|
+| OpenCode  | `~/.config/opencode/opencode.json`                      | `examples/opencode.json`   |
+| Codex     | `~/.codex/config.toml` (`$CODEX_HOME`)                  | `examples/codex.toml`      |
+| OpenClaude| `~/.openclaude/.openclaude.json` (`$OPENCLAUDE_CONFIG_DIR`) | `examples/openclaude.json` |
+
+### Field-level equivalence
+
+The three configs encode the same logical setup: point `baseURL` at
+`http://127.0.0.1:8787/v1`, pin the free model `hy3-free`, and send no real key (the proxy
+strips it). Where OpenClaude uses env vars, they live in the config file's `env` block.
+
+| OpenCode (`opencode.json`)        | Codex (`config.toml`)        | OpenClaude (`.openclaude.json`)     |
+|-----------------------------------|------------------------------|-------------------------------------|
+| `options.baseURL`                 | `base_url`                   | `env.OPENAI_BASE_URL`               |
+| `options.apiKey` (placeholder)    | `api_key` (placeholder)      | `env.OPENAI_API_KEY` (empty)        |
+| `models` list                     | `model_provider` → provider  | `env.OPENAI_MODEL`                  |
+| `npm: @ai-sdk/openai-compatible`  | `wire_api = "chat"`          | `env.CLAUDE_CODE_USE_OPENAI=1`      |
+
+OpenClaude's `.openclaude.json` `env` block is read at startup and injected into
+`process.env`, so model discovery (`GET /v1/models`) and chat both hit the proxy with no
+shell env vars. Verified: OpenClaude auto-populated its model picker with the six free
+models ("Detected from Local OpenAI-compatible") and completed a keyless `hy3-free` chat.
+
 ## Install
 
 ```sh
