@@ -2,16 +2,15 @@ import io
 import json
 import os
 import signal
-import sys
-import subprocess
 import threading
 import time
 import unittest
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, ".")
 import importlib.util
+import sys
 
+sys.path.insert(0, ".")
 spec = importlib.util.spec_from_file_location("free_zen", "free-zen.py")
 free_zen = importlib.util.module_from_spec(spec)
 sys.modules["free_zen"] = free_zen
@@ -65,7 +64,6 @@ class TestFetchFreeModels(unittest.TestCase):
             }
         ).encode()
         mock_urlopen.return_value.__enter__.return_value = resp
-
         result = free_zen.fetch_free_models()
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["id"], "free-a")
@@ -100,6 +98,45 @@ class TestFetchFreeModels(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("fallback", err.getvalue())
         self.assertIn("OPENAI_MODEL=", out.getvalue())
+
+    def test_env_var_override(self):
+        with patch.dict(os.environ, {"FREE_ZEN_MODELS_DEV_URL": "http://test"}):
+            with patch("free_zen.urllib.request.urlopen") as mu:
+                resp = MagicMock()
+                resp.read.return_value = (
+                    b'{"opencode":{"models":{"m":{"cost":{"input":0}}}}}'
+                )
+                mu.return_value.__enter__.return_value = resp
+                result = free_zen.fetch_free_models()
+                self.assertEqual(len(result), 1)
+                self.assertEqual(result[0]["id"], "m")
+
+
+class TestPickBestModel(unittest.TestCase):
+    def test_prefers_deepseek(self):
+        ids = {"mimo-v2.5-free", "deepseek-v4-flash-free", "other"}
+        self.assertEqual(free_zen._pick_best_model(ids), "deepseek-v4-flash-free")
+
+    def test_fallback_to_sorted(self):
+        ids = {"b-model", "a-model", "c-model"}
+        self.assertEqual(free_zen._pick_best_model(ids), "a-model")
+
+    def test_single_model(self):
+        ids = {"only-one"}
+        self.assertEqual(free_zen._pick_best_model(ids), "only-one")
+
+
+class TestPrintEnv(unittest.TestCase):
+    def test_prints_env_vars(self):
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            free_zen.print_env(12345, "test-model")
+        text = out.getvalue()
+        self.assertIn("CLAUDE_CODE_USE_OPENAI=1", text)
+        self.assertIn("OPENAI_BASE_URL=http://127.0.0.1:12345", text)
+        self.assertIn("OPENAI_API_KEY=", text)
+        self.assertIn("OPENAI_MODEL=test-model", text)
+        self.assertIn("OPENAI_API_FORMAT=chat_completions", text)
 
 
 class TestMainOutput(unittest.TestCase):
@@ -158,40 +195,27 @@ class TestMainOutput(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("deepseek-v4-flash-free", out)
 
-    @patch("free_zen.fetch_free_models")
-    def test_launch_not_found(self, mock_fetch):
-        mock_fetch.return_value = [{"id": "m", "name": "M"}]
-        with patch("sys.stderr", io.StringIO()), patch("sys.stdout", io.StringIO()):
-            rc = free_zen.main(["--launch", "--launch-cmd", "nonexistent-binary-xyz"])
-        self.assertEqual(rc, 2)
-
-    @patch("free_zen.fetch_free_models")
-    @patch("free_zen.subprocess.Popen")
-    def test_launch_ok(self, mock_popen, mock_fetch):
-        mock_fetch.return_value = [{"id": "m", "name": "M"}]
-        proc = MagicMock()
-        proc.wait.return_value = 0
-        mock_popen.return_value = proc
-        rc = free_zen.main(["--launch"])
-        self.assertEqual(rc, 0)
-        mock_popen.assert_called_once()
-
     def test_invalid_flag(self):
         with patch("sys.stderr", io.StringIO()):
             with self.assertRaises(SystemExit):
                 free_zen.main(["--invalid-flag"])
 
-    def test_env_var_override(self):
-        with patch.dict(os.environ, {"FREE_ZEN_MODELS_DEV_URL": "http://test"}):
-            with patch("free_zen.urllib.request.urlopen") as mu:
-                resp = MagicMock()
-                resp.read.return_value = (
-                    b'{"opencode":{"models":{"m":{"cost":{"input":0}}}}}'
-                )
-                mu.return_value.__enter__.return_value = resp
-                result = free_zen.fetch_free_models()
-                self.assertEqual(len(result), 1)
-                self.assertEqual(result[0]["id"], "m")
+    def test_daemon_mode_forks_and_prints_env(self):
+        with patch("free_zen.fetch_free_models") as fetch:
+            fetch.return_value = [{"id": "m", "name": "M"}]
+            with patch("http.server.ThreadingHTTPServer") as ms:
+                ms.return_value.server_address = ("127.0.0.1", 9999)
+                with patch("os.fork") as fork:
+                    fork.return_value = 123
+                    with patch("os._exit") as mock_exit:
+                        out = io.StringIO()
+                        with patch("sys.stdout", out):
+                            rc = free_zen.main(["--daemon"])
+        self.assertEqual(rc, 0)
+        mock_exit.assert_called_once_with(0)
+        text = out.getvalue()
+        self.assertIn("CLAUDE_CODE_USE_OPENAI=1", text)
+        self.assertIn("OPENAI_BASE_URL=http://127.0.0.1:9999", text)
 
 
 class TestProxy(unittest.TestCase):
@@ -199,15 +223,13 @@ class TestProxy(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls._free_model_ids = set(free_zen._free_model_ids)
-        cls._free_models = list(free_zen._free_models)
-
+        cls._saved_ids = set(free_zen._free_model_ids)
+        cls._saved_models = list(free_zen._free_models)
         free_zen._free_model_ids = {"free-a", "free-b"}
         free_zen._free_models = [
             {"id": "free-a", "name": "Free A"},
             {"id": "free-b", "name": "Free B"},
         ]
-
         cls.server = free_zen.http.server.ThreadingHTTPServer(
             ("127.0.0.1", 0), free_zen.ZenProxyHandler
         )
@@ -219,8 +241,8 @@ class TestProxy(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
-        free_zen._free_model_ids = cls._free_model_ids
-        free_zen._free_models = cls._free_models
+        free_zen._free_model_ids = cls._saved_ids
+        free_zen._free_models = cls._saved_models
 
     def _get(self, path):
         import urllib.request

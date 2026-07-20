@@ -1,21 +1,27 @@
 #!/usr/bin/env python3
-"""Free OpenCode Zen models for openclaude via local HTTP proxy."""
+"""Free OpenCode Zen models proxy — standalone daemon, no openclaude dependency.
+
+Usage:
+  python3 free-zen.py --daemon              # start proxy, print env, exit
+  python3 free-zen.py [--port PORT]         # foreground mode
+  python3 free-zen.py --list                # list free models
+  python3 free-zen.py --json                # JSON output
+"""
 
 import argparse
 import http.server
 import json
 import os
 import signal
-import subprocess
 import sys
-import threading
 import urllib.error
 import urllib.request
 import uuid
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 MODELS_DEV_URL = "https://models.dev/api.json"
-ZEN_BASE_URL = "https://opencode.ai/zen/v1"
+ZEN_HOST = "opencode.ai"
+ZEN_PATH = "/zen/v1"
 
 FALLBACK_MODEL_IDS = [
     "deepseek-v4-flash-free",
@@ -53,11 +59,12 @@ class ZenProxyHandler(http.server.BaseHTTPRequestHandler):
     def _proxy(self, method):
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length) if content_length > 0 else None
-
-        target = ZEN_BASE_URL + self.path
+        target = ZEN_PATH + self.path
         headers = generate_opencode_headers()
 
-        req = urllib.request.Request(target, data=body, headers=headers, method=method)
+        req = urllib.request.Request(
+            f"https://{ZEN_HOST}{target}", data=body, headers=headers, method=method
+        )
 
         try:
             with urllib.request.urlopen(req, timeout=600) as upstream:
@@ -76,15 +83,15 @@ class ZenProxyHandler(http.server.BaseHTTPRequestHandler):
                         data = json.dumps(doc).encode()
                     except (json.JSONDecodeError, TypeError):
                         pass
-                    self._send_regular(upstream.status, upstream.headers, data)
+                    self._send_data(upstream.status, upstream.headers, data)
                 else:
                     self._stream(upstream)
         except urllib.error.HTTPError as e:
-            self._send_regular(e.code, e.headers, e.read())
+            self._send_data(e.code, e.headers, e.read())
         except Exception as e:
             self.send_error(502, str(e))
 
-    def _send_regular(self, status, upstream_headers, body):
+    def _send_data(self, status, upstream_headers, body):
         self.send_response(status)
         skip = {
             "transfer-encoding",
@@ -159,40 +166,70 @@ def fetch_free_models(timeout: int = 10) -> List[Dict[str, str]]:
     return result
 
 
+def _pick_best_model(ids: Set[str]) -> str:
+    return (
+        "deepseek-v4-flash-free" if "deepseek-v4-flash-free" in ids else sorted(ids)[0]
+    )
+
+
+def print_env(port: int, model: str) -> None:
+    print("# free-zen proxy env — source this or set manually")
+    print(f"# Proxy: http://127.0.0.1:{port}")
+    print(f"# Model: {model}")
+    print("CLAUDE_CODE_USE_OPENAI=1")
+    print(f"OPENAI_BASE_URL=http://127.0.0.1:{port}")
+    print("OPENAI_API_KEY=")
+    print(f"OPENAI_MODEL={model}")
+    print("OPENAI_API_FORMAT=chat_completions")
+
+
+def start_server(port: int) -> http.server.ThreadingHTTPServer:
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), ZenProxyHandler)
+    server.server_bind() if port == 0 else None
+    return server
+
+
+def run_foreground(server: http.server.ThreadingHTTPServer) -> None:
+    port = server.server_address[1]
+    print(f"free-zen: proxy listening on http://127.0.0.1:{port}", file=sys.stderr)
+    print_env(port, _pick_best_model(_free_model_ids))
+    try:
+        signal.pause()
+    except KeyboardInterrupt:
+        pass
+    server.shutdown()
+
+
+def run_daemon(server: http.server.ThreadingHTTPServer) -> None:
+    port = server.server_address[1]
+    pid = os.fork()
+    if pid > 0:
+        print_env(port, _pick_best_model(_free_model_ids))
+        sys.stdout.flush()
+        os._exit(0)
+    os.setsid()
+    server.serve_forever()
+
+
 def main(argv: List[str]) -> int:
     global _free_models, _free_model_ids
 
     parser = argparse.ArgumentParser(
-        description="Free OpenCode Zen models for openclaude via local proxy.\n"
-        "Starts an HTTP proxy on localhost that injects opencode-style headers\n"
-        "and filters /v1/models to only show free models.",
+        description="Free OpenCode Zen models proxy — standalone daemon, no openclaude dependency."
     )
     parser.add_argument("--list", action="store_true", help="List free models and exit")
+    parser.add_argument("--json", action="store_true", help="JSON output")
     parser.add_argument(
-        "--json", action="store_true", help="Output free models as JSON and exit"
+        "--daemon", action="store_true", help="Fork to background, print env to stdout"
     )
     parser.add_argument(
-        "--probe", action="store_true", help="Probe zen /v1/models for verification"
+        "--port", type=int, default=0, help="Proxy port (default: random)"
     )
     parser.add_argument(
-        "--port",
-        type=int,
-        default=0,
-        help="Local proxy port (default: random available)",
+        "--timeout", type=int, default=10, help="models.dev fetch timeout"
     )
     parser.add_argument(
-        "--launch", action="store_true", help="Launch openclaude through the proxy"
-    )
-    parser.add_argument(
-        "--launch-cmd",
-        default="openclaude",
-        help="Command to launch (default: openclaude)",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=int,
-        default=10,
-        help="Timeout for models.dev fetch (default: 10)",
+        "--probe", action="store_true", help="Verify free models against zen /v1/models"
     )
     args = parser.parse_args(argv)
 
@@ -201,7 +238,7 @@ def main(argv: List[str]) -> int:
 
     if not _free_models:
         print(
-            "free-zen: warning: using hardcoded fallback model list (no free models from remote)",
+            "free-zen: warning: using hardcoded fallback model list (remote unavailable)",
             file=sys.stderr,
         )
         _free_model_ids = set(FALLBACK_MODEL_IDS)
@@ -219,7 +256,7 @@ def main(argv: List[str]) -> int:
     if args.probe:
         try:
             req = urllib.request.Request(
-                "https://opencode.ai/zen/v1/models",
+                f"https://opencode.ai/zen/v1/models",
                 headers=generate_opencode_headers(),
             )
             with urllib.request.urlopen(req, timeout=args.timeout) as r:
@@ -234,68 +271,15 @@ def main(argv: List[str]) -> int:
                     file=sys.stderr,
                 )
         except Exception as e:
-            print(
-                f"free-zen: warning: zen probe failed: {e}",
-                file=sys.stderr,
-            )
+            print(f"free-zen: warning: zen probe failed: {e}", file=sys.stderr)
 
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", args.port), ZenProxyHandler)
+    server = start_server(args.port)
     port = server.server_address[1]
-    proxy_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    proxy_thread.start()
 
-    best = (
-        "deepseek-v4-flash-free"
-        if "deepseek-v4-flash-free" in _free_model_ids
-        else sorted(_free_model_ids)[0]
-    )
-
-    lines = []
-    lines.append("# Generated by free-zen.py - free OpenCode Zen models")
-    lines.append(f"# Proxy: http://127.0.0.1:{port} -> {ZEN_BASE_URL}")
-    lines.append(f"# Free model: {best}")
-    lines.append("# Usage: source <(python free-zen.py) && openclaude")
-    lines.append("export CLAUDE_CODE_USE_OPENAI=1")
-    lines.append(f"export OPENAI_BASE_URL=http://127.0.0.1:{port}")
-    lines.append("export OPENAI_API_KEY=")
-    lines.append(f"export OPENAI_MODEL={best}")
-    lines.append("export OPENAI_API_FORMAT=chat_completions")
-    print("\n".join(lines))
-    sys.stdout.flush()
-
-    if args.launch:
-        env = os.environ.copy()
-        env.update(
-            {
-                "CLAUDE_CODE_USE_OPENAI": "1",
-                "OPENAI_BASE_URL": f"http://127.0.0.1:{port}",
-                "OPENAI_API_KEY": "",
-                "OPENAI_MODEL": best,
-                "OPENAI_API_FORMAT": "chat_completions",
-            }
-        )
-        try:
-            proc = subprocess.Popen([args.launch_cmd], env=env)
-            proc.wait()
-        except FileNotFoundError:
-            print(
-                f"free-zen: error: '{args.launch_cmd}' not found on PATH",
-                file=sys.stderr,
-            )
-            server.shutdown()
-            return 2
-        finally:
-            server.shutdown()
+    if args.daemon:
+        run_daemon(server)
     else:
-        print(
-            f"free-zen: proxy on http://127.0.0.1:{port} - press Ctrl+C to stop",
-            file=sys.stderr,
-        )
-        try:
-            signal.pause()
-        except KeyboardInterrupt:
-            pass
-        server.shutdown()
+        run_foreground(server)
 
     return 0
 

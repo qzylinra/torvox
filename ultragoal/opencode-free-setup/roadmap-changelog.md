@@ -1,0 +1,1 @@
+- 2026-07-20: Added Stage 5 (Refinement — Standalone High-Performance Proxy). Removed openclaude spawn dependency. Added "latest protocol" and "high performance" requirements.
