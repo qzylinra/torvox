@@ -43,6 +43,8 @@ Requires Go 1.24+. No external modules (`go.mod` has no `require`).
 
 ## Point OpenClaude at it (verified)
 
+Ready-to-use env file: `examples/openclaude.env`.
+
 OpenClaude's built-in `custom` (OpenAI-compatible) route is used. It is `requiresAuth:false`,
 performs model discovery via `GET {baseURL}/models`, and treats `127.0.0.1` as a local
 provider so an **empty** API key passes validation. No config file edit and no `.env` are
@@ -84,6 +86,8 @@ This was verified end-to-end: OpenClaude listed the free models and completed a 
 
 ## Point OpenCode (`opencode`) at it (verified)
 
+Ready-to-use config: `examples/opencode.json` (drop into your opencode config dir).
+
 OpenCode's custom provider uses the `@ai-sdk/openai-compatible` package. Write a config
 (here isolated via `XDG_CONFIG_HOME`) pointing `baseURL` at the proxy:
 
@@ -119,6 +123,8 @@ Verified: `opencode models zenfree` listed all six free models, and `opencode ru
 real `hy3-free` chat through the proxy with no real key (keyless upstream call).
 
 ## Point Codex (`code`) at it (verified)
+
+Ready-to-use config: `examples/codex.toml` (copy to `$CODEX_HOME/config.toml`).
 
 Codex reads `config.toml` from `$CODEX_HOME`. Register a custom `model_providers` entry:
 
@@ -157,9 +163,26 @@ Zen receives the bare id. Any `provider/` prefix is handled transparently.
 | `-models-dev` | `https://models.dev/api.json` | Cost-info source (non-fatal)     |
 | `-quiet`      | `false`                       | Reduce access logging            |
 
-## How it avoids detection / matches the client
+## How it avoids detection / matches the client / protocol compatibility
 
-Requests forwarded upstream replicate the OpenCode CLI's request shape (User-Agent and
-`x-opencode-*` headers) and go keyless-free, exactly like the official `opencode` client
-when using Zen. Model ids are never interpolated into the upstream URL; only the path is
-forwarded. Only `models` and `chat/completions` are handled — everything else returns 404.
+Every request except `GET /v1/models` is forwarded **transparently** to the upstream
+OpenCode Zen gateway — the proxy does not whitelist a fixed set of endpoints, so it works
+with whatever the client sends (chat, streaming, tool calls, `responses`, `embeddings`,
+file uploads, …). For each forwarded request the proxy:
+
+- copies **all** incoming headers verbatim (so any current/p future protocol-version or
+  client markers the real `opencode` CLI sends are preserved — the request stays on the
+  latest Zen protocol), then
+- strips only the credential (`Authorization`) and hop-by-hop headers, and
+- overlays the OpenCode client identity (`User-Agent`, `x-opencode-client`, and per-request
+  `x-opencode-session` / `-project` / `-request`), exactly mirroring the official
+  `opencode` CLI when it uses Zen.
+
+The request also goes keyless, exactly like `opencode` on Zen. Model ids are never
+interpolated into the upstream URL; only the path is forwarded.
+
+The only enforced rule is **free-only**: `GET /v1/models` is intercepted and returns only
+the free models (fetched live from Zen each call, intersected with the free rule), and any
+POST that carries a `model` field is rejected unless that model is free (the `provider/`
+prefix some CLIs add, e.g. `zenfree/hy3-free`, is stripped before the check and before
+forwarding). Everything else passes through untouched.

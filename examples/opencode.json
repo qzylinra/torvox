@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "zenfree": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenCode Zen Free",
+      "options": {
+        "baseURL": "http://127.0.0.1:8787/v1",
+        "apiKey": "sk-zen-free"
+      },
+      "models": {
+        "hy3-free": { "name": "hy3-free" },
+        "big-pickle": { "name": "big-pickle" },
+        "deepseek-v4-flash-free": { "name": "deepseek-v4-flash-free" },
+        "mimo-v2.5-free": { "name": "mimo-v2.5-free" },
+        "nemotron-3-ultra-free": { "name": "nemotron-3-ultra-free" },
+        "north-mini-code-free": { "name": "north-mini-code-free" }
+      }
+    }
+  }
+}

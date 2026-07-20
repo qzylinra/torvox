@@ -1,0 +1,18 @@
+# Codex (the `code` CLI) — free-only proxy configuration (no API key required).
+#
+# Place this in $CODEX_HOME/config.toml, e.g.:
+#
+#   mkdir -p /tmp/ocz_codex_home
+#   cp examples/codex.toml /tmp/ocz_codex_home/config.toml
+#   CODEX_HOME=/tmp/ocz_codex_home code exec -m zenfree/hy3-free "hello"
+#
+# The proxy strips the `zenfree/` provider prefix, so OpenCode Zen receives the
+# bare model id `hy3-free`.
+
+model_provider = "zenfree"
+
+[model_providers.zenfree]
+name = "zenfree"
+base_url = "http://127.0.0.1:8787/v1"
+api_key = "sk-zen-free"
+wire_api = "chat"

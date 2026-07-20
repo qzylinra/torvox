@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -143,10 +144,10 @@ func (p *proxy) handle(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && normalized == "/models":
 		p.handleModels(w, r, normalized)
-	case r.Method == http.MethodPost && normalized == "/chat/completions":
-		p.handleChatCompletions(w, r, normalized)
+	case r.Method == http.MethodPost:
+		p.handlePost(w, r, normalized)
 	default:
-		http.Error(w, "only GET /v1/models and POST /v1/chat/completions are supported", http.StatusNotFound)
+		p.forward(w, r, normalized, nil, "")
 	}
 }
 
@@ -169,7 +170,11 @@ func (p *proxy) handleModels(w http.ResponseWriter, r *http.Request, normalized 
 	p.logger.Printf("path=%s model=- upstream=intercepted free_count=%d", r.URL.Path, len(freeIDs))
 }
 
-func (p *proxy) handleChatCompletions(w http.ResponseWriter, r *http.Request, normalized string) {
+// handlePost enforces the free-only rule on any POST that carries a model field
+// (chat/completions, responses, embeddings, …), rewrites the model id to its bare
+// form, then forwards the request upstream. Requests without a model field are
+// forwarded untouched.
+func (p *proxy) handlePost(w http.ResponseWriter, r *http.Request, normalized string) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "failed to read request body: "+err.Error(), http.StatusBadRequest)
@@ -177,40 +182,30 @@ func (p *proxy) handleChatCompletions(w http.ResponseWriter, r *http.Request, no
 	}
 
 	var reqBody map[string]interface{}
-	if err := json.Unmarshal(body, &reqBody); err != nil {
-		http.Error(w, "malformed JSON in request body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
+	_ = json.Unmarshal(body, &reqBody)
 
 	rawModel, _ := reqBody["model"].(string)
 	model := stripProviderPrefix(rawModel)
-	if model == "" {
-		http.Error(w, "missing model in request body", http.StatusBadRequest)
-		return
+	if model != "" {
+		freeIDs, err := p.freeModels()
+		if err != nil {
+			p.logger.Printf("path=%s model=%s error computing free models: %v", r.URL.Path, model, err)
+			http.Error(w, "failed to compute free models: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		if !contains(freeIDs, model) {
+			msg := "model " + rawModel + " is not a free model; this proxy only serves free OpenCode Zen models"
+			p.logger.Printf("path=%s model=%s upstream=- rejected=free-only", r.URL.Path, model)
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+		reqBody["model"] = model
+		if rewritten, err := json.Marshal(reqBody); err == nil {
+			body = rewritten
+		}
 	}
 
-	freeIDs, err := p.freeModels()
-	if err != nil {
-		p.logger.Printf("path=%s model=%s error computing free models: %v", r.URL.Path, model, err)
-		http.Error(w, "failed to compute free models: "+err.Error(), http.StatusBadGateway)
-		return
-	}
-
-	if !contains(freeIDs, model) {
-		msg := "model " + rawModel + " is not a free model; this proxy only serves free OpenCode Zen models"
-		p.logger.Printf("path=%s model=%s upstream=- rejected=free-only", r.URL.Path, model)
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-
-	reqBody["model"] = model
-	rewritten, err := json.Marshal(reqBody)
-	if err != nil {
-		http.Error(w, "failed to rewrite request body: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	p.forward(w, r, normalized, rewritten, model)
+	p.forward(w, r, normalized, body, model)
 }
 
 // stripProviderPrefix removes a leading "provider/" segment some clients send
@@ -222,21 +217,51 @@ func stripProviderPrefix(id string) string {
 	return id
 }
 
+// hopHeaders are not forwarded to the upstream; they are connection-specific or
+// would conflict with the rebuilt request. Keys are lower-cased: lookups must use
+// strings.ToLower(k).
+var hopHeaders = map[string]bool{
+	"authorization":     true,
+	"content-length":    true,
+	"connection":        true,
+	"transfer-encoding": true,
+	"trailer":           true,
+	"host":              true,
+	"accept-encoding":   true,
+}
+
+// forward copies the incoming request (minus credential and hop-by-hop headers) to
+// the upstream OpenCode Zen gateway, overlaying the OpenCode client identity so the
+// request mirrors one sent by the official `opencode` CLI. Any header the client
+// sends (including protocol-version markers) is preserved, so the proxy stays
+// compatible with the current Zen protocol; only the key is stripped and the
+// opencode identity is asserted.
 func (p *proxy) forward(w http.ResponseWriter, r *http.Request, normalized string, body []byte, model string) {
 	target := p.config.upstream + normalized
 
-	upstreamReq, err := http.NewRequestWithContext(r.Context(), r.Method, target, strings.NewReader(string(body)))
+	var bodyReader io.Reader
+	switch {
+	case body != nil:
+		bodyReader = bytes.NewReader(body)
+	case r.Body != nil:
+		bodyReader = r.Body
+	}
+
+	upstreamReq, err := http.NewRequestWithContext(r.Context(), r.Method, target, bodyReader)
 	if err != nil {
 		http.Error(w, "failed to build upstream request: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	if contentType := r.Header.Get("Content-Type"); contentType != "" {
-		upstreamReq.Header.Set("Content-Type", contentType)
+	for k, vals := range r.Header {
+		if hopHeaders[strings.ToLower(k)] {
+			continue
+		}
+		for _, v := range vals {
+			upstreamReq.Header.Add(k, v)
+		}
 	}
-	if accept := r.Header.Get("Accept"); accept != "" {
-		upstreamReq.Header.Set("Accept", accept)
-	}
+
 	upstreamReq.Header.Set("User-Agent", userAgent)
 	upstreamReq.Header.Set("x-opencode-client", clientHeader)
 	upstreamReq.Header.Set("x-opencode-session", randomHex(sessionHexLen))
@@ -251,8 +276,13 @@ func (p *proxy) forward(w http.ResponseWriter, r *http.Request, normalized strin
 	}
 	defer resp.Body.Close()
 
-	if contentType := resp.Header.Get("Content-Type"); contentType != "" {
-		w.Header().Set("Content-Type", contentType)
+	for k, vals := range resp.Header {
+		if hopHeaders[strings.ToLower(k)] {
+			continue
+		}
+		for _, v := range vals {
+			w.Header().Add(k, v)
+		}
 	}
 	w.WriteHeader(resp.StatusCode)
 	if flusher, ok := w.(http.Flusher); ok {
