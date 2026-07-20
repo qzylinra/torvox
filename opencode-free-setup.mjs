@@ -1,5 +1,6 @@
 import { createServer } from 'node:http'
 import { request as httpsRequest, Agent } from 'node:https'
+import { spawn } from 'node:child_process'
 import crypto from 'node:crypto'
 import process from 'node:process'
 
@@ -10,6 +11,7 @@ const UPSTREAM_PATH_PREFIX = '/zen'
 const REQUEST_TIMEOUT_MS = 60_000
 const PORT = parseInt(process.env.OPENCODE_FREE_PROXY_PORT ?? process.env.PORT ?? '8080', 10)
 const HOST = '127.0.0.1'
+const OPENCLAUDE_BIN = process.env.OPENCLAUDE_PATH || 'openclaude'
 
 const UPSTREAM_AGENT = new Agent({ keepAlive: true, keepAliveMsecs: 30_000, maxSockets: 64 })
 
@@ -261,4 +263,67 @@ function start() {
   return server
 }
 
-start()
+async function main() {
+  const args = process.argv.slice(2)
+  const shouldLaunch = args.includes('--launch') || args.includes('-l')
+  const shouldPrintEnv = args.includes('--print-env') || args.includes('-e')
+
+  if (args.includes('--help') || args.includes('-h')) {
+    console.error(`Usage: node opencode-free-setup.mjs [options]
+
+Options:
+  --launch, -l    Start proxy + launch openclaude with env vars
+  --print-env, -e Print environment variables for manual openclaude setup
+  --help, -h      Show this help
+
+Examples:
+  node opencode-free-setup.mjs              # standalone proxy (port 8080)
+  node opencode-free-setup.mjs --launch     # proxy + openclaude
+  PORT=9090 node opencode-free-setup.mjs    # custom port`)
+    process.exit(0)
+  }
+
+  const freeModelIds = await freeModelIdsPromise
+  const bestModel = pickBestModel(freeModelIds)
+
+  if (shouldPrintEnv) {
+    console.error(`[opencode-free] Setup openclaude with these env vars:
+  export CLAUDE_CODE_USE_OPENAI=1
+  export OPENAI_BASE_URL=http://127.0.0.1:${PORT}/v1
+  export OPENAI_API_KEY=public
+  export OPENAI_MODEL=${bestModel}
+Or pass them inline:
+  CLAUDE_CODE_USE_OPENAI=1 OPENAI_BASE_URL=http://127.0.0.1:${PORT}/v1 OPENAI_API_KEY=public OPENAI_MODEL=${bestModel} openclaude`)
+    process.exit(0)
+  }
+
+  const server = start()
+
+  if (shouldLaunch) {
+    await new Promise(resolve => server.on('listening', resolve))
+    const addr = server.address()
+    const env = {
+      ...process.env,
+      CLAUDE_CODE_USE_OPENAI: '1',
+      OPENAI_BASE_URL: `http://127.0.0.1:${addr.port}/v1`,
+      OPENAI_API_KEY: 'public',
+      OPENAI_MODEL: bestModel,
+    }
+    const child = spawn(OPENCLAUDE_BIN, args.filter(a => a !== '--launch' && a !== '-l'), {
+      env,
+      stdio: 'inherit',
+    })
+    child.on('exit', () => {
+      UPSTREAM_AGENT.destroy()
+      server.close(() => process.exit(0))
+      setTimeout(() => process.exit(0), 2000).unref()
+    })
+    process.on('SIGINT', () => { child.kill(); shutdown() })
+    process.on('SIGTERM', () => { child.kill(); shutdown() })
+  }
+}
+
+main().catch(err => {
+  console.error(err.message)
+  process.exit(1)
+})
