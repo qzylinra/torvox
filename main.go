@@ -176,29 +176,50 @@ func (p *proxy) handleChatCompletions(w http.ResponseWriter, r *http.Request, no
 		return
 	}
 
-	var parsed struct {
-		Model string `json:"model"`
-	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
+	var reqBody map[string]interface{}
+	if err := json.Unmarshal(body, &reqBody); err != nil {
 		http.Error(w, "malformed JSON in request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rawModel, _ := reqBody["model"].(string)
+	model := stripProviderPrefix(rawModel)
+	if model == "" {
+		http.Error(w, "missing model in request body", http.StatusBadRequest)
 		return
 	}
 
 	freeIDs, err := p.freeModels()
 	if err != nil {
-		p.logger.Printf("path=%s model=%s error computing free models: %v", r.URL.Path, parsed.Model, err)
+		p.logger.Printf("path=%s model=%s error computing free models: %v", r.URL.Path, model, err)
 		http.Error(w, "failed to compute free models: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	if !contains(freeIDs, parsed.Model) {
-		msg := "model " + parsed.Model + " is not a free model; this proxy only serves free OpenCode Zen models"
-		p.logger.Printf("path=%s model=%s upstream=- rejected=free-only", r.URL.Path, parsed.Model)
+	if !contains(freeIDs, model) {
+		msg := "model " + rawModel + " is not a free model; this proxy only serves free OpenCode Zen models"
+		p.logger.Printf("path=%s model=%s upstream=- rejected=free-only", r.URL.Path, model)
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 
-	p.forward(w, r, normalized, body, parsed.Model)
+	reqBody["model"] = model
+	rewritten, err := json.Marshal(reqBody)
+	if err != nil {
+		http.Error(w, "failed to rewrite request body: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	p.forward(w, r, normalized, rewritten, model)
+}
+
+// stripProviderPrefix removes a leading "provider/" segment some clients send
+// (e.g. "zenfree/hy3-free"); OpenCode Zen expects the bare model id ("hy3-free").
+func stripProviderPrefix(id string) string {
+	if i := strings.IndexByte(id, '/'); i >= 0 {
+		return id[i+1:]
+	}
+	return id
 }
 
 func (p *proxy) forward(w http.ResponseWriter, r *http.Request, normalized string, body []byte, model string) {

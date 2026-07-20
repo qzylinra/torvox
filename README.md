@@ -82,6 +82,66 @@ Notes:
 This was verified end-to-end: OpenClaude listed the free models and completed a real
 `hy3-free` chat through the proxy with no API key.
 
+## Point OpenCode (`opencode`) at it (verified)
+
+OpenCode's custom provider uses the `@ai-sdk/openai-compatible` package. Write a config
+(here isolated via `XDG_CONFIG_HOME`) pointing `baseURL` at the proxy:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "zenfree": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OpenCode Zen Free",
+      "options": { "baseURL": "http://127.0.0.1:8787/v1", "apiKey": "sk-zen-free" },
+      "models": {
+        "hy3-free": {"name":"hy3-free"},
+        "big-pickle": {"name":"big-pickle"},
+        "deepseek-v4-flash-free": {"name":"deepseek-v4-flash-free"},
+        "mimo-v2.5-free": {"name":"mimo-v2.5-free"},
+        "nemotron-3-ultra-free": {"name":"nemotron-3-ultra-free"},
+        "north-mini-code-free": {"name":"north-mini-code-free"}
+      }
+    }
+  }
+}
+```
+
+Then list models and run a one-shot chat:
+
+```sh
+XDG_CONFIG_HOME=/tmp/ocz_cfg opencode models zenfree          # lists the free models
+XDG_CONFIG_HOME=/tmp/ocz_cfg opencode run "hello" -m zenfree/hy3-free
+```
+
+Verified: `opencode models zenfree` listed all six free models, and `opencode run` completed a
+real `hy3-free` chat through the proxy with no real key (keyless upstream call).
+
+## Point Codex (`code`) at it (verified)
+
+Codex reads `config.toml` from `$CODEX_HOME`. Register a custom `model_providers` entry:
+
+```toml
+model_provider = "zenfree"
+
+[model_providers.zenfree]
+name = "zenfree"
+base_url = "http://127.0.0.1:8787/v1"
+api_key = "sk-zen-free"
+wire_api = "chat"
+```
+
+Then run non-interactively:
+
+```sh
+CODEX_HOME=/tmp/ocz_codex_home code exec -m zenfree/hy3-free "hello"
+```
+
+Verified: `code exec` reached the proxy and completed a real `hy3-free` chat, keyless.
+The proxy strips the `zenfree/` provider prefix (Codex sends `zenfree/hy3-free`) so OpenCode
+Zen receives the bare id. Any `provider/` prefix is handled transparently.
+
 ## Install
 
 ```sh
