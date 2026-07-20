@@ -179,11 +179,12 @@ def _env_text(port: int, model: str) -> str:
         f"# free-zen proxy env — source this or set manually\n"
         f"# Proxy: http://127.0.0.1:{port}\n"
         f"# Model: {model}\n"
-        f"CLAUDE_CODE_USE_OPENAI=1\n"
-        f"OPENAI_BASE_URL=http://127.0.0.1:{port}\n"
-        f"OPENAI_API_KEY=\n"
-        f"OPENAI_MODEL={model}\n"
-        f"OPENAI_API_FORMAT=chat_completions\n"
+        f"export CLAUDE_CODE_USE_OPENAI=1\n"
+        f"export OPENAI_BASE_URL=http://127.0.0.1:{port}\n"
+        f"export OPENAI_API_KEY=sk-free-zen\n"
+        f"export OPENAI_MODEL={model}\n"
+        f"export OPENAI_API_FORMAT=chat_completions\n"
+        f"export ANTHROPIC_API_KEY=sk-ant-dummy\n"
     )
 
 
@@ -210,13 +211,17 @@ def run_foreground(server: http.server.ThreadingHTTPServer) -> None:
 
 def run_daemon(server: http.server.ThreadingHTTPServer) -> None:
     port = server.server_address[1]
+    model = _pick_best_model(_free_model_ids)
     env_path = f"/tmp/free-zen-{port}.env"
     pid = os.fork()
     if pid > 0:
         with open(env_path, "w") as f:
-            f.write(_env_text(port, _pick_best_model(_free_model_ids)))
+            f.write(_env_text(port, model))
+        print(_env_text(port, model), end="")
         print(f"free-zen: proxy started on http://127.0.0.1:{port}", file=sys.stderr)
         print(f"free-zen: source {env_path} to set env vars", file=sys.stderr)
+        sys.stdout.flush()
+        sys.stderr.flush()
         os._exit(0)
         return  # unreachable in production; prevents fallthrough when fork is mocked in tests
     os.setsid()

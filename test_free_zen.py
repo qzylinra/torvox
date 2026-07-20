@@ -132,11 +132,12 @@ class TestPrintEnv(unittest.TestCase):
         with patch("sys.stdout", out):
             free_zen.print_env(12345, "test-model")
         text = out.getvalue()
-        self.assertIn("CLAUDE_CODE_USE_OPENAI=1", text)
-        self.assertIn("OPENAI_BASE_URL=http://127.0.0.1:12345", text)
-        self.assertIn("OPENAI_API_KEY=", text)
-        self.assertIn("OPENAI_MODEL=test-model", text)
-        self.assertIn("OPENAI_API_FORMAT=chat_completions", text)
+        self.assertIn("export CLAUDE_CODE_USE_OPENAI=1", text)
+        self.assertIn("export OPENAI_BASE_URL=http://127.0.0.1:12345", text)
+        self.assertIn("export OPENAI_API_KEY=sk-free-zen", text)
+        self.assertIn("export OPENAI_MODEL=test-model", text)
+        self.assertIn("export OPENAI_API_FORMAT=chat_completions", text)
+        self.assertIn("export ANTHROPIC_API_KEY=sk-ant-dummy", text)
 
 
 class TestMainOutput(unittest.TestCase):
@@ -158,10 +159,11 @@ class TestMainOutput(unittest.TestCase):
     def test_default_prints_env_exports(self):
         rc, out, _ = self._main_with_mocks([], [{"id": "free-a", "name": "Free A"}])
         self.assertEqual(rc, 0)
-        self.assertIn("CLAUDE_CODE_USE_OPENAI=1", out)
-        self.assertIn("OPENAI_BASE_URL=http://127.0.0.1:8888", out)
-        self.assertIn("OPENAI_API_KEY=", out)
-        self.assertIn("OPENAI_API_FORMAT=chat_completions", out)
+        self.assertIn("export CLAUDE_CODE_USE_OPENAI=1", out)
+        self.assertIn("export OPENAI_BASE_URL=http://127.0.0.1:8888", out)
+        self.assertIn("export OPENAI_API_KEY=sk-free-zen", out)
+        self.assertIn("export OPENAI_API_FORMAT=chat_completions", out)
+        self.assertIn("export ANTHROPIC_API_KEY=sk-ant-dummy", out)
 
     def test_list_mode(self):
         with patch("free_zen.fetch_free_models") as fetch:
@@ -201,8 +203,6 @@ class TestMainOutput(unittest.TestCase):
                 free_zen.main(["--invalid-flag"])
 
     def test_daemon_mode_forks_and_prints_env(self):
-        import tempfile
-
         with patch("free_zen.fetch_free_models") as fetch:
             fetch.return_value = [{"id": "m", "name": "M"}]
             with patch("http.server.ThreadingHTTPServer") as ms:
@@ -210,16 +210,20 @@ class TestMainOutput(unittest.TestCase):
                 with patch("os.fork") as fork:
                     fork.return_value = 123
                     with patch("os._exit") as mock_exit:
+                        out = io.StringIO()
                         err = io.StringIO()
-                        with patch("sys.stderr", err):
+                        with patch("sys.stdout", out), patch("sys.stderr", err):
                             rc = free_zen.main(["--daemon"])
         self.assertEqual(rc, 0)
         mock_exit.assert_called_once_with(0)
-        env_path = f"/tmp/free-zen-9999.env"
+        self.assertIn("export CLAUDE_CODE_USE_OPENAI=1", out.getvalue())
+        self.assertIn("export OPENAI_BASE_URL=http://127.0.0.1:9999", out.getvalue())
+        self.assertIn("proxy started on http://127.0.0.1:9999", err.getvalue())
+        env_path = "/tmp/free-zen-9999.env"
         with open(env_path) as f:
             text = f.read()
-        self.assertIn("CLAUDE_CODE_USE_OPENAI=1", text)
-        self.assertIn("OPENAI_BASE_URL=http://127.0.0.1:9999", text)
+        self.assertIn("export CLAUDE_CODE_USE_OPENAI=1", text)
+        self.assertIn("export OPENAI_BASE_URL=http://127.0.0.1:9999", text)
         os.unlink(env_path)
 
 
