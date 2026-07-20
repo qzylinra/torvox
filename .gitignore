@@ -1,2 +1,8 @@
 # Cloned upstream source used only for local testing/reference; not part of the deliverable.
 openclaude/
+
+# Built binary (produced by `go build` / install.sh); not source.
+/openclaude-zen-free
+
+# Ultra-goal workflow artifacts (process scaffolding, not the deliverable).
+/ultragoal/

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	userAgent     = "opencode/latest/1.3.15/cli"
+	userAgent     = "opencode/latest/1.17.15/cli"
 	clientHeader  = "cli"
 	sessionHexLen = 26
 	serverTimeout = 5 * time.Minute
