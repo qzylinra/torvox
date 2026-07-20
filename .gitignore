@@ -1,3 +1,2 @@
-openclaude-zen-free
-ultragoal/
-*.txt
+# Cloned upstream source used only for local testing/reference; not part of the deliverable.
+openclaude/
