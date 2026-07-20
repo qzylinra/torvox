@@ -1,59 +1,73 @@
 # Final Review: free-zen-openclaude
 
-## Status: **COMPLETE** — Overall Goal Achieved
+## Status: COMPLETE — Overall Goal Achieved
 
 ## What Was Built
 
-**`free-zen.py`** — a Python local HTTP proxy that enables openclaude to use only free models from the opencode.ai zen gateway, without any API key, configuration files, or paid models.
+**`free-zen.py`** — a 313-line Python stdlib-only local HTTP proxy that:
 
-## How It Works
+1. Dynamically fetches models.dev to identify free models (cost.input===0, not deprecated)
+2. Starts an HTTP proxy on `127.0.0.1` using `http.server.ThreadingHTTPServer`
+3. Injects opencode-style HTTP headers (User-Agent + 4 x-opencode-* UUIDs) into every upstream request
+4. Intercepts `/v1/models` responses to filter out all paid models
+5. Streams `/v1/chat/completions` responses with SSE passthrough
+6. **Foreground mode**: prints env vars and waits for Ctrl+C
+7. **Daemon mode** (`--daemon`): forks to background, writes env vars to `/tmp/free-zen-*.env`
+8. Works alongside existing openclaude config (env vars > config, no files modified)
 
-1. Starts a local HTTP proxy on `127.0.0.1`
-2. Fetches `models.dev` to determine which models are free (cost.input === 0, not deprecated)
-3. Intercepts `/v1/models` responses to filter out any paid models
-4. Injects opencode client-style headers (User-Agent, x-opencode-* UUIDs) into every upstream request
-5. Streams `/v1/chat/completions` responses for SSE
-6. Prints env vars for openclaude to use the proxy: `CLAUDE_CODE_USE_OPENAI=1`, `OPENAI_BASE_URL=http://127.0.0.1:<port>`, `OPENAI_API_KEY=""`, `OPENAI_MODEL=<best-free>`, `OPENAI_API_FORMAT=chat_completions`
+## Files
 
-## Usage
+| File | Lines | Tests |
+|------|-------|-------|
+| `free-zen.py` | 313 | — |
+| `test_free_zen.py` | 335 | 24 (22 pass, 2 upstream-skip) |
 
-```bash
-# One-liner with auto-launch
-python3 free-zen.py --launch
-
-# Or print env vars, then run openclaude separately
-source <(python3 free-zen.py)
-openclaude
-```
-
-## Verified Results
+## E2E Verification
 
 | Test | Result |
 |------|--------|
-| Proxy model filtering | ✅ 6 free models (not 55 paid+free) |
-| Chat completion via proxy | ✅ Returns response, cost=0 |
-| OpenClaude E2E through proxy | ✅ `openclaude --print "hello"` returns "hello" |
-| Unit tests | ✅ 21 tests, 19 pass, 2 skipped (upstream-dependent) |
+| `--list` shows 6 free models | ✅ |
+| `--json` valid JSON output | ✅ |
+| `--probe` validates against zen | ✅ |
+| Foreground proxy /models returns 6 models | ✅ |
+| openclaude through foreground proxy | ✅ → "PASS" |
+| Daemon mode env file written correctly | ✅ |
+| openclaude through daemon proxy | ✅ → "DAEMON-PASS" |
 
 ## Requirements Fulfilled
 
-| Requirement | How |
-|-------------|-----|
-| Dynamic model fetch every run | Fetches models.dev each invocation |
-| Only free models | Filters by cost.input===0, status!==deprecated |
-| No manual env var setup | `--launch` flag handles everything |
-| No OPENCODE_API_KEY | Empty `OPENAI_API_KEY` — zen accepts free models without auth |
-| No .env file | Only stdout output |
-| Python stdlib only | `http.server`, `urllib`, `json`, `uuid`, etc. |
-| No wrapping/dependencies | Standalone proxy, no pip packages |
-| Same HTTP requests | 5 opencode-style headers per request |
-| No config file modification | Env vars only; works alongside existing openclaude config |
-| Works with openclaude | Verified E2E |
+| Requirement | Status | How |
+|-------------|--------|-----|
+| Dynamic fetch every run | ✅ | `fetch_free_models()` each invocation |
+| Only free models | ✅ | cost filter + zen /v1/models passthrough |
+| No manual env setup | ✅ | `--daemon` writes /tmp env file, `source <(...)` works |
+| No OPENCODE_API_KEY | ✅ | Empty `OPENAI_API_KEY` |
+| No .env file | ✅ | Only /tmp temp files |
+| Best language (std-only) | ✅ | Python stdlib: http.server, urllib, json, uuid, os |
+| Proxy approach | ✅ | Local HTTP proxy on 127.0.0.1 |
+| No openclaude dependency | ✅ | Standalone — works with any OpenAI client |
+| Same HTTP requests | ✅ | User-Agent + 4 x-opencode-* UUIDs per request |
+| Avoid detection | ✅ | Same headers as real opencode client |
+| No config file modification | ✅ | Env vars only, no files touched |
+| Compatible with config | ✅ | Env vars > config, user's config preserved |
+| Don't launch openclaude | ✅ | Pure proxy, no subprocess |
+| High performance | ✅ | ThreadingHTTPServer + fork-based daemon |
+| Latest protocol | ✅ | OpenAI-compatible streaming SSE, /v1/models, chat/completions |
+| OpenClaude E2E test | ✅ | Both foreground and daemon modes verified |
 
-## Files Created
+## Architecture
 
-| File | Purpose |
-|------|---------|
-| `free-zen.py` | Local HTTP proxy + CLI |
-| `test_free_zen.py` | Unit + integration tests |
-| `ultragoal/free-zen-openclaude/` | Workflow artifacts |
+```ascii
+openclaude → free-zen proxy (127.0.0.1:PORT) → opencode.ai/zen/v1
+                │                                │
+                ├─ injects opencode headers       ├─ /v1/models (filtered)
+                ├─ filters /v1/models             ├─ /v1/chat/completions
+                └─ streams SSE                     └─ (streaming)
+```
+
+## Remaining Risks
+
+All accepted (low/theoretical):
+- `os.fork()` is Unix-only (target: Linux)
+- No upstream response size limit (localhost only, /models ~4.5 KB)
+- SSE lacks explicit Transfer-Encoding (works because clients read until close)

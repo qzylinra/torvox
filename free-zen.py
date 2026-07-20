@@ -218,6 +218,7 @@ def run_daemon(server: http.server.ThreadingHTTPServer) -> None:
         print(f"free-zen: proxy started on http://127.0.0.1:{port}", file=sys.stderr)
         print(f"free-zen: source {env_path} to set env vars", file=sys.stderr)
         os._exit(0)
+        return  # unreachable in production; prevents fallthrough when fork is mocked in tests
     os.setsid()
     try:
         devnull = os.open(os.devnull, os.O_RDWR)
