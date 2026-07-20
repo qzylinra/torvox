@@ -10,10 +10,12 @@ Usage:
 
 import argparse
 import http.server
+import io
 import json
 import os
 import signal
 import sys
+import threading
 import urllib.error
 import urllib.request
 import uuid
@@ -172,25 +174,31 @@ def _pick_best_model(ids: Set[str]) -> str:
     )
 
 
+def _env_text(port: int, model: str) -> str:
+    return (
+        f"# free-zen proxy env — source this or set manually\n"
+        f"# Proxy: http://127.0.0.1:{port}\n"
+        f"# Model: {model}\n"
+        f"CLAUDE_CODE_USE_OPENAI=1\n"
+        f"OPENAI_BASE_URL=http://127.0.0.1:{port}\n"
+        f"OPENAI_API_KEY=\n"
+        f"OPENAI_MODEL={model}\n"
+        f"OPENAI_API_FORMAT=chat_completions\n"
+    )
+
+
 def print_env(port: int, model: str) -> None:
-    print("# free-zen proxy env — source this or set manually")
-    print(f"# Proxy: http://127.0.0.1:{port}")
-    print(f"# Model: {model}")
-    print("CLAUDE_CODE_USE_OPENAI=1")
-    print(f"OPENAI_BASE_URL=http://127.0.0.1:{port}")
-    print("OPENAI_API_KEY=")
-    print(f"OPENAI_MODEL={model}")
-    print("OPENAI_API_FORMAT=chat_completions")
+    print(_env_text(port, model), end="")
 
 
 def start_server(port: int) -> http.server.ThreadingHTTPServer:
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), ZenProxyHandler)
-    server.server_bind() if port == 0 else None
-    return server
+    return http.server.ThreadingHTTPServer(("127.0.0.1", port), ZenProxyHandler)
 
 
 def run_foreground(server: http.server.ThreadingHTTPServer) -> None:
     port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
     print(f"free-zen: proxy listening on http://127.0.0.1:{port}", file=sys.stderr)
     print_env(port, _pick_best_model(_free_model_ids))
     try:
@@ -202,13 +210,29 @@ def run_foreground(server: http.server.ThreadingHTTPServer) -> None:
 
 def run_daemon(server: http.server.ThreadingHTTPServer) -> None:
     port = server.server_address[1]
+    env_path = f"/tmp/free-zen-{port}.env"
     pid = os.fork()
     if pid > 0:
-        print_env(port, _pick_best_model(_free_model_ids))
-        sys.stdout.flush()
+        with open(env_path, "w") as f:
+            f.write(_env_text(port, _pick_best_model(_free_model_ids)))
+        print(f"free-zen: proxy started on http://127.0.0.1:{port}", file=sys.stderr)
+        print(f"free-zen: source {env_path} to set env vars", file=sys.stderr)
         os._exit(0)
     os.setsid()
-    server.serve_forever()
+    try:
+        devnull = os.open(os.devnull, os.O_RDWR)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.dup2(devnull, sys.stderr.fileno())
+        os.close(devnull)
+    except (OSError, io.UnsupportedOperation):
+        pass
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        signal.pause()
+    except KeyboardInterrupt:
+        pass
+    server.shutdown()
 
 
 def main(argv: List[str]) -> int:
@@ -272,6 +296,7 @@ def main(argv: List[str]) -> int:
                 )
         except Exception as e:
             print(f"free-zen: warning: zen probe failed: {e}", file=sys.stderr)
+        return 0
 
     server = start_server(args.port)
     port = server.server_address[1]

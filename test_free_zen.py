@@ -201,6 +201,8 @@ class TestMainOutput(unittest.TestCase):
                 free_zen.main(["--invalid-flag"])
 
     def test_daemon_mode_forks_and_prints_env(self):
+        import tempfile
+
         with patch("free_zen.fetch_free_models") as fetch:
             fetch.return_value = [{"id": "m", "name": "M"}]
             with patch("http.server.ThreadingHTTPServer") as ms:
@@ -208,14 +210,17 @@ class TestMainOutput(unittest.TestCase):
                 with patch("os.fork") as fork:
                     fork.return_value = 123
                     with patch("os._exit") as mock_exit:
-                        out = io.StringIO()
-                        with patch("sys.stdout", out):
+                        err = io.StringIO()
+                        with patch("sys.stderr", err):
                             rc = free_zen.main(["--daemon"])
         self.assertEqual(rc, 0)
         mock_exit.assert_called_once_with(0)
-        text = out.getvalue()
+        env_path = f"/tmp/free-zen-9999.env"
+        with open(env_path) as f:
+            text = f.read()
         self.assertIn("CLAUDE_CODE_USE_OPENAI=1", text)
         self.assertIn("OPENAI_BASE_URL=http://127.0.0.1:9999", text)
+        os.unlink(env_path)
 
 
 class TestProxy(unittest.TestCase):
